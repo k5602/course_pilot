@@ -1,13 +1,15 @@
 use crate::nlp::structure_course;
 use crate::planner::generate_plan;
 use crate::types::{AppState, Course, Plan, PlanSettings, Route};
+use crate::ui::Button;
+use crate::ui::Input;
 use crate::ui::components::skeleton::SkeletonLoader;
 use crate::ui::components::{Checkbox, Label, Progress};
-use crate::ui::{Button, Card, Input};
 use chrono::{DateTime, Utc};
 use dioxus::prelude::*;
 use dioxus_toast::ToastInfo;
 use dioxus_toast::ToastManager;
+use freyr::prelude::*;
 use uuid::Uuid;
 
 /// Plan view component for displaying and managing course plans
@@ -252,7 +254,8 @@ pub fn PlanView(course_id: Uuid) -> Element {
                 "← Back to Dashboard"
             }
 
-            Card {
+            FreyrCard {
+                has_shadow: true,
                 div {
                     h1 { "{current_course.name}" }
                     div { "📺 {current_course.video_count()} videos • Created {format_date(current_course.created_at)}" }
@@ -274,7 +277,8 @@ pub fn PlanView(course_id: Uuid) -> Element {
                 div { class: "success-message", "{success}" }
             }
 
-            Card {
+            FreyrCard {
+                has_shadow: true,
                 div {
                     h2 { "Course Structure" }
                     if !current_course.is_structured() {
@@ -352,8 +356,10 @@ pub fn PlanView(course_id: Uuid) -> Element {
                 }
             }
 
+            // --- NESTED: Study Plan, Plan Settings, and Plan Rendering ---
             if current_course.is_structured() {
-                Card {
+                FreyrCard {
+                    has_shadow: true,
                     div {
                         h2 { "Study Plan" }
                         div {
@@ -367,257 +373,254 @@ pub fn PlanView(course_id: Uuid) -> Element {
                                 if *is_planning.read() {
                                     "📅 Generating..."
                                 } else {
-                                    "📅 Generate Plan"
+                                    "Generate Plan"
                                 }
                             }
                         }
                     }
+                }
 
-                    if *show_plan_settings.read() {
+                if *show_plan_settings.read() {
+                    div {
+                        h3 { "Plan Settings" }
                         div {
-                            h3 { "Plan Settings" }
                             div {
-                                div {
-                                    Label {
-                                        class: "label",
-                                        html_for: "sessions-per-week",
-                                        "Sessions per week"
-                                    }
-                                    Input {
-                                        id: "sessions-per-week",
-                                        r#type: "number",
-                                        min: "1",
-                                        max: "14",
-                                        value: "{sessions_per_week}",
-                                        oninput: move |evt: FormEvent| {
-                                            if let Ok(val) = evt.value().parse::<u8>() {
-                                                sessions_per_week.set(val);
-                                            }
+                                Label {
+                                    class: "label",
+                                    html_for: "sessions-per-week",
+                                    "Sessions per week"
+                                }
+                                Input {
+                                    id: "sessions-per-week",
+                                    r#type: "number",
+                                    min: "1",
+                                    max: "14",
+                                    value: "{sessions_per_week}",
+                                    oninput: move |evt: FormEvent| {
+                                        if let Ok(val) = evt.value().parse::<u8>() {
+                                            sessions_per_week.set(val);
                                         }
                                     }
                                 }
-                                div {
-                                    Label {
-                                        class: "label",
-                                        html_for: "session-length",
-                                        "Session length (minutes)"
-                                    }
-                                    Input {
-                                        id: "session-length",
-                                        r#type: "number",
-                                        min: "15",
-                                        max: "180",
-                                        value: "{session_length_minutes}",
-                                        oninput: move |evt: FormEvent| {
-                                            if let Ok(val) = evt.value().parse::<u32>() {
-                                                session_length_minutes.set(val);
-                                            }
+                            }
+                            div {
+                                Label {
+                                    class: "label",
+                                    html_for: "session-length",
+                                    "Session length (minutes)"
+                                }
+                                Input {
+                                    id: "session-length",
+                                    r#type: "number",
+                                    min: "15",
+                                    max: "180",
+                                    value: "{session_length_minutes}",
+                                    oninput: move |evt: FormEvent| {
+                                        if let Ok(val) = evt.value().parse::<u32>() {
+                                            session_length_minutes.set(val);
                                         }
                                     }
                                 }
-                                div {
-                                    Label {
-                                        class: "label",
-                                        html_for: "start-date",
-                                        "Start date"
-                                    }
-                                    Input {
-                                        id: "start-date",
-                                        r#type: "date",
-                                        value: "{start_date}",
-                                        oninput: move |evt: FormEvent| start_date.set(evt.value())
-                                    }
+                            }
+                            div {
+                                Label {
+                                    class: "label",
+                                    html_for: "start-date",
+                                    "Start date"
                                 }
-                                div {
-                                    Label {
-                                        class: "label",
-                                        html_for: "include-weekends",
-
-
-
-                                        Checkbox {
-                                            id: "include-weekends",
-                                            class: "checkbox",
-                                            name: "include-weekends",
-                                            checked: *include_weekends.read(),
-                                            onchange: move |evt: dioxus::events::FormEvent| {
-                                                let checked = evt.value().parse::<bool>().unwrap_or(false);
-                                                include_weekends.set(checked);
-                                            },
-                                        }
-                                        "Include weekends"
+                                Input {
+                                    id: "start-date",
+                                    r#type: "date",
+                                    value: "{start_date}",
+                                    oninput: move |evt: FormEvent| start_date.set(evt.value())
+                                }
+                            }
+                            div {
+                                Label {
+                                    class: "label",
+                                    html_for: "include-weekends",
+                                    Checkbox {
+                                        id: "include-weekends",
+                                        class: "checkbox",
+                                        name: "include-weekends",
+                                        checked: *include_weekends.read(),
+                                        onchange: move |evt: dioxus::events::FormEvent| {
+                                            let checked = evt.value().parse::<bool>().unwrap_or(false);
+                                            include_weekends.set(checked);
+                                        },
                                     }
+                                    "Include weekends"
                                 }
                             }
                         }
                     }
+                }
 
-                    if *is_planning.read() {
-                        div { "Generating plan..." }
-                    } else if let Some(current_plan) = plan.read().as_ref() {
+                if *is_planning.read() {
+                    div { "Generating plan..." }
+                } else if let Some(current_plan) = plan.read().as_ref() {
+                    div {
                         div {
                             div {
-                                div {
-                                    div { "{current_plan.total_sessions()}" }
-                                    div { "Total Sessions" }
-                                }
-                                div {
-                                    div { "{calculate_plan_duration_weeks(current_plan)}" }
-                                    div { "Weeks" }
-                                }
-                                div {
-                                    div { "{current_plan.completed_sessions()}" }
-                                    div { "Completed" }
-                                }
+                                div { "{current_plan.total_sessions()}" }
+                                div { "Total Sessions" }
                             }
-
                             div {
-                                div { "Overall Progress" }
-                                div { "{current_plan.progress_percentage():.1}%" }
+                                div { "{calculate_plan_duration_weeks(current_plan)}" }
+                                div { "Weeks" }
                             }
-                            Progress {
-                                aria_label: "Overall Progress",
-                                class: "progress",
-                                value: current_plan.progress_percentage() as f64,
-                            }
-
                             div {
-                                for (i, item) in current_plan.items.iter().enumerate() {
-                                    // Animate plan item scale on completion
-                                    // Animate fade/scale for inline editing
+                                div { "{current_plan.completed_sessions()}" }
+                                div { "Completed" }
+                            }
+                        }
+
+                        div {
+                            div { "Overall Progress" }
+                            div { "{current_plan.progress_percentage():.1}%" }
+                        }
+                        Progress {
+                            aria_label: "Overall Progress",
+                            class: "progress",
+                            value: current_plan.progress_percentage() as f64,
+                        }
+
+                        div {
+                            for (i, item) in current_plan.items.iter().enumerate() {
+                                // Animate plan item scale on completion
+                                // Animate fade/scale for inline editing
+                                div {
+                                    key: "{i}",
+                                    class: format!("plan-item {}", if item.completed { "completed" } else { "" }),
+                                    style: format!(
+                                        "transform: scale({}); transition: transform 0.18s cubic-bezier(0.4,0,0.2,1);",
+                                        scale_vec.read().get(i).cloned().unwrap_or(1.0)
+                                    ),
                                     div {
-                                        key: "{i}",
-                                        class: format!("plan-item {}", if item.completed { "completed" } else { "" }),
-                                        style: format!(
-                                            "transform: scale({}); transition: transform 0.18s cubic-bezier(0.4,0,0.2,1);",
-                                            scale_vec.read().get(i).cloned().unwrap_or(1.0)
-                                        ),
-                                        div {
-                                            // Completion toggle
-                                            input {
-                                                r#type: "checkbox",
-                                                checked: item.completed,
-                                                aria_label: "Mark as complete",
-                                                tabindex: "0",
-                                                onchange: {
-                                                    let mut plan = plan.clone();
-                                                    let mut toast = toast.clone();
-                                                    move |_| {
-                                                        if let Some(ref mut p) = plan.write().as_mut() {
-                                                            p.items[i].completed = !p.items[i].completed;
-                                                            toast.write().popup(ToastInfo::success(
-                                                                if p.items[i].completed { "Marked complete" } else { "Marked incomplete" },
-                                                                "Plan Item"
-                                                            ));
-                                                        }
+                                        // Completion toggle
+                                        input {
+                                            r#type: "checkbox",
+                                            checked: item.completed,
+                                            aria_label: "Mark as complete",
+                                            tabindex: "0",
+                                            onchange: {
+                                                let mut plan = plan.clone();
+                                                let mut toast = toast.clone();
+                                                move |_| {
+                                                    if let Some(ref mut p) = plan.write().as_mut() {
+                                                        p.items[i].completed = !p.items[i].completed;
+                                                        toast.write().popup(ToastInfo::success(
+                                                            if p.items[i].completed { "Marked complete" } else { "Marked incomplete" },
+                                                            "Plan Item"
+                                                        ));
                                                     }
                                                 }
                                             }
-                                            if item.completed {
-                                                span { "✅" }
-                                            } else {
-                                                span { "⭕" }
-                                            }
                                         }
-                                        div {
-                                            // Inline title editing with fade/scale
-                                            if editing_title_vec.read().get(i).cloned().unwrap_or(false) {
-                                                input {
-                                                    value: temp_title_vec.read().get(i).cloned().unwrap_or_else(|| item.section_title.clone()),
-                                                    aria_label: "Edit section title",
-                                                    autofocus: true,
-                                                    style: "opacity: 1.0; transition: opacity 0.18s;",
-                                                    oninput: move |evt| {
-                                                        let mut temp_title_vec = temp_title_vec.write();
-                                                        temp_title_vec[i] = evt.value();
-                                                    },
-                                                    onkeydown: move |evt| {
-                                                        use dioxus::events::Key;
-                                                        if evt.key() == Key::Enter {
-                                                            if let Some(ref mut p) = plan.write().as_mut() {
-                                                                let new_title = temp_title_vec.read()[i].clone();
-                                                                if new_title.trim().is_empty() {
-                                                                    toast.write().popup(ToastInfo::simple("Title cannot be empty"));
-                                                                } else {
-                                                                    p.items[i].section_title = new_title;
-                                                                }
+                                        if item.completed {
+                                            span { "✅" }
+                                        } else {
+                                            span { "⭕" }
+                                        }
+                                    }
+                                    div {
+                                        // Inline title editing with fade/scale
+                                        if editing_title_vec.read().get(i).cloned().unwrap_or(false) {
+                                            input {
+                                                value: temp_title_vec.read().get(i).cloned().unwrap_or_else(|| item.section_title.clone()),
+                                                aria_label: "Edit section title",
+                                                autofocus: true,
+                                                style: "opacity: 1.0; transition: opacity 0.18s;",
+                                                oninput: move |evt| {
+                                                    let mut temp_title_vec = temp_title_vec.write();
+                                                    temp_title_vec[i] = evt.value();
+                                                },
+                                                onkeydown: move |evt| {
+                                                    use dioxus::events::Key;
+                                                    if evt.key() == Key::Enter {
+                                                        if let Some(ref mut p) = plan.write().as_mut() {
+                                                            let new_title = temp_title_vec.read()[i].clone();
+                                                            if new_title.trim().is_empty() {
+                                                                toast.write().popup(ToastInfo::simple("Title cannot be empty"));
+                                                            } else {
+                                                                p.items[i].section_title = new_title;
                                                             }
-                                                            let mut editing_title_vec = editing_title_vec.write();
-                                                            editing_title_vec[i] = false;
-                                                        } else if evt.key() == Key::Escape {
-                                                            let mut editing_title_vec = editing_title_vec.write();
-                                                            editing_title_vec[i] = false;
                                                         }
-                                                    },
-                                                    onblur: move |_| {
                                                         let mut editing_title_vec = editing_title_vec.write();
                                                         editing_title_vec[i] = false;
-                                                    },
-                                                }
-                                            } else {
-                                                button {
-                                                    class: "plan-item-title-btn",
-                                                    aria_label: "Edit section title",
-                                                    tabindex: "0",
-                                                    style: "opacity: 1.0; transition: opacity 0.18s;",
-                                                    onclick: move |_| {
+                                                    } else if evt.key() == Key::Escape {
                                                         let mut editing_title_vec = editing_title_vec.write();
-                                                        editing_title_vec[i] = true;
-                                                    },
-                                                    {item.section_title.clone()}
-                                                }
+                                                        editing_title_vec[i] = false;
+                                                    }
+                                                },
+                                                onblur: move |_| {
+                                                    let mut editing_title_vec = editing_title_vec.write();
+                                                    editing_title_vec[i] = false;
+                                                },
                                             }
-                                            div { "📁 {item.module_title}" }
-                                            // Inline date editing with fade/scale
-                                            if editing_date_vec.read().get(i).cloned().unwrap_or(false) {
-                                                input {
-                                                    r#type: "date",
-                                                    value: temp_date_vec.read().get(i).cloned().unwrap_or_else(|| item.date.format("%Y-%m-%d").to_string()),
-                                                    aria_label: "Edit session date",
-                                                    autofocus: true,
-                                                    style: "opacity: 1.0; transition: opacity 0.18s;",
-                                                    oninput: move |evt| {
-                                                        let mut temp_date_vec = temp_date_vec.write();
-                                                        temp_date_vec[i] = evt.value();
-                                                    },
-                                                    onkeydown: move |evt| {
-                                                        use dioxus::events::Key;
-                                                        if evt.key() == Key::Enter {
-                                                            if let Some(ref mut p) = plan.write().as_mut() {
-                                                                if let Ok(new_date) = chrono::NaiveDate::parse_from_str(&temp_date_vec.read()[i], "%Y-%m-%d") {
-                                                                    let dt = chrono::DateTime::<Utc>::from_utc(new_date.and_hms_opt(0,0,0).unwrap(), Utc);
-                                                                    p.items[i].date = dt;
-                                                                } else {
-                                                                    toast.write().popup(ToastInfo::simple("Invalid date"));
-                                                                }
+                                        } else {
+                                            button {
+                                                class: "plan-item-title-btn",
+                                                aria_label: "Edit section title",
+                                                tabindex: "0",
+                                                style: "opacity: 1.0; transition: opacity 0.18s;",
+                                                onclick: move |_| {
+                                                    let mut editing_title_vec = editing_title_vec.write();
+                                                    editing_title_vec[i] = true;
+                                                },
+                                                {item.section_title.clone()}
+                                            }
+                                        }
+                                        div { "📁 {item.module_title}" }
+                                        // Inline date editing with fade/scale
+                                        if editing_date_vec.read().get(i).cloned().unwrap_or(false) {
+                                            input {
+                                                r#type: "date",
+                                                value: temp_date_vec.read().get(i).cloned().unwrap_or_else(|| item.date.format("%Y-%m-%d").to_string()),
+                                                aria_label: "Edit session date",
+                                                autofocus: true,
+                                                style: "opacity: 1.0; transition: opacity 0.18s;",
+                                                oninput: move |evt| {
+                                                    let mut temp_date_vec = temp_date_vec.write();
+                                                    temp_date_vec[i] = evt.value();
+                                                },
+                                                onkeydown: move |evt| {
+                                                    use dioxus::events::Key;
+                                                    if evt.key() == Key::Enter {
+                                                        if let Some(ref mut p) = plan.write().as_mut() {
+                                                            if let Ok(new_date) = chrono::NaiveDate::parse_from_str(&temp_date_vec.read()[i], "%Y-%m-%d") {
+                                                                let dt = chrono::DateTime::<Utc>::from_utc(new_date.and_hms_opt(0,0,0).unwrap(), Utc);
+                                                                p.items[i].date = dt;
+                                                            } else {
+                                                                toast.write().popup(ToastInfo::simple("Invalid date"));
                                                             }
-                                                            let mut editing_date_vec = editing_date_vec.write();
-                                                            editing_date_vec[i] = false;
-                                                        } else if evt.key() == Key::Escape {
-                                                            let mut editing_date_vec = editing_date_vec.write();
-                                                            editing_date_vec[i] = false;
                                                         }
-                                                    },
-                                                    onblur: move |_| {
                                                         let mut editing_date_vec = editing_date_vec.write();
                                                         editing_date_vec[i] = false;
-                                                    },
-                                                }
-                                            } else {
-                                                button {
-                                                    class: "plan-item-date-btn",
-                                                    aria_label: "Edit session date",
-                                                    tabindex: "0",
-                                                    style: "opacity: 1.0; transition: opacity 0.18s;",
-                                                    onclick: move |_| {
+                                                    } else if evt.key() == Key::Escape {
                                                         let mut editing_date_vec = editing_date_vec.write();
-                                                        editing_date_vec[i] = true;
-                                                    },
-                                                    "{format_date(item.date)}"
-                                                }
+                                                        editing_date_vec[i] = false;
+                                                    }
+                                                },
+                                                onblur: move |_| {
+                                                    let mut editing_date_vec = editing_date_vec.write();
+                                                    editing_date_vec[i] = false;
+                                                },
                                             }
-                                            div { "{item.video_indices.len()} videos" }
+                                        } else {
+                                            button {
+                                                class: "plan-item-date-btn",
+                                                aria_label: "Edit session date",
+                                                tabindex: "0",
+                                                style: "opacity: 1.0; transition: opacity 0.18s;",
+                                                onclick: move |_| {
+                                                    let mut editing_date_vec = editing_date_vec.write();
+                                                    editing_date_vec[i] = true;
+                                                },
+                                                "{format_date(item.date)}"
+                                            }
                                         }
+                                        div { "{item.video_indices.len()} videos" }
                                     }
                                 }
                             }
