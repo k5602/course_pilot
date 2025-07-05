@@ -1,4 +1,6 @@
 use crate::types::{AppState, Route};
+use crate::ui::navigation::handle_navigation_with_fallback;
+use crate::ui::theme::ThemeToggle;
 use dioxus::prelude::*;
 
 /// Sidebar navigation item
@@ -26,12 +28,9 @@ const NAV_ITEMS: &[NavItem] = &[
 /// Layout component: sidebar, app bar, main content
 #[component]
 pub fn Layout() -> Element {
-    use crate::ui::{AddCourseDialog, CourseDashboard, PlanView};
-    let mut app_state = use_context::<Signal<AppState>>();
+    use crate::ui::{AddCourseDialog, PlanView, course_dashboard};
+    let app_state = use_context::<Signal<AppState>>();
     let current_route = app_state.read().current_route.clone();
-
-    // Theme toggle (light/dark)
-    let mut dark_mode = use_signal(|| false);
 
     // Sidebar collapsed state - collapsed by default
     let mut sidebar_collapsed = use_signal(|| true);
@@ -78,43 +77,15 @@ pub fn Layout() -> Element {
         "220px"
     };
 
-    // Handle navigation
-    let mut on_nav = move |route: Route| {
-        app_state.write().current_route = route;
+    // Handle navigation with safe navigation system
+    let on_nav = move |route: Route| {
+        handle_navigation_with_fallback(app_state, route);
     };
 
     // App bar branding
     let brand = "Course Pilot";
 
-    // Only one rsx! block allowed per component. Move all style and UI into a single rsx! block.
-    let theme_vars = if *dark_mode.read() {
-        r#"
-        :root {
-            --bg: #181a20;
-            --fg: #f5f5f5;
-            --sidebar-bg: #23272f;
-            --sidebar-fg: #fff;
-            --sidebar-active: #3f51b5;
-            --appbar-bg: #23272f;
-            --appbar-fg: #fff;
-        }
-        "#
-    } else {
-        r#"
-        :root {
-            --bg: #f5f5f5;
-            --fg: #23272f;
-            --sidebar-bg: #23272f;
-            --sidebar-fg: #fff;
-            --sidebar-active: #3f51b5;
-            --appbar-bg: #fff;
-            --appbar-fg: #23272f;
-        }
-        "#
-    };
-
     rsx! {
-        style { "{theme_vars}" }
         style {
             {
                 let sidebar_align = if *sidebar_collapsed.read() { "center" } else { "flex-start" };
@@ -125,14 +96,14 @@ pub fn Layout() -> Element {
                         display: flex;
                         height: 100vh;
                         width: 100vw;
-                        background: var(--bg, #f5f5f5);
-                        color: var(--fg, #222);
+                        background: var(--bg);
+                        color: var(--fg);
                         transition: background 0.2s, color 0.2s;
                     }}
                     .sidebar {{
                         width: {};
-                        background: var(--sidebar-bg, #23272f);
-                        color: var(--sidebar-fg, #fff);
+                        background: var(--sidebar-bg);
+                        color: var(--sidebar-fg);
                         display: flex;
                         flex-direction: column;
                         align-items: {};
@@ -176,11 +147,11 @@ pub fn Layout() -> Element {
                         outline: none;
                     }}
                     .sidebar-nav-item.active, .sidebar-nav-item:focus {{
-                        background: var(--sidebar-active, #3f51b5);
-                        color: #fff;
+                        background: var(--sidebar-active);
+                        color: var(--sidebar-fg);
                     }}
                     .sidebar-nav-item:hover {{
-                        background: #2c3140;
+                        background: var(--sidebar-hover);
                     }}
                     .sidebar-toggle {{
                         margin: 1rem auto 0.5rem auto;
@@ -198,12 +169,13 @@ pub fn Layout() -> Element {
                         transition: background 0.15s;
                     }}
                     .sidebar-toggle:hover {{
-                        background: #3335;
+                        background: var(--sidebar-hover);
                     }}
                     .appbar {{
                         height: 56px;
-                        background: var(--appbar-bg, #fff);
-                        color: var(--appbar-fg, #23272f);
+                        background: var(--appbar-bg);
+                        color: var(--appbar-fg);
+                        border-bottom: 1px solid var(--appbar-border);
                         display: flex;
                         align-items: center;
                         justify-content: space-between;
@@ -241,7 +213,7 @@ pub fn Layout() -> Element {
                         transition: background 0.15s;
                     }}
                     .theme-toggle-btn:hover {{
-                        background: #eee;
+                        background: var(--bg-secondary);
                     }}
                     .main-content {{
                         flex: 1;
@@ -335,13 +307,7 @@ pub fn Layout() -> Element {
                         span { "{brand}" }
                     }
                     div { class: "appbar-actions",
-                        button {
-                            class: "theme-toggle-btn",
-                            r#type: "button",
-                            onclick: move |_| dark_mode.set(!dark_mode()),
-                            aria_label: if *dark_mode.read() { "Switch to light mode" } else { "Switch to dark mode" },
-                            if *dark_mode.read() { "🌙" } else { "☀️" }
-                        }
+                        ThemeToggle {}
                     }
                 }
                 main { class: "main-content",
@@ -352,7 +318,7 @@ pub fn Layout() -> Element {
                         }
                     }
                     match current_route {
-                        Route::Dashboard => rsx! { CourseDashboard {} },
+                        Route::Dashboard => rsx! { course_dashboard {} },
                         Route::AddCourse => rsx! { AddCourseDialog {} },
                         Route::PlanView(course_id) => rsx! { PlanView { course_id } }
                     }

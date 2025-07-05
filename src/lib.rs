@@ -7,10 +7,12 @@
 //! - SQLite-based persistence
 //! - Dioxus-based desktop UI
 
+// Main modules
 pub mod app;
 pub mod ingest;
 pub mod nlp;
 pub mod planner;
+pub mod state;
 pub mod storage;
 pub mod types;
 pub mod ui;
@@ -23,7 +25,7 @@ pub use types::{
 
 // Re-export main UI components
 pub use ui::{
-    add_course_dialog::AddCourseDialog, course_dashboard::CourseDashboard, plan_view::PlanView,
+    add_course_dialog::AddCourseDialog, course_dashboard::course_dashboard, plan_view::PlanView,
 };
 
 // Re-export core functionality

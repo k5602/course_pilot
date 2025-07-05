@@ -4,8 +4,8 @@
 //! and provides the overall application structure.
 
 use crate::types::AppState;
-use crate::ui::AppTheme;
 use crate::ui::Layout;
+use crate::ui::theme::UnifiedThemeProvider;
 use dioxus::prelude::*;
 use dioxus_toast::{ToastFrame, ToastManager};
 
@@ -27,9 +27,10 @@ pub fn App() -> Element {
     use_context_provider(|| toast);
 
     rsx! {
-        AppTheme {},
-        ToastFrame { manager: toast.clone() }
-        Layout {}
+        UnifiedThemeProvider {
+            ToastFrame { manager: toast.clone() }
+            Layout {}
+        }
     }
 }
 

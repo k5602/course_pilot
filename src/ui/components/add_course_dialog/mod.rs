@@ -9,6 +9,7 @@ use crate::ui::components::progress::Progress;
 use crate::ui::components::radio_group::{RadioGroup, RadioItem};
 use crate::ui::components::skeleton::SkeletonLoader;
 use crate::ui::components::{Button, Input};
+use crate::ui::navigation::{async_navigate_to, navigate_to_dashboard};
 use dioxus::prelude::*;
 use dioxus_toast::ToastManager;
 use rfd::AsyncFileDialog;
@@ -164,7 +165,9 @@ pub fn AddCourseDialog() -> Element {
                         let mut app_state_nav = app_state.clone();
                         spawn(async move {
                             tokio::time::sleep(std::time::Duration::from_secs(2)).await;
-                            app_state_nav.write().current_route = Route::Dashboard;
+                            if let Err(e) = async_navigate_to(app_state_nav, Route::Dashboard) {
+                                log::error!("Failed to navigate to dashboard: {:?}", e);
+                            }
                         });
                     }
                 }
@@ -186,7 +189,9 @@ pub fn AddCourseDialog() -> Element {
     let cancel_import = {
         let mut app_state_cancel = app_state.clone();
         move |_| {
-            app_state_cancel.write().current_route = Route::Dashboard;
+            if let Err(e) = navigate_to_dashboard(app_state_cancel) {
+                log::error!("Failed to navigate to dashboard: {:?}", e);
+            }
         }
     };
 

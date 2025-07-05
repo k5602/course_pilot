@@ -1,4 +1,7 @@
-use crate::types::{AppState, Course, Route};
+use crate::state::{
+    delete_course, duplicate_course, navigate_to, use_app_state, use_course_stats, use_courses,
+};
+use crate::types::{Course, Route};
 use chrono::{DateTime, Utc};
 use dioxus::prelude::*;
 use dioxus_free_icons::Icon;
@@ -41,9 +44,9 @@ struct CourseCardProps {
     course: Course,
 }
 
-fn CourseCard(props: CourseCardProps) -> Element {
+fn course_card(props: CourseCardProps) -> Element {
     let course = props.course;
-    let mut app_state = use_context::<Signal<AppState>>();
+    let app_state = use_app_state();
     let formatted_date = format_date(course.created_at);
     let video_count = course.video_count();
     let is_structured = course.is_structured();
@@ -151,9 +154,13 @@ fn CourseCard(props: CourseCardProps) -> Element {
                             on_click: {
                                 let course_id = course.id;
                                 move |_| {
-                                    app_state.write().courses.retain(|c| c.id != course_id);
+                                    if let Err(e) = delete_course(app_state, course_id) {
+                                        log::error!("Failed to delete course: {:?}", e);
+                                        toast.write().popup(ToastInfo::simple("Failed to delete course"));
+                                    } else {
+                                        toast.write().popup(ToastInfo::simple("Course deleted"));
+                                    }
                                     show_delete_dialog.set(false);
-                                    toast.write().popup(ToastInfo::simple("Course deleted"));
                                 }
                             },
                             "Delete"
@@ -189,12 +196,13 @@ fn CourseCard(props: CourseCardProps) -> Element {
                             on_click: {
                                 let course = course.clone();
                                 move |_| {
-                                    let mut new_course = course.clone();
-                                    new_course.id = uuid::Uuid::new_v4();
-                                    new_course.name = format!("{} (Copy)", new_course.name);
-                                    app_state.write().courses.push(new_course);
+                                    if let Err(e) = duplicate_course(app_state, course.id) {
+                                        log::error!("Failed to duplicate course: {:?}", e);
+                                        toast.write().popup(ToastInfo::simple("Failed to duplicate course"));
+                                    } else {
+                                        toast.write().popup(ToastInfo::simple("Course duplicated"));
+                                    }
                                     show_duplicate_dialog.set(false);
-                                    toast.write().popup(ToastInfo::simple("Course duplicated"));
                                 }
                             },
                             "Duplicate"
@@ -342,11 +350,8 @@ fn CourseCard(props: CourseCardProps) -> Element {
                     onclick: {
                         let course_id = course.id;
                         move |_| {
-                            if is_structured {
-                                app_state.write().current_route = Route::PlanView(course_id);
-                            } else {
-                                // Structure course functionality
-                                app_state.write().current_route = Route::PlanView(course_id);
+                            if let Err(e) = navigate_to(app_state, Route::PlanView(course_id)) {
+                                log::error!("Failed to navigate to plan view: {:?}", e);
                             }
                         }
                     },
@@ -367,16 +372,17 @@ fn CourseCard(props: CourseCardProps) -> Element {
     }
 }
 
-pub fn CourseDashboard() -> Element {
-    let mut app_state = use_context::<Signal<AppState>>();
+pub fn course_dashboard() -> Element {
+    let app_state = use_app_state();
+    let courses_signal = use_courses();
+    let course_stats = use_course_stats();
     let mut search_query = use_signal(String::new);
     let mut filter_structured = use_signal(|| false);
 
     let filtered_courses = use_memo(move || {
-        let state = app_state.read();
+        let courses = courses_signal.read();
         let query = search_query.read().to_lowercase();
-        state
-            .courses
+        courses
             .iter()
             .filter(|course| {
                 let matches_search =
@@ -392,24 +398,24 @@ pub fn CourseDashboard() -> Element {
             .collect::<Vec<Course>>()
     });
 
-    // Animated stats
-    let mut total_courses = use_motion(app_state.read().courses.len() as f32);
-    let mut structured_courses =
-        use_motion(count_structured_courses(app_state.read().courses.clone()) as f32);
-    let mut total_videos = use_motion(count_total_videos(app_state.read().courses.clone()) as f32);
+    // Animated stats using reactive course stats
+    let (total_count, structured_count, video_count) = *course_stats.read();
+    let mut total_courses = use_motion(total_count as f32);
+    let mut structured_courses = use_motion(structured_count as f32);
+    let mut total_videos = use_motion(video_count as f32);
 
     use_effect(move || {
-        let courses = app_state.read().courses.clone();
+        let (total, structured, videos) = *course_stats.read();
         total_courses.animate_to(
-            courses.len() as f32,
+            total as f32,
             AnimationConfig::new(AnimationMode::Spring(Spring::default())),
         );
         structured_courses.animate_to(
-            count_structured_courses(courses.clone()) as f32,
+            structured as f32,
             AnimationConfig::new(AnimationMode::Spring(Spring::default())),
         );
         total_videos.animate_to(
-            count_total_videos(courses) as f32,
+            videos as f32,
             AnimationConfig::new(AnimationMode::Spring(Spring::default())),
         );
     });
@@ -429,7 +435,9 @@ pub fn CourseDashboard() -> Element {
                 button {
                     class: "dashboard-add-btn",
                     onclick: move |_| {
-                        app_state.write().current_route = Route::AddCourse;
+                        if let Err(e) = navigate_to(app_state, Route::AddCourse) {
+                            log::error!("Failed to navigate to add course: {:?}", e);
+                        }
                     },
                     Icon { width: 20, height: 20, fill: "currentColor", icon: MdAdd }
                     span { "Add Course" }
@@ -519,7 +527,7 @@ pub fn CourseDashboard() -> Element {
             }
 
             // Course grid or empty state
-            if filtered_courses().is_empty() && app_state.read().courses.is_empty() {
+            if filtered_courses().is_empty() && courses_signal.read().is_empty() {
                 section { class: "empty-state",
                     div { class: "empty-state-icon", "📚" }
                     h2 { class: "empty-state-title", "Welcome to Course Pilot!" }
@@ -527,7 +535,9 @@ pub fn CourseDashboard() -> Element {
                     button {
                         class: "dashboard-add-btn",
                         onclick: move |_| {
-                            app_state.write().current_route = Route::AddCourse;
+                            if let Err(e) = navigate_to(app_state, Route::AddCourse) {
+                                log::error!("Failed to navigate to add course: {:?}", e);
+                            }
                         },
                         Icon { width: 20, height: 20, fill: "currentColor", icon: MdAdd }
                         span { "Add Your First Course" }
@@ -545,7 +555,7 @@ pub fn CourseDashboard() -> Element {
                         class: "courses-grid",
                         style: "display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 24px;",
                         for course in filtered_courses() {
-                            CourseCard { course }
+                            course_card { course }
                         }
                     }
                 }

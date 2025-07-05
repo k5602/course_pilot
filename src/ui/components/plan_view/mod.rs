@@ -9,7 +9,9 @@
 
 use crate::nlp::structure_course;
 use crate::planner::generate_plan;
+use crate::state::{async_structure_course, navigate_to, use_app_state, use_course};
 use crate::types::{AppState, Course, Plan, PlanSettings, Route};
+use crate::ui::navigation::navigate_to_dashboard;
 use chrono::{DateTime, Duration, Local, Utc};
 use dioxus::prelude::*;
 use dioxus_free_icons::Icon;
@@ -93,40 +95,31 @@ impl Default for LearningAnalytics {
 
 #[component]
 pub fn PlanView(course_id: Uuid) -> Element {
-    let mut app_state = use_context::<Signal<AppState>>();
+    let app_state = use_app_state();
+    let course_signal = use_course(course_id);
     let mut sidebar_open = use_signal(|| false);
     let mut selected_session = use_signal(|| Option::<Uuid>::None);
     let mut toast: Signal<ToastManager> = use_context();
-    let mut course = use_signal(|| Option::<Course>::None);
-    let mut plan = use_signal(|| Option::<Plan>::None);
+    let _plan = use_signal(|| Option::<Plan>::None);
     let mut is_loading = use_signal(|| true);
-    let mut is_structuring = use_signal(|| false);
-    let mut is_planning = use_signal(|| false);
+    let is_structuring = use_signal(|| false);
+    let _is_planning = use_signal(|| false);
     let mut error_message = use_signal(|| Option::<String>::None);
 
-    // Initialize course data
+    // Initialize course data using reactive course signal
     use_effect(move || {
-        let found_course = app_state
-            .read()
-            .courses
-            .iter()
-            .find(|c| c.id == course_id)
-            .cloned();
-
-        match found_course {
-            Some(c) => {
-                course.set(Some(c));
-                is_loading.set(false);
-            }
-            None => {
-                error_message.set(Some("Course not found".to_string()));
-                is_loading.set(false);
-            }
+        let course_exists = crate::state::course_exists(app_state, course_id);
+        if course_exists {
+            is_loading.set(false);
+            error_message.set(None);
+        } else {
+            error_message.set(Some("Course not found".to_string()));
+            is_loading.set(false);
         }
     });
 
-    // Get current course
-    let current_course = match course.read().as_ref() {
+    // Get current course from reactive signal
+    let current_course = match course_signal.read().as_ref() {
         Some(c) => c.clone(),
         None => {
             if *is_loading.read() {
@@ -142,7 +135,9 @@ pub fn PlanView(course_id: Uuid) -> Element {
                             h2 { "Course not found" }
                             button {
                                 onclick: move |_| {
-                                    app_state.write().current_route = Route::Dashboard;
+                                    if let Err(e) = navigate_to(app_state, Route::Dashboard) {
+                                        log::error!("Failed to navigate to dashboard: {:?}", e);
+                                    }
                                 },
                                 "← Back to Dashboard"
                             }
@@ -153,39 +148,36 @@ pub fn PlanView(course_id: Uuid) -> Element {
         }
     };
 
-    // Structure course action
+    // Structure course action using async state function
     let structure_course_action = move |_| {
-        if let Some(current_course) = course.read().clone() {
+        if let Some(current_course) = course_signal.read().clone() {
+            let app_state_clone = app_state;
+            let mut toast_clone = toast;
+            let mut error_message_clone = error_message;
+            let mut is_structuring_clone = is_structuring;
+
             spawn(async move {
-                is_structuring.set(true);
-                error_message.set(None);
+                is_structuring_clone.set(true);
+                error_message_clone.set(None);
 
-                match structure_course(current_course.raw_titles.clone()) {
-                    Ok(structure) => {
-                        let mut updated_course = current_course;
-                        updated_course.structure = Some(structure);
-
-                        let course_index = app_state
-                            .read()
-                            .courses
-                            .iter()
-                            .position(|c| c.id == updated_course.id);
-
-                        if let Some(index) = course_index {
-                            app_state.write().courses[index] = updated_course.clone();
-                        }
-
-                        course.set(Some(updated_course));
-                        toast
+                match async_structure_course(
+                    app_state_clone,
+                    current_course.id,
+                    current_course.raw_titles.clone(),
+                )
+                .await
+                {
+                    Ok(()) => {
+                        toast_clone
                             .write()
                             .popup(ToastInfo::simple("Course structured successfully!"));
                     }
                     Err(e) => {
-                        error_message.set(Some(format!("Failed to structure course: {}", e)));
+                        error_message_clone.set(Some(format!("Failed to structure course: {}", e)));
                     }
                 }
 
-                is_structuring.set(false);
+                is_structuring_clone.set(false);
             });
         }
     };
@@ -306,7 +298,9 @@ pub fn PlanView(course_id: Uuid) -> Element {
                         button {
                             class: "course-action-btn",
                             onclick: move |_| {
-                                app_state.write().current_route = Route::Dashboard;
+                                if let Err(e) = navigate_to(app_state, Route::Dashboard) {
+                                    log::error!("Failed to navigate to dashboard: {:?}", e);
+                                }
                             },
                             "← Dashboard"
                         }
