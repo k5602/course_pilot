@@ -36,6 +36,41 @@ pub fn Layout() -> Element {
     // Sidebar collapsed state - collapsed by default
     let mut sidebar_collapsed = use_signal(|| true);
 
+    // Load sidebar state from config file on mount
+    use_effect(move || {
+        if let Some(config_dir) = dirs::config_dir() {
+            let config_path = config_dir.join("course_pilot").join("ui_state.json");
+            if let Ok(contents) = std::fs::read_to_string(&config_path) {
+                if let Ok(ui_state) = serde_json::from_str::<serde_json::Value>(&contents) {
+                    if let Some(collapsed) = ui_state.get("sidebar_collapsed") {
+                        if let Some(state) = collapsed.as_bool() {
+                            sidebar_collapsed.set(state);
+                        }
+                    }
+                }
+            }
+        }
+    });
+
+    // Save sidebar state to config file whenever it changes
+    use_effect(move || {
+        let state = *sidebar_collapsed.read();
+        if let Some(config_dir) = dirs::config_dir() {
+            let config_path = config_dir.join("course_pilot");
+            let _ = std::fs::create_dir_all(&config_path);
+            let config_file = config_path.join("ui_state.json");
+
+            let ui_state = serde_json::json!({
+                "sidebar_collapsed": state
+            });
+
+            let _ = std::fs::write(
+                &config_file,
+                serde_json::to_string_pretty(&ui_state).unwrap_or_default(),
+            );
+        }
+    });
+
     // Sidebar width
     let sidebar_width = if *sidebar_collapsed.read() {
         "60px"

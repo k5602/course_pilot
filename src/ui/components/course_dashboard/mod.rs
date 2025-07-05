@@ -210,15 +210,24 @@ fn CourseCard(props: CourseCardProps) -> Element {
     rsx! {
         div {
             class: format!("course-card {}", status_class),
+            style: "position: relative; display: flex; flex-direction: column; height: 100%; min-height: 200px; transition: all 0.2s;",
+            onmouseenter: move |_| {
+                // Show secondary actions on hover
+            },
+            onmouseleave: move |_| {
+                // Hide secondary actions on leave
+            },
 
             // Course Card Header
             div { class: "course-card-header",
                 // Secondary actions (show on hover)
-                div { class: "course-secondary-actions",
+                div {
+                    class: "course-secondary-actions",
+                    style: "position: absolute; top: 12px; right: 12px; display: flex; gap: 4px; opacity: 0; transition: opacity 0.2s;",
                     button {
                         class: "course-action-btn",
                         title: "Edit Course",
-                        style: format!("transform: scale({});", scale_edit.get_value()),
+                        style: format!("transform: scale({}); padding: 4px; border-radius: 4px;", scale_edit.get_value()),
                         onmouseenter: move |_| {
                             scale_edit.animate_to(1.1, AnimationConfig::new(AnimationMode::Spring(Spring::default())));
                         },
@@ -234,7 +243,7 @@ fn CourseCard(props: CourseCardProps) -> Element {
                     button {
                         class: "course-action-btn",
                         title: "Duplicate Course",
-                        style: format!("transform: scale({});", scale_duplicate.get_value()),
+                        style: format!("transform: scale({}); padding: 4px; border-radius: 4px;", scale_duplicate.get_value()),
                         onmouseenter: move |_| {
                             scale_duplicate.animate_to(1.1, AnimationConfig::new(AnimationMode::Spring(Spring::default())));
                         },
@@ -248,7 +257,7 @@ fn CourseCard(props: CourseCardProps) -> Element {
                     button {
                         class: "course-action-btn danger",
                         title: "Delete Course",
-                        style: format!("transform: scale({});", scale_delete.get_value()),
+                        style: format!("transform: scale({}); padding: 4px; border-radius: 4px;", scale_delete.get_value()),
                         onmouseenter: move |_| {
                             scale_delete.animate_to(1.1, AnimationConfig::new(AnimationMode::Spring(Spring::default())));
                         },
@@ -325,16 +334,30 @@ fn CourseCard(props: CourseCardProps) -> Element {
             }
 
             // Course Card Footer
-            div { class: "course-card-footer",
+            div {
+                class: "course-card-footer",
+                style: "display: flex; gap: 12px; margin-top: auto;",
                 button {
                     class: "course-primary-action",
                     onclick: {
                         let course_id = course.id;
                         move |_| {
-                            app_state.write().current_route = Route::PlanView(course_id);
+                            if is_structured {
+                                app_state.write().current_route = Route::PlanView(course_id);
+                            } else {
+                                // Structure course functionality
+                                app_state.write().current_route = Route::PlanView(course_id);
+                            }
                         }
                     },
                     if is_structured { "View Plan" } else { "Structure Course" }
+                }
+                button {
+                    class: "course-secondary-action",
+                    onclick: move |_| {
+                        toast.write().popup(ToastInfo::simple("Edit functionality coming soon"));
+                    },
+                    "Edit"
                 }
             }
         }
@@ -397,7 +420,9 @@ pub fn CourseDashboard() -> Element {
             href: asset!("src/ui/components/course_dashboard/style.css")
         }
 
-        div { class: "dashboard-container",
+        div {
+            class: "dashboard-container",
+            style: "height: 100vh; overflow-y: auto; padding: 24px;",
             // Header
             header { class: "dashboard-header",
                 h1 { class: "dashboard-title", "Dashboard" }
@@ -516,7 +541,9 @@ pub fn CourseDashboard() -> Element {
                 }
             } else {
                 section { class: "courses-section",
-                    div { class: "courses-grid",
+                    div {
+                        class: "courses-grid",
+                        style: "display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 24px;",
                         for course in filtered_courses() {
                             CourseCard { course }
                         }

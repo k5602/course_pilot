@@ -1,31 +1,31 @@
-/* Dashboard-specific CSS - Force light mode for testing */
+/* Dashboard-specific CSS with improved theming */
 
 /* Dashboard Layout Extensions */
 .dashboard-container {
-    /* Force light mode colors regardless of system preference */
-    --dashboard-primary: #2563eb;
-    --dashboard-primary-hover: #1d4ed8;
-    --dashboard-primary-light: #dbeafe;
-    --dashboard-success: #059669;
-    --dashboard-success-light: #d1fae5;
-    --dashboard-warning: #d97706;
-    --dashboard-warning-light: #fef3c7;
-    --dashboard-danger: #dc2626;
-    --dashboard-danger-light: #fee2e2;
+    /* Primary Colors */
+    --dashboard-primary: var(--color-primary-600);
+    --dashboard-primary-hover: var(--color-primary-700);
+    --dashboard-primary-light: var(--color-primary-100);
+    --dashboard-success: var(--color-success-600);
+    --dashboard-success-light: var(--color-success-100);
+    --dashboard-warning: var(--color-warning-600);
+    --dashboard-warning-light: var(--color-warning-100);
+    --dashboard-danger: var(--color-danger-600);
+    --dashboard-danger-light: var(--color-danger-100);
 
-    /* Surface Colors - Forced light theme */
-    --dashboard-bg: #f9fafb;
-    --dashboard-card: #ffffff;
-    --dashboard-elevated: #f3f4f6;
-    --dashboard-border: #e5e7eb;
-    --dashboard-divider: #f3f4f6;
+    /* Surface Colors */
+    --dashboard-bg: var(--color-gray-50);
+    --dashboard-card: var(--color-white);
+    --dashboard-elevated: var(--color-gray-100);
+    --dashboard-border: var(--color-gray-200);
+    --dashboard-divider: var(--color-gray-100);
 
-    /* Text Colors - Forced light theme */
-    --dashboard-text-primary: #111827;
-    --dashboard-text-secondary: #374151;
-    --dashboard-text-tertiary: #6b7280;
-    --dashboard-text-disabled: #9ca3af;
-    --dashboard-text-inverse: #ffffff;
+    /* Text Colors */
+    --dashboard-text-primary: var(--color-gray-900);
+    --dashboard-text-secondary: var(--color-gray-700);
+    --dashboard-text-tertiary: var(--color-gray-500);
+    --dashboard-text-disabled: var(--color-gray-400);
+    --dashboard-text-inverse: var(--color-white);
 
     /* Transitions */
     --dashboard-transition-fast: 150ms ease;
@@ -33,7 +33,20 @@
     --dashboard-transition-slow: 300ms ease;
 }
 
-/* Dark Theme - Variables automatically flip with theme.rs */
+/* Dark Theme Support */
+@media (prefers-color-scheme: dark) {
+    .dashboard-container {
+        --dashboard-bg: var(--color-gray-900);
+        --dashboard-card: var(--color-gray-800);
+        --dashboard-elevated: var(--color-gray-700);
+        --dashboard-border: var(--color-gray-600);
+        --dashboard-divider: var(--color-gray-700);
+        --dashboard-text-primary: var(--color-gray-100);
+        --dashboard-text-secondary: var(--color-gray-300);
+        --dashboard-text-tertiary: var(--color-gray-400);
+        --dashboard-text-inverse: var(--color-gray-900);
+    }
+}
 
 /* Base Styles */
 * {
@@ -505,6 +518,8 @@
     padding-top: var(--space-3);
     border-top: 1px solid var(--dashboard-divider);
     margin-top: auto;
+    display: flex;
+    gap: var(--space-3);
 }
 
 .course-primary-action {
@@ -517,7 +532,11 @@
     font-weight: var(--font-medium);
     cursor: pointer;
     transition: all var(--dashboard-transition-base);
-    width: 100%;
+    flex: 1;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: var(--space-1);
 }
 
 .course-primary-action:hover {
@@ -530,6 +549,30 @@
     box-shadow: 0 0 0 3px var(--dashboard-primary-light);
 }
 
+.course-secondary-action {
+    background: var(--dashboard-bg);
+    color: var(--dashboard-text-secondary);
+    border: 1px solid var(--dashboard-border);
+    border-radius: var(--radius-md);
+    padding: var(--space-2) var(--space-4);
+    font-size: var(--text-sm);
+    font-weight: var(--font-medium);
+    cursor: pointer;
+    transition: all var(--dashboard-transition-base);
+    flex: 0 0 auto;
+}
+
+.course-secondary-action:hover {
+    background: var(--dashboard-elevated);
+    color: var(--dashboard-text-primary);
+    border-color: var(--dashboard-primary);
+}
+
+.course-secondary-action:focus {
+    outline: none;
+    box-shadow: 0 0 0 3px var(--dashboard-primary-light);
+}
+
 .course-secondary-actions {
     position: absolute;
     top: var(--space-2);
@@ -538,6 +581,7 @@
     gap: 4px;
     opacity: 0;
     transition: opacity var(--dashboard-transition-base);
+    z-index: 1;
 }
 
 .course-card:hover .course-secondary-actions {
@@ -548,7 +592,7 @@
     padding: 6px;
     border: 1px solid var(--dashboard-border);
     border-radius: var(--radius-sm);
-    background: rgba(255, 255, 255, 0.9);
+    background: rgba(255, 255, 255, 0.95);
     color: var(--dashboard-text-secondary);
     cursor: pointer;
     transition: all var(--dashboard-transition-base);
@@ -557,13 +601,15 @@
     justify-content: center;
     width: 28px;
     height: 28px;
-    backdrop-filter: blur(4px);
+    backdrop-filter: blur(8px);
+    box-shadow: var(--shadow-sm);
 }
 
 .course-action-btn:hover {
     background: var(--dashboard-elevated);
     color: var(--dashboard-text-primary);
-    transform: scale(1.05);
+    transform: scale(1.1);
+    box-shadow: var(--shadow-md);
 }
 
 .course-action-btn:focus {
