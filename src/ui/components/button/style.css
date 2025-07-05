@@ -81,6 +81,45 @@
     box-shadow: 0 0 0 2px var(--focused-border-color);
 }
 
+/* PlanView Loading Overlay & Spinner */
+.planview-loading-overlay {
+    position: fixed;
+    z-index: 9999;
+    inset: 0;
+    background: rgba(255, 255, 255, 0.75);
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    pointer-events: all;
+}
+
+.planview-spinner {
+    width: 48px;
+    height: 48px;
+    border: 5px solid #e0e7ff;
+    border-top: 5px solid #2356c7;
+    border-radius: 50%;
+    animation: planview-spin 1s linear infinite;
+    margin-bottom: 1.5rem;
+}
+
+@keyframes planview-spin {
+    0% {
+        transform: rotate(0deg);
+    }
+    100% {
+        transform: rotate(360deg);
+    }
+}
+
+.planview-loading-msg {
+    font-size: 1.25rem;
+    color: #2356c7;
+    font-weight: 600;
+    text-align: center;
+}
+
 .button[data-style="primary"] {
     background-color: var(--secondary-color-2);
     color: var(--primary-color);

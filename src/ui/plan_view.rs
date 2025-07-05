@@ -3,6 +3,7 @@ use crate::planner::generate_plan;
 use crate::types::{AppState, Course, Plan, PlanSettings, Route};
 use crate::ui::Button;
 use crate::ui::Input;
+use crate::ui::components::alert_dialog::{AlertDialogContent, AlertDialogRoot};
 use crate::ui::components::skeleton::SkeletonLoader;
 use crate::ui::components::{Checkbox, Label, Progress};
 use chrono::{DateTime, Utc};
@@ -131,6 +132,39 @@ pub fn PlanView(course_id: Uuid) -> Element {
             .unwrap_or_default()
     });
 
+    // Helper to reinitialize vectors when plan changes
+    fn reinit_plan_edit_vectors(
+        plan: &Option<Plan>,
+        editing_title_vec: &mut Signal<Vec<bool>>,
+        editing_date_vec: &mut Signal<Vec<bool>>,
+        temp_title_vec: &mut Signal<Vec<String>>,
+        temp_date_vec: &mut Signal<Vec<String>>,
+    ) {
+        let len = plan.as_ref().map(|p| p.items.len()).unwrap_or(0);
+        editing_title_vec.set(vec![false; len]);
+        editing_date_vec.set(vec![false; len]);
+        temp_title_vec.set(
+            plan.as_ref()
+                .map(|p| {
+                    p.items
+                        .iter()
+                        .map(|item| item.section_title.clone())
+                        .collect()
+                })
+                .unwrap_or_default(),
+        );
+        temp_date_vec.set(
+            plan.as_ref()
+                .map(|p| {
+                    p.items
+                        .iter()
+                        .map(|item| item.date.format("%Y-%m-%d").to_string())
+                        .collect()
+                })
+                .unwrap_or_default(),
+        );
+    }
+
     let go_back = {
         let mut app_state_back = app_state.clone();
         move |_| {
@@ -161,6 +195,14 @@ pub fn PlanView(course_id: Uuid) -> Element {
 
                         course.set(Some(updated_course));
                         success_message.set(Some("Course structured successfully!".to_string()));
+                        // Reinitialize editing vectors after structure changes
+                        reinit_plan_edit_vectors(
+                            &plan.read(),
+                            &mut editing_title_vec,
+                            &mut editing_date_vec,
+                            &mut temp_title_vec,
+                            &mut temp_date_vec,
+                        );
                     }
                     Err(e) => {
                         error_message.set(Some(format!("Failed to structure course: {}", e)));
@@ -201,6 +243,14 @@ pub fn PlanView(course_id: Uuid) -> Element {
                         plan.set(Some(generated_plan));
                         success_message.set(Some("Study plan generated successfully!".to_string()));
                         show_plan_settings.set(false);
+                        // Reinitialize editing vectors after plan changes
+                        reinit_plan_edit_vectors(
+                            &plan.read(),
+                            &mut editing_title_vec,
+                            &mut editing_date_vec,
+                            &mut temp_title_vec,
+                            &mut temp_date_vec,
+                        );
                     }
                     Err(e) => {
                         error_message.set(Some(format!("Failed to generate plan: {}", e)));
@@ -219,6 +269,20 @@ pub fn PlanView(course_id: Uuid) -> Element {
 
     if *is_loading.read() {
         return rsx! { div { "Loading course..." } };
+    }
+
+    // Loading overlay for async actions
+    if *is_structuring.read() || *is_planning.read() {
+        return rsx! {
+            div {
+                class: "planview-loading-overlay",
+                div { class: "planview-spinner" }
+                div { class: "planview-loading-msg",
+                    if *is_structuring.read() { "Analyzing course structure..." }
+                    else { "Generating study plan..." }
+                }
+            }
+        };
     }
 
     let current_course = match course.read().as_ref() {
@@ -381,75 +445,85 @@ pub fn PlanView(course_id: Uuid) -> Element {
                 }
 
                 if *show_plan_settings.read() {
-                    div {
-                        h3 { "Plan Settings" }
-                        div {
+                    AlertDialogRoot {
+                        open: true,
+                        on_open_change: move |open| show_plan_settings.set(open),
+                        AlertDialogContent {
                             div {
-                                Label {
-                                    class: "label",
-                                    html_for: "sessions-per-week",
-                                    "Sessions per week"
-                                }
-                                Input {
-                                    id: "sessions-per-week",
-                                    r#type: "number",
-                                    min: "1",
-                                    max: "14",
-                                    value: "{sessions_per_week}",
-                                    oninput: move |evt: FormEvent| {
-                                        if let Ok(val) = evt.value().parse::<u8>() {
-                                            sessions_per_week.set(val);
+                                h3 { "Plan Settings" }
+                                div {
+                                    div {
+                                        Label {
+                                            class: "label",
+                                            html_for: "sessions-per-week",
+                                            "Sessions per week"
+                                        }
+                                        Input {
+                                            id: "sessions-per-week",
+                                            r#type: "number",
+                                            min: "1",
+                                            max: "14",
+                                            value: "{sessions_per_week}",
+                                            oninput: move |evt: FormEvent| {
+                                                if let Ok(val) = evt.value().parse::<u8>() {
+                                                    sessions_per_week.set(val);
+                                                }
+                                            }
+                                        }
+                                    }
+                                    div {
+                                        Label {
+                                            class: "label",
+                                            html_for: "session-length",
+                                            "Session length (minutes)"
+                                        }
+                                        Input {
+                                            id: "session-length",
+                                            r#type: "number",
+                                            min: "15",
+                                            max: "180",
+                                            value: "{session_length_minutes}",
+                                            oninput: move |evt: FormEvent| {
+                                                if let Ok(val) = evt.value().parse::<u32>() {
+                                                    session_length_minutes.set(val);
+                                                }
+                                            }
+                                        }
+                                    }
+                                    div {
+                                        Label {
+                                            class: "label",
+                                            html_for: "start-date",
+                                            "Start date"
+                                        }
+                                        Input {
+                                            id: "start-date",
+                                            r#type: "date",
+                                            value: "{start_date}",
+                                            oninput: move |evt: FormEvent| start_date.set(evt.value())
+                                        }
+                                    }
+                                    div {
+                                        Label {
+                                            class: "label",
+                                            html_for: "include-weekends",
+                                            Checkbox {
+                                                id: "include-weekends",
+                                                class: "checkbox",
+                                                name: "include-weekends",
+                                                checked: *include_weekends.read(),
+                                                onchange: move |evt: dioxus::events::FormEvent| {
+                                                    let checked = evt.value().parse::<bool>().unwrap_or(false);
+                                                    include_weekends.set(checked);
+                                                },
+                                            }
+                                            "Include weekends"
                                         }
                                     }
                                 }
-                            }
-                            div {
-                                Label {
-                                    class: "label",
-                                    html_for: "session-length",
-                                    "Session length (minutes)"
-                                }
-                                Input {
-                                    id: "session-length",
-                                    r#type: "number",
-                                    min: "15",
-                                    max: "180",
-                                    value: "{session_length_minutes}",
-                                    oninput: move |evt: FormEvent| {
-                                        if let Ok(val) = evt.value().parse::<u32>() {
-                                            session_length_minutes.set(val);
-                                        }
-                                    }
-                                }
-                            }
-                            div {
-                                Label {
-                                    class: "label",
-                                    html_for: "start-date",
-                                    "Start date"
-                                }
-                                Input {
-                                    id: "start-date",
-                                    r#type: "date",
-                                    value: "{start_date}",
-                                    oninput: move |evt: FormEvent| start_date.set(evt.value())
-                                }
-                            }
-                            div {
-                                Label {
-                                    class: "label",
-                                    html_for: "include-weekends",
-                                    Checkbox {
-                                        id: "include-weekends",
-                                        class: "checkbox",
-                                        name: "include-weekends",
-                                        checked: *include_weekends.read(),
-                                        onchange: move |evt: dioxus::events::FormEvent| {
-                                            let checked = evt.value().parse::<bool>().unwrap_or(false);
-                                            include_weekends.set(checked);
-                                        },
-                                    }
-                                    "Include weekends"
+                                div {
+                                    Button { onclick: move |_| show_plan_settings.set(false), "Cancel" }
+                                    Button { onclick: generate_plan_action, "Save & Generate" }
                                 }
                             }
                         }
@@ -566,7 +640,9 @@ pub fn PlanView(course_id: Uuid) -> Element {
                                                 style: "opacity: 1.0; transition: opacity 0.18s;",
                                                 onclick: move |_| {
                                                     let mut editing_title_vec = editing_title_vec.write();
-                                                    editing_title_vec[i] = true;
+                                                    if i < editing_title_vec.len() {
+                                                        editing_title_vec[i] = true;
+                                                    }
                                                 },
                                                 {item.section_title.clone()}
                                             }
@@ -615,7 +691,9 @@ pub fn PlanView(course_id: Uuid) -> Element {
                                                 style: "opacity: 1.0; transition: opacity 0.18s;",
                                                 onclick: move |_| {
                                                     let mut editing_date_vec = editing_date_vec.write();
-                                                    editing_date_vec[i] = true;
+                                                    if i < editing_date_vec.len() {
+                                                        editing_date_vec[i] = true;
+                                                    }
                                                 },
                                                 "{format_date(item.date)}"
                                             }
