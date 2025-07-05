@@ -36,3 +36,33 @@ venv/
 /.env
 /.envrc
 /.direnv
+
+# Dioxus/Component build artifacts
+src/ui/components/preview/
+src/ui/components/primitives/
+src/ui/components/*/docs.md
+
+# Editor/OS junk
+*.tmp
+*.bak
+*.swp
+*.swo
+*.DS_Store
+
+# Remove any leftover markdown docs in components
+src/ui/components/**/*.md
+
+# Remove any leftover build/test output
+*.out
+*.test
+*.coverage
+*.lcov
+
+# Remove npm/pnpm/yarn lock files if present
+package-lock.json
+pnpm-lock.yaml
+yarn.lock
+hover_car
+
+# Remove any leftover build artifacts
+.gitignore
