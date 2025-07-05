@@ -54,7 +54,7 @@ fn CourseCard(props: CourseCardProps) -> Element {
     };
     let mut show_delete_dialog = use_signal(|| false);
     let mut show_duplicate_dialog = use_signal(|| false);
-    let mut show_content_expanded = use_signal(|| false);
+    // Removed content expansion for compact grid layout
     let mut toast: Signal<ToastManager> = use_context();
 
     // Motion for icon buttons
@@ -80,18 +80,12 @@ fn CourseCard(props: CourseCardProps) -> Element {
         (0, 0.0, "Pending".to_string())
     };
 
-    // Content preview logic
+    // Compact content preview - show max 3 items
     let content_preview = if !course.raw_titles.is_empty() {
-        let expanded = *show_content_expanded.read();
-        let items_to_show = if expanded {
-            course.raw_titles.len()
-        } else {
-            3.min(course.raw_titles.len())
-        };
         let preview_items: Vec<_> = course
             .raw_titles
             .iter()
-            .take(items_to_show)
+            .take(3)
             .enumerate()
             .map(|(i, title)| {
                 rsx!(
@@ -103,26 +97,19 @@ fn CourseCard(props: CourseCardProps) -> Element {
             })
             .collect();
 
-        let has_more = course.raw_titles.len() > 3;
-
         rsx!(
             div { class: "course-content-preview",
                 div { class: "course-content-header",
                     h4 { class: "course-content-title", "Course Content" }
-                    if has_more {
-                        button {
-                            class: "course-content-toggle",
-                            onclick: move |_| show_content_expanded.set(!expanded),
-                            if expanded {
-                                "Show less"
-                            } else {
-                                "Show all {video_count} videos"
-                            }
-                            span { if expanded { "▲" } else { "▼" } }
-                        }
-                    }
                 }
                 div { class: "course-content-list", {preview_items.into_iter()} }
+                if course.raw_titles.len() > 3 {
+                    div {
+                        class: "course-content-item",
+                        style: "font-style: italic; opacity: 0.7;",
+                        span { class: "course-content-title-text", "... and {course.raw_titles.len() - 3} more videos" }
+                    }
+                }
             }
         )
     } else {
@@ -226,25 +213,74 @@ fn CourseCard(props: CourseCardProps) -> Element {
 
             // Course Card Header
             div { class: "course-card-header",
-                div { class: "course-title-row",
-                    h3 { class: "course-title", "{course.name}" }
-                    div {
-                        class: format!("course-status-badge {}", status_class),
-                        if is_structured {
-                            Icon { width: 16, height: 16, fill: "currentColor", icon: MdCheckCircle }
-                        } else {
-                            Icon { width: 16, height: 16, fill: "currentColor", icon: MdSchedule }
-                        }
-                        span { if is_structured { "Ready" } else { "Pending" } }
+                // Secondary actions (show on hover)
+                div { class: "course-secondary-actions",
+                    button {
+                        class: "course-action-btn",
+                        title: "Edit Course",
+                        style: format!("transform: scale({});", scale_edit.get_value()),
+                        onmouseenter: move |_| {
+                            scale_edit.animate_to(1.1, AnimationConfig::new(AnimationMode::Spring(Spring::default())));
+                        },
+                        onmouseleave: move |_| {
+                            scale_edit.animate_to(1.0, AnimationConfig::new(AnimationMode::Spring(Spring::default())));
+                        },
+                        onclick: move |_| {
+                            toast.write().popup(ToastInfo::simple("Edit not implemented"));
+                        },
+                        Icon { width: 12, height: 12, fill: "currentColor", icon: MdCreate }
+                    }
+
+                    button {
+                        class: "course-action-btn",
+                        title: "Duplicate Course",
+                        style: format!("transform: scale({});", scale_duplicate.get_value()),
+                        onmouseenter: move |_| {
+                            scale_duplicate.animate_to(1.1, AnimationConfig::new(AnimationMode::Spring(Spring::default())));
+                        },
+                        onmouseleave: move |_| {
+                            scale_duplicate.animate_to(1.0, AnimationConfig::new(AnimationMode::Spring(Spring::default())));
+                        },
+                        onclick: move |_| show_duplicate_dialog.set(true),
+                        Icon { width: 12, height: 12, fill: "currentColor", icon: MdContentCopy }
+                    }
+
+                    button {
+                        class: "course-action-btn danger",
+                        title: "Delete Course",
+                        style: format!("transform: scale({});", scale_delete.get_value()),
+                        onmouseenter: move |_| {
+                            scale_delete.animate_to(1.1, AnimationConfig::new(AnimationMode::Spring(Spring::default())));
+                        },
+                        onmouseleave: move |_| {
+                            scale_delete.animate_to(1.0, AnimationConfig::new(AnimationMode::Spring(Spring::default())));
+                        },
+                        onclick: move |_| show_delete_dialog.set(true),
+                        Icon { width: 12, height: 12, fill: "currentColor", icon: MdDelete }
                     }
                 }
+
+                div { class: "course-title-row",
+                    h3 { class: "course-title", "{course.name}" }
+                }
+
+                div {
+                    class: format!("course-status-badge {}", status_class),
+                    if is_structured {
+                        Icon { width: 12, height: 12, fill: "currentColor", icon: MdCheckCircle }
+                    } else {
+                        Icon { width: 12, height: 12, fill: "currentColor", icon: MdSchedule }
+                    }
+                    span { if is_structured { "Ready" } else { "Pending" } }
+                }
+
                 div { class: "course-meta-row",
                     div { class: "course-meta-item",
-                        Icon { width: 16, height: 16, fill: "currentColor", icon: MdMovie }
-                        span { "{video_count} videos" }
+                        Icon { width: 12, height: 12, fill: "currentColor", icon: MdMovie }
+                        span { "{video_count}" }
                     }
                     div { class: "course-meta-item",
-                        Icon { width: 16, height: 16, fill: "currentColor", icon: MdAccessTime }
+                        Icon { width: 12, height: 12, fill: "currentColor", icon: MdAccessTime }
                         span { "Created {formatted_date}" }
                     }
                 }
@@ -299,52 +335,6 @@ fn CourseCard(props: CourseCardProps) -> Element {
                         }
                     },
                     if is_structured { "View Plan" } else { "Structure Course" }
-                }
-
-                div { class: "course-secondary-actions",
-                    button {
-                        class: "course-action-btn",
-                        title: "Edit Course",
-                        style: format!("transform: scale({});", scale_edit.get_value()),
-                        onmouseenter: move |_| {
-                            scale_edit.animate_to(1.1, AnimationConfig::new(AnimationMode::Spring(Spring::default())));
-                        },
-                        onmouseleave: move |_| {
-                            scale_edit.animate_to(1.0, AnimationConfig::new(AnimationMode::Spring(Spring::default())));
-                        },
-                        onclick: move |_| {
-                            toast.write().popup(ToastInfo::simple("Edit not implemented"));
-                        },
-                        Icon { width: 16, height: 16, fill: "currentColor", icon: MdCreate }
-                    }
-
-                    button {
-                        class: "course-action-btn",
-                        title: "Duplicate Course",
-                        style: format!("transform: scale({});", scale_duplicate.get_value()),
-                        onmouseenter: move |_| {
-                            scale_duplicate.animate_to(1.1, AnimationConfig::new(AnimationMode::Spring(Spring::default())));
-                        },
-                        onmouseleave: move |_| {
-                            scale_duplicate.animate_to(1.0, AnimationConfig::new(AnimationMode::Spring(Spring::default())));
-                        },
-                        onclick: move |_| show_duplicate_dialog.set(true),
-                        Icon { width: 16, height: 16, fill: "currentColor", icon: MdContentCopy }
-                    }
-
-                    button {
-                        class: "course-action-btn danger",
-                        title: "Delete Course",
-                        style: format!("transform: scale({});", scale_delete.get_value()),
-                        onmouseenter: move |_| {
-                            scale_delete.animate_to(1.1, AnimationConfig::new(AnimationMode::Spring(Spring::default())));
-                        },
-                        onmouseleave: move |_| {
-                            scale_delete.animate_to(1.0, AnimationConfig::new(AnimationMode::Spring(Spring::default())));
-                        },
-                        onclick: move |_| show_delete_dialog.set(true),
-                        Icon { width: 16, height: 16, fill: "currentColor", icon: MdDelete }
-                    }
                 }
             }
         }
@@ -404,7 +394,7 @@ pub fn CourseDashboard() -> Element {
     rsx! {
         document::Link {
             rel: "stylesheet",
-            href: asset!("src/ui/course_dashboard/style.css")
+            href: asset!("src/ui/components/course_dashboard/style.css")
         }
 
         div { class: "dashboard-container",

@@ -258,7 +258,7 @@ pub fn AddCourseDialog() -> Element {
     rsx! {
         document::Link {
             rel: "stylesheet",
-            href: asset!("src/ui/add_course_dialog.css")
+            href: asset!("src/ui/components/add_course_dialog/style.css")
         }
         div { class: "add-course-dialog-root",
             Button {

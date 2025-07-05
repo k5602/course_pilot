@@ -33,8 +33,8 @@ pub fn Layout() -> Element {
     // Theme toggle (light/dark)
     let mut dark_mode = use_signal(|| false);
 
-    // Sidebar collapsed state
-    let mut sidebar_collapsed = use_signal(|| false);
+    // Sidebar collapsed state - collapsed by default
+    let mut sidebar_collapsed = use_signal(|| true);
 
     // Sidebar width
     let sidebar_width = if *sidebar_collapsed.read() {

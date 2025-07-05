@@ -14,6 +14,11 @@ pub mod button;
 // pub mod alert_dialog;
 pub mod alert_dialog;
 
+// Major UI components
+pub mod add_course_dialog;
+pub mod course_dashboard;
+pub mod plan_view;
+
 // Re-export main components for easier importing
 // Re-export local components
 pub use card::Card;
