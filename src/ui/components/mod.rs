@@ -12,6 +12,7 @@ pub mod button;
 // pub mod radio_group;
 // pub mod label;
 // pub mod alert_dialog;
+pub mod alert_dialog;
 
 // Re-export main components for easier importing
 // Re-export local components
@@ -29,7 +30,7 @@ pub use button::Button;
 pub use skeleton::SkeletonLoader;
 // pub use radio_group::{RadioGroup, RadioItem};
 // pub use label::Label;
-// pub use alert_dialog::{
-//     AlertDialogAction, AlertDialogActions, AlertDialogCancel, AlertDialogContent,
-//     AlertDialogDescription, AlertDialogRoot, AlertDialogTitle,
-// };
+pub use alert_dialog::{
+    AlertDialogAction, AlertDialogActions, AlertDialogCancel, AlertDialogContent,
+    AlertDialogDescription, AlertDialogRoot, AlertDialogTitle,
+};

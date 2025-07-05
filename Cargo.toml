@@ -21,7 +21,7 @@ dioxus-motion = { version = "0.3.1", default-features = false, features = ["desk
 dioxus-sdk = "0.6.0"
 dioxus-desktop = "0.6.3"
 scroll-rs = "0.2.3"
-
+freyr = "0.2.3"
 rfd = { version = "0.14", default-features = false, features = ["tokio"] }
 
 

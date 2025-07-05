@@ -53,12 +53,111 @@ fn CourseCard(course: Course) -> Element {
     let video_count = course.video_count();
     let is_structured = course.is_structured();
 
-    // Dialog state (disabled, see UI placeholder below)
-    // let show_delete_dialog = use_signal(|| false);
-    // let show_duplicate_dialog = use_signal(|| false);
+    // Dialog state for confirmation modals
+    let mut show_delete_dialog = use_signal(|| false);
+    let mut show_duplicate_dialog = use_signal(|| false);
 
     // Toast manager
     let mut toast: Signal<ToastManager> = use_context();
+
+    // Dialog RSX as Option<Element>
+    let delete_dialog = if *show_delete_dialog.read() {
+        Some(rsx!(
+            crate::ui::components::alert_dialog::AlertDialogRoot {
+                open: true,
+                on_open_change: move |open| {
+                    let mut show_delete_dialog = show_delete_dialog.clone();
+                    show_delete_dialog.set(open)
+                },
+                class: "alert-dialog-backdrop",
+                crate::ui::components::alert_dialog::AlertDialogContent {
+                    class: "alert-dialog",
+                    crate::ui::components::alert_dialog::AlertDialogTitle { "Delete Course" }
+                    crate::ui::components::alert_dialog::AlertDialogDescription {
+                        "Are you sure you want to delete this course? This action cannot be undone."
+                    }
+                    crate::ui::components::alert_dialog::AlertDialogActions {
+                        crate::ui::components::alert_dialog::AlertDialogCancel {
+                            class: "alert-dialog-cancel",
+                            on_click: move |_| {
+                                let mut show_delete_dialog = show_delete_dialog.clone();
+                                show_delete_dialog.set(false)
+                            },
+                            "Cancel"
+                        }
+                        crate::ui::components::alert_dialog::AlertDialogAction {
+                            class: "alert-dialog-action",
+                            on_click: {
+                                let mut show_delete_dialog = show_delete_dialog.clone();
+                                let mut app_state = app_state.clone();
+                                let course_id = course.id;
+                                let mut toast = toast.clone();
+                                move |_| {
+                                    // Remove course from state
+                                    app_state.write().courses.retain(|c| c.id != course_id);
+                                    show_delete_dialog.set(false);
+                                    toast.write().popup(ToastInfo::simple("Course deleted"));
+                                }
+                            },
+                            "Delete"
+                        }
+                    }
+                }
+            }
+        ))
+    } else {
+        None
+    };
+
+    let duplicate_dialog = if *show_duplicate_dialog.read() {
+        Some(rsx!(
+            crate::ui::components::alert_dialog::AlertDialogRoot {
+                open: true,
+                on_open_change: move |open| {
+                    let mut show_duplicate_dialog = show_duplicate_dialog.clone();
+                    show_duplicate_dialog.set(open)
+                },
+                class: "alert-dialog-backdrop",
+                crate::ui::components::alert_dialog::AlertDialogContent {
+                    class: "alert-dialog",
+                    crate::ui::components::alert_dialog::AlertDialogTitle { "Duplicate Course" }
+                    crate::ui::components::alert_dialog::AlertDialogDescription {
+                        "Do you want to duplicate this course? All course data will be copied."
+                    }
+                    crate::ui::components::alert_dialog::AlertDialogActions {
+                        crate::ui::components::alert_dialog::AlertDialogCancel {
+                            class: "alert-dialog-cancel",
+                            on_click: move |_| {
+                                let mut show_duplicate_dialog = show_duplicate_dialog.clone();
+                                show_duplicate_dialog.set(false)
+                            },
+                            "Cancel"
+                        }
+                        crate::ui::components::alert_dialog::AlertDialogAction {
+                            class: "alert-dialog-action",
+                            on_click: {
+                                let mut show_duplicate_dialog = show_duplicate_dialog.clone();
+                                let mut app_state = app_state.clone();
+                                let course = course.clone();
+                                let mut toast = toast.clone();
+                                move |_| {
+                                    let mut new_course = course.clone();
+                                    new_course.id = uuid::Uuid::new_v4();
+                                    new_course.name = format!("{} (Copy)", new_course.name);
+                                    app_state.write().courses.push(new_course);
+                                    show_duplicate_dialog.set(false);
+                                    toast.write().popup(ToastInfo::simple("Course duplicated"));
+                                }
+                            },
+                            "Duplicate"
+                        }
+                    }
+                }
+            }
+        ))
+    } else {
+        None
+    };
 
     // Motion for icon buttons
     let scale_edit = use_motion(1.0f32);
@@ -328,8 +427,8 @@ fn CourseCard(course: Course) -> Element {
                     },
                     onclick: move |evt: Event<MouseData>| {
                         evt.stop_propagation();
-                        // Dialog disabled: show_duplicate_dialog.set(true);
-                        toast.write().popup(ToastInfo::simple("Duplicate dialog not implemented"));
+                        let mut show_duplicate_dialog = show_duplicate_dialog.clone();
+                        show_duplicate_dialog.set(true);
                     },
                     Icon {
                         width: 22,
@@ -419,8 +518,8 @@ fn CourseCard(course: Course) -> Element {
                     },
                     onclick: move |evt: Event<MouseData>| {
                         evt.stop_propagation();
-                        // Dialog disabled: show_delete_dialog.set(true);
-                        toast.write().popup(ToastInfo::simple("Delete dialog not implemented"));
+                        let mut show_delete_dialog = show_delete_dialog.clone();
+                        show_delete_dialog.set(true);
                     },
                     Icon {
                         width: 22,
@@ -431,13 +530,9 @@ fn CourseCard(course: Course) -> Element {
                 }
             }
 
-            // Delete confirmation dialog
-            // [Dialog temporarily disabled: implement or import dialog component]
-            // Placeholder: Delete confirmation dialog would appear here.
-
-            // Duplicate confirmation dialog
-            // [Dialog temporarily disabled: implement or import dialog component]
-            // Placeholder: Duplicate confirmation dialog would appear here.
+            // Dialogs (conditionally rendered)
+            {delete_dialog}
+            {duplicate_dialog}
         }
     }
 }
