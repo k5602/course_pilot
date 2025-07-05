@@ -54,8 +54,8 @@ fn CourseCard(course: Course) -> Element {
     let is_structured = course.is_structured();
 
     // Dialog state for confirmation modals
-    let mut show_delete_dialog = use_signal(|| false);
-    let mut show_duplicate_dialog = use_signal(|| false);
+    let show_delete_dialog = use_signal(|| false);
+    let show_duplicate_dialog = use_signal(|| false);
 
     // Toast manager
     let mut toast: Signal<ToastManager> = use_context();
