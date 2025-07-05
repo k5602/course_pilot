@@ -15,7 +15,8 @@ dioxus-free-icons = { version = "0.9", features = [
     "material-design-icons-action",
     "material-design-icons-content",
     "material-design-icons-editor",
-    "material-design-icons-av"
+    "material-design-icons-av",
+    "material-design-icons-device"
 ] }
 dioxus-motion = { version = "0.3.1", default-features = false, features = ["desktop"] }
 dioxus-sdk = "0.6.0"

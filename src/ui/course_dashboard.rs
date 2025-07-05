@@ -1,69 +1,149 @@
-use crate::ui::components::card::Card;
-use crate::ui::components::Button;
-use dioxus_free_icons::Icon;
-use dioxus_free_icons::icons::md_action_icons::{MdCheckCircle, MdDelete};
-use dioxus_free_icons::icons::md_content_icons::{MdCreate, MdContentCopy};
-use dioxus_free_icons::icons::md_av_icons::{MdLibraryBooks, MdMovie};
-use dioxus_motion::prelude::*;
-use dioxus_toast::{ToastInfo, ToastManager};
-
 use crate::types::{AppState, Course, Route};
 use chrono::{DateTime, Utc};
 use dioxus::prelude::*;
+use dioxus_free_icons::Icon;
+use dioxus_free_icons::icons::md_action_icons::{
+    MdCheckCircle, MdDelete, MdSchedule, MdSearch, MdTrendingUp,
+};
+use dioxus_free_icons::icons::md_av_icons::{MdLibraryBooks, MdMovie};
+use dioxus_free_icons::icons::md_content_icons::{MdAdd, MdContentCopy, MdCreate};
+use dioxus_free_icons::icons::md_device_icons::MdAccessTime;
+use dioxus_motion::prelude::*;
+use dioxus_toast::{ToastInfo, ToastManager};
 
-/// Helper: count structured courses
 fn count_structured_courses(courses: Vec<Course>) -> usize {
     courses.iter().filter(|c| c.is_structured()).count()
 }
 
-/// Helper: count total videos
 fn count_total_videos(courses: Vec<Course>) -> usize {
     courses.iter().map(|c| c.video_count()).sum()
 }
 
-/// Helper: format date
 fn format_date(date: DateTime<Utc>) -> String {
     let now = Utc::now();
-    let duration = now.signed_duration_since(date);
+    let diff = now.signed_duration_since(date);
 
-    if duration.num_days() == 0 {
+    if diff.num_days() == 0 {
         "today".to_string()
-    } else if duration.num_days() == 1 {
+    } else if diff.num_days() == 1 {
         "yesterday".to_string()
-    } else if duration.num_days() < 7 {
-        format!("{} days ago", duration.num_days())
-    } else if duration.num_weeks() == 1 {
-        "1 week ago".to_string()
-    } else if duration.num_weeks() < 4 {
-        format!("{} weeks ago", duration.num_weeks())
+    } else if diff.num_days() < 7 {
+        format!("{} days ago", diff.num_days())
+    } else if diff.num_days() < 30 {
+        format!("{} weeks ago", diff.num_days() / 7)
     } else {
-        date.format("%b %d, %Y").to_string()
+        date.format("%B %d, %Y").to_string()
     }
 }
 
-/// Standalone CourseCard component
-#[component]
-fn CourseCard(course: Course) -> Element {
-    use dioxus::prelude::*;
+#[derive(Props, PartialEq, Clone)]
+struct CourseCardProps {
+    course: Course,
+}
+
+fn CourseCard(props: CourseCardProps) -> Element {
+    let course = props.course;
     let mut app_state = use_context::<Signal<AppState>>();
     let formatted_date = format_date(course.created_at);
     let video_count = course.video_count();
     let is_structured = course.is_structured();
-
-    // Dialog state for confirmation modals
-    let show_delete_dialog = use_signal(|| false);
-    let show_duplicate_dialog = use_signal(|| false);
-
-    // Toast manager
+    let status_class = if is_structured {
+        "structured"
+    } else {
+        "unstructured"
+    };
+    let mut show_delete_dialog = use_signal(|| false);
+    let mut show_duplicate_dialog = use_signal(|| false);
+    let mut show_content_expanded = use_signal(|| false);
     let mut toast: Signal<ToastManager> = use_context();
 
-    // Dialog RSX as Option<Element>
+    // Motion for icon buttons
+    let mut scale_edit = use_motion(1.0f32);
+    let mut scale_duplicate = use_motion(1.0f32);
+    let mut scale_delete = use_motion(1.0f32);
+
+    // Prepare course statistics
+    let (modules_count, duration, difficulty) = if is_structured {
+        if let Some(structure) = &course.structure {
+            let modules = structure.modules.len();
+            let duration_hours = structure.metadata.estimated_duration_hours.unwrap_or(0.0);
+            let difficulty_str = structure
+                .metadata
+                .difficulty_level
+                .clone()
+                .unwrap_or_else(|| "Unknown".to_string());
+            (modules, duration_hours, difficulty_str)
+        } else {
+            (0, 0.0, "Unknown".to_string())
+        }
+    } else {
+        (0, 0.0, "Pending".to_string())
+    };
+
+    // Content preview logic
+    let content_preview = if !course.raw_titles.is_empty() {
+        let expanded = *show_content_expanded.read();
+        let items_to_show = if expanded {
+            course.raw_titles.len()
+        } else {
+            3.min(course.raw_titles.len())
+        };
+        let preview_items: Vec<_> = course
+            .raw_titles
+            .iter()
+            .take(items_to_show)
+            .enumerate()
+            .map(|(i, title)| {
+                rsx!(
+                    div { class: "course-content-item",
+                        span { class: "course-content-number", "{i + 1}" }
+                        span { class: "course-content-title-text", "{title}" }
+                    }
+                )
+            })
+            .collect();
+
+        let has_more = course.raw_titles.len() > 3;
+
+        rsx!(
+            div { class: "course-content-preview",
+                div { class: "course-content-header",
+                    h4 { class: "course-content-title", "Course Content" }
+                    if has_more {
+                        button {
+                            class: "course-content-toggle",
+                            onclick: move |_| show_content_expanded.set(!expanded),
+                            if expanded {
+                                "Show less"
+                            } else {
+                                "Show all {video_count} videos"
+                            }
+                            span { if expanded { "▲" } else { "▼" } }
+                        }
+                    }
+                }
+                div { class: "course-content-list", {preview_items.into_iter()} }
+            }
+        )
+    } else {
+        rsx!(
+            div { class: "course-content-preview",
+                div { class: "course-content-header",
+                    h4 { class: "course-content-title", "Course Content" }
+                }
+                div { class: "course-content-item",
+                    span { class: "course-content-title-text", "No content available" }
+                }
+            }
+        )
+    };
+
+    // Dialog components
     let delete_dialog = if *show_delete_dialog.read() {
         Some(rsx!(
             crate::ui::components::alert_dialog::AlertDialogRoot {
                 open: true,
                 on_open_change: move |open| {
-                    let mut show_delete_dialog = show_delete_dialog.clone();
                     show_delete_dialog.set(open)
                 },
                 class: "alert-dialog-backdrop",
@@ -76,21 +156,14 @@ fn CourseCard(course: Course) -> Element {
                     crate::ui::components::alert_dialog::AlertDialogActions {
                         crate::ui::components::alert_dialog::AlertDialogCancel {
                             class: "alert-dialog-cancel",
-                            on_click: move |_| {
-                                let mut show_delete_dialog = show_delete_dialog.clone();
-                                show_delete_dialog.set(false)
-                            },
+                            on_click: move |_| show_delete_dialog.set(false),
                             "Cancel"
                         }
                         crate::ui::components::alert_dialog::AlertDialogAction {
                             class: "alert-dialog-action",
                             on_click: {
-                                let mut show_delete_dialog = show_delete_dialog.clone();
-                                let mut app_state = app_state.clone();
                                 let course_id = course.id;
-                                let mut toast = toast.clone();
                                 move |_| {
-                                    // Remove course from state
                                     app_state.write().courses.retain(|c| c.id != course_id);
                                     show_delete_dialog.set(false);
                                     toast.write().popup(ToastInfo::simple("Course deleted"));
@@ -110,10 +183,7 @@ fn CourseCard(course: Course) -> Element {
         Some(rsx!(
             crate::ui::components::alert_dialog::AlertDialogRoot {
                 open: true,
-                on_open_change: move |open| {
-                    let mut show_duplicate_dialog = show_duplicate_dialog.clone();
-                    show_duplicate_dialog.set(open)
-                },
+                on_open_change: move |open| show_duplicate_dialog.set(open),
                 class: "alert-dialog-backdrop",
                 crate::ui::components::alert_dialog::AlertDialogContent {
                     class: "alert-dialog",
@@ -124,19 +194,13 @@ fn CourseCard(course: Course) -> Element {
                     crate::ui::components::alert_dialog::AlertDialogActions {
                         crate::ui::components::alert_dialog::AlertDialogCancel {
                             class: "alert-dialog-cancel",
-                            on_click: move |_| {
-                                let mut show_duplicate_dialog = show_duplicate_dialog.clone();
-                                show_duplicate_dialog.set(false)
-                            },
+                            on_click: move |_| show_duplicate_dialog.set(false),
                             "Cancel"
                         }
                         crate::ui::components::alert_dialog::AlertDialogAction {
                             class: "alert-dialog-action",
                             on_click: {
-                                let mut show_duplicate_dialog = show_duplicate_dialog.clone();
-                                let mut app_state = app_state.clone();
                                 let course = course.clone();
-                                let mut toast = toast.clone();
                                 move |_| {
                                     let mut new_course = course.clone();
                                     new_course.id = uuid::Uuid::new_v4();
@@ -156,400 +220,140 @@ fn CourseCard(course: Course) -> Element {
         None
     };
 
-    // Motion for icon buttons
-    let scale_edit = use_motion(1.0f32);
-    let scale_duplicate = use_motion(1.0f32);
-    let scale_delete = use_motion(1.0f32);
-
-    // Prepare badges
-    let mut badges = vec![];
-    if is_structured {
-        badges.push(rsx!(span { class: "course-card-badge structured", "Structured" }));
-    } else {
-        badges.push(rsx!(span { class: "course-card-badge unstructured", "Unstructured" }));
-    }
-    badges.push(rsx!(span { class: "course-card-badge videos", "{video_count} videos" }));
-
-    // Prepare meta
-    let meta = if is_structured {
-        if let Some(structure) = &course.structure {
-            let mut meta_vec = vec![rsx!(span { "📁 {structure.modules.len()} modules" })];
-            if let Some(duration) = structure.metadata.estimated_duration_hours {
-                meta_vec.push(rsx!(span { "⏱️ ~{duration:.1} hours" }));
-            }
-            if let Some(difficulty) = &structure.metadata.difficulty_level {
-                meta_vec.push(rsx!(span { "📊 {difficulty} level" }));
-            }
-            meta_vec
-        } else {
-            vec![]
-        }
-    } else {
-        vec![rsx!(span { class: "course-card-structure", "Course structure analysis pending..." })]
-    };
-
-    // Prepare sample content
-    let mut sample_titles = vec![];
-    for (i, title) in course.raw_titles.iter().take(3).enumerate() {
-        sample_titles.push(rsx!(
-            div {
-                span { style: "color:#bbb; margin-right:0.4rem;", "{i + 1}." }
-                span { "{title}" }
-            }
-        ));
-    }
-    if course.raw_titles.len() > 3 {
-        sample_titles.push(rsx!(
-            div { style: "color:#bbb;", "... and {course.raw_titles.len() - 3} more" }
-        ));
-    }
-
-    // Progress bar placeholder (removed: Course does not have a plan field)
-    let plan_progress: Option<Element> = None;
-
     rsx! {
-        Card {
-            elevation: 2,
-            div {
-                class: "course-card-root",
-                tabindex: "0",
-                onclick: {
-                    let course_id = course.id;
-                    move |_| {
-                        app_state.write().current_route = Route::PlanView(course_id);
+        div {
+            class: format!("course-card {}", status_class),
+
+            // Course Card Header
+            div { class: "course-card-header",
+                div { class: "course-title-row",
+                    h3 { class: "course-title", "{course.name}" }
+                    div {
+                        class: format!("course-status-badge {}", status_class),
+                        if is_structured {
+                            Icon { width: 16, height: 16, fill: "currentColor", icon: MdCheckCircle }
+                        } else {
+                            Icon { width: 16, height: 16, fill: "currentColor", icon: MdSchedule }
+                        }
+                        span { if is_structured { "Ready" } else { "Pending" } }
                     }
-                },
-                onkeydown: move |evt| {
-                    use dioxus::events::Key;
-                    if matches!(evt.key(), Key::Enter) || evt.key() == Key::Character(" ".to_string()) {
+                }
+                div { class: "course-meta-row",
+                    div { class: "course-meta-item",
+                        Icon { width: 16, height: 16, fill: "currentColor", icon: MdMovie }
+                        span { "{video_count} videos" }
+                    }
+                    div { class: "course-meta-item",
+                        Icon { width: 16, height: 16, fill: "currentColor", icon: MdAccessTime }
+                        span { "Created {formatted_date}" }
+                    }
+                }
+            }
+
+            // Course Card Body
+            div { class: "course-card-body",
+                if is_structured {
+                    div { class: "course-stats-grid",
+                        div { class: "course-stat",
+                            div { class: "course-stat-value", "{modules_count}" }
+                            div { class: "course-stat-label", "Modules" }
+                        }
+                        div { class: "course-stat",
+                            div { class: "course-stat-value", "{duration:.1}h" }
+                            div { class: "course-stat-label", "Duration" }
+                        }
+                        div { class: "course-stat",
+                            div { class: "course-stat-value", "{difficulty}" }
+                            div { class: "course-stat-label", "Level" }
+                        }
+                    }
+                } else {
+                    div { class: "course-stats-grid",
+                        div { class: "course-stat",
+                            div { class: "course-stat-value", "—" }
+                            div { class: "course-stat-label", "Modules" }
+                        }
+                        div { class: "course-stat",
+                            div { class: "course-stat-value", "—" }
+                            div { class: "course-stat-label", "Duration" }
+                        }
+                        div { class: "course-stat",
+                            div { class: "course-stat-value", "Pending" }
+                            div { class: "course-stat-label", "Analysis" }
+                        }
+                    }
+                }
+
+                // Content preview
+                {content_preview}
+            }
+
+            // Course Card Footer
+            div { class: "course-card-footer",
+                button {
+                    class: "course-primary-action",
+                    onclick: {
                         let course_id = course.id;
-                        app_state.write().current_route = Route::PlanView(course_id);
-                    }
-                },
-
-                // Top row: title and badges
-                div {
-                    class: "course-card-top-row",
-                    role: "group",
-                    aria_label: format!("Course card for {}", course.name),
-                    div { class: "course-card-title-badges",
-                        span { class: "course-card-title", tabindex: "0", "{course.name}" }
-                        div { class: "course-card-badges", {badges.into_iter()} }
-                    }
-                    div { class: "course-card-date", "Created {formatted_date}" }
-                }
-
-                // Meta section
-                div { class: "course-card-meta", {meta.into_iter()} },
-
-                { plan_progress },
-
-                // Sample content
-                div { class: "course-card-sample",
-                    div { class: "course-card-sample-label", "Sample content:" },
-                    div { class: "course-card-sample-list", {sample_titles.into_iter()} }
-                },
-
-                // Bottom row: actions
-                div { class: "course-card-actions-row",
-                    Button {
-                        button_type: "primary",
-                        onclick: {
-                            let course_id = course.id;
-                            move |evt: Event<MouseData>| {
-                                evt.stop_propagation();
-                                app_state.write().current_route = Route::PlanView(course_id);
-                            }
-                        },
-                        aria_label: if is_structured { "View course plan" } else { "Structure this course" },
-                        tabindex: "0",
-                        if is_structured { "View Plan" } else { "Structure Course" }
+                        move |_| {
+                            app_state.write().current_route = Route::PlanView(course_id);
+                        }
                     },
-                    div { class: "course-card-icon-actions",
-                        // Edit action
-                        button {
-                            class: "icon-action-btn",
-                            title: "Edit Course",
-                            aria_label: "Edit this course",
-                            tabindex: "0",
-                            style: format!("transform: scale({}); transition: transform 0.12s cubic-bezier(0.4,0,0.2,1);", scale_edit.get_value()),
-                            onmouseenter: {
-                                let scale_edit = scale_edit.clone();
-                                move |_| scale_edit.clone().animate_to(
-                                    1.12,
-                                    AnimationConfig::new(AnimationMode::Spring(Spring {
-                                        stiffness: 300.0,
-                                        damping: 20.0,
-                                        mass: 1.0,
-                                        velocity: 0.0,
-                                    })),
-                                )
-                            },
-                            onmouseleave: {
-                                let scale_edit = scale_edit.clone();
-                                move |_| scale_edit.clone().animate_to(
-                                    1.0,
-                                    AnimationConfig::new(AnimationMode::Spring(Spring {
-                                        stiffness: 300.0,
-                                        damping: 20.0,
-                                        mass: 1.0,
-                                        velocity: 0.0,
-                                    })),
-                                )
-                            },
-                            onmousedown: {
-                                let scale_edit = scale_edit.clone();
-                                move |_| scale_edit.clone().animate_to(
-                                    0.93,
-                                    AnimationConfig::new(AnimationMode::Spring(Spring {
-                                        stiffness: 300.0,
-                                        damping: 20.0,
-                                        mass: 1.0,
-                                        velocity: 0.0,
-                                    })),
-                                )
-                            },
-                            onmouseup: {
-                                let scale_edit = scale_edit.clone();
-                                move |_| scale_edit.clone().animate_to(
-                                    1.12,
-                                    AnimationConfig::new(AnimationMode::Spring(Spring {
-                                        stiffness: 300.0,
-                                        damping: 20.0,
-                                        mass: 1.0,
-                                        velocity: 0.0,
-                                    })),
-                                )
-                            },
-                            onfocus: {
-                                let scale_edit = scale_edit.clone();
-                                move |_| scale_edit.clone().animate_to(
-                                    1.12,
-                                    AnimationConfig::new(AnimationMode::Spring(Spring {
-                                        stiffness: 300.0,
-                                        damping: 20.0,
-                                        mass: 1.0,
-                                        velocity: 0.0,
-                                    })),
-                                )
-                            },
-                            onblur: {
-                                let scale_edit = scale_edit.clone();
-                                move |_| scale_edit.clone().animate_to(
-                                    1.0,
-                                    AnimationConfig::new(AnimationMode::Spring(Spring {
-                                        stiffness: 300.0,
-                                        damping: 20.0,
-                                        mass: 1.0,
-                                        velocity: 0.0,
-                                    })),
-                                )
-                            },
-                            onclick: move |evt: Event<MouseData>| {
-                                evt.stop_propagation();
-                                toast.write().popup(ToastInfo::simple("Edit not implemented"));
-                            },
-                            Icon {
-                                width: 22,
-                                height: 22,
-                                fill: "#666",
-                                icon: MdCreate,
-                            }
-                        }
-                        // Duplicate action
-                        button {
-                            class: "icon-action-btn",
-                            title: "Duplicate Course",
-                            aria_label: "Duplicate this course",
-                            tabindex: "0",
-                            style: format!("transform: scale({}); transition: transform 0.12s cubic-bezier(0.4,0,0.2,1);", scale_duplicate.get_value()),
-                            onmouseenter: {
-                                let scale_duplicate = scale_duplicate.clone();
-                                move |_| scale_duplicate.clone().animate_to(
-                                    1.12,
-                                    AnimationConfig::new(AnimationMode::Spring(Spring {
-                                        stiffness: 300.0,
-                                        damping: 20.0,
-                                        mass: 1.0,
-                                        velocity: 0.0,
-                                    })),
-                                )
-                            },
-                            onmouseleave: {
-                                let scale_duplicate = scale_duplicate.clone();
-                                move |_| scale_duplicate.clone().animate_to(
-                                    1.0,
-                                    AnimationConfig::new(AnimationMode::Spring(Spring {
-                                        stiffness: 300.0,
-                                        damping: 20.0,
-                                        mass: 1.0,
-                                        velocity: 0.0,
-                                    })),
-                                )
-                            },
-                            onmousedown: {
-                                let scale_duplicate = scale_duplicate.clone();
-                                move |_| scale_duplicate.clone().animate_to(
-                                    0.93,
-                                    AnimationConfig::new(AnimationMode::Spring(Spring {
-                                        stiffness: 300.0,
-                                        damping: 20.0,
-                                        mass: 1.0,
-                                        velocity: 0.0,
-                                    })),
-                                )
-                            },
-                            onmouseup: {
-                                let scale_duplicate = scale_duplicate.clone();
-                                move |_| scale_duplicate.clone().animate_to(
-                                    1.12,
-                                    AnimationConfig::new(AnimationMode::Spring(Spring {
-                                        stiffness: 300.0,
-                                        damping: 20.0,
-                                        mass: 1.0,
-                                        velocity: 0.0,
-                                    })),
-                                )
-                            },
-                            onfocus: {
-                                let scale_duplicate = scale_duplicate.clone();
-                                move |_| scale_duplicate.clone().animate_to(
-                                    1.12,
-                                    AnimationConfig::new(AnimationMode::Spring(Spring {
-                                        stiffness: 300.0,
-                                        damping: 20.0,
-                                        mass: 1.0,
-                                        velocity: 0.0,
-                                    })),
-                                )
-                            },
-                            onblur: {
-                                let scale_duplicate = scale_duplicate.clone();
-                                move |_| scale_duplicate.clone().animate_to(
-                                    1.0,
-                                    AnimationConfig::new(AnimationMode::Spring(Spring {
-                                        stiffness: 300.0,
-                                        damping: 20.0,
-                                        mass: 1.0,
-                                        velocity: 0.0,
-                                    })),
-                                )
-                            },
-                            onclick: move |evt: Event<MouseData>| {
-                                evt.stop_propagation();
-                                let mut show_duplicate_dialog = show_duplicate_dialog.clone();
-                                show_duplicate_dialog.set(true);
-                            },
-                            Icon {
-                                width: 22,
-                                height: 22,
-                                fill: "#666",
-                                icon: MdContentCopy,
-                            }
-                        }
-                        // Delete action
-                        button {
-                            class: "icon-action-btn danger",
-                            title: "Delete Course",
-                            aria_label: "Delete this course",
-                            tabindex: "0",
-                            style: format!("transform: scale({}); transition: transform 0.12s cubic-bezier(0.4,0,0.2,1);", scale_delete.get_value()),
-                            onmouseenter: {
-                                let scale_delete = scale_delete.clone();
-                                move |_| scale_delete.clone().animate_to(
-                                    1.12,
-                                    AnimationConfig::new(AnimationMode::Spring(Spring {
-                                        stiffness: 300.0,
-                                        damping: 20.0,
-                                        mass: 1.0,
-                                        velocity: 0.0,
-                                    })),
-                                )
-                            },
-                            onmouseleave: {
-                                let scale_delete = scale_delete.clone();
-                                move |_| scale_delete.clone().animate_to(
-                                    1.0,
-                                    AnimationConfig::new(AnimationMode::Spring(Spring {
-                                        stiffness: 300.0,
-                                        damping: 20.0,
-                                        mass: 1.0,
-                                        velocity: 0.0,
-                                    })),
-                                )
-                            },
-                            onmousedown: {
-                                let scale_delete = scale_delete.clone();
-                                move |_| scale_delete.clone().animate_to(
-                                    0.93,
-                                    AnimationConfig::new(AnimationMode::Spring(Spring {
-                                        stiffness: 300.0,
-                                        damping: 20.0,
-                                        mass: 1.0,
-                                        velocity: 0.0,
-                                    })),
-                                )
-                            },
-                            onmouseup: {
-                                let scale_delete = scale_delete.clone();
-                                move |_| scale_delete.clone().animate_to(
-                                    1.12,
-                                    AnimationConfig::new(AnimationMode::Spring(Spring {
-                                        stiffness: 300.0,
-                                        damping: 20.0,
-                                        mass: 1.0,
-                                        velocity: 0.0,
-                                    })),
-                                )
-                            },
-                            onfocus: {
-                                let scale_delete = scale_delete.clone();
-                                move |_| scale_delete.clone().animate_to(
-                                    1.12,
-                                    AnimationConfig::new(AnimationMode::Spring(Spring {
-                                        stiffness: 300.0,
-                                        damping: 20.0,
-                                        mass: 1.0,
-                                        velocity: 0.0,
-                                    })),
-                                )
-                            },
-                            onblur: {
-                                let scale_delete = scale_delete.clone();
-                                move |_| scale_delete.clone().animate_to(
-                                    1.0,
-                                    AnimationConfig::new(AnimationMode::Spring(Spring {
-                                        stiffness: 300.0,
-                                        damping: 20.0,
-                                        mass: 1.0,
-                                        velocity: 0.0,
-                                    })),
-                                )
-                            },
-                            onclick: move |evt: Event<MouseData>| {
-                                evt.stop_propagation();
-                                let mut show_delete_dialog = show_delete_dialog.clone();
-                                show_delete_dialog.set(true);
-                            },
-                            Icon {
-                                width: 22,
-                                height: 22,
-                                fill: "#c00",
-                                icon: MdDelete,
-                            }
-                        }
+                    if is_structured { "View Plan" } else { "Structure Course" }
+                }
+
+                div { class: "course-secondary-actions",
+                    button {
+                        class: "course-action-btn",
+                        title: "Edit Course",
+                        style: format!("transform: scale({});", scale_edit.get_value()),
+                        onmouseenter: move |_| {
+                            scale_edit.animate_to(1.1, AnimationConfig::new(AnimationMode::Spring(Spring::default())));
+                        },
+                        onmouseleave: move |_| {
+                            scale_edit.animate_to(1.0, AnimationConfig::new(AnimationMode::Spring(Spring::default())));
+                        },
+                        onclick: move |_| {
+                            toast.write().popup(ToastInfo::simple("Edit not implemented"));
+                        },
+                        Icon { width: 16, height: 16, fill: "currentColor", icon: MdCreate }
+                    }
+
+                    button {
+                        class: "course-action-btn",
+                        title: "Duplicate Course",
+                        style: format!("transform: scale({});", scale_duplicate.get_value()),
+                        onmouseenter: move |_| {
+                            scale_duplicate.animate_to(1.1, AnimationConfig::new(AnimationMode::Spring(Spring::default())));
+                        },
+                        onmouseleave: move |_| {
+                            scale_duplicate.animate_to(1.0, AnimationConfig::new(AnimationMode::Spring(Spring::default())));
+                        },
+                        onclick: move |_| show_duplicate_dialog.set(true),
+                        Icon { width: 16, height: 16, fill: "currentColor", icon: MdContentCopy }
+                    }
+
+                    button {
+                        class: "course-action-btn danger",
+                        title: "Delete Course",
+                        style: format!("transform: scale({});", scale_delete.get_value()),
+                        onmouseenter: move |_| {
+                            scale_delete.animate_to(1.1, AnimationConfig::new(AnimationMode::Spring(Spring::default())));
+                        },
+                        onmouseleave: move |_| {
+                            scale_delete.animate_to(1.0, AnimationConfig::new(AnimationMode::Spring(Spring::default())));
+                        },
+                        onclick: move |_| show_delete_dialog.set(true),
+                        Icon { width: 16, height: 16, fill: "currentColor", icon: MdDelete }
                     }
                 }
-                // Dialogs (conditionally rendered)
-                if let Some(dialog) = delete_dialog { {dialog} }
-                if let Some(dialog) = duplicate_dialog { {dialog} }
             }
         }
+
+        if let Some(dialog) = delete_dialog { {dialog} }
+        if let Some(dialog) = duplicate_dialog { {dialog} }
     }
 }
 
-/// Main dashboard component that displays the list of courses
-#[component]
 pub fn CourseDashboard() -> Element {
     let mut app_state = use_context::<Signal<AppState>>();
     let mut search_query = use_signal(String::new);
@@ -558,200 +362,177 @@ pub fn CourseDashboard() -> Element {
     let filtered_courses = use_memo(move || {
         let state = app_state.read();
         let query = search_query.read().to_lowercase();
-
         state
             .courses
             .iter()
             .filter(|course| {
                 let matches_search =
                     query.is_empty() || course.name.to_lowercase().contains(&query);
-
                 let matches_structure = if *filter_structured.read() {
                     course.is_structured()
                 } else {
                     true
                 };
-
                 matches_search && matches_structure
             })
             .cloned()
             .collect::<Vec<Course>>()
     });
 
-    // Animated metrics with icons
+    // Animated stats
     let mut total_courses = use_motion(app_state.read().courses.len() as f32);
     let mut structured_courses =
         use_motion(count_structured_courses(app_state.read().courses.clone()) as f32);
     let mut total_videos = use_motion(count_total_videos(app_state.read().courses.clone()) as f32);
 
     use_effect(move || {
+        let courses = app_state.read().courses.clone();
         total_courses.animate_to(
-            app_state.read().courses.len() as f32,
-            AnimationConfig::new(AnimationMode::Spring(Spring {
-                stiffness: 120.0,
-                damping: 18.0,
-                mass: 1.0,
-                velocity: 0.0,
-            })),
+            courses.len() as f32,
+            AnimationConfig::new(AnimationMode::Spring(Spring::default())),
         );
         structured_courses.animate_to(
-            count_structured_courses(app_state.read().courses.clone()) as f32,
-            AnimationConfig::new(AnimationMode::Spring(Spring {
-                stiffness: 120.0,
-                damping: 18.0,
-                mass: 1.0,
-                velocity: 0.0,
-            })),
+            count_structured_courses(courses.clone()) as f32,
+            AnimationConfig::new(AnimationMode::Spring(Spring::default())),
         );
         total_videos.animate_to(
-            count_total_videos(app_state.read().courses.clone()) as f32,
-            AnimationConfig::new(AnimationMode::Spring(Spring {
-                stiffness: 120.0,
-                damping: 18.0,
-                mass: 1.0,
-                velocity: 0.0,
-            })),
+            count_total_videos(courses) as f32,
+            AnimationConfig::new(AnimationMode::Spring(Spring::default())),
         );
     });
 
-    let metrics = if !app_state.read().courses.is_empty() {
-        vec![rsx!(
-            section { class: "dashboard-metrics",
-                div { class: "dashboard-metric-card",
-                    Icon { width: 28, height: 28, fill: "#1976d2", icon: MdLibraryBooks }
-                    div { class: "dashboard-metric-label", "Total Courses" }
-                    div { class: "dashboard-metric-value", "{total_courses.get_value().round() as usize}" }
-                }
-                div { class: "dashboard-metric-card",
-                    Icon { width: 28, height: 28, fill: "#43a047", icon: MdCheckCircle }
-                    div { class: "dashboard-metric-label", "Structured" }
-                    div { class: "dashboard-metric-value", "{structured_courses.get_value().round() as usize}" }
-                }
-                div { class: "dashboard-metric-card",
-                    Icon { width: 28, height: 28, fill: "#fbc02d", icon: MdMovie }
-                    div { class: "dashboard-metric-label", "Total Videos" }
-                    div { class: "dashboard-metric-value", "{total_videos.get_value().round() as usize}" }
-                }
-            }
-        )]
-    } else {
-        vec![]
-    };
-
-    // Prepare empty state
-    let empty_state = if filtered_courses().len() == 0 && app_state.read().courses.is_empty() {
-        vec![rsx!(
-            section { class: "dashboard-empty-card",
-                div { class: "dashboard-empty-icon", "📚" }
-                h1 { class: "dashboard-empty-title", "Welcome to Course Pilot!" }
-                p { class: "dashboard-empty-desc", "Start your learning journey by adding your first course." }
-                Button {
-                    button_type: "primary",
-                    onclick: move |_| {
-                        app_state.write().current_route = Route::AddCourse;
-                    },
-                    "Add Your First Course"
-                }
-            }
-        )]
-    } else if filtered_courses().len() == 0 {
-        vec![rsx!(
-            section { class: "dashboard-empty-card",
-                div { class: "dashboard-empty-icon", "🔍" }
-                h2 { class: "dashboard-empty-title", "No courses found" }
-                p { class: "dashboard-empty-desc", "Try adjusting your search terms or filters." }
-            }
-        )]
-    } else {
-        vec![]
-    };
-
-    // Prepare course grid
-    let course_grid: Vec<_> = if filtered_courses().len() > 0 {
-        let cards: Vec<_> = filtered_courses()
-            .into_iter()
-            .map(|course| rsx! { CourseCard { course: course } })
-            .collect();
-        vec![rsx!(section {
-            class: "course-grid",
-            { cards.into_iter() }
-        })]
-    } else {
-        vec![]
-    };
-
     rsx! {
-        // Skip to content anchor for accessibility
-        a {
-            href: "#main-content",
-            class: "skip-to-content",
-            tabindex: "0",
-            "Skip to main content"
-        }
-        link {
+        document::Link {
             rel: "stylesheet",
-            href: "src/ui/course_dashboard/style.css"
+            href: asset!("src/ui/course_dashboard/style.css")
         }
-        main {
-            class: "course-dashboard",
-            id: "main-content",
-            role: "main",
-            header {
-                class: "dashboard-header",
+
+        div { class: "dashboard-container",
+            // Header
+            header { class: "dashboard-header",
                 h1 { class: "dashboard-title", "Dashboard" }
-                Button {
-                    button_type: "primary",
+                button {
+                    class: "dashboard-add-btn",
                     onclick: move |_| {
                         app_state.write().current_route = Route::AddCourse;
                     },
-                    aria_label: "Add a new course",
-                    tabindex: "0",
-                    "Add Course"
+                    Icon { width: 20, height: 20, fill: "currentColor", icon: MdAdd }
+                    span { "Add Course" }
                 }
             }
-            { metrics.into_iter() }
-            // Search/filter bar
-            section {
-                class: "dashboard-search-row",
-                aria_label: "Course search and filter",
-                role: "search",
-                input {
-                    class: "dashboard-search-input",
-                    r#type: "search",
-                    placeholder: "Search courses...",
-                    value: search_query(),
-                    oninput: move |evt| search_query.set(evt.value()),
-                    aria_label: "Search courses",
-                    tabindex: "0"
-                }
-                // Structured/unstructured/all toggle
-                div { class: "dashboard-filter-toggle",
-                    label {
-                        input {
-                            r#type: "radio",
-                            name: "filter",
-                            checked: !*filter_structured.read(),
-                            onchange: move |_| filter_structured.set(false),
-                            aria_label: "Show all courses",
-                            tabindex: "0"
+
+            // Enhanced Stats Section
+            section { class: "stats-section",
+                div { class: "stats-grid",
+                    div { class: "stat-card",
+                        div { class: "stat-header",
+                            div { class: "stat-icon",
+                                Icon { width: 24, height: 24, fill: "currentColor", icon: MdLibraryBooks }
+                            }
+                            div { class: "stat-content",
+                                h3 { class: "stat-value", "{total_courses.get_value().round() as usize}" }
+                                p { class: "stat-label", "Total Courses" }
+                            }
                         }
-                        "All"
+                        div { class: "stat-trend",
+                            Icon { width: 12, height: 12, fill: "currentColor", icon: MdTrendingUp }
+                            span { "Growing" }
+                        }
                     }
-                    label {
-                        input {
-                            r#type: "radio",
-                            name: "filter",
-                            checked: *filter_structured.read(),
-                            onchange: move |_| filter_structured.set(true),
-                            aria_label: "Show only structured courses",
-                            tabindex: "0"
+
+                    div { class: "stat-card",
+                        div { class: "stat-header",
+                            div { class: "stat-icon",
+                                Icon { width: 24, height: 24, fill: "currentColor", icon: MdCheckCircle }
+                            }
+                            div { class: "stat-content",
+                                h3 { class: "stat-value", "{structured_courses.get_value().round() as usize}" }
+                                p { class: "stat-label", "Structured" }
+                            }
                         }
-                        "Structured"
+                        div { class: "stat-trend",
+                            Icon { width: 12, height: 12, fill: "currentColor", icon: MdTrendingUp }
+                            span { "Ready to learn" }
+                        }
+                    }
+
+                    div { class: "stat-card",
+                        div { class: "stat-header",
+                            div { class: "stat-icon",
+                                Icon { width: 24, height: 24, fill: "currentColor", icon: MdMovie }
+                            }
+                            div { class: "stat-content",
+                                h3 { class: "stat-value", "{total_videos.get_value().round() as usize}" }
+                                p { class: "stat-label", "Total Videos" }
+                            }
+                        }
+                        div { class: "stat-trend",
+                            Icon { width: 12, height: 12, fill: "currentColor", icon: MdTrendingUp }
+                            span { "Content available" }
+                        }
                     }
                 }
             }
-            { empty_state.into_iter() }
-            { course_grid.into_iter() }
+
+            // Enhanced Search and Filter Controls
+            section { class: "controls-section",
+                div { class: "search-container",
+                    div { class: "search-icon",
+                        Icon { width: 20, height: 20, fill: "currentColor", icon: MdSearch }
+                    }
+                    input {
+                        class: "search-input",
+                        r#type: "search",
+                        placeholder: "Search courses...",
+                        value: search_query(),
+                        oninput: move |evt| search_query.set(evt.value())
+                    }
+                }
+
+                div { class: "filter-controls",
+                    button {
+                        class: if !*filter_structured.read() { "filter-pill active" } else { "filter-pill" },
+                        onclick: move |_| filter_structured.set(false),
+                        "All Courses"
+                    }
+                    button {
+                        class: if *filter_structured.read() { "filter-pill active" } else { "filter-pill" },
+                        onclick: move |_| filter_structured.set(true),
+                        "Structured Only"
+                    }
+                }
+            }
+
+            // Course grid or empty state
+            if filtered_courses().is_empty() && app_state.read().courses.is_empty() {
+                section { class: "empty-state",
+                    div { class: "empty-state-icon", "📚" }
+                    h2 { class: "empty-state-title", "Welcome to Course Pilot!" }
+                    p { class: "empty-state-description", "Start your learning journey by adding your first course from YouTube or local folders." }
+                    button {
+                        class: "dashboard-add-btn",
+                        onclick: move |_| {
+                            app_state.write().current_route = Route::AddCourse;
+                        },
+                        Icon { width: 20, height: 20, fill: "currentColor", icon: MdAdd }
+                        span { "Add Your First Course" }
+                    }
+                }
+            } else if filtered_courses().is_empty() {
+                section { class: "empty-state",
+                    div { class: "empty-state-icon", "🔍" }
+                    h2 { class: "empty-state-title", "No courses found" }
+                    p { class: "empty-state-description", "Try adjusting your search terms or filters to find what you're looking for." }
+                }
+            } else {
+                section { class: "courses-section",
+                    div { class: "courses-grid",
+                        for course in filtered_courses() {
+                            CourseCard { course }
+                        }
+                    }
+                }
+            }
         }
     }
 }

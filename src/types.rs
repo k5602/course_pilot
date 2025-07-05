@@ -95,6 +95,13 @@ pub enum Route {
     PlanView(Uuid),
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+pub enum CourseStatus {
+    Structured,
+    Unstructured,
+    Pending,
+}
+
 impl Default for AppState {
     fn default() -> Self {
         Self {

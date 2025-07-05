@@ -1,5 +1,6 @@
 use dioxus::events::Key;
 use dioxus::prelude::*;
+use crate::types::CourseStatus;
 
 #[derive(Props, Clone, PartialEq)]
 pub struct CardProps {
@@ -25,21 +26,54 @@ pub struct CardProps {
     /// Optional actions row (primary/secondary actions)
     #[props(optional)]
     pub actions_row: Option<Element>,
+    /// Optional status
+    #[props(optional)]
+    pub status: Option<CourseStatus>,
     // The children prop now correctly uses dioxus::prelude::Element
     pub children: Element,
+}
+
+impl CardProps {
+    pub fn status_class(&self) -> &'static str {
+        match self.status {
+            Some(CourseStatus::Structured) => "card--success",
+            Some(CourseStatus::Unstructured) => "card--warning",
+            Some(CourseStatus::Pending) => "card--pending",
+            _ => "",
+        }
+    }
+    pub fn status_aria(&self) -> (&'static str, &'static str) {
+        match self.status {
+            Some(CourseStatus::Structured) => ("status", "Structured course"),
+            Some(CourseStatus::Unstructured) => ("status", "Unstructured course"),
+            Some(CourseStatus::Pending) => ("status", "Pending course"),
+            _ => ("", ""),
+        }
+    }
 }
 
 #[component]
 // The function now correctly returns dioxus::prelude::Element
 pub fn Card(props: CardProps) -> Element {
+    let (aria_role, aria_desc) = props.status_aria();
     let is_clickable = props.onclick.is_some();
     let elevation = props.elevation.clamp(0, 4);
-
     let card_class = format!(
-        "card card--{} card--elevation-{} {}",
+        "card card--{} card--elevation-{}{}",
         props.variant,
         elevation,
-        if is_clickable { "card--clickable" } else { "" }
+        {
+            let mut s = String::new();
+            if is_clickable {
+                s.push_str(" card--clickable");
+            }
+            let status = props.status_class();
+            if !status.is_empty() {
+                s.push(' ');
+                s.push_str(status);
+            }
+            s
+        }
     );
 
     let mut style_str = String::new();
@@ -55,8 +89,14 @@ pub fn Card(props: CardProps) -> Element {
             class: "{card_class}",
             style: "{style_str}",
             tabindex: if is_clickable { "0" } else { "-1" },
-            role: if is_clickable { "button" } else { "region" },
-            aria_label: if is_clickable { Some("Course card, clickable") } else { Some("Course card") },
+            role: if !aria_role.is_empty() { aria_role } else { if is_clickable { "button" } else { "region" } },
+            aria_label: if !aria_desc.is_empty() {
+                aria_desc
+            } else if is_clickable {
+                "Course card, clickable"
+            } else {
+                "Course card"
+            },
             aria_pressed: None::<bool>,
             aria_selected: None::<bool>,
 

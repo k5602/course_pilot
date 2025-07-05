@@ -1,6 +1,19 @@
 use dioxus::prelude::*;
 use dioxus_motion::prelude::*;
 
+#[derive(PartialEq, Eq, Clone, Copy)]
+pub enum ButtonSize {
+    Small,
+    Medium,
+    Large,
+}
+
+impl Default for ButtonSize {
+    fn default() -> Self {
+        ButtonSize::Medium
+    }
+}
+
 #[derive(Props, Clone, PartialEq)]
 pub struct ButtonProps {
     #[props(optional)]
@@ -14,10 +27,35 @@ pub struct ButtonProps {
     #[props(optional)]
     pub tabindex: Option<String>,
     pub children: Element,
+    #[props(optional)]
+    pub size: Option<ButtonSize>,
+}
+
+impl ButtonProps {
+    pub fn size_class(&self) -> &'static str {
+        match self.size.unwrap_or(ButtonSize::Medium) {
+            ButtonSize::Small => "button--sm",
+            ButtonSize::Medium => "button--md",
+            ButtonSize::Large => "button--lg",
+        }
+    }
 }
 
 #[component]
 pub fn Button(props: ButtonProps) -> Element {
+    let ButtonProps {
+        button_type,
+        size,
+        disabled,
+        aria_label,
+        children,
+        ..
+    } = props;
+    let size_class = match size.unwrap_or(ButtonSize::Medium) {
+        ButtonSize::Small => "button--sm",
+        ButtonSize::Medium => "button--md",
+        ButtonSize::Large => "button--lg",
+    };
     let scale = use_motion(1.0f32);
 
     let on_mouse_down = {
@@ -87,10 +125,9 @@ pub fn Button(props: ButtonProps) -> Element {
         }
 
         button {
-            class: "button",
-            "data-style": props.button_type,
-            disabled: props.disabled,
-            aria_label: props.aria_label.unwrap_or_default(),
+            class: format!("button {} {}", button_type, size_class),
+            disabled: disabled,
+            aria_label: aria_label.unwrap_or_default(),
             tabindex: props.tabindex.unwrap_or_default(),
             style: format!("transform: scale({}); transition: transform 0.1s cubic-bezier(0.4,0,0.2,1);", scale.get_value()),
             onmousedown: on_mouse_down,
@@ -102,7 +139,7 @@ pub fn Button(props: ButtonProps) -> Element {
                     handler.call(evt);
                 }
             },
-            {props.children}
+            {children}
         }
     }
 }
