@@ -1,0 +1,91 @@
+.course-dashboard {
+    display: flex;
+    flex-direction: column;
+    gap: 2.5rem;
+    width: 100%;
+    max-width: 1200px;
+    margin: 0 auto;
+}
+.dashboard-metrics {
+    display: flex;
+    gap: 2.5rem;
+    margin-bottom: 0.5rem;
+    flex-wrap: wrap;
+}
+.dashboard-metric-card {
+    flex: 1 1 180px;
+    min-width: 160px;
+    background: var(--appbar-bg, #fff);
+    color: var(--appbar-fg, #23272f);
+    border-radius: 1rem;
+    box-shadow: 0 2px 8px #0001;
+    padding: 1.2rem 1.5rem;
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 0.3rem;
+    font-size: 1.1rem;
+    font-weight: 500;
+}
+.dashboard-metric-label {
+    font-size: 0.95rem;
+    color: #888;
+    font-weight: 400;
+}
+.dashboard-metric-value {
+    font-size: 2.1rem;
+    font-weight: bold;
+    color: var(--sidebar-active, #3f51b5);
+}
+.dashboard-search-row {
+    display: flex;
+    gap: 1.5rem;
+    align-items: center;
+    margin-bottom: 0.5rem;
+    flex-wrap: wrap;
+}
+.dashboard-search-row .input-container {
+    flex: 1 1 260px;
+    min-width: 180px;
+}
+.dashboard-search-row label {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    font-size: 1rem;
+    color: #555;
+    cursor: pointer;
+    user-select: none;
+}
+.course-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+    gap: 2.2rem;
+    margin-top: 0.5rem;
+}
+.dashboard-empty-card {
+    margin: 2.5rem auto 0 auto;
+    max-width: 420px;
+    text-align: center;
+    padding: 2.5rem 1.5rem;
+    border-radius: 1.2rem;
+    background: var(--appbar-bg, #fff);
+    box-shadow: 0 2px 12px #0002;
+    color: var(--appbar-fg, #23272f);
+}
+.dashboard-empty-card h2,
+.dashboard-empty-card h3 {
+    margin: 0.7rem 0 0.3rem 0;
+}
+.dashboard-empty-card p {
+    color: #666;
+    margin-bottom: 1.2rem;
+}
+@media (max-width: 900px) {
+    .dashboard-metrics {
+        gap: 1.2rem;
+    }
+    .course-grid {
+        gap: 1.2rem;
+    }
+}
