@@ -1,4 +1,4 @@
-use dioxus::events::{Key, MouseEvent};
+use dioxus::events::Key;
 use dioxus::prelude::*;
 
 #[derive(Props, Clone, PartialEq)]
