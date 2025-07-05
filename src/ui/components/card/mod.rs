@@ -13,6 +13,18 @@ pub struct CardProps {
     pub color: Option<String>,
     #[props(optional)]
     pub background: Option<String>,
+    /// Optional status badge (e.g., "Structured", "Unstructured")
+    #[props(optional)]
+    pub status_badge: Option<Element>,
+    /// Optional meta/info row (e.g., modules, duration, difficulty)
+    #[props(optional)]
+    pub meta_row: Option<Element>,
+    /// Optional sample content row
+    #[props(optional)]
+    pub sample_row: Option<Element>,
+    /// Optional actions row (primary/secondary actions)
+    #[props(optional)]
+    pub actions_row: Option<Element>,
     // The children prop now correctly uses dioxus::prelude::Element
     pub children: Element,
 }
@@ -44,28 +56,9 @@ pub fn Card(props: CardProps) -> Element {
             style: "{style_str}",
             tabindex: if is_clickable { "0" } else { "-1" },
             role: if is_clickable { "button" } else { "region" },
-
-            // onmousemove: move |evt: MouseEvent| {
-            //     if is_clickable {
-            //         // We explicitly dereference evt.data to access the methods on the underlying MouseData.
-            //         if let Some(element) = (*evt.data).target_element() {
-            //             if let Ok(rect) = element.get_bounding_client_rect() {
-            //                 let x = (*evt.data).client_x() as f64 - rect.left();
-            //                 let y = (*evt.data).client_y() as f64 - rect.top();
-
-            //                 let current_style = element.get_attribute("style").unwrap_or_default();
-            //                 let base_style = current_style.split(" --mouse-x").next().unwrap_or(&current_style);
-            //                 let new_style = format!(
-            //                     "{} --mouse-x: {}px; --mouse-y: {}px;",
-            //                     base_style.trim(),
-            //                     x,
-            //                     y
-            //                 );
-            //                 let _ = element.set_attribute("style", &new_style);
-            //             }
-            //         }
-            //     }
-            // },
+            aria_label: if is_clickable { Some("Course card, clickable") } else { Some("Course card") },
+            aria_pressed: None::<bool>,
+            aria_selected: None::<bool>,
 
             onclick: move |_| {
                 if let Some(handler) = &props.onclick {
@@ -80,7 +73,62 @@ pub fn Card(props: CardProps) -> Element {
                 }
             },
 
-            {props.children}
+            // Card content wrapper for spacing and vertical rhythm
+            div {
+                class: "card-content-visual",
+                // Title row with status badge
+                div {
+                    class: "card-title-row",
+                    h3 {
+                        class: "card-title",
+                        tabindex: "0",
+                        aria_label: "Course title",
+                        {props.children}
+                    }
+                    // Status badge (if any)
+                    if let Some(badge) = &props.status_badge {
+                        span {
+                            role: "status",
+                            aria_label: "Course status",
+                            tabindex: "0",
+                            style: "outline: none;",
+                            {badge.clone()}
+                        }
+                    },
+                }
+                // Meta/info row (if any)
+                if let Some(meta) = &props.meta_row {
+                    div {
+                        class: "card-meta-row",
+                        role: "list",
+                        aria_label: "Course meta information",
+                        tabindex: "0",
+                        style: "outline: none;",
+                        {meta.clone()}
+                    }
+                },
+                // Sample content row (if any)
+                if let Some(sample) = &props.sample_row {
+                    div {
+                        class: "card-sample-row",
+                        aria_label: "Sample course content",
+                        tabindex: "0",
+                        style: "outline: none;",
+                        {sample.clone()}
+                    }
+                },
+                // Actions row (if any)
+                if let Some(actions) = &props.actions_row {
+                    div {
+                        class: "card-actions-row",
+                        role: "group",
+                        aria_label: "Course actions",
+                        tabindex: "0",
+                        style: "outline: none;",
+                        {actions.clone()}
+                    }
+                },
+            }
         }
     }
 }

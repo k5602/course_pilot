@@ -9,6 +9,10 @@ pub struct ButtonProps {
     pub button_type: String,
     #[props(optional, default = false)]
     pub disabled: bool,
+    #[props(optional)]
+    pub aria_label: Option<String>,
+    #[props(optional)]
+    pub tabindex: Option<String>,
     pub children: Element,
 }
 
@@ -86,6 +90,8 @@ pub fn Button(props: ButtonProps) -> Element {
             class: "button",
             "data-style": props.button_type,
             disabled: props.disabled,
+            aria_label: props.aria_label.unwrap_or_default(),
+            tabindex: props.tabindex.unwrap_or_default(),
             style: format!("transform: scale({}); transition: transform 0.1s cubic-bezier(0.4,0,0.2,1);", scale.get_value()),
             onmousedown: on_mouse_down,
             onmouseup: on_mouse_up,

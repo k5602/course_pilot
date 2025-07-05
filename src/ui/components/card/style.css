@@ -9,6 +9,13 @@
     --card-border-light: #e2e8f0;
     --card-focus-ring: #3b82f6;
 
+    --badge-structured-bg: #e8f5e9;
+    --badge-structured-fg: #388e3c;
+    --badge-unstructured-bg: #fffbe6;
+    --badge-unstructured-fg: #bfa100;
+    --badge-default-bg: #e3e7ef;
+    --badge-default-fg: #3f51b5;
+
     --bg-color-dark: #1a202c;
     --text-color-dark: #e2e8f0;
     --header-color-dark: #ffffff;
@@ -20,16 +27,12 @@
 
 .card-demo-container {
     padding: 2rem 4rem;
-    background-color: var(--bg-color-light);
+    background-color: var(--theme-bg);
     font-family:
         -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial,
         sans-serif;
     min-height: 100vh;
     transition: background-color 0.3s ease;
-}
-
-.dark .card-demo-container {
-    background-color: var(--bg-color-dark);
 }
 
 .demo-header {
@@ -38,29 +41,21 @@
 }
 
 .demo-header h2 {
-    color: var(--header-color-light);
+    color: var(--theme-header);
     font-size: 2.5rem;
     font-weight: 700;
-}
-.dark .demo-header h2 {
-    color: var(--header-color-dark);
 }
 
 .theme-toggle {
     margin-top: 1rem;
     padding: 0.75rem 1.5rem;
     border-radius: 999px;
-    border: 1px solid var(--card-border-light);
-    background-color: var(--card-bg-light);
-    color: var(--card-color-light);
+    border: 1px solid var(--theme-card-border);
+    background-color: var(--theme-card-bg);
+    color: var(--theme-card-fg);
     font-weight: 600;
     cursor: pointer;
     transition: all 0.2s ease;
-}
-.dark .theme-toggle {
-    border-color: var(--card-border-dark);
-    background-color: var(--card-bg-dark);
-    color: var(--card-color-dark);
 }
 .theme-toggle:hover {
     transform: translateY(-2px);
@@ -77,25 +72,20 @@
 
 /* --- Base Card Styles --- */
 .card {
-    --card-bg: var(--card-custom-bg, var(--card-bg-light));
-    --card-color: var(--card-custom-color, var(--card-color-light));
-    --card-border-color: var(--card-border-light);
+    --card-bg: var(--card-custom-bg, var(--theme-card-bg));
+    --card-color: var(--card-custom-color, var(--theme-card-fg));
+    --card-border-color: var(--theme-card-border);
     --card-radius: 0.75rem;
 
     background: var(--card-bg);
     color: var(--card-color);
     border-radius: var(--card-radius);
-    border: 1px solid transparent;
+    border: 1px solid var(--card-border-color);
     transition:
         transform 0.3s ease,
         box-shadow 0.3s ease;
     position: relative;
     overflow: hidden; /* Important for glow effect */
-}
-.dark .card {
-    --card-bg: var(--card-custom-bg, var(--card-bg-dark));
-    --card-color: var(--card-custom-color, var(--card-color-dark));
-    --card-border-color: var(--card-border-dark);
 }
 
 /* --- Card Content & Layout --- */
@@ -106,95 +96,324 @@
     border-radius: var(--card-radius) var(--card-radius) 0 0;
 }
 .card-content {
-    padding: 1.5rem;
+    padding: 2rem 2rem 1.5rem 2rem;
+    margin-bottom: 0.5rem;
+    display: flex;
+    flex-direction: column;
+    gap: 0.7rem;
 }
 .card-content h3 {
-    font-size: 1.25rem;
-    font-weight: 600;
-    margin: 0 0 0.5rem 0;
+    font-size: 1.5rem;
+    font-weight: 700;
+    margin: 0 0 0.75rem 0;
+    color: var(--header-color-light);
+    letter-spacing: -0.01em;
+}
+.dark .card-content h3 {
+    color: var(--header-color-dark);
 }
 .card-content p {
-    font-size: 1rem;
-    line-height: 1.6;
-    color: var(--card-p-color-light);
-    margin: 0;
-}
-.dark .card-content p {
-    color: var(--card-p-color-dark);
+    font-size: 1.1rem;
+    line-height: 1.7;
+    color: var(--theme-card-p);
+    margin: 0 0 0.75rem 0;
 }
 
+.card-actions-row,
 .card-actions {
-    padding: 0 1.5rem 1.5rem;
+    padding: 0 2rem 1.5rem 2rem;
     display: flex;
     justify-content: flex-end;
-    gap: 0.5rem;
+    gap: 1rem;
+    margin-top: 1.25rem;
+    align-items: center;
+}
+.card-actions-row :focus-visible,
+.card-actions :focus-visible {
+    outline: 2.5px solid var(--card-focus-ring);
+    outline-offset: 2px;
+    box-shadow: 0 0 0 4px #3b82f622;
+    z-index: 2;
 }
 .action-button {
-    font-weight: 600;
-    padding: 0.5rem 1rem;
+    font-weight: 700;
+    font-size: 1.1rem;
+    padding: 0.65em 1.4em;
     border-radius: 0.5rem;
-    border: 1px solid var(--card-border-light);
+    border: 1.5px solid var(--card-border-light);
     background: transparent;
     color: var(--card-color-light);
     cursor: pointer;
-    transition: all 0.2s ease;
+    transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+    letter-spacing: 0.01em;
 }
 .dark .action-button {
     border-color: var(--card-border-dark);
     color: var(--card-color-dark);
 }
-.action-button:hover {
+.action-button:hover,
+.action-button:focus-visible {
     background-color: #f0f0f0;
+    outline: 2px solid var(--card-focus-ring);
+    outline-offset: 2px;
 }
-.dark .action-button:hover {
+.dark .action-button:hover,
+.dark .action-button:focus-visible {
     background-color: #3d485c;
 }
 .action-button.primary {
     background-color: var(--card-focus-ring);
     border-color: var(--card-focus-ring);
-    color: white;
+    color: #fff;
+    box-shadow: 0 2px 8px #3b82f633;
 }
 .dark .action-button.primary {
     background-color: #4299e1;
     border-color: #4299e1;
 }
 
+/* --- Status Badges --- */
+.course-card-badges {
+    display: flex;
+    gap: 0.7rem;
+    margin-bottom: 0.5rem;
+    flex-wrap: wrap;
+}
+.course-card-badge {
+    display: inline-block;
+    padding: 0.22em 0.85em;
+    border-radius: 999px;
+    font-size: 0.98rem;
+    font-weight: 600;
+    letter-spacing: 0.01em;
+    background: var(--theme-badge-default-bg);
+    color: var(--theme-badge-default-fg);
+    border: none;
+    margin-right: 0.2em;
+    vertical-align: middle;
+    user-select: none;
+    outline: none;
+    transition: box-shadow 0.15s;
+    min-width: 44px;
+    min-height: 44px;
+    line-height: 1.2;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+.course-card-badge.structured {
+    background: var(--theme-badge-structured-bg);
+    color: var(--theme-badge-structured-fg);
+}
+.course-card-badge.unstructured {
+    background: var(--theme-badge-unstructured-bg);
+    color: var(--theme-badge-unstructured-fg);
+}
+.course-card-badge.status {
+    margin-left: 0.2em;
+}
+.course-card-meta {
+    display: flex;
+    gap: 1.2rem;
+    font-size: 1.05rem;
+    color: #666;
+    margin-bottom: 0.2rem;
+    flex-wrap: wrap;
+}
+.course-card-meta span {
+    display: flex;
+    align-items: center;
+    gap: 0.3em;
+}
+.course-card-header {
+    display: flex;
+    flex-direction: row;
+    align-items: flex-end;
+    justify-content: space-between;
+    margin-bottom: 0.3rem;
+    gap: 1.2rem;
+}
+.course-card-title {
+    font-size: 1.5rem;
+    font-weight: 700;
+    color: var(--header-color-light);
+    letter-spacing: -0.01em;
+}
+.course-card-date {
+    font-size: 1.02rem;
+    color: #888;
+    font-weight: 400;
+    margin-left: 0.7em;
+}
+.course-card-sample {
+    margin-top: 0.5rem;
+    font-size: 1.01rem;
+    color: #555;
+}
+.course-card-actions {
+    display: flex;
+    gap: 0.7rem;
+    margin-top: 1.1rem;
+    align-items: center;
+    justify-content: flex-end;
+}
+.course-card-actions .Button,
+.course-card-actions .action-button.primary {
+    font-size: 1.13rem;
+    font-weight: 700;
+    padding: 0.6em 1.5em;
+    border-radius: 0.5rem;
+    background: var(--card-focus-ring);
+    color: #fff;
+    border: none;
+    box-shadow: 0 2px 8px #3b82f633;
+    transition:
+        background 0.18s,
+        box-shadow 0.18s;
+}
+.course-card-actions .Button:hover,
+.course-card-actions .action-button.primary:hover,
+.course-card-actions .Button:focus-visible,
+.course-card-actions .action-button.primary:focus-visible {
+    background: #1746a2;
+    color: #fff;
+    outline: 2px solid var(--card-focus-ring);
+    outline-offset: 2px;
+}
+.course-card-actions .icon-action-btn {
+    background: none;
+    border: none;
+    padding: 0.35em 0.5em;
+    border-radius: 0.4em;
+    cursor: pointer;
+    transition:
+        background 0.15s,
+        box-shadow 0.15s;
+    color: #666;
+    font-size: 1.1rem;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    outline: none;
+    min-width: 44px;
+    min-height: 44px;
+    font-size: 1.25rem;
+}
+.course-card-actions .icon-action-btn:focus-visible,
+.course-card-actions .icon-action-btn:hover {
+    background: #f0f0f0;
+    outline: 2.5px solid var(--card-focus-ring);
+    outline-offset: 2px;
+    color: #1746a2;
+    box-shadow: 0 0 0 4px #3b82f622;
+    z-index: 2;
+}
+.course-card-actions .icon-action-btn.danger {
+    color: #c00;
+}
+.course-card-actions .icon-action-btn.danger:focus-visible,
+.course-card-actions .icon-action-btn.danger:hover {
+    background: #ffeaea;
+    color: #a00;
+    outline: 2.5px solid #c00;
+    outline-offset: 2px;
+    box-shadow: 0 0 0 4px #ffcccc44;
+    z-index: 2;
+}
+.course-card-actions .icon-action-btn,
+.card-actions-row .icon-action-btn {
+    min-width: 44px;
+    min-height: 44px;
+    font-size: 1.25rem;
+    padding: 0.5em 0.7em;
+    background: var(--theme-card-bg);
+    color: var(--theme-card-fg);
+    border: none;
+    transition:
+        background 0.15s,
+        color 0.15s;
+}
+.course-card-actions .icon-action-btn.danger,
+.card-actions-row .icon-action-btn.danger {
+    background: var(--theme-danger-bg);
+    color: var(--theme-danger-fg);
+}
+.course-card-actions .Button,
+.card-actions-row .Button,
+.course-card-actions .action-button,
+.card-actions-row .action-button {
+    min-width: 44px;
+    min-height: 44px;
+    font-size: 1.13rem;
+    padding: 0.7em 1.7em;
+    background: var(--theme-focus-ring);
+    color: #fff;
+    border: none;
+    box-shadow: 0 2px 8px #3b82f633;
+    transition:
+        background 0.18s,
+        box-shadow 0.18s;
+}
+.course-card-structure {
+    color: #bfa100;
+    font-weight: 500;
+    font-size: 1.04rem;
+    margin-top: 0.2rem;
+}
+.course-card-root {
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+    min-height: 320px;
+    height: 100%;
+    justify-content: space-between;
+    padding: 0.5rem 0 0.5rem 0;
+}
+
 /* --- Variants & Elevation --- */
 .card--filled {
     border-color: var(--card-border-color);
+    box-shadow:
+        0 2px 12px #0002,
+        0 1.5px 4px #0001;
 }
 .card--outlined {
     background: transparent;
-    border: 1px solid var(--card-border-color);
+    border: 1.5px solid var(--card-border-color);
+    box-shadow: 0 1px 4px #0001;
 }
 .card--elevation-0 {
     box-shadow: none;
 }
 .card--elevation-1 {
-    box-shadow: 0 1px 2px 0 rgba(0, 0, 0, 0.05);
+    box-shadow: 0 2px 6px 0 rgba(0, 0, 0, 0.07);
 }
 .card--elevation-2 {
     box-shadow:
-        0 4px 6px -1px rgba(0, 0, 0, 0.08),
-        0 2px 4px -1px rgba(0, 0, 0, 0.04);
+        0 6px 12px -2px rgba(0, 0, 0, 0.1),
+        0 2px 6px -1px rgba(0, 0, 0, 0.05);
 }
 .card--elevation-3 {
     box-shadow:
-        0 10px 15px -3px rgba(0, 0, 0, 0.08),
-        0 4px 6px -2px rgba(0, 0, 0, 0.04);
+        0 14px 20px -4px rgba(0, 0, 0, 0.12),
+        0 6px 10px -2px rgba(0, 0, 0, 0.06);
 }
 .card--elevation-4 {
     box-shadow:
-        0 20px 25px -5px rgba(0, 0, 0, 0.1),
-        0 10px 10px -5px rgba(0, 0, 0, 0.04);
+        0 24px 32px -8px rgba(0, 0, 0, 0.13),
+        0 12px 16px -6px rgba(0, 0, 0, 0.07);
 }
 .dark .card {
-    box-shadow: none;
-} /* Simpler shadows in dark mode */
+    box-shadow: 0 0.5px 2px #0008;
+}
 
 /* --- Interactivity & Glow Effect --- */
 .card--clickable {
     cursor: pointer;
+    min-width: 44px;
+    min-height: 44px;
+    background: var(--theme-card-bg);
+    color: var(--theme-card-fg);
 }
 
 .card--clickable::after {
@@ -236,8 +455,9 @@
 }
 
 .card--clickable:focus-visible {
-    outline: 2px solid var(--card-focus-ring);
+    outline: 2.5px solid var(--card-focus-ring);
     outline-offset: 3px;
+    box-shadow: 0 0 0 4px #3b82f622;
 }
 
 .card--clickable:active {

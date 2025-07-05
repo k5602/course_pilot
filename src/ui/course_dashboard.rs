@@ -1,15 +1,11 @@
+use crate::ui::components::card::Card;
 use crate::ui::components::Button;
 use dioxus_free_icons::Icon;
 use dioxus_free_icons::icons::md_action_icons::{MdCheckCircle, MdDelete};
+use dioxus_free_icons::icons::md_content_icons::{MdCreate, MdContentCopy};
 use dioxus_free_icons::icons::md_av_icons::{MdLibraryBooks, MdMovie};
-use dioxus_free_icons::icons::md_content_icons::{MdContentCopy, MdCreate};
 use dioxus_motion::prelude::*;
 use dioxus_toast::{ToastInfo, ToastManager};
-use freyr::FreyrCard;
-// Course Dashboard UI Component
-//
-// This component displays the main dashboard where users can view all their courses,
-// see progress, and navigate to add new courses or view existing plans.
 
 use crate::types::{AppState, Course, Route};
 use chrono::{DateTime, Utc};
@@ -168,11 +164,11 @@ fn CourseCard(course: Course) -> Element {
     // Prepare badges
     let mut badges = vec![];
     if is_structured {
-        badges.push(rsx!(span { class: "course-card-badge", "Structured" }));
+        badges.push(rsx!(span { class: "course-card-badge structured", "Structured" }));
     } else {
         badges.push(rsx!(span { class: "course-card-badge unstructured", "Unstructured" }));
     }
-    badges.push(rsx!(span { class: "course-card-badge", "{video_count} videos" }));
+    badges.push(rsx!(span { class: "course-card-badge videos", "{video_count} videos" }));
 
     // Prepare meta
     let meta = if is_structured {
@@ -212,8 +208,8 @@ fn CourseCard(course: Course) -> Element {
     let plan_progress: Option<Element> = None;
 
     rsx! {
-        FreyrCard {
-            has_shadow: true,
+        Card {
+            elevation: 2,
             div {
                 class: "course-card-root",
                 tabindex: "0",
@@ -231,30 +227,33 @@ fn CourseCard(course: Course) -> Element {
                     }
                 },
 
-                div { class: "course-card-header",
-                    div {
-                        class: "course-card-title",
-                        "{course.name}"
+                // Top row: title and badges
+                div {
+                    class: "course-card-top-row",
+                    role: "group",
+                    aria_label: format!("Course card for {}", course.name),
+                    div { class: "course-card-title-badges",
+                        span { class: "course-card-title", tabindex: "0", "{course.name}" }
+                        div { class: "course-card-badges", {badges.into_iter()} }
                     }
-                    div {
-                        class: "course-card-date",
-                        "Created {formatted_date}"
-                    }
+                    div { class: "course-card-date", "Created {formatted_date}" }
                 }
 
-                div { class: "course-card-badges", { badges.into_iter() } }
+                // Meta section
+                div { class: "course-card-meta", {meta.into_iter()} },
 
-                div { class: "course-card-meta", { meta.into_iter() } }
+                { plan_progress },
 
-                { plan_progress }
-
+                // Sample content
                 div { class: "course-card-sample",
-                    div { style: "font-weight:500; color:#888; margin-bottom:0.2rem;", "Sample content:" }
-                    div { { sample_titles.into_iter() } }
-                }
+                    div { class: "course-card-sample-label", "Sample content:" },
+                    div { class: "course-card-sample-list", {sample_titles.into_iter()} }
+                },
 
-                div { class: "course-card-actions",
+                // Bottom row: actions
+                div { class: "course-card-actions-row",
                     Button {
+                        button_type: "primary",
                         onclick: {
                             let course_id = course.id;
                             move |evt: Event<MouseData>| {
@@ -262,285 +261,288 @@ fn CourseCard(course: Course) -> Element {
                                 app_state.write().current_route = Route::PlanView(course_id);
                             }
                         },
+                        aria_label: if is_structured { "View course plan" } else { "Structure this course" },
+                        tabindex: "0",
                         if is_structured { "View Plan" } else { "Structure Course" }
-                    }
-                    // Edit action
-                    button {
-                        class: "icon-action-btn",
-                        title: "Edit Course",
-                        aria_label: "Edit Course",
-                        tabindex: "0",
-                        style: format!("transform: scale({}); transition: transform 0.12s cubic-bezier(0.4,0,0.2,1);", scale_edit.get_value()),
-                        onmouseenter: {
-                            let scale_edit = scale_edit.clone();
-                            move |_| scale_edit.clone().animate_to(
-                                1.12,
-                                AnimationConfig::new(AnimationMode::Spring(Spring {
-                                    stiffness: 300.0,
-                                    damping: 20.0,
-                                    mass: 1.0,
-                                    velocity: 0.0,
-                                })),
-                            )
-                        },
-                        onmouseleave: {
-                            let scale_edit = scale_edit.clone();
-                            move |_| scale_edit.clone().animate_to(
-                                1.0,
-                                AnimationConfig::new(AnimationMode::Spring(Spring {
-                                    stiffness: 300.0,
-                                    damping: 20.0,
-                                    mass: 1.0,
-                                    velocity: 0.0,
-                                })),
-                            )
-                        },
-                        onmousedown: {
-                            let scale_edit = scale_edit.clone();
-                            move |_| scale_edit.clone().animate_to(
-                                0.93,
-                                AnimationConfig::new(AnimationMode::Spring(Spring {
-                                    stiffness: 300.0,
-                                    damping: 20.0,
-                                    mass: 1.0,
-                                    velocity: 0.0,
-                                })),
-                            )
-                        },
-                        onmouseup: {
-                            let scale_edit = scale_edit.clone();
-                            move |_| scale_edit.clone().animate_to(
-                                1.12,
-                                AnimationConfig::new(AnimationMode::Spring(Spring {
-                                    stiffness: 300.0,
-                                    damping: 20.0,
-                                    mass: 1.0,
-                                    velocity: 0.0,
-                                })),
-                            )
-                        },
-                        onfocus: {
-                            let scale_edit = scale_edit.clone();
-                            move |_| scale_edit.clone().animate_to(
-                                1.12,
-                                AnimationConfig::new(AnimationMode::Spring(Spring {
-                                    stiffness: 300.0,
-                                    damping: 20.0,
-                                    mass: 1.0,
-                                    velocity: 0.0,
-                                })),
-                            )
-                        },
-                        onblur: {
-                            let scale_edit = scale_edit.clone();
-                            move |_| scale_edit.clone().animate_to(
-                                1.0,
-                                AnimationConfig::new(AnimationMode::Spring(Spring {
-                                    stiffness: 300.0,
-                                    damping: 20.0,
-                                    mass: 1.0,
-                                    velocity: 0.0,
-                                })),
-                            )
-                        },
-                        onclick: move |evt: Event<MouseData>| {
-                            evt.stop_propagation();
-                            toast.write().popup(ToastInfo::simple("Edit not implemented"));
-                        },
-                        Icon {
-                            width: 22,
-                            height: 22,
-                            fill: "#666",
-                            icon: MdCreate,
+                    },
+                    div { class: "course-card-icon-actions",
+                        // Edit action
+                        button {
+                            class: "icon-action-btn",
+                            title: "Edit Course",
+                            aria_label: "Edit this course",
+                            tabindex: "0",
+                            style: format!("transform: scale({}); transition: transform 0.12s cubic-bezier(0.4,0,0.2,1);", scale_edit.get_value()),
+                            onmouseenter: {
+                                let scale_edit = scale_edit.clone();
+                                move |_| scale_edit.clone().animate_to(
+                                    1.12,
+                                    AnimationConfig::new(AnimationMode::Spring(Spring {
+                                        stiffness: 300.0,
+                                        damping: 20.0,
+                                        mass: 1.0,
+                                        velocity: 0.0,
+                                    })),
+                                )
+                            },
+                            onmouseleave: {
+                                let scale_edit = scale_edit.clone();
+                                move |_| scale_edit.clone().animate_to(
+                                    1.0,
+                                    AnimationConfig::new(AnimationMode::Spring(Spring {
+                                        stiffness: 300.0,
+                                        damping: 20.0,
+                                        mass: 1.0,
+                                        velocity: 0.0,
+                                    })),
+                                )
+                            },
+                            onmousedown: {
+                                let scale_edit = scale_edit.clone();
+                                move |_| scale_edit.clone().animate_to(
+                                    0.93,
+                                    AnimationConfig::new(AnimationMode::Spring(Spring {
+                                        stiffness: 300.0,
+                                        damping: 20.0,
+                                        mass: 1.0,
+                                        velocity: 0.0,
+                                    })),
+                                )
+                            },
+                            onmouseup: {
+                                let scale_edit = scale_edit.clone();
+                                move |_| scale_edit.clone().animate_to(
+                                    1.12,
+                                    AnimationConfig::new(AnimationMode::Spring(Spring {
+                                        stiffness: 300.0,
+                                        damping: 20.0,
+                                        mass: 1.0,
+                                        velocity: 0.0,
+                                    })),
+                                )
+                            },
+                            onfocus: {
+                                let scale_edit = scale_edit.clone();
+                                move |_| scale_edit.clone().animate_to(
+                                    1.12,
+                                    AnimationConfig::new(AnimationMode::Spring(Spring {
+                                        stiffness: 300.0,
+                                        damping: 20.0,
+                                        mass: 1.0,
+                                        velocity: 0.0,
+                                    })),
+                                )
+                            },
+                            onblur: {
+                                let scale_edit = scale_edit.clone();
+                                move |_| scale_edit.clone().animate_to(
+                                    1.0,
+                                    AnimationConfig::new(AnimationMode::Spring(Spring {
+                                        stiffness: 300.0,
+                                        damping: 20.0,
+                                        mass: 1.0,
+                                        velocity: 0.0,
+                                    })),
+                                )
+                            },
+                            onclick: move |evt: Event<MouseData>| {
+                                evt.stop_propagation();
+                                toast.write().popup(ToastInfo::simple("Edit not implemented"));
+                            },
+                            Icon {
+                                width: 22,
+                                height: 22,
+                                fill: "#666",
+                                icon: MdCreate,
+                            }
                         }
-                    }
-                    // Duplicate action
-                    button {
-                        class: "icon-action-btn",
-                        title: "Duplicate Course",
-                        aria_label: "Duplicate Course",
-                        tabindex: "0",
-                        style: format!("transform: scale({}); transition: transform 0.12s cubic-bezier(0.4,0,0.2,1);", scale_duplicate.get_value()),
-                        onmouseenter: {
-                            let scale_duplicate = scale_duplicate.clone();
-                            move |_| scale_duplicate.clone().animate_to(
-                                1.12,
-                                AnimationConfig::new(AnimationMode::Spring(Spring {
-                                    stiffness: 300.0,
-                                    damping: 20.0,
-                                    mass: 1.0,
-                                    velocity: 0.0,
-                                })),
-                            )
-                        },
-                        onmouseleave: {
-                            let scale_duplicate = scale_duplicate.clone();
-                            move |_| scale_duplicate.clone().animate_to(
-                                1.0,
-                                AnimationConfig::new(AnimationMode::Spring(Spring {
-                                    stiffness: 300.0,
-                                    damping: 20.0,
-                                    mass: 1.0,
-                                    velocity: 0.0,
-                                })),
-                            )
-                        },
-                        onmousedown: {
-                            let scale_duplicate = scale_duplicate.clone();
-                            move |_| scale_duplicate.clone().animate_to(
-                                0.93,
-                                AnimationConfig::new(AnimationMode::Spring(Spring {
-                                    stiffness: 300.0,
-                                    damping: 20.0,
-                                    mass: 1.0,
-                                    velocity: 0.0,
-                                })),
-                            )
-                        },
-                        onmouseup: {
-                            let scale_duplicate = scale_duplicate.clone();
-                            move |_| scale_duplicate.clone().animate_to(
-                                1.12,
-                                AnimationConfig::new(AnimationMode::Spring(Spring {
-                                    stiffness: 300.0,
-                                    damping: 20.0,
-                                    mass: 1.0,
-                                    velocity: 0.0,
-                                })),
-                            )
-                        },
-                        onfocus: {
-                            let scale_duplicate = scale_duplicate.clone();
-                            move |_| scale_duplicate.clone().animate_to(
-                                1.12,
-                                AnimationConfig::new(AnimationMode::Spring(Spring {
-                                    stiffness: 300.0,
-                                    damping: 20.0,
-                                    mass: 1.0,
-                                    velocity: 0.0,
-                                })),
-                            )
-                        },
-                        onblur: {
-                            let scale_duplicate = scale_duplicate.clone();
-                            move |_| scale_duplicate.clone().animate_to(
-                                1.0,
-                                AnimationConfig::new(AnimationMode::Spring(Spring {
-                                    stiffness: 300.0,
-                                    damping: 20.0,
-                                    mass: 1.0,
-                                    velocity: 0.0,
-                                })),
-                            )
-                        },
-                        onclick: move |evt: Event<MouseData>| {
-                            evt.stop_propagation();
-                            let mut show_duplicate_dialog = show_duplicate_dialog.clone();
-                            show_duplicate_dialog.set(true);
-                        },
-                        Icon {
-                            width: 22,
-                            height: 22,
-                            fill: "#666",
-                            icon: MdContentCopy,
+                        // Duplicate action
+                        button {
+                            class: "icon-action-btn",
+                            title: "Duplicate Course",
+                            aria_label: "Duplicate this course",
+                            tabindex: "0",
+                            style: format!("transform: scale({}); transition: transform 0.12s cubic-bezier(0.4,0,0.2,1);", scale_duplicate.get_value()),
+                            onmouseenter: {
+                                let scale_duplicate = scale_duplicate.clone();
+                                move |_| scale_duplicate.clone().animate_to(
+                                    1.12,
+                                    AnimationConfig::new(AnimationMode::Spring(Spring {
+                                        stiffness: 300.0,
+                                        damping: 20.0,
+                                        mass: 1.0,
+                                        velocity: 0.0,
+                                    })),
+                                )
+                            },
+                            onmouseleave: {
+                                let scale_duplicate = scale_duplicate.clone();
+                                move |_| scale_duplicate.clone().animate_to(
+                                    1.0,
+                                    AnimationConfig::new(AnimationMode::Spring(Spring {
+                                        stiffness: 300.0,
+                                        damping: 20.0,
+                                        mass: 1.0,
+                                        velocity: 0.0,
+                                    })),
+                                )
+                            },
+                            onmousedown: {
+                                let scale_duplicate = scale_duplicate.clone();
+                                move |_| scale_duplicate.clone().animate_to(
+                                    0.93,
+                                    AnimationConfig::new(AnimationMode::Spring(Spring {
+                                        stiffness: 300.0,
+                                        damping: 20.0,
+                                        mass: 1.0,
+                                        velocity: 0.0,
+                                    })),
+                                )
+                            },
+                            onmouseup: {
+                                let scale_duplicate = scale_duplicate.clone();
+                                move |_| scale_duplicate.clone().animate_to(
+                                    1.12,
+                                    AnimationConfig::new(AnimationMode::Spring(Spring {
+                                        stiffness: 300.0,
+                                        damping: 20.0,
+                                        mass: 1.0,
+                                        velocity: 0.0,
+                                    })),
+                                )
+                            },
+                            onfocus: {
+                                let scale_duplicate = scale_duplicate.clone();
+                                move |_| scale_duplicate.clone().animate_to(
+                                    1.12,
+                                    AnimationConfig::new(AnimationMode::Spring(Spring {
+                                        stiffness: 300.0,
+                                        damping: 20.0,
+                                        mass: 1.0,
+                                        velocity: 0.0,
+                                    })),
+                                )
+                            },
+                            onblur: {
+                                let scale_duplicate = scale_duplicate.clone();
+                                move |_| scale_duplicate.clone().animate_to(
+                                    1.0,
+                                    AnimationConfig::new(AnimationMode::Spring(Spring {
+                                        stiffness: 300.0,
+                                        damping: 20.0,
+                                        mass: 1.0,
+                                        velocity: 0.0,
+                                    })),
+                                )
+                            },
+                            onclick: move |evt: Event<MouseData>| {
+                                evt.stop_propagation();
+                                let mut show_duplicate_dialog = show_duplicate_dialog.clone();
+                                show_duplicate_dialog.set(true);
+                            },
+                            Icon {
+                                width: 22,
+                                height: 22,
+                                fill: "#666",
+                                icon: MdContentCopy,
+                            }
                         }
-                    }
-                    // Delete action
-                    button {
-                        class: "icon-action-btn",
-                        title: "Delete Course",
-                        aria_label: "Delete Course",
-                        tabindex: "0",
-                        style: format!("transform: scale({}); transition: transform 0.12s cubic-bezier(0.4,0,0.2,1);", scale_delete.get_value()),
-                        onmouseenter: {
-                            let scale_delete = scale_delete.clone();
-                            move |_| scale_delete.clone().animate_to(
-                                1.12,
-                                AnimationConfig::new(AnimationMode::Spring(Spring {
-                                    stiffness: 300.0,
-                                    damping: 20.0,
-                                    mass: 1.0,
-                                    velocity: 0.0,
-                                })),
-                            )
-                        },
-                        onmouseleave: {
-                            let scale_delete = scale_delete.clone();
-                            move |_| scale_delete.clone().animate_to(
-                                1.0,
-                                AnimationConfig::new(AnimationMode::Spring(Spring {
-                                    stiffness: 300.0,
-                                    damping: 20.0,
-                                    mass: 1.0,
-                                    velocity: 0.0,
-                                })),
-                            )
-                        },
-                        onmousedown: {
-                            let scale_delete = scale_delete.clone();
-                            move |_| scale_delete.clone().animate_to(
-                                0.93,
-                                AnimationConfig::new(AnimationMode::Spring(Spring {
-                                    stiffness: 300.0,
-                                    damping: 20.0,
-                                    mass: 1.0,
-                                    velocity: 0.0,
-                                })),
-                            )
-                        },
-                        onmouseup: {
-                            let scale_delete = scale_delete.clone();
-                            move |_| scale_delete.clone().animate_to(
-                                1.12,
-                                AnimationConfig::new(AnimationMode::Spring(Spring {
-                                    stiffness: 300.0,
-                                    damping: 20.0,
-                                    mass: 1.0,
-                                    velocity: 0.0,
-                                })),
-                            )
-                        },
-                        onfocus: {
-                            let scale_delete = scale_delete.clone();
-                            move |_| scale_delete.clone().animate_to(
-                                1.12,
-                                AnimationConfig::new(AnimationMode::Spring(Spring {
-                                    stiffness: 300.0,
-                                    damping: 20.0,
-                                    mass: 1.0,
-                                    velocity: 0.0,
-                                })),
-                            )
-                        },
-                        onblur: {
-                            let scale_delete = scale_delete.clone();
-                            move |_| scale_delete.clone().animate_to(
-                                1.0,
-                                AnimationConfig::new(AnimationMode::Spring(Spring {
-                                    stiffness: 300.0,
-                                    damping: 20.0,
-                                    mass: 1.0,
-                                    velocity: 0.0,
-                                })),
-                            )
-                        },
-                        onclick: move |evt: Event<MouseData>| {
-                            evt.stop_propagation();
-                            let mut show_delete_dialog = show_delete_dialog.clone();
-                            show_delete_dialog.set(true);
-                        },
-                        Icon {
-                            width: 22,
-                            height: 22,
-                            fill: "#c00",
-                            icon: MdDelete,
+                        // Delete action
+                        button {
+                            class: "icon-action-btn danger",
+                            title: "Delete Course",
+                            aria_label: "Delete this course",
+                            tabindex: "0",
+                            style: format!("transform: scale({}); transition: transform 0.12s cubic-bezier(0.4,0,0.2,1);", scale_delete.get_value()),
+                            onmouseenter: {
+                                let scale_delete = scale_delete.clone();
+                                move |_| scale_delete.clone().animate_to(
+                                    1.12,
+                                    AnimationConfig::new(AnimationMode::Spring(Spring {
+                                        stiffness: 300.0,
+                                        damping: 20.0,
+                                        mass: 1.0,
+                                        velocity: 0.0,
+                                    })),
+                                )
+                            },
+                            onmouseleave: {
+                                let scale_delete = scale_delete.clone();
+                                move |_| scale_delete.clone().animate_to(
+                                    1.0,
+                                    AnimationConfig::new(AnimationMode::Spring(Spring {
+                                        stiffness: 300.0,
+                                        damping: 20.0,
+                                        mass: 1.0,
+                                        velocity: 0.0,
+                                    })),
+                                )
+                            },
+                            onmousedown: {
+                                let scale_delete = scale_delete.clone();
+                                move |_| scale_delete.clone().animate_to(
+                                    0.93,
+                                    AnimationConfig::new(AnimationMode::Spring(Spring {
+                                        stiffness: 300.0,
+                                        damping: 20.0,
+                                        mass: 1.0,
+                                        velocity: 0.0,
+                                    })),
+                                )
+                            },
+                            onmouseup: {
+                                let scale_delete = scale_delete.clone();
+                                move |_| scale_delete.clone().animate_to(
+                                    1.12,
+                                    AnimationConfig::new(AnimationMode::Spring(Spring {
+                                        stiffness: 300.0,
+                                        damping: 20.0,
+                                        mass: 1.0,
+                                        velocity: 0.0,
+                                    })),
+                                )
+                            },
+                            onfocus: {
+                                let scale_delete = scale_delete.clone();
+                                move |_| scale_delete.clone().animate_to(
+                                    1.12,
+                                    AnimationConfig::new(AnimationMode::Spring(Spring {
+                                        stiffness: 300.0,
+                                        damping: 20.0,
+                                        mass: 1.0,
+                                        velocity: 0.0,
+                                    })),
+                                )
+                            },
+                            onblur: {
+                                let scale_delete = scale_delete.clone();
+                                move |_| scale_delete.clone().animate_to(
+                                    1.0,
+                                    AnimationConfig::new(AnimationMode::Spring(Spring {
+                                        stiffness: 300.0,
+                                        damping: 20.0,
+                                        mass: 1.0,
+                                        velocity: 0.0,
+                                    })),
+                                )
+                            },
+                            onclick: move |evt: Event<MouseData>| {
+                                evt.stop_propagation();
+                                let mut show_delete_dialog = show_delete_dialog.clone();
+                                show_delete_dialog.set(true);
+                            },
+                            Icon {
+                                width: 22,
+                                height: 22,
+                                fill: "#c00",
+                                icon: MdDelete,
+                            }
                         }
                     }
                 }
-
                 // Dialogs (conditionally rendered)
-                {delete_dialog}
-                {duplicate_dialog}
+                if let Some(dialog) = delete_dialog { {dialog} }
+                if let Some(dialog) = duplicate_dialog { {dialog} }
             }
         }
     }
@@ -614,7 +616,7 @@ pub fn CourseDashboard() -> Element {
 
     let metrics = if !app_state.read().courses.is_empty() {
         vec![rsx!(
-            div { class: "dashboard-metrics",
+            section { class: "dashboard-metrics",
                 div { class: "dashboard-metric-card",
                     Icon { width: 28, height: 28, fill: "#1976d2", icon: MdLibraryBooks }
                     div { class: "dashboard-metric-label", "Total Courses" }
@@ -639,11 +641,12 @@ pub fn CourseDashboard() -> Element {
     // Prepare empty state
     let empty_state = if filtered_courses().len() == 0 && app_state.read().courses.is_empty() {
         vec![rsx!(
-            div { class: "dashboard-empty-card",
-                div { style: "font-size:2.5rem; margin-bottom:0.5rem;", "📚" }
-                h2 { "Welcome to Course Pilot!" }
-                p { "Start your learning journey by adding your first course." }
+            section { class: "dashboard-empty-card",
+                div { class: "dashboard-empty-icon", "📚" }
+                h1 { class: "dashboard-empty-title", "Welcome to Course Pilot!" }
+                p { class: "dashboard-empty-desc", "Start your learning journey by adding your first course." }
                 Button {
+                    button_type: "primary",
                     onclick: move |_| {
                         app_state.write().current_route = Route::AddCourse;
                     },
@@ -653,10 +656,10 @@ pub fn CourseDashboard() -> Element {
         )]
     } else if filtered_courses().len() == 0 {
         vec![rsx!(
-            div { class: "dashboard-empty-card",
-                div { style: "font-size:2.2rem; margin-bottom:0.5rem;", "🔍" }
-                h3 { "No courses found" }
-                p { "Try adjusting your search terms or filters." }
+            section { class: "dashboard-empty-card",
+                div { class: "dashboard-empty-icon", "🔍" }
+                h2 { class: "dashboard-empty-title", "No courses found" }
+                p { class: "dashboard-empty-desc", "Try adjusting your search terms or filters." }
             }
         )]
     } else {
@@ -669,7 +672,7 @@ pub fn CourseDashboard() -> Element {
             .into_iter()
             .map(|course| rsx! { CourseCard { course: course } })
             .collect();
-        vec![rsx!(div {
+        vec![rsx!(section {
             class: "course-grid",
             { cards.into_iter() }
         })]
@@ -678,47 +681,75 @@ pub fn CourseDashboard() -> Element {
     };
 
     rsx! {
-    document::Link {
-        rel: "stylesheet",
-        href: asset!("src/ui/course_dashboard/style.css")
-    }
-    div { class: "course-dashboard",
-        { metrics.into_iter() }
-        // Search/filter bar
-        div { class: "dashboard-search-row",
-            input {
-                class: "dashboard-search-input",
-                r#type: "search",
-                placeholder: "Search courses...",
-                value: search_query(),
-                oninput: move |evt| search_query.set(evt.value()),
-                aria_label: "Search courses"
-            }
-            // Structured/unstructured/all toggle
-            div { class: "dashboard-filter-toggle",
-                label {
-                    input {
-                        r#type: "radio",
-                        name: "filter",
-                        checked: !*filter_structured.read(),
-                        onchange: move |_| filter_structured.set(false),
-                        aria_label: "Show all courses"
-                    }
-                    "All"
-                }
-                label {
-                    input {
-                        r#type: "radio",
-                        name: "filter",
-                        checked: *filter_structured.read(),
-                        onchange: move |_| filter_structured.set(true),
-                        aria_label: "Show only structured courses"
-                    }
-                    "Structured"
-                }
-            }
+        // Skip to content anchor for accessibility
+        a {
+            href: "#main-content",
+            class: "skip-to-content",
+            tabindex: "0",
+            "Skip to main content"
         }
-
+        link {
+            rel: "stylesheet",
+            href: "src/ui/course_dashboard/style.css"
+        }
+        main {
+            class: "course-dashboard",
+            id: "main-content",
+            role: "main",
+            header {
+                class: "dashboard-header",
+                h1 { class: "dashboard-title", "Dashboard" }
+                Button {
+                    button_type: "primary",
+                    onclick: move |_| {
+                        app_state.write().current_route = Route::AddCourse;
+                    },
+                    aria_label: "Add a new course",
+                    tabindex: "0",
+                    "Add Course"
+                }
+            }
+            { metrics.into_iter() }
+            // Search/filter bar
+            section {
+                class: "dashboard-search-row",
+                aria_label: "Course search and filter",
+                role: "search",
+                input {
+                    class: "dashboard-search-input",
+                    r#type: "search",
+                    placeholder: "Search courses...",
+                    value: search_query(),
+                    oninput: move |evt| search_query.set(evt.value()),
+                    aria_label: "Search courses",
+                    tabindex: "0"
+                }
+                // Structured/unstructured/all toggle
+                div { class: "dashboard-filter-toggle",
+                    label {
+                        input {
+                            r#type: "radio",
+                            name: "filter",
+                            checked: !*filter_structured.read(),
+                            onchange: move |_| filter_structured.set(false),
+                            aria_label: "Show all courses",
+                            tabindex: "0"
+                        }
+                        "All"
+                    }
+                    label {
+                        input {
+                            r#type: "radio",
+                            name: "filter",
+                            checked: *filter_structured.read(),
+                            onchange: move |_| filter_structured.set(true),
+                            aria_label: "Show only structured courses",
+                            tabindex: "0"
+                        }
+                        "Structured"
+                    }
+                }
+            }
             { empty_state.into_iter() }
             { course_grid.into_iter() }
         }
