@@ -356,4 +356,4 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 
 **Ready to transform your learning experience?** Download Course Pilot and turn your video chaos into structured success!
 
-[📥 Download Latest Release](https://github.com/your-repo/course-pilot/releases) | [📖 Documentation](https://docs.course-pilot.dev) | [💬 Community](https://discord.gg/course-pilot)
+[📥 Download Latest Release](https://github.com/course_pilot/course-pilot/releases) | [📖 Documentation](https://docs.course-pilot.dev) 
