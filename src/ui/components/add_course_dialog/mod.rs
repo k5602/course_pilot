@@ -162,7 +162,7 @@ pub fn AddCourseDialog() -> Element {
                         youtube_url.set(String::new());
                         selected_folder.set(None);
 
-                        let mut app_state_nav = app_state.clone();
+                        let app_state_nav = app_state.clone();
                         spawn(async move {
                             tokio::time::sleep(std::time::Duration::from_secs(2)).await;
                             if let Err(e) = async_navigate_to(app_state_nav, Route::Dashboard) {
@@ -187,7 +187,7 @@ pub fn AddCourseDialog() -> Element {
     };
 
     let cancel_import = {
-        let mut app_state_cancel = app_state.clone();
+        let app_state_cancel = app_state.clone();
         move |_| {
             if let Err(e) = navigate_to_dashboard(app_state_cancel) {
                 log::error!("Failed to navigate to dashboard: {:?}", e);

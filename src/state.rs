@@ -121,7 +121,7 @@ pub fn delete_course(mut app_state: Signal<AppState>, id: Uuid) -> StateResult<(
 }
 
 /// Duplicate a course
-pub fn duplicate_course(mut app_state: Signal<AppState>, id: Uuid) -> StateResult<()> {
+pub fn duplicate_course(app_state: Signal<AppState>, id: Uuid) -> StateResult<()> {
     let original_course = {
         let state = app_state.read();
         state
@@ -171,7 +171,7 @@ pub fn structure_course(
 }
 
 /// Generate a unique course name
-fn generate_unique_name(mut app_state: Signal<AppState>, base_name: &str) -> StateResult<String> {
+fn generate_unique_name(app_state: Signal<AppState>, base_name: &str) -> StateResult<String> {
     let state = app_state.read();
     let mut counter = 1;
     let mut new_name = format!("{} (Copy)", base_name);
@@ -284,12 +284,12 @@ pub fn clear_import(mut app_state: Signal<AppState>) -> StateResult<()> {
 // Read-only helper functions
 
 /// Check if a course exists
-pub fn course_exists(mut app_state: Signal<AppState>, id: Uuid) -> bool {
+pub fn course_exists(app_state: Signal<AppState>, id: Uuid) -> bool {
     app_state.read().courses.iter().any(|c| c.id == id)
 }
 
 /// Get a course by ID
-pub fn get_course(mut app_state: Signal<AppState>, id: Uuid) -> Option<Course> {
+pub fn get_course(app_state: Signal<AppState>, id: Uuid) -> Option<Course> {
     app_state
         .read()
         .courses
@@ -299,22 +299,22 @@ pub fn get_course(mut app_state: Signal<AppState>, id: Uuid) -> Option<Course> {
 }
 
 /// Get all courses
-pub fn get_courses(mut app_state: Signal<AppState>) -> Vec<Course> {
+pub fn get_courses(app_state: Signal<AppState>) -> Vec<Course> {
     app_state.read().courses.clone()
 }
 
 /// Get current route
-pub fn get_current_route(mut app_state: Signal<AppState>) -> Route {
+pub fn get_current_route(app_state: Signal<AppState>) -> Route {
     app_state.read().current_route.clone()
 }
 
 /// Get active import
-pub fn get_active_import(mut app_state: Signal<AppState>) -> Option<ImportJob> {
+pub fn get_active_import(app_state: Signal<AppState>) -> Option<ImportJob> {
     app_state.read().active_import.clone()
 }
 
 /// Get course statistics
-pub fn get_course_stats(mut app_state: Signal<AppState>) -> (usize, usize, usize) {
+pub fn get_course_stats(app_state: Signal<AppState>) -> (usize, usize, usize) {
     let state = app_state.read();
     let total = state.courses.len();
     let structured = state.courses.iter().filter(|c| c.is_structured()).count();
@@ -374,7 +374,7 @@ pub fn use_app_state() -> Signal<AppState> {
 
 /// Async-safe course structuring
 pub async fn async_structure_course(
-    mut app_state: Signal<AppState>,
+    app_state: Signal<AppState>,
     course_id: Uuid,
     raw_titles: Vec<String>,
 ) -> StateResult<()> {

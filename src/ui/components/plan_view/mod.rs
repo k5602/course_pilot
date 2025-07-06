@@ -7,12 +7,9 @@
 //! - Adaptive scheduling recommendations
 //! - Interactive study sessions with focus mode
 
-use crate::nlp::structure_course;
-use crate::planner::generate_plan;
 use crate::state::{async_structure_course, navigate_to, use_app_state, use_course};
-use crate::types::{AppState, Course, Plan, PlanSettings, Route};
-use crate::ui::navigation::navigate_to_dashboard;
-use chrono::{DateTime, Duration, Local, Utc};
+use crate::types::{Course, Plan, Route};
+use chrono::{DateTime, Duration, Local};
 use dioxus::prelude::*;
 use dioxus_free_icons::Icon;
 use dioxus_free_icons::icons::md_action_icons::{

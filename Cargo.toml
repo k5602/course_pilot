@@ -25,6 +25,12 @@ scroll-rs = "0.2.3"
 freyr = "0.2.3"
 rfd = { version = "0.14", default-features = false, features = ["tokio"] }
 
+rand = "0.8.5" # For random ID generation
+
+# For web-specific APIs used in Dioxus desktop (e.g., local storage)
+wasm-bindgen = "0.2"
+web-sys = { version = "0.3", features = ["Window", "Storage"] }
+
 
 
 
@@ -79,6 +85,3 @@ once_cell = "1.0"
 
 # Web utilities for async timeouts and UUID generation
 gloo-timers = { version = "0.3", features = ["futures"] }
-
-# Web APIs for DOM manipulation (used in component demos)
-web-sys = "0.3"

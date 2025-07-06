@@ -1,40 +1,728 @@
-/* Input Styles */
+/* === INPUT COMPONENT STYLES === */
+
+/* Base input wrapper */
+.input-wrapper {
+    display: flex;
+    flex-direction: column;
+    gap: var(--spacing-1);
+    position: relative;
+    font-family: inherit;
+}
+
+.input-wrapper--full-width {
+    width: 100%;
+}
+
+.input-wrapper--disabled {
+    opacity: 0.6;
+    cursor: not-allowed;
+}
+
+.input-wrapper--readonly {
+    opacity: 0.8;
+}
+
+/* === INPUT CONTAINER === */
+
+.input__container {
+    position: relative;
+    display: flex;
+    align-items: center;
+}
+
+/* === BASE INPUT STYLES === */
+
 .input {
-  position: relative;
-  display: flex;
-  box-sizing: border-box;
-  flex-direction: row;
-  align-items: center;
-  justify-content: space-between;
-  padding: 0.25rem;
-  padding: 8px 12px;
-  border: none;
-  border-radius: 0.5rem;
-  border-radius: calc(0.5rem);
-  background: none;
-  background: var(--light, var(--primary-color))
-    var(--dark, var(--primary-color-3));
-  box-shadow: inset 0 0 0 1px var(--light, var(--primary-color-6))
-    var(--dark, var(--primary-color-7));
-  color: var(--secondary-color-4);
-  cursor: pointer;
-  gap: 0.25rem;
-  transition: background-color 100ms ease-out;
+    /* Layout */
+    width: 100%;
+    border: 1px solid var(--input-border);
+    border-radius: var(--radius-md);
+    background-color: var(--input-bg);
+    color: var(--input-text);
+    outline: none;
+
+    /* Typography */
+    font-family: inherit;
+    font-size: var(--font-size-base);
+    line-height: var(--line-height-normal);
+
+    /* Spacing */
+    padding: var(--spacing-3) var(--spacing-4);
+
+    /* Transitions */
+    transition:
+        border-color var(--transition-fast),
+        background-color var(--transition-fast),
+        box-shadow var(--transition-fast);
 }
 
 .input::placeholder {
-  color: var(--secondary-color-5);
+    color: var(--input-placeholder);
+    opacity: 1;
+}
+
+.input:focus {
+    border-color: var(--input-border-focus);
+    box-shadow: var(--focus-ring);
 }
 
 .input:disabled {
-  color: var(--secondary-color-5);
-  cursor: not-allowed;
+    cursor: not-allowed;
+    opacity: 0.6;
 }
 
-.input:hover:not(:disabled),
-.input:focus-visible {
-  background: var(--light, var(--primary-color-4))
-    var(--dark, var(--primary-color-5));
-  color: var(--secondary-color-1);
-  outline: none;
+.input:readonly {
+    cursor: default;
+    opacity: 0.8;
+}
+
+/* === INPUT VARIANTS === */
+
+/* Filled variant */
+.input--filled {
+    background-color: var(--bg-secondary);
+    border: 1px solid transparent;
+    border-bottom: 2px solid var(--border-primary);
+    border-radius: var(--radius-md) var(--radius-md) 0 0;
+}
+
+.input--filled:focus {
+    border-bottom-color: var(--input-border-focus);
+    background-color: var(--bg-tertiary);
+}
+
+.input--filled:hover:not(:focus):not(:disabled) {
+    background-color: var(--bg-tertiary);
+}
+
+/* Outlined variant (default) */
+.input--outlined {
+    background-color: var(--input-bg);
+    border: 1px solid var(--input-border);
+}
+
+.input--outlined:hover:not(:focus):not(:disabled) {
+    border-color: var(--border-secondary);
+}
+
+/* Standard variant */
+.input--standard {
+    background-color: transparent;
+    border: none;
+    border-bottom: 1px solid var(--input-border);
+    border-radius: 0;
+    padding-left: 0;
+    padding-right: 0;
+}
+
+.input--standard:focus {
+    border-bottom: 2px solid var(--input-border-focus);
+    box-shadow: none;
+}
+
+.input--standard:hover:not(:focus):not(:disabled) {
+    border-bottom-color: var(--border-secondary);
+}
+
+/* === INPUT SIZES === */
+
+.input--sm {
+    padding: var(--spacing-2) var(--spacing-3);
+    font-size: var(--font-size-sm);
+    min-height: 2.25rem; /* 36px */
+}
+
+.input--md {
+    padding: var(--spacing-3) var(--spacing-4);
+    font-size: var(--font-size-base);
+    min-height: 2.75rem; /* 44px */
+}
+
+.input--lg {
+    padding: var(--spacing-4) var(--spacing-5);
+    font-size: var(--font-size-lg);
+    min-height: 3.25rem; /* 52px */
+}
+
+/* Adjust standard variant padding for sizes */
+.input--standard.input--sm {
+    padding-left: 0;
+    padding-right: 0;
+    padding-top: var(--spacing-2);
+    padding-bottom: var(--spacing-2);
+}
+
+.input--standard.input--md {
+    padding-left: 0;
+    padding-right: 0;
+    padding-top: var(--spacing-3);
+    padding-bottom: var(--spacing-3);
+}
+
+.input--standard.input--lg {
+    padding-left: 0;
+    padding-right: 0;
+    padding-top: var(--spacing-4);
+    padding-bottom: var(--spacing-4);
+}
+
+/* === INPUT STATES === */
+
+/* Success state */
+.input--success {
+    border-color: var(--color-success);
+}
+
+.input--success:focus {
+    border-color: var(--color-success);
+    box-shadow:
+        0 0 0 2px var(--color-success-light),
+        0 0 0 4px var(--color-success);
+}
+
+.input--filled.input--success {
+    border-bottom-color: var(--color-success);
+}
+
+.input--standard.input--success {
+    border-bottom-color: var(--color-success);
+}
+
+/* Warning state */
+.input--warning {
+    border-color: var(--color-warning);
+}
+
+.input--warning:focus {
+    border-color: var(--color-warning);
+    box-shadow:
+        0 0 0 2px var(--color-warning-light),
+        0 0 0 4px var(--color-warning);
+}
+
+.input--filled.input--warning {
+    border-bottom-color: var(--color-warning);
+}
+
+.input--standard.input--warning {
+    border-bottom-color: var(--color-warning);
+}
+
+/* Error state */
+.input--error {
+    border-color: var(--color-error);
+}
+
+.input--error:focus {
+    border-color: var(--color-error);
+    box-shadow:
+        0 0 0 2px var(--color-error-light),
+        0 0 0 4px var(--color-error);
+}
+
+.input--filled.input--error {
+    border-bottom-color: var(--color-error);
+}
+
+.input--standard.input--error {
+    border-bottom-color: var(--color-error);
+}
+
+/* === INPUT WITH ICONS === */
+
+.input--has-left-icon {
+    padding-left: 2.75rem;
+}
+
+.input--has-right-icon {
+    padding-right: 2.75rem;
+}
+
+.input--sm.input--has-left-icon {
+    padding-left: 2.25rem;
+}
+
+.input--sm.input--has-right-icon {
+    padding-right: 2.25rem;
+}
+
+.input--lg.input--has-left-icon {
+    padding-left: 3.25rem;
+}
+
+.input--lg.input--has-right-icon {
+    padding-right: 3.25rem;
+}
+
+/* Standard variant icon adjustments */
+.input--standard.input--has-left-icon {
+    padding-left: 2rem;
+}
+
+.input--standard.input--has-right-icon {
+    padding-right: 2rem;
+}
+
+/* === ICON STYLES === */
+
+.input__icon {
+    position: absolute;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: var(--text-tertiary);
+    pointer-events: none;
+    z-index: 1;
+}
+
+.input__icon--left {
+    left: var(--spacing-3);
+}
+
+.input__icon--right {
+    right: var(--spacing-3);
+}
+
+.input--sm .input__icon--left {
+    left: var(--spacing-2);
+}
+
+.input--sm .input__icon--right {
+    right: var(--spacing-2);
+}
+
+.input--lg .input__icon--left {
+    left: var(--spacing-4);
+}
+
+.input--lg .input__icon--right {
+    right: var(--spacing-4);
+}
+
+/* Icon sizing */
+.input__icon {
+    width: 1.25rem;
+    height: 1.25rem;
+    font-size: 1rem;
+}
+
+.input--sm .input__icon {
+    width: 1rem;
+    height: 1rem;
+    font-size: 0.875rem;
+}
+
+.input--lg .input__icon {
+    width: 1.5rem;
+    height: 1.5rem;
+    font-size: 1.125rem;
+}
+
+/* Interactive icons (buttons) */
+.input__icon button {
+    background: none;
+    border: none;
+    cursor: pointer;
+    padding: var(--spacing-1);
+    border-radius: var(--radius-sm);
+    color: inherit;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: background-color var(--transition-fast);
+    pointer-events: auto;
+}
+
+.input__icon button:hover,
+.input__icon button:focus-visible {
+    background-color: var(--bg-secondary);
+    color: var(--text-primary);
+}
+
+/* === LABEL STYLES === */
+
+.input__label {
+    display: block;
+    font-size: var(--font-size-sm);
+    font-weight: var(--font-weight-medium);
+    color: var(--text-primary);
+    margin-bottom: var(--spacing-1);
+    line-height: var(--line-height-normal);
+}
+
+.input__required {
+    color: var(--color-error);
+    margin-left: var(--spacing-1);
+    font-weight: var(--font-weight-bold);
+}
+
+/* === MESSAGE STYLES === */
+
+.input__message {
+    font-size: var(--font-size-sm);
+    line-height: var(--line-height-normal);
+    margin-top: var(--spacing-1);
+}
+
+.input__message--helper {
+    color: var(--text-secondary);
+}
+
+.input__message--error {
+    color: var(--color-error-text);
+}
+
+/* === TEXTAREA STYLES === */
+
+.textarea {
+    /* Inherit base input styles */
+    width: 100%;
+    border: 1px solid var(--input-border);
+    border-radius: var(--radius-md);
+    background-color: var(--input-bg);
+    color: var(--input-text);
+    outline: none;
+    font-family: inherit;
+    font-size: var(--font-size-base);
+    line-height: var(--line-height-normal);
+    padding: var(--spacing-3) var(--spacing-4);
+    transition:
+        border-color var(--transition-fast),
+        background-color var(--transition-fast),
+        box-shadow var(--transition-fast);
+
+    /* Textarea specific */
+    resize: vertical;
+    min-height: 6rem;
+}
+
+.textarea::placeholder {
+    color: var(--input-placeholder);
+    opacity: 1;
+}
+
+.textarea:focus {
+    border-color: var(--input-border-focus);
+    box-shadow: var(--focus-ring);
+}
+
+.textarea:disabled {
+    cursor: not-allowed;
+    opacity: 0.6;
+    resize: none;
+}
+
+.textarea:readonly {
+    cursor: default;
+    opacity: 0.8;
+    resize: none;
+}
+
+.textarea--no-resize {
+    resize: none;
+}
+
+/* Textarea variants */
+.textarea--filled {
+    background-color: var(--bg-secondary);
+    border: 1px solid transparent;
+    border-bottom: 2px solid var(--border-primary);
+    border-radius: var(--radius-md) var(--radius-md) 0 0;
+}
+
+.textarea--filled:focus {
+    border-bottom-color: var(--input-border-focus);
+    background-color: var(--bg-tertiary);
+}
+
+.textarea--filled:hover:not(:focus):not(:disabled) {
+    background-color: var(--bg-tertiary);
+}
+
+.textarea--outlined {
+    background-color: var(--input-bg);
+    border: 1px solid var(--input-border);
+}
+
+.textarea--outlined:hover:not(:focus):not(:disabled) {
+    border-color: var(--border-secondary);
+}
+
+.textarea--standard {
+    background-color: transparent;
+    border: none;
+    border-bottom: 1px solid var(--input-border);
+    border-radius: 0;
+    padding-left: 0;
+    padding-right: 0;
+}
+
+.textarea--standard:focus {
+    border-bottom: 2px solid var(--input-border-focus);
+    box-shadow: none;
+}
+
+.textarea--standard:hover:not(:focus):not(:disabled) {
+    border-bottom-color: var(--border-secondary);
+}
+
+/* Textarea sizes */
+.textarea--sm {
+    padding: var(--spacing-2) var(--spacing-3);
+    font-size: var(--font-size-sm);
+    min-height: 4rem;
+}
+
+.textarea--lg {
+    padding: var(--spacing-4) var(--spacing-5);
+    font-size: var(--font-size-lg);
+    min-height: 8rem;
+}
+
+/* Textarea states (inherit from input states) */
+.textarea--success {
+    border-color: var(--color-success);
+}
+
+.textarea--success:focus {
+    border-color: var(--color-success);
+    box-shadow:
+        0 0 0 2px var(--color-success-light),
+        0 0 0 4px var(--color-success);
+}
+
+.textarea--warning {
+    border-color: var(--color-warning);
+}
+
+.textarea--warning:focus {
+    border-color: var(--color-warning);
+    box-shadow:
+        0 0 0 2px var(--color-warning-light),
+        0 0 0 4px var(--color-warning);
+}
+
+.textarea--error {
+    border-color: var(--color-error);
+}
+
+.textarea--error:focus {
+    border-color: var(--color-error);
+    box-shadow:
+        0 0 0 2px var(--color-error-light),
+        0 0 0 4px var(--color-error);
+}
+
+/* === RESPONSIVE DESIGN === */
+
+@media (max-width: 640px) {
+    .input,
+    .textarea {
+        font-size: var(--font-size-base);
+    }
+
+    .input--lg,
+    .textarea--lg {
+        font-size: var(--font-size-base);
+        padding: var(--spacing-3) var(--spacing-4);
+    }
+
+    .input__label {
+        font-size: var(--font-size-sm);
+    }
+
+    .input__message {
+        font-size: var(--font-size-xs);
+    }
+}
+
+/* === ACCESSIBILITY ENHANCEMENTS === */
+
+/* High contrast mode */
+@media (prefers-contrast: high) {
+    .input,
+    .textarea {
+        border-width: 2px;
+    }
+
+    .input:focus,
+    .textarea:focus {
+        outline: 2px solid currentColor;
+        outline-offset: 2px;
+    }
+
+    .input--filled,
+    .textarea--filled {
+        border-bottom-width: 3px;
+    }
+
+    .input--standard,
+    .textarea--standard {
+        border-bottom-width: 2px;
+    }
+}
+
+/* Reduced motion */
+@media (prefers-reduced-motion: reduce) {
+    .input,
+    .textarea,
+    .input__icon button {
+        transition: none;
+    }
+}
+
+/* === FOCUS MANAGEMENT === */
+
+/* Focus within wrapper for better accessibility */
+.input-wrapper:focus-within .input__label {
+    color: var(--color-primary);
+}
+
+.input-wrapper:focus-within .input__icon {
+    color: var(--color-primary);
+}
+
+/* === THEME SPECIFIC OVERRIDES === */
+
+[data-theme="dark"] .input--filled,
+[data-theme="dark"] .textarea--filled {
+    background-color: var(--bg-tertiary);
+}
+
+[data-theme="dark"] .input--filled:focus,
+[data-theme="dark"] .textarea--filled:focus,
+[data-theme="dark"] .input--filled:hover:not(:focus):not(:disabled),
+[data-theme="dark"] .textarea--filled:hover:not(:focus):not(:disabled) {
+    background-color: var(--bg-secondary);
+}
+
+/* === UTILITY CLASSES === */
+
+.input-group {
+    display: flex;
+    gap: var(--spacing-3);
+    align-items: flex-end;
+}
+
+.input-group .input-wrapper {
+    flex: 1;
+}
+
+.input-stack {
+    display: flex;
+    flex-direction: column;
+    gap: var(--spacing-4);
+}
+
+/* Input with prefix/suffix text */
+.input-with-addon {
+    display: flex;
+    align-items: center;
+}
+
+.input-addon {
+    background-color: var(--bg-secondary);
+    border: 1px solid var(--input-border);
+    padding: var(--spacing-3) var(--spacing-4);
+    font-size: var(--font-size-base);
+    color: var(--text-secondary);
+    white-space: nowrap;
+}
+
+.input-addon--prefix {
+    border-right: none;
+    border-radius: var(--radius-md) 0 0 var(--radius-md);
+}
+
+.input-addon--suffix {
+    border-left: none;
+    border-radius: 0 var(--radius-md) var(--radius-md) 0;
+}
+
+.input-with-addon .input {
+    border-radius: 0;
+}
+
+.input-with-addon .input:first-child {
+    border-radius: var(--radius-md) 0 0 var(--radius-md);
+}
+
+.input-with-addon .input:last-child {
+    border-radius: 0 var(--radius-md) var(--radius-md) 0;
+}
+
+/* === PRINT STYLES === */
+
+@media print {
+    .input,
+    .textarea {
+        border: 1px solid var(--text-primary) !important;
+        background: white !important;
+        color: black !important;
+        box-shadow: none !important;
+    }
+
+    .input__icon {
+        display: none !important;
+    }
+
+    .input__message--error {
+        color: black !important;
+    }
+}
+
+/* === ANIMATION KEYFRAMES === */
+
+@keyframes input-shake {
+    0%,
+    100% {
+        transform: translateX(0);
+    }
+    25% {
+        transform: translateX(-4px);
+    }
+    75% {
+        transform: translateX(4px);
+    }
+}
+
+/* Shake animation for error states */
+.input--error.input--shake,
+.textarea--error.textarea--shake {
+    animation: input-shake 0.5s ease-in-out;
+}
+
+/* === FLOATING LABEL VARIANT === */
+
+.input-wrapper--floating {
+    position: relative;
+}
+
+.input-wrapper--floating .input__label {
+    position: absolute;
+    left: var(--spacing-4);
+    top: 50%;
+    transform: translateY(-50%);
+    transition: all var(--transition-fast);
+    pointer-events: none;
+    background-color: var(--input-bg);
+    padding: 0 var(--spacing-1);
+    margin: 0;
+}
+
+.input-wrapper--floating .input:focus + .input__label,
+.input-wrapper--floating .input:not(:placeholder-shown) + .input__label {
+    top: 0;
+    left: var(--spacing-3);
+    font-size: var(--font-size-xs);
+    color: var(--color-primary);
+    transform: translateY(-50%);
+}
+
+.input-wrapper--floating .input--standard + .input__label {
+    background: none;
+}
+
+.input-wrapper--floating .input--filled + .input__label {
+    background-color: var(--bg-secondary);
 }

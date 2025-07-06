@@ -76,7 +76,7 @@ pub(super) fn Demo() -> Element {
     rsx! {
         document::Link {
             rel: "stylesheet",
-            href: asset!("/src/components/hover_card/style.css"),
+            href: asset!("/src/ui/components/hover_card/style.css"),
         }
         div {
             style: "padding: 50px; display: flex; flex-direction: row; flex-wrap: wrap; gap: 40px; justify-content: center; align-items: center;",

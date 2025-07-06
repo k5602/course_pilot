@@ -1,14 +1,26 @@
+//! Layout Component with Unified Theme System
+//!
+//! This module provides the main application layout including:
+//! - Responsive sidebar navigation
+//! - App bar with theme toggle
+//! - Main content area
+//! - Proper state management
+//! - Accessibility features
+//! - Mobile-first responsive design
+
 use crate::types::{AppState, Route};
 use crate::ui::navigation::handle_navigation_with_fallback;
-use crate::ui::theme::ThemeToggle;
+use crate::ui::theme_unified::{ThemeProvider, ThemeToggle, use_theme};
 use dioxus::prelude::*;
+use wasm_bindgen::JsCast;
 
 /// Sidebar navigation item
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 struct NavItem {
     label: &'static str,
-    icon: &'static str, // Unicode or SVG path for simplicity
+    icon: &'static str,
     route: Route,
+    aria_label: &'static str,
 }
 
 const NAV_ITEMS: &[NavItem] = &[
@@ -16,314 +28,697 @@ const NAV_ITEMS: &[NavItem] = &[
         label: "Dashboard",
         icon: "🏠",
         route: Route::Dashboard,
+        aria_label: "Navigate to dashboard",
     },
     NavItem {
         label: "Add Course",
         icon: "➕",
         route: Route::AddCourse,
+        aria_label: "Add new course",
     },
-    // PlanView is dynamic, not shown in sidebar
 ];
 
-/// Layout component: sidebar, app bar, main content
+/// Layout state for managing UI preferences
+#[derive(Clone, Debug, PartialEq)]
+#[derive(serde::Serialize, serde::Deserialize)]
+pub struct LayoutState {
+    pub sidebar_collapsed: bool,
+    pub mobile_nav_open: bool,
+}
+
+impl Default for LayoutState {
+    fn default() -> Self {
+        Self {
+            sidebar_collapsed: true,
+            mobile_nav_open: false,
+        }
+    }
+}
+
+/// Hook for layout state management
+pub fn use_layout_state() -> Signal<LayoutState> {
+    use_context::<Signal<LayoutState>>()
+}
+
+/// Sidebar Navigation Component
 #[component]
-pub fn Layout() -> Element {
-    use crate::ui::{AddCourseDialog, PlanView, course_dashboard};
-    let app_state = use_context::<Signal<AppState>>();
+fn Sidebar() -> Element {
+    let _app_state = use_context::<Signal<AppState>>();
+    let mut layout_state = use_layout_state();
     let current_route = app_state.read().current_route.clone();
 
-    // Sidebar collapsed state - collapsed by default
-    let mut sidebar_collapsed = use_signal(|| true);
+    let toggle_sidebar = move |_| {
+        let mut state = layout_state.read().clone();
+        state.sidebar_collapsed = !state.sidebar_collapsed;
+        layout_state.set(state);
 
-    // Load sidebar state from config file on mount
-    use_effect(move || {
-        if let Some(config_dir) = dirs::config_dir() {
-            let config_path = config_dir.join("course_pilot").join("ui_state.json");
-            if let Ok(contents) = std::fs::read_to_string(&config_path) {
-                if let Ok(ui_state) = serde_json::from_str::<serde_json::Value>(&contents) {
-                    if let Some(collapsed) = ui_state.get("sidebar_collapsed") {
-                        if let Some(state) = collapsed.as_bool() {
-                            sidebar_collapsed.set(state);
-                        }
-                    }
-                }
-            }
-        }
-    });
-
-    // Save sidebar state to config file whenever it changes
-    use_effect(move || {
-        let state = *sidebar_collapsed.read();
-        if let Some(config_dir) = dirs::config_dir() {
-            let config_path = config_dir.join("course_pilot");
-            let _ = std::fs::create_dir_all(&config_path);
-            let config_file = config_path.join("ui_state.json");
-
-            let ui_state = serde_json::json!({
-                "sidebar_collapsed": state
-            });
-
-            let _ = std::fs::write(
-                &config_file,
-                serde_json::to_string_pretty(&ui_state).unwrap_or_default(),
-            );
-        }
-    });
-
-    // Sidebar width
-    let sidebar_width = if *sidebar_collapsed.read() {
-        "60px"
-    } else {
-        "220px"
+        // Persist to local storage
+        save_layout_preferences(&layout_state.read());
     };
 
-    // Handle navigation with safe navigation system
-    let on_nav = move |route: Route| {
+    let close_mobile_nav = move |_| {
+        let mut state = layout_state.read().clone();
+        state.mobile_nav_open = false;
+        layout_state.set(state);
+    };
+
+    let handle_nav = move |route: Route| {
         handle_navigation_with_fallback(app_state, route);
+        let dummy_mouse_data = Rc::new(MouseData::new(
+            dioxus::events::Coordinates::new(0.0, 0.0),
+            dioxus::events::Coordinates::new(0.0, 0.0),
+            None,
+            None,
+            false,
+            false,
+            false,
+            false,
+        ));
+        close_mobile_nav(MouseEvent::new(dummy_mouse_data, false));
     };
 
-    // App bar branding
-    let brand = "Course Pilot";
+    let is_collapsed = layout_state.read().sidebar_collapsed;
+    let is_mobile_open = layout_state.read().mobile_nav_open;
 
     rsx! {
-        style {
-            {
-                let sidebar_align = if *sidebar_collapsed.read() { "center" } else { "flex-start" };
-                let sidebar_justify = if *sidebar_collapsed.read() { "center" } else { "space-between" };
-                format!(
-                    r#"
-                    .layout-root {{
-                        display: flex;
-                        height: 100vh;
-                        width: 100vw;
-                        background: var(--bg);
-                        color: var(--fg);
-                        transition: background 0.2s, color 0.2s;
-                    }}
-                    .sidebar {{
-                        width: {};
-                        background: var(--sidebar-bg);
-                        color: var(--sidebar-fg);
-                        display: flex;
-                        flex-direction: column;
-                        align-items: {};
-                        padding: 0.5rem 0;
-                        transition: width 0.2s;
-                        box-shadow: 2px 0 8px #0001;
-                        z-index: 2;
-                    }}
-                    .sidebar-header {{
-                        width: 100%;
-                        display: flex;
-                        align-items: center;
-                        justify-content: {};
-                        padding: 0 1rem 1rem 1rem;
-                        font-weight: bold;
-                        font-size: 1.2rem;
-                        letter-spacing: 0.04em;
-                        border-bottom: 1px solid #3334;
-                    }}
-                    .sidebar-nav {{
-                        flex: 1;
-                        width: 100%;
-                        display: flex;
-                        flex-direction: column;
-                        gap: 0.25rem;
-                        margin-top: 1rem;
-                    }}
-                    .sidebar-nav-item {{
-                        display: flex;
-                        align-items: center;
-                        gap: 1rem;
-                        width: 100%;
-                        padding: 0.7rem 1.2rem;
-                        font-size: 1rem;
-                        border-radius: 0.5rem;
-                        cursor: pointer;
-                        background: none;
-                        border: none;
-                        color: inherit;
-                        transition: background 0.15s, color 0.15s;
-                        outline: none;
-                    }}
-                    .sidebar-nav-item.active, .sidebar-nav-item:focus {{
-                        background: var(--sidebar-active);
-                        color: var(--sidebar-fg);
-                    }}
-                    .sidebar-nav-item:hover {{
-                        background: var(--sidebar-hover);
-                    }}
-                    .sidebar-toggle {{
-                        margin: 1rem auto 0.5rem auto;
-                        background: none;
-                        border: none;
-                        color: #bbb;
-                        cursor: pointer;
-                        font-size: 1.3rem;
-                        border-radius: 50%;
-                        width: 2.2rem;
-                        height: 2.2rem;
-                        display: flex;
-                        align-items: center;
-                        justify-content: center;
-                        transition: background 0.15s;
-                    }}
-                    .sidebar-toggle:hover {{
-                        background: var(--sidebar-hover);
-                    }}
-                    .appbar {{
-                        height: 56px;
-                        background: var(--appbar-bg);
-                        color: var(--appbar-fg);
-                        border-bottom: 1px solid var(--appbar-border);
-                        display: flex;
-                        align-items: center;
-                        justify-content: space-between;
-                        padding: 0 2rem;
-                        box-shadow: 0 2px 8px #0001;
-                        position: sticky;
-                        top: 0;
-                        z-index: 1;
-                    }}
-                    .appbar-brand {{
-                        font-size: 1.3rem;
-                        font-weight: bold;
-                        letter-spacing: 0.03em;
-                        display: flex;
-                        align-items: center;
-                        gap: 0.7rem;
-                    }}
-                    .appbar-actions {{
-                        display: flex;
-                        align-items: center;
-                        gap: 1.2rem;
-                    }}
-                    .theme-toggle-btn {{
-                        background: none;
-                        border: none;
-                        color: inherit;
-                        cursor: pointer;
-                        font-size: 1.3rem;
-                        border-radius: 50%;
-                        width: 2.2rem;
-                        height: 2.2rem;
-                        display: flex;
-                        align-items: center;
-                        justify-content: center;
-                        transition: background 0.15s;
-                    }}
-                    .theme-toggle-btn:hover {{
-                        background: var(--bg-secondary);
-                    }}
-                    .main-content {{
-                        flex: 1;
-                        min-width: 0;
-                        background: inherit;
-                        padding: 2.5rem 2.5rem 2.5rem 2.5rem;
-                        overflow-y: auto;
-                        height: 100vh;
-                    }}
-                    .import-status-bar {{
-                        background: #fffae6;
-                        color: #7c5e00;
-                        padding: 0.7rem 1.2rem;
-                        border-radius: 0.5rem;
-                        margin-bottom: 1.5rem;
-                        font-size: 1rem;
-                        display: flex;
-                        align-items: center;
-                        gap: 0.7rem;
-                        box-shadow: 0 2px 8px #0001;
-                    }}
-                    @media (max-width: 900px) {{
-                        .main-content {{
-                            padding: 1rem;
-                        }}
-                        .appbar {{
-                            padding: 0 1rem;
-                        }}
-                    }}
-                    @media (max-width: 600px) {{
-                        .sidebar {{
-                            width: 0;
-                            min-width: 0;
-                            overflow: hidden;
-                        }}
-                        .main-content {{
-                            padding: 0.5rem;
-                        }}
-                    }}
-                    "#,
-                    sidebar_width,
-                    sidebar_align,
-                    sidebar_justify
-                )
-            }
-        }
-        div { class: "layout-root",
-            nav { class: "sidebar",
-                div { class: "sidebar-header",
-                    if !*sidebar_collapsed.read() {
-                        span { "{brand}" }
-                    }
-                    button {
-                        class: "sidebar-toggle",
-                        r#type: "button",
-                        onclick: move |_| sidebar_collapsed.set(!sidebar_collapsed()),
-                        aria_label: "Collapse sidebar",
-                        if *sidebar_collapsed.read() { "»" } else { "«" }
+        nav {
+            class: format!(
+                "sidebar {} {}",
+                if is_collapsed { "sidebar--collapsed" } else { "sidebar--expanded" },
+                if is_mobile_open { "sidebar--mobile-open" } else { "" }
+            ),
+            role: "navigation",
+            aria_label: "Main navigation",
+
+            // Sidebar header
+            div { class: "sidebar__header",
+                button {
+                    class: "sidebar__toggle",
+                    onclick: toggle_sidebar,
+                    aria_label: if is_collapsed { "Expand sidebar" } else { "Collapse sidebar" },
+                    aria_expanded: (!is_collapsed).to_string(),
+                    title: if is_collapsed { "Expand sidebar" } else { "Collapse sidebar" },
+
+                    if is_collapsed { "»" } else { "«" }
+                }
+
+                if !is_collapsed {
+                    div { class: "sidebar__brand",
+                        span { class: "sidebar__brand-icon", "🎓" }
+                        span { class: "sidebar__brand-text", "Course Pilot" }
                     }
                 }
-                {
-                    let mut nav_buttons = Vec::new();
-                    for nav_item in NAV_ITEMS.iter() {
-                        let is_active = current_route == nav_item.route;
-                        nav_buttons.push(rsx! {
-                            button {
-                                class: if is_active { "sidebar-nav-item active" } else { "sidebar-nav-item" },
-                                r#type: "button",
-                                tabindex: "0",
-                                onclick: {
-                                    let route = nav_item.route.clone();
-                                    move |_| on_nav(route.clone())
-                                },
-                                aria_label: nav_item.label,
-                                span { style: "font-size:1.3rem;", "{nav_item.icon}" }
-                                if !*sidebar_collapsed.read() {
-                                    span { "{nav_item.label}" }
-                                }
+            }
+
+            // Navigation items
+            ul { class: "sidebar__nav",
+                for nav_item in NAV_ITEMS.iter() {
+                    li { class: "sidebar__nav-item",
+                        button {
+                            class: format!(
+                                "sidebar__nav-button {}",
+                                if current_route == nav_item.route { "sidebar__nav-button--active" } else { "" }
+                            ),
+                            onclick: {
+                                let route = nav_item.route.clone();
+                                move |_| handle_nav(route.clone())
+                            },
+                            aria_label: nav_item.aria_label,
+                            aria_current: if current_route == nav_item.route { "page" } else { "false" },
+                            title: if is_collapsed { nav_item.label } else { "" },
+
+                            span { class: "sidebar__nav-icon", "{nav_item.icon}" }
+
+                            if !is_collapsed {
+                                span { class: "sidebar__nav-label", "{nav_item.label}" }
                             }
-                        });
-                    }
-                    rsx! {
-                        div { class: "sidebar-nav", { nav_buttons.into_iter() } }
-                    }
-                }
-            }
-            div { style: "flex:1; display:flex; flex-direction:column; min-width:0;",
-                header { class: "appbar",
-                    div { class: "appbar-brand",
-                        "🎓"
-                        span { "{brand}" }
-                    }
-                    div { class: "appbar-actions",
-                        ThemeToggle {}
-                    }
-                }
-                main { class: "main-content",
-                    if app_state.read().active_import.is_some() {
-                        div {
-                            class: "import-status-bar",
-                            "🔄 Import in progress... Check the dashboard for details."
                         }
                     }
-                    match current_route {
-                        Route::Dashboard => rsx! { course_dashboard {} },
-                        Route::AddCourse => rsx! { AddCourseDialog {} },
-                        Route::PlanView(course_id) => rsx! { PlanView { course_id } }
-                    }
                 }
             }
+        }
+
+        // Mobile overlay
+        if is_mobile_open {
+            div {
+                class: "sidebar__overlay",
+                onclick: close_mobile_nav,
+                aria_hidden: "true"
+            }
+        }
+    }
+}
+
+/// App Bar Component
+#[component]
+fn AppBar() -> Element {
+    let mut layout_state = use_layout_state();
+    let _app_state = use_context::<Signal<AppState>>();
+    let has_active_import = app_state.read().active_import.is_some();
+
+    let toggle_mobile_nav = move |_| {
+        let mut state = layout_state.read().clone();
+        state.mobile_nav_open = !state.mobile_nav_open;
+        layout_state.set(state);
+    };
+
+    rsx! {
+        header { class: "appbar",
+            div { class: "appbar__start",
+                // Mobile menu button
+                button {
+                    class: "appbar__mobile-toggle",
+                    onclick: toggle_mobile_nav,
+                    aria_label: "Open navigation menu",
+                    aria_expanded: layout_state.read().mobile_nav_open.to_string(),
+
+                    span { class: "appbar__mobile-toggle-icon", "☰" }
+                }
+
+                // Brand
+                div { class: "appbar__brand",
+                    span { class: "appbar__brand-icon", "🎓" }
+                    h1 { class: "appbar__brand-text", "Course Pilot" }
+                }
+            }
+
+            div { class: "appbar__end",
+                // Import status indicator
+                if has_active_import {
+                    div { class: "appbar__status",
+                        span { class: "appbar__status-icon", "🔄" }
+                        span { class: "appbar__status-text", "Import in progress" }
+                    }
+                }
+
+                // Theme toggle
+                ThemeToggle {}
+            }
+        }
+    }
+}
+
+/// Main Content Area Component
+#[component]
+fn MainContent() -> Element {
+    use crate::ui::{AddCourseDialog, PlanView, course_dashboard};
+    let _app_state = use_context::<Signal<AppState>>();
+    let current_route = app_state.read().current_route.clone();
+
+    rsx! {
+        main { class: "main-content",
+            role: "main",
+            aria_label: "Main content",
+
+            // Route-based content
+            match current_route {
+                Route::Dashboard => rsx! { course_dashboard {} },
+                Route::AddCourse => rsx! { AddCourseDialog {} },
+                Route::PlanView(course_id) => rsx! { PlanView { course_id } }
+            }
+        }
+    }
+}
+
+/// Main Layout Component
+#[component]
+pub fn Layout() -> Element {
+    let _app_state = use_context::<Signal<AppState>>();
+    let layout_state = use_signal(|| load_layout_preferences());
+
+    // Provide layout state context
+    use_context_provider(|| layout_state);
+
+    // Handle responsive behavior
+    use_effect(move || {
+        // Add resize listener for responsive behavior
+        if let Some(window) = web_sys::window() {
+            let closure = wasm_bindgen::closure::Closure::wrap(Box::new(move || {
+                handle_window_resize(&mut layout_state);
+            }) as Box<dyn FnMut()>);
+
+            let _ =
+                window.add_event_listener_with_callback("resize", closure.as_ref().unchecked_ref());
+
+            closure.forget(); // Keep closure alive
+        }
+    });
+
+    rsx! {
+        ThemeProvider {
+            div { class: "layout",
+                Sidebar {}
+
+                div { class: "layout__main",
+                    AppBar {}
+                    MainContent {}
+                }
+
+                // Include layout styles
+                style { dangerous_inner_html: LAYOUT_STYLES }
+            }
+        }
+    }
+}
+
+/// Handle window resize for responsive behavior
+fn handle_window_resize(layout_state: &mut Signal<LayoutState>) {
+    if let Some(window) = web_sys::window() {
+        let width = window
+            .inner_width()
+            .unwrap_or_default()
+            .as_f64()
+            .unwrap_or(0.0);
+
+        let mut state = layout_state.read().clone();
+
+        // Auto-collapse sidebar on mobile
+        if width < 768.0 {
+            state.sidebar_collapsed = true;
+            state.mobile_nav_open = false;
+        }
+
+        layout_state.set(state);
+    }
+}
+
+/// Load layout preferences from localStorage
+fn load_layout_preferences() -> LayoutState {
+    if let Some(window) = web_sys::window() {
+        if let Some(storage) = window.local_storage().ok().flatten() {
+            if let Some(data) = storage.get_item("course_pilot_layout").ok().flatten() {
+                if let Ok(state) = serde_json::from_str::<LayoutState>(&data) {
+                    return state;
+                }
+            }
+        }
+    }
+    LayoutState::default()
+}
+
+/// Save layout preferences to localStorage
+fn save_layout_preferences(state: &LayoutState) {
+    if let Some(window) = web_sys::window() {
+        if let Some(storage) = window.local_storage().ok().flatten() {
+            if let Ok(data) = serde_json::to_string(state) {
+                let _ = storage.set_item("course_pilot_layout", &data);
+            }
+        }
+    }
+}
+
+/// Layout component styles
+const LAYOUT_STYLES: &str = r#"
+/* === LAYOUT STYLES === */
+
+.layout {
+    display: flex;
+    height: 100vh;
+    width: 100vw;
+    background-color: var(--bg-primary);
+    color: var(--text-primary);
+    overflow: hidden;
+}
+
+/* === SIDEBAR === */
+
+.sidebar {
+    background-color: var(--nav-bg);
+    color: var(--nav-text);
+    transition: width var(--transition-normal);
+    box-shadow: var(--shadow-lg);
+    z-index: 100;
+    display: flex;
+    flex-direction: column;
+    position: relative;
+    overflow: hidden;
+}
+
+.sidebar--collapsed {
+    width: 4rem; /* 64px */
+}
+
+.sidebar--expanded {
+    width: 14rem; /* 224px */
+}
+
+.sidebar__header {
+    display: flex;
+    align-items: center;
+    padding: var(--spacing-4);
+    border-bottom: 1px solid var(--border-primary);
+    min-height: 4rem;
+}
+
+.sidebar__toggle {
+    background: none;
+    border: none;
+    color: var(--nav-text-secondary);
+    cursor: pointer;
+    font-size: 1.25rem;
+    border-radius: var(--radius-md);
+    width: 2rem;
+    height: 2rem;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: all var(--transition-fast);
+    flex-shrink: 0;
+}
+
+.sidebar__toggle:hover,
+.sidebar__toggle:focus-visible {
+    background-color: var(--nav-item-hover);
+    color: var(--nav-text);
+}
+
+.sidebar__brand {
+    display: flex;
+    align-items: center;
+    gap: var(--spacing-3);
+    margin-left: var(--spacing-3);
+    overflow: hidden;
+}
+
+.sidebar__brand-icon {
+    font-size: 1.5rem;
+    flex-shrink: 0;
+}
+
+.sidebar__brand-text {
+    font-weight: var(--font-weight-bold);
+    font-size: var(--font-size-lg);
+    white-space: nowrap;
+    letter-spacing: 0.025em;
+}
+
+.sidebar__nav {
+    flex: 1;
+    list-style: none;
+    margin: 0;
+    padding: var(--spacing-2) 0;
+    overflow-y: auto;
+    overflow-x: hidden;
+}
+
+.sidebar__nav-item {
+    margin: 0;
+    padding: 0;
+}
+
+.sidebar__nav-button {
+    width: 100%;
+    background: none;
+    border: none;
+    color: var(--nav-text-secondary);
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    gap: var(--spacing-3);
+    padding: var(--spacing-3) var(--spacing-4);
+    transition: all var(--transition-fast);
+    text-align: left;
+    font-size: var(--font-size-base);
+    min-height: 3rem;
+    position: relative;
+}
+
+.sidebar__nav-button:hover,
+.sidebar__nav-button:focus-visible {
+    background-color: var(--nav-item-hover);
+    color: var(--nav-text);
+}
+
+.sidebar__nav-button--active {
+    background-color: var(--nav-item-active);
+    color: var(--nav-text);
+    font-weight: var(--font-weight-medium);
+}
+
+.sidebar__nav-button--active::before {
+    content: '';
+    position: absolute;
+    left: 0;
+    top: 0;
+    bottom: 0;
+    width: 3px;
+    background-color: currentColor;
+}
+
+.sidebar__nav-icon {
+    font-size: 1.25rem;
+    flex-shrink: 0;
+    width: 1.5rem;
+    text-align: center;
+}
+
+.sidebar__nav-label {
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+/* === MOBILE SIDEBAR === */
+
+.sidebar__overlay {
+    position: fixed;
+    inset: 0;
+    background-color: var(--bg-overlay);
+    z-index: 90;
+    display: none;
+}
+
+@media (max-width: 768px) {
+    .sidebar {
+        position: fixed;
+        top: 0;
+        left: 0;
+        height: 100vh;
+        width: 16rem;
+        transform: translateX(-100%);
+        z-index: 100;
+    }
+
+    .sidebar--mobile-open {
+        transform: translateX(0);
+    }
+
+    .sidebar--mobile-open + .layout__main .sidebar__overlay {
+        display: block;
+    }
+
+    .sidebar--collapsed {
+        width: 16rem;
+    }
+}
+
+/* === APP BAR === */
+
+.appbar {
+    height: 4rem;
+    background-color: var(--appbar-bg);
+    color: var(--appbar-text);
+    border-bottom: 1px solid var(--appbar-border);
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 0 var(--spacing-6);
+    box-shadow: var(--shadow-sm);
+    position: sticky;
+    top: 0;
+    z-index: 50;
+    min-height: 4rem;
+}
+
+.appbar__start {
+    display: flex;
+    align-items: center;
+    gap: var(--spacing-4);
+}
+
+.appbar__mobile-toggle {
+    background: none;
+    border: none;
+    color: inherit;
+    cursor: pointer;
+    font-size: 1.25rem;
+    border-radius: var(--radius-md);
+    width: 2.5rem;
+    height: 2.5rem;
+    display: none;
+    align-items: center;
+    justify-content: center;
+    transition: background-color var(--transition-fast);
+}
+
+.appbar__mobile-toggle:hover,
+.appbar__mobile-toggle:focus-visible {
+    background-color: var(--bg-secondary);
+}
+
+.appbar__brand {
+    display: flex;
+    align-items: center;
+    gap: var(--spacing-3);
+}
+
+.appbar__brand-icon {
+    font-size: 1.75rem;
+}
+
+.appbar__brand-text {
+    font-size: var(--font-size-xl);
+    font-weight: var(--font-weight-bold);
+    margin: 0;
+    letter-spacing: 0.025em;
+}
+
+.appbar__end {
+    display: flex;
+    align-items: center;
+    gap: var(--spacing-4);
+}
+
+.appbar__status {
+    display: flex;
+    align-items: center;
+    gap: var(--spacing-2);
+    background-color: var(--color-warning-light);
+    color: var(--color-warning-text);
+    padding: var(--spacing-2) var(--spacing-3);
+    border-radius: var(--radius-md);
+    font-size: var(--font-size-sm);
+    font-weight: var(--font-weight-medium);
+}
+
+.appbar__status-icon {
+    animation: spin 2s linear infinite;
+}
+
+@keyframes spin {
+    from { transform: rotate(0deg); }
+    to { transform: rotate(360deg); }
+}
+
+@media (max-width: 768px) {
+    .appbar {
+        padding: 0 var(--spacing-4);
+    }
+
+    .appbar__mobile-toggle {
+        display: flex;
+    }
+
+    .appbar__brand-text {
+        font-size: var(--font-size-lg);
+    }
+}
+
+/* === MAIN LAYOUT === */
+
+.layout__main {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    min-width: 0;
+    overflow: hidden;
+}
+
+.main-content {
+    flex: 1;
+    background-color: var(--bg-primary);
+    padding: var(--spacing-6);
+    overflow-y: auto;
+    overflow-x: hidden;
+}
+
+@media (max-width: 768px) {
+    .main-content {
+        padding: var(--spacing-4);
+    }
+}
+
+@media (max-width: 480px) {
+    .main-content {
+        padding: var(--spacing-3);
+    }
+}
+
+/* === REDUCED MOTION === */
+
+@media (prefers-reduced-motion: reduce) {
+    .sidebar,
+    .sidebar__nav-button,
+    .appbar__mobile-toggle {
+        transition: none;
+    }
+
+    .appbar__status-icon {
+        animation: none;
+    }
+}
+
+/* === HIGH CONTRAST === */
+
+@media (prefers-contrast: high) {
+    .sidebar {
+        border-right: 2px solid var(--border-primary);
+    }
+
+    .appbar {
+        border-bottom: 2px solid var(--border-primary);
+    }
+
+    .sidebar__nav-button:focus-visible,
+    .sidebar__toggle:focus-visible,
+    .appbar__mobile-toggle:focus-visible {
+        outline: 2px solid currentColor;
+        outline-offset: 2px;
+    }
+}
+
+/* === PRINT STYLES === */
+
+@media print {
+    .sidebar,
+    .appbar {
+        display: none;
+    }
+
+    .layout__main {
+        width: 100%;
+    }
+
+    .main-content {
+        padding: 0;
+        overflow: visible;
+    }
+}
+"#;
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_layout_state_default() {
+        let state = LayoutState::default();
+        assert!(state.sidebar_collapsed);
+        assert!(!state.mobile_nav_open);
+    }
+
+    #[test]
+    fn test_nav_items_not_empty() {
+        assert!(!NAV_ITEMS.is_empty());
+        assert!(NAV_ITEMS.len() >= 2);
+    }
+
+    #[test]
+    fn test_nav_item_properties() {
+        for item in NAV_ITEMS {
+            assert!(!item.label.is_empty());
+            assert!(!item.icon.is_empty());
+            assert!(!item.aria_label.is_empty());
         }
     }
 }

@@ -95,7 +95,7 @@ pub(super) fn Demo() -> Element {
     rsx! {
         document::Link {
             rel: "stylesheet",
-            href: asset!("/src/components/context_menu/style.css"),
+            href: asset!("/src/ui/components/context_menu/style.css"),
         }
         ContextMenu {
             ContextMenuTrigger {

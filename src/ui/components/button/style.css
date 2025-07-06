@@ -1,210 +1,346 @@
+/* === BUTTON COMPONENT STYLES === */
+
 .button {
-    border: none;
-    border-radius: var(--radius-md);
-    font-weight: var(--font-semibold);
-    cursor: pointer;
-    transition: background 0.18s, box-shadow 0.18s, color 0.18s;
-    outline: none;
-    box-shadow: var(--shadow-sm);
-    min-width: 44px;
-    min-height: 44px;
+    /* Base button styles */
     display: inline-flex;
     align-items: center;
     justify-content: center;
-    gap: var(--space-2);
+    gap: var(--spacing-2);
+
+    /* Typography */
+    font-family: inherit;
+    font-weight: var(--font-weight-medium);
+    font-size: var(--font-size-base);
+    line-height: var(--line-height-normal);
+    text-decoration: none;
+    white-space: nowrap;
+
+    /* Layout */
+    border: 1px solid transparent;
+    border-radius: var(--radius-md);
+    cursor: pointer;
+    outline: none;
+
+    /* Transitions */
+    transition:
+        background-color var(--transition-fast),
+        border-color var(--transition-fast),
+        color var(--transition-fast),
+        box-shadow var(--transition-fast),
+        transform var(--transition-fast);
+
+    /* Accessibility */
+    user-select: none;
+    -webkit-user-select: none;
+    -moz-user-select: none;
+
+    /* Focus management */
+    position: relative;
 }
 
-.button--sm {
-    padding: var(--space-2) var(--space-3);
-    font-size: var(--text-sm);
-    min-height: 36px;
-}
-
-.button--md {
-    padding: var(--space-3) var(--space-4);
-    font-size: var(--text-base);
-    min-height: 44px;
-}
-
-.button--lg {
-    padding: var(--space-4) var(--space-6);
-    font-size: var(--text-lg);
-    min-height: 48px;
-}
-
-.button--primary {
-    background: linear-gradient(90deg, var(--color-primary-600), var(--color-primary-500));
-    color: var(--color-white);
-    box-shadow: var(--shadow-md);
-}
-
-.button--primary:hover,
-.button--primary:focus {
-    background: linear-gradient(90deg, var(--color-primary-700), var(--color-primary-600));
-    box-shadow: var(--shadow-lg);
-}
-
-.button--secondary {
-    background: var(--color-gray-100);
-    color: var(--color-gray-900);
-    border: 1px solid var(--color-gray-300);
-}
-
-.button--secondary:hover,
-.button--secondary:focus {
-    background: var(--color-gray-200);
-    color: var(--color-gray-900);
-}
-
-.button--destructive {
-    background: var(--color-danger-600);
-    color: var(--color-white);
-}
-
-.button--destructive:hover,
-.button--destructive:focus {
-    background: var(--color-danger-700);
-}
-
-.button--outline {
-    background: transparent;
-    color: var(--color-primary-600);
-    border: 1px solid var(--color-primary-500);
-}
-
-.button--outline:hover,
-.button--outline:focus {
-    background: var(--color-primary-50);
-}
-
-.button--ghost {
-    background: transparent;
-    color: var(--color-gray-700);
-}
-
-.button--ghost:hover,
-.button--ghost:focus {
-    background: var(--color-gray-100);
-}
-
-.button:focus {
-    outline: 2px solid var(--focus-ring-color);
-    outline-offset: var(--focus-ring-offset);
+.button:focus-visible {
+    box-shadow: var(--focus-ring);
+    z-index: 1;
 }
 
 .button:active {
-    box-shadow: var(--shadow-sm);
-}
-
-@media (max-width: 600px) {
-    .button {
-        font-size: clamp(var(--text-sm), 2vw, var(--text-base));
-        padding: clamp(var(--space-2), 2vw, var(--space-4)) clamp(var(--space-3), 4vw, var(--space-6));
-    }
-}
-
-.planview-btn-primary {
-    background: linear-gradient(90deg, #4f8cff 0%, #2356c7 100%);
-    color: #fff;
-    font-weight: 600;
-    box-shadow: 0 2px 8px rgba(79, 140, 255, 0.1);
-}
-.planview-btn-primary:hover,
-.planview-btn-primary:focus-visible {
-    background: linear-gradient(90deg, #2356c7 0%, #4f8cff 100%);
-    box-shadow: 0 4px 16px rgba(79, 140, 255, 0.18);
-    transform: translateY(-2px) scale(1.03);
-}
-
-.planview-btn-secondary {
-    background: #f5f7fa;
-    color: #2356c7;
-    font-weight: 500;
-    border: 1px solid #c7d2fe;
-}
-.planview-btn-secondary:hover,
-.planview-btn-secondary:focus-visible {
-    background: #e0e7ff;
-    color: #1e3a8a;
-    border-color: #a5b4fc;
-    transform: translateY(-1px) scale(1.02);
-}
-
-.planview-btn {
-    border-radius: 0.5rem;
-    padding: 0.5rem 1.25rem;
-    margin-right: 0.5rem;
-    margin-bottom: 0.5rem;
-    min-width: 120px;
-    transition:
-        box-shadow 0.18s cubic-bezier(0.4, 0, 0.2, 1),
-        transform 0.12s cubic-bezier(0.4, 0, 0.2, 1);
-    outline: none;
-}
-
-.planview-btn:active {
     transform: scale(0.97);
 }
 
-.planview-card-main,
-.planview-card-structure,
-.planview-card-study {
-    border-radius: 1rem;
-    box-shadow: 0 4px 24px rgba(30, 64, 175, 0.07);
-    margin-bottom: 1.5rem;
-    padding: 1.25rem 1.5rem;
+.button:disabled {
+    opacity: 0.6;
+    cursor: not-allowed;
+    pointer-events: none;
 }
 
-.planview-card-main {
-    background: #fff;
-    border: 1px solid #e0e7ff;
+/* === SIZE VARIANTS === */
+
+.button--sm {
+    padding: var(--spacing-2) var(--spacing-3);
+    font-size: var(--font-size-sm);
+    min-height: 2.25rem; /* 36px */
+    min-width: 2.25rem;
 }
 
-.planview-card-structure {
-    background: #f5f7fa;
-    border: 1px solid #c7d2fe;
+.button--md {
+    padding: var(--spacing-3) var(--spacing-4);
+    font-size: var(--font-size-base);
+    min-height: 2.75rem; /* 44px */
+    min-width: 2.75rem;
 }
 
-.planview-card-study {
-    background: #f0f9ff;
-    border: 1px solid #bae6fd;
+.button--lg {
+    padding: var(--spacing-4) var(--spacing-6);
+    font-size: var(--font-size-lg);
+    min-height: 3rem; /* 48px */
+    min-width: 3rem;
 }
 
-/* PlanView Loading Overlay & Spinner */
-.planview-loading-overlay {
-    position: fixed;
-    z-index: 9999;
-    inset: 0;
-    background: rgba(255, 255, 255, 0.75);
-    display: flex;
-    flex-direction: column;
+/* === STYLE VARIANTS === */
+
+/* Primary Button */
+.button--primary {
+    background-color: var(--btn-primary-bg);
+    color: var(--btn-primary-text);
+    border-color: var(--btn-primary-border);
+    box-shadow: var(--shadow-sm);
+}
+
+.button--primary:hover:not(:disabled) {
+    background-color: var(--btn-primary-bg-hover);
+    box-shadow: var(--shadow-md);
+    transform: translateY(-1px);
+}
+
+.button--primary:active:not(:disabled) {
+    transform: translateY(0) scale(0.97);
+    box-shadow: var(--shadow-sm);
+}
+
+/* Secondary Button */
+.button--secondary {
+    background-color: var(--btn-secondary-bg);
+    color: var(--btn-secondary-text);
+    border-color: var(--btn-secondary-border);
+    box-shadow: var(--shadow-sm);
+}
+
+.button--secondary:hover:not(:disabled) {
+    background-color: var(--btn-secondary-bg-hover);
+    box-shadow: var(--shadow-md);
+}
+
+.button--secondary:active:not(:disabled) {
+    transform: scale(0.97);
+    box-shadow: var(--shadow-sm);
+}
+
+/* Outline Button */
+.button--outline {
+    background-color: var(--btn-outline-bg);
+    color: var(--btn-outline-text);
+    border-color: var(--btn-outline-border);
+}
+
+.button--outline:hover:not(:disabled) {
+    background-color: var(--btn-outline-bg-hover);
+}
+
+.button--outline:active:not(:disabled) {
+    transform: scale(0.97);
+}
+
+/* Ghost Button */
+.button--ghost {
+    background-color: var(--btn-ghost-bg);
+    color: var(--btn-ghost-text);
+    border-color: var(--btn-ghost-border);
+}
+
+.button--ghost:hover:not(:disabled) {
+    background-color: var(--btn-ghost-bg-hover);
+}
+
+.button--ghost:active:not(:disabled) {
+    transform: scale(0.97);
+}
+
+/* Destructive Button */
+.button--destructive {
+    background-color: var(--btn-destructive-bg);
+    color: var(--btn-destructive-text);
+    border-color: var(--btn-destructive-border);
+    box-shadow: var(--shadow-sm);
+}
+
+.button--destructive:hover:not(:disabled) {
+    background-color: var(--btn-destructive-bg-hover);
+    box-shadow: var(--shadow-md);
+}
+
+.button--destructive:active:not(:disabled) {
+    transform: scale(0.97);
+    box-shadow: var(--shadow-sm);
+}
+
+/* === ICON BUTTONS === */
+
+.button--icon-only {
+    padding: var(--spacing-2);
+    min-width: auto;
+}
+
+.button--icon-only.button--sm {
+    padding: var(--spacing-1);
+}
+
+.button--icon-only.button--lg {
+    padding: var(--spacing-3);
+}
+
+.button__icon {
+    display: inline-flex;
     align-items: center;
     justify-content: center;
-    pointer-events: all;
+    flex-shrink: 0;
 }
 
-.planview-spinner {
-    width: 48px;
-    height: 48px;
-    border: 5px solid #e0e7ff;
-    border-top: 5px solid #2356c7;
+.button__icon--left {
+    margin-right: var(--spacing-2);
+}
+
+.button__icon--right {
+    margin-left: var(--spacing-2);
+}
+
+.button--sm .button__icon--left {
+    margin-right: var(--spacing-1);
+}
+
+.button--sm .button__icon--right {
+    margin-left: var(--spacing-1);
+}
+
+/* === LOADING STATE === */
+
+.button--loading {
+    position: relative;
+    pointer-events: none;
+}
+
+.button--loading .button__content {
+    opacity: 0;
+}
+
+.button--loading .button__spinner {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    width: 1rem;
+    height: 1rem;
+    border: 2px solid transparent;
+    border-top: 2px solid currentColor;
     border-radius: 50%;
-    animation: planview-spin 1s linear infinite;
-    margin-bottom: 1.5rem;
+    animation: button-spin 1s linear infinite;
 }
 
-@keyframes planview-spin {
+@keyframes button-spin {
     0% {
-        transform: rotate(0deg);
+        transform: translate(-50%, -50%) rotate(0deg);
     }
     100% {
-        transform: rotate(360deg);
+        transform: translate(-50%, -50%) rotate(360deg);
     }
 }
 
-.planview-loading-msg {
-    font-size: 1.25rem;
-    color: #2356c7;
-    font-weight: 600;
-    text-align: center;
+/* === BUTTON GROUPS === */
+
+.button-group {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--spacing-2);
+}
+
+.button-group--connected {
+    gap: 0;
+}
+
+.button-group--connected .button:not(:first-child) {
+    border-top-left-radius: 0;
+    border-bottom-left-radius: 0;
+    border-left: none;
+}
+
+.button-group--connected .button:not(:last-child) {
+    border-top-right-radius: 0;
+    border-bottom-right-radius: 0;
+}
+
+.button-group--connected .button:not(:first-child):not(:last-child) {
+    border-radius: 0;
+}
+
+.button-group--vertical {
+    flex-direction: column;
+}
+
+.button-group--vertical.button-group--connected .button:not(:first-child) {
+    border-top-left-radius: 0;
+    border-top-right-radius: 0;
+    border-top: none;
+    border-left: 1px solid var(--btn-secondary-border);
+}
+
+.button-group--vertical.button-group--connected .button:not(:last-child) {
+    border-bottom-left-radius: 0;
+    border-bottom-right-radius: 0;
+}
+
+/* === RESPONSIVE DESIGN === */
+
+@media (max-width: 640px) {
+    .button {
+        font-size: clamp(var(--font-size-sm), 2vw, var(--font-size-base));
+    }
+
+    .button--sm {
+        padding: var(--spacing-2) var(--spacing-3);
+    }
+
+    .button--md {
+        padding: var(--spacing-3) var(--spacing-4);
+    }
+
+    .button--lg {
+        padding: var(--spacing-4) var(--spacing-5);
+    }
+}
+
+/* === HIGH CONTRAST MODE === */
+
+@media (prefers-contrast: high) {
+    .button {
+        border-width: 2px;
+    }
+
+    .button--outline {
+        border-width: 2px;
+    }
+
+    .button:focus-visible {
+        outline: 2px solid currentColor;
+        outline-offset: 2px;
+    }
+}
+
+/* === REDUCED MOTION === */
+
+@media (prefers-reduced-motion: reduce) {
+    .button {
+        transition: none;
+    }
+
+    .button:hover {
+        transform: none;
+    }
+
+    .button:active {
+        transform: none;
+    }
+
+    .button__spinner {
+        animation: none;
+    }
+}
+
+/* === PRINT STYLES === */
+
+@media print {
+    .button {
+        border: 1px solid var(--text-primary) !important;
+        color: var(--text-primary) !important;
+        background: none !important;
+        box-shadow: none !important;
+    }
 }

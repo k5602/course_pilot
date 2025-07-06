@@ -1,243 +1,814 @@
-use dioxus::events::Key;
-use dioxus::prelude::*;
-use crate::types::CourseStatus;
+//! Enhanced Card Component with Unified Theme System
+//!
+//! This module provides a comprehensive card component that follows modern
+//! design principles and integrates seamlessly with the unified theme system.
+//!
+//! Features:
+//! - Multiple card variants (elevated, outlined, filled)
+//! - Flexible composition with header, content, and actions
+//! - Full accessibility support
+//! - Hover and focus interactions
+//! - Loading and disabled states
+//! - Image and media support
+//! - Responsive design
+//! - Theme-aware styling
 
+use dioxus::prelude::*;
+
+/// Card variant styles
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+pub enum CardVariant {
+    Elevated,
+    Outlined,
+    Filled,
+}
+
+impl Default for CardVariant {
+    fn default() -> Self {
+        Self::Elevated
+    }
+}
+
+impl CardVariant {
+    pub fn as_class(&self) -> &'static str {
+        match self {
+            Self::Elevated => "card--elevated",
+            Self::Outlined => "card--outlined",
+            Self::Filled => "card--filled",
+        }
+    }
+}
+
+/// Card size variants
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+pub enum CardSize {
+    Small,
+    Medium,
+    Large,
+}
+
+impl Default for CardSize {
+    fn default() -> Self {
+        Self::Medium
+    }
+}
+
+impl CardSize {
+    pub fn as_class(&self) -> &'static str {
+        match self {
+            Self::Small => "card--sm",
+            Self::Medium => "card--md",
+            Self::Large => "card--lg",
+        }
+    }
+}
+
+/// Card interaction behavior
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+pub enum CardInteraction {
+    None,
+    Clickable,
+    Hoverable,
+}
+
+impl Default for CardInteraction {
+    fn default() -> Self {
+        Self::None
+    }
+}
+
+/// Main card component properties
 #[derive(Props, Clone, PartialEq)]
 pub struct CardProps {
-    #[props(default)]
-    pub onclick: Option<EventHandler>,
-    #[props(default = "filled".to_string())]
-    pub variant: String, // "filled" | "outlined"
-    #[props(default = 1)]
-    pub elevation: u8, // 0-4
-    #[props(optional)]
-    pub color: Option<String>,
-    #[props(optional)]
-    pub background: Option<String>,
-    /// Optional status badge (e.g., "Structured", "Unstructured")
-    #[props(optional)]
-    pub status_badge: Option<Element>,
-    /// Optional meta/info row (e.g., modules, duration, difficulty)
-    #[props(optional)]
-    pub meta_row: Option<Element>,
-    /// Optional sample content row
-    #[props(optional)]
-    pub sample_row: Option<Element>,
-    /// Optional actions row (primary/secondary actions)
-    #[props(optional)]
-    pub actions_row: Option<Element>,
-    /// Optional status
-    #[props(optional)]
-    pub status: Option<CourseStatus>,
-    // The children prop now correctly uses dioxus::prelude::Element
+    /// Card content
     pub children: Element,
+
+    /// Card variant
+    #[props(optional, default = CardVariant::Elevated)]
+    pub variant: CardVariant,
+
+    /// Card size
+    #[props(optional, default = CardSize::Medium)]
+    pub size: CardSize,
+
+    /// Interaction behavior
+    #[props(optional, default = CardInteraction::None)]
+    pub interaction: CardInteraction,
+
+    /// Whether the card is clickable
+    #[props(optional, default = false)]
+    pub clickable: bool,
+
+    /// Click event handler
+    #[props(optional)]
+    pub onclick: Option<EventHandler<MouseEvent>>,
+
+    /// Whether the card is disabled
+    #[props(optional, default = false)]
+    pub disabled: bool,
+
+    /// Whether the card is in loading state
+    #[props(optional, default = false)]
+    pub loading: bool,
+
+    /// Additional CSS classes
+    #[props(optional)]
+    pub class: Option<String>,
+
+    /// Accessibility label
+    #[props(optional)]
+    pub aria_label: Option<String>,
+
+    /// Accessibility description
+    #[props(optional)]
+    pub aria_describedby: Option<String>,
+
+    /// Role for accessibility
+    #[props(optional)]
+    pub role: Option<String>,
+
+    /// Tab index for keyboard navigation
+    #[props(optional)]
+    pub tabindex: Option<i32>,
+
+    /// Custom data attributes
+    #[props(optional)]
+    pub data_testid: Option<String>,
+
+    /// Tooltip text
+    #[props(optional)]
+    pub title: Option<String>,
 }
 
-impl CardProps {
-    pub fn status_class(&self) -> &'static str {
-        match self.status {
-            Some(CourseStatus::Structured) => "card--success",
-            Some(CourseStatus::Unstructured) => "card--warning",
-            Some(CourseStatus::Pending) => "card--pending",
-            _ => "",
-        }
-    }
-    pub fn status_aria(&self) -> (&'static str, &'static str) {
-        match self.status {
-            Some(CourseStatus::Structured) => ("status", "Structured course"),
-            Some(CourseStatus::Unstructured) => ("status", "Unstructured course"),
-            Some(CourseStatus::Pending) => ("status", "Pending course"),
-            _ => ("", ""),
-        }
-    }
+/// Card header component properties
+#[derive(Props, Clone, PartialEq)]
+pub struct CardHeaderProps {
+    /// Header content
+    pub children: Element,
+
+    /// Header title
+    #[props(optional)]
+    pub title: Option<String>,
+
+    /// Header subtitle
+    #[props(optional)]
+    pub subtitle: Option<String>,
+
+    /// Header avatar/icon
+    #[props(optional)]
+    pub avatar: Option<Element>,
+
+    /// Header action button
+    #[props(optional)]
+    pub action: Option<Element>,
+
+    /// Additional CSS classes
+    #[props(optional)]
+    pub class: Option<String>,
 }
 
+/// Card content component properties
+#[derive(Props, Clone, PartialEq)]
+pub struct CardContentProps {
+    /// Content
+    pub children: Element,
+
+    /// Additional CSS classes
+    #[props(optional)]
+    pub class: Option<String>,
+
+    /// Whether content should be padded
+    #[props(optional, default = true)]
+    pub padded: bool,
+}
+
+/// Card actions component properties
+#[derive(Props, Clone, PartialEq)]
+pub struct CardActionsProps {
+    /// Actions content
+    pub children: Element,
+
+    /// Actions alignment
+    #[props(optional, default = "end".to_string())]
+    pub align: String,
+
+    /// Whether actions are full width
+    #[props(optional, default = false)]
+    pub full_width: bool,
+
+    /// Additional CSS classes
+    #[props(optional)]
+    pub class: Option<String>,
+}
+
+/// Card media component properties
+#[derive(Props, Clone, PartialEq)]
+pub struct CardMediaProps {
+    /// Media source (image URL)
+    pub src: String,
+
+    /// Alt text for image
+    pub alt: String,
+
+    /// Media height
+    #[props(optional, default = "200px".to_string())]
+    pub height: String,
+
+    /// Object fit behavior
+    #[props(optional, default = "cover".to_string())]
+    pub object_fit: String,
+
+    /// Additional CSS classes
+    #[props(optional)]
+    pub class: Option<String>,
+
+    /// Loading behavior
+    #[props(optional, default = "lazy".to_string())]
+    pub loading: String,
+}
+
+/// Main Card Component
 #[component]
-// The function now correctly returns dioxus::prelude::Element
 pub fn Card(props: CardProps) -> Element {
-    let (aria_role, aria_desc) = props.status_aria();
-    let is_clickable = props.onclick.is_some();
-    let elevation = props.elevation.clamp(0, 4);
-    let card_class = format!(
-        "card card--{} card--elevation-{}{}",
-        props.variant,
-        elevation,
-        {
-            let mut s = String::new();
-            if is_clickable {
-                s.push_str(" card--clickable");
-            }
-            let status = props.status_class();
-            if !status.is_empty() {
-                s.push(' ');
-                s.push_str(status);
-            }
-            s
-        }
-    );
+    let CardProps {
+        children,
+        variant,
+        size,
+        interaction,
+        clickable,
+        onclick,
+        disabled,
+        loading,
+        class,
+        aria_label,
+        aria_describedby,
+        role,
+        tabindex,
+        data_testid,
+        title,
+    } = props;
 
-    let mut style_str = String::new();
-    if let Some(bg) = &props.background {
-        style_str.push_str(&format!("--card-custom-bg: {};", bg));
+    // Build CSS classes
+    let mut classes = vec!["card", variant.as_class(), size.as_class()];
+
+    let is_interactive = clickable
+        || onclick.is_some()
+        || matches!(
+            interaction,
+            CardInteraction::Clickable | CardInteraction::Hoverable
+        );
+
+    if is_interactive {
+        classes.push("card--interactive");
     }
-    if let Some(c) = &props.color {
-        style_str.push_str(&format!("--card-custom-color: {};", c));
+
+    if disabled {
+        classes.push("card--disabled");
     }
+
+    if loading {
+        classes.push("card--loading");
+    }
+
+    if let Some(custom_class) = &class {
+        classes.push(custom_class);
+    }
+
+    let class_string = classes.join(" ");
+
+    // Handle keyboard events for interactive cards
+    let handle_keydown = move |evt: KeyboardEvent| {
+        if is_interactive && !disabled && (evt.key() == Key::Enter || evt.key() == Key::Space) {
+            if let Some(handler) = &onclick {
+                handler.call(MouseEvent::new(evt.data(), false));
+            }
+        }
+    };
+
+    // Handle click events
+    let handle_click = move |evt: MouseEvent| {
+        if is_interactive && !disabled && !loading {
+            if let Some(handler) = &onclick {
+                handler.call(evt);
+            }
+        }
+    };
+
+    // Determine the appropriate HTML element
+    let element_role = if is_interactive {
+        role.as_deref().unwrap_or("button")
+    } else {
+        role.as_deref().unwrap_or("article")
+    };
 
     rsx! {
+        // Include CSS styles
+        document::Link {
+            rel: "stylesheet",
+            href: asset!("src/ui/components/card/style.css")
+        }
+
         div {
-            class: "{card_class}",
-            style: "{style_str}",
-            tabindex: if is_clickable { "0" } else { "-1" },
-            role: if !aria_role.is_empty() { aria_role } else { if is_clickable { "button" } else { "region" } },
-            aria_label: if !aria_desc.is_empty() {
-                aria_desc
-            } else if is_clickable {
-                "Course card, clickable"
-            } else {
-                "Course card"
-            },
-            aria_pressed: None::<bool>,
-            aria_selected: None::<bool>,
+            class: class_string,
+            role: element_role,
 
-            onclick: move |_| {
-                if let Some(handler) = &props.onclick {
-                    handler.call(());
-                }
-            },
-            onkeydown: move |evt| {
-                if is_clickable && (evt.key() == Key::Enter || evt.key() == Key::Character(" ".to_string())) {
-                    if let Some(handler) = &props.onclick {
-                        handler.call(());
-                    }
-                }
-            },
+            // Accessibility attributes
+            aria_label: aria_label.unwrap_or_default(),
+            aria_describedby: aria_describedby.unwrap_or_default(),
+            aria_disabled: if is_interactive { disabled.to_string() } else { String::new() },
+            aria_busy: loading.to_string(),
 
-            // Card content wrapper for spacing and vertical rhythm
-            div {
-                class: "card-content-visual",
-                // Title row with status badge
-                div {
-                    class: "card-title-row",
-                    h3 {
-                        class: "card-title",
-                        tabindex: "0",
-                        aria_label: "Course title",
-                        {props.children}
+            // Navigation attributes
+            tabindex: if is_interactive && !disabled { tabindex.unwrap_or(0) } else { -1 },
+
+            // Event handlers
+            onclick: handle_click,
+            onkeydown: handle_keydown,
+
+            // Meta attributes
+            title: title.unwrap_or_default(),
+            "data-testid": data_testid.unwrap_or_default(),
+
+            // Loading overlay
+            if loading {
+                div { class: "card__loading-overlay",
+                    div { class: "card__spinner",
+                        aria_hidden: "true",
+                        role: "status"
                     }
-                    // Status badge (if any)
-                    if let Some(badge) = &props.status_badge {
-                        span {
-                            role: "status",
-                            aria_label: "Course status",
-                            tabindex: "0",
-                            style: "outline: none;",
-                            {badge.clone()}
-                        }
-                    },
+                    span { class: "sr-only", "Loading..." }
                 }
-                // Meta/info row (if any)
-                if let Some(meta) = &props.meta_row {
-                    div {
-                        class: "card-meta-row",
-                        role: "list",
-                        aria_label: "Course meta information",
-                        tabindex: "0",
-                        style: "outline: none;",
-                        {meta.clone()}
-                    }
-                },
-                // Sample content row (if any)
-                if let Some(sample) = &props.sample_row {
-                    div {
-                        class: "card-sample-row",
-                        aria_label: "Sample course content",
-                        tabindex: "0",
-                        style: "outline: none;",
-                        {sample.clone()}
-                    }
-                },
-                // Actions row (if any)
-                if let Some(actions) = &props.actions_row {
-                    div {
-                        class: "card-actions-row",
-                        role: "group",
-                        aria_label: "Course actions",
-                        tabindex: "0",
-                        style: "outline: none;",
-                        {actions.clone()}
-                    }
-                },
+            }
+
+            // Card content
+            {children}
+        }
+    }
+}
+
+/// Card Header Component
+#[component]
+pub fn CardHeader(props: CardHeaderProps) -> Element {
+    let CardHeaderProps {
+        children,
+        title,
+        subtitle,
+        avatar,
+        action,
+        class,
+    } = props;
+
+    let mut classes = vec!["card__header"];
+    if let Some(custom_class) = &class {
+        classes.push(custom_class);
+    }
+    let class_string = classes.join(" ");
+
+    rsx! {
+        div { class: class_string,
+            // Avatar section
+            if let Some(avatar_elem) = avatar {
+                div { class: "card__header-avatar",
+                    {avatar_elem}
+                }
+            }
+
+            // Text content
+            div { class: "card__header-content",
+                if let Some(title_text) = title {
+                    h3 { class: "card__header-title", "{title_text}" }
+                }
+                if let Some(subtitle_text) = subtitle {
+                    p { class: "card__header-subtitle", "{subtitle_text}" }
+                }
+                {children}
+            }
+
+            // Action section
+            if let Some(action_elem) = action {
+                div { class: "card__header-action",
+                    {action_elem}
+                }
             }
         }
     }
 }
 
+/// Card Content Component
 #[component]
-// The function now correctly returns dioxus::prelude::Element
-pub(super) fn Demo() -> Element {
-    let mut is_dark = use_signal(|| false);
+pub fn CardContent(props: CardContentProps) -> Element {
+    let CardContentProps {
+        children,
+        class,
+        padded,
+    } = props;
+
+    let mut classes = vec!["card__content"];
+    if !padded {
+        classes.push("card__content--no-padding");
+    }
+    if let Some(custom_class) = &class {
+        classes.push(custom_class);
+    }
+    let class_string = classes.join(" ");
+
+    rsx! {
+        div { class: class_string,
+            {children}
+        }
+    }
+}
+
+/// Card Actions Component
+#[component]
+pub fn CardActions(props: CardActionsProps) -> Element {
+    let CardActionsProps {
+        children,
+        align,
+        full_width,
+        class,
+    } = props;
+
+    let mut classes = vec!["card__actions"];
+    let align_class = format!("card__actions--{}", align);
+    classes.push(&align_class);
+
+    if full_width {
+        classes.push("card__actions--full-width");
+    }
+
+    if let Some(custom_class) = &class {
+        classes.push(custom_class);
+    }
+    let class_string = classes.join(" ");
+
+    rsx! {
+        div { class: class_string,
+            {children}
+        }
+    }
+}
+
+/// Card Media Component
+#[component]
+pub fn CardMedia(props: CardMediaProps) -> Element {
+    let CardMediaProps {
+        src,
+        alt,
+        height,
+        object_fit,
+        class,
+        loading,
+    } = props;
+
+    let mut classes = vec!["card__media"];
+    if let Some(custom_class) = &class {
+        classes.push(custom_class);
+    }
+    let class_string = classes.join(" ");
+
+    rsx! {
+        div { class: class_string,
+            style: format!("height: {};", height),
+            img {
+                src: src,
+                alt: alt,
+                loading: loading,
+                style: format!("object-fit: {}; width: 100%; height: 100%;", object_fit),
+                draggable: "false"
+            }
+        }
+    }
+}
+
+/// Utility function to create a simple card with title and content
+#[component]
+pub fn SimpleCard(
+    title: String,
+    children: Element,
+    #[props(optional)] variant: Option<CardVariant>,
+    #[props(optional)] size: Option<CardSize>,
+    #[props(optional)] onclick: Option<EventHandler<MouseEvent>>,
+    #[props(optional)] class: Option<String>,
+) -> Element {
+    rsx! {
+        Card {
+            variant: variant.unwrap_or_default(),
+            size: size.unwrap_or_default(),
+            clickable: onclick.is_some(),
+            onclick,
+            class,
+
+            CardHeader {
+                title: Some(title)
+            }
+
+            CardContent {
+                {children}
+            }
+        }
+    }
+}
+
+/// Utility function to create an action card with buttons
+#[component]
+pub fn ActionCard(
+    title: String,
+    children: Element,
+    actions: Element,
+    #[props(optional)] variant: Option<CardVariant>,
+    #[props(optional)] size: Option<CardSize>,
+    #[props(optional)] class: Option<String>,
+) -> Element {
+    rsx! {
+        Card {
+            variant: variant.unwrap_or_default(),
+            size: size.unwrap_or_default(),
+            class,
+
+            CardHeader {
+                title: Some(title)
+            }
+
+            CardContent {
+                {children}
+            }
+
+            CardActions {
+                {actions}
+            }
+        }
+    }
+}
+
+/// Utility function to create a media card with image
+#[component]
+pub fn MediaCard(
+    title: String,
+    image_src: String,
+    image_alt: String,
+    children: Element,
+    #[props(optional)] variant: Option<CardVariant>,
+    #[props(optional)] size: Option<CardSize>,
+    #[props(optional)] onclick: Option<EventHandler<MouseEvent>>,
+    #[props(optional)] actions: Option<Element>,
+    #[props(optional)] class: Option<String>,
+) -> Element {
+    rsx! {
+        Card {
+            variant: variant.unwrap_or_default(),
+            size: size.unwrap_or_default(),
+            clickable: onclick.is_some(),
+            onclick,
+            class,
+
+            CardMedia {
+                src: image_src,
+                alt: image_alt
+            }
+
+            CardHeader {
+                title: Some(title)
+            }
+
+            CardContent {
+                {children}
+            }
+
+            if let Some(action_elements) = actions {
+                CardActions {
+                    {action_elements}
+                }
+            }
+        }
+    }
+}
+
+/// Demo component showcasing all card variants and compositions
+#[component]
+pub(crate) fn Demo() -> Element {
+    let mut interactive_count = use_signal(|| 0);
+
+    let increment_count = move |_| {
+        interactive_count.set(interactive_count() + 1);
+    };
 
     rsx! {
         div {
-            class: if is_dark() { "dark" } else { "" },
-            div {
-                class: "card-demo-container",
-                div {
-                    class: "demo-header",
-                    h2 { "Elegant Card Components" },
-                    button {
-                        class: "theme-toggle",
-                        onclick: move |_| is_dark.set(!is_dark()),
-                        if is_dark() { "Switch to Light Mode" } else { "Switch to Dark Mode" }
+            style: "padding: 2rem; max-width: 1200px; margin: 0 auto;",
+
+            h2 { "Card Component Demo" }
+
+            // Basic card variants
+            section {
+                h3 { "Card Variants" }
+                div { style: "display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 1rem; margin-bottom: 2rem;",
+
+                    SimpleCard {
+                        title: "Elevated Card".to_string(),
+                        variant: Some(CardVariant::Elevated),
+                        p { "This is an elevated card with shadow elevation." }
+                    }
+
+                    SimpleCard {
+                        title: "Outlined Card".to_string(),
+                        variant: Some(CardVariant::Outlined),
+                        p { "This is an outlined card with border styling." }
+                    }
+
+                    SimpleCard {
+                        title: "Filled Card".to_string(),
+                        variant: Some(CardVariant::Filled),
+                        p { "This is a filled card with background color." }
                     }
                 }
+            }
 
-                div {
-                    class: "card-demo-grid",
-                    Card {
-                        variant: "filled",
-                        elevation: 2,
-                        onclick: move |_| { println!("Filled Card clicked!"); },
-                        div {
-                            class: "card-content",
-                            h3 { "Interactive Card" },
-                            p { "Hover over me to see the magnetic glow effect." }
+            // Card sizes
+            section {
+                h3 { "Card Sizes" }
+                div { style: "display: grid; grid-template-columns: repeat(auto-fit, minmax(250px, 1fr)); gap: 1rem; margin-bottom: 2rem;",
+
+                    SimpleCard {
+                        title: "Small Card".to_string(),
+                        size: Some(CardSize::Small),
+                        p { "Compact card size." }
+                    }
+
+                    SimpleCard {
+                        title: "Medium Card".to_string(),
+                        size: Some(CardSize::Medium),
+                        p { "Standard card size." }
+                    }
+
+                    SimpleCard {
+                        title: "Large Card".to_string(),
+                        size: Some(CardSize::Large),
+                        p { "Spacious card size." }
+                    }
+                }
+            }
+
+            // Interactive cards
+            section {
+                h3 { "Interactive Cards" }
+                div { style: "display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 1rem; margin-bottom: 2rem;",
+
+                    SimpleCard {
+                        title: "Clickable Card".to_string(),
+                        onclick: increment_count,
+                        p {
+                            "Click me! Count: {interactive_count()}"
+                            br {}
+                            "This card responds to clicks and keyboard navigation."
                         }
-                    },
+                    }
+
                     Card {
-                        variant: "filled",
-                        elevation: 2,
-                        onclick: move |_| { println!("Image Card clicked!"); },
-                        div {
-                            class: "card-media",
-                            img {
-                                src: "https://placehold.co/600x400/6b73ff/FFFFFF?text=Dioxus",
-                                alt: "Placeholder Image"
+                        variant: CardVariant::Outlined,
+                        loading: true,
+
+                        CardHeader {
+                            title: Some("Loading Card".to_string())
+                        }
+
+                        CardContent {
+                            p { "This card is in a loading state." }
+                        }
+                    }
+
+                    Card {
+                        variant: CardVariant::Elevated,
+                        disabled: true,
+
+                        CardHeader {
+                            title: Some("Disabled Card".to_string())
+                        }
+
+                        CardContent {
+                            p { "This card is disabled and non-interactive." }
+                        }
+                    }
+                }
+            }
+
+            // Complex card compositions
+            section {
+                h3 { "Complex Card Compositions" }
+                div { style: "display: grid; grid-template-columns: repeat(auto-fit, minmax(350px, 1fr)); gap: 1rem; margin-bottom: 2rem;",
+
+                    // Card with header, content, and actions
+                    ActionCard {
+                        title: "Action Card".to_string(),
+                        variant: Some(CardVariant::Elevated),
+                        actions: rsx! {
+                            button { style: "margin-right: 0.5rem;", "Cancel" }
+                            button { style: "background: var(--color-primary); color: white; border: none; padding: 0.5rem 1rem; border-radius: 0.25rem;", "Save" }
+                        },
+
+                        p { "This card includes action buttons at the bottom." }
+                        p { "Actions are commonly used for forms or confirmation dialogs." }
+                    }
+
+                    // Card with avatar and action
+                    Card {
+                        variant: CardVariant::Outlined,
+
+                        CardHeader {
+                            title: Some("User Profile".to_string()),
+                            subtitle: Some("Software Engineer".to_string()),
+                            avatar: rsx! {
+                                div {
+                                    style: "width: 40px; height: 40px; border-radius: 50%; background: var(--color-primary); display: flex; align-items: center; justify-content: center; color: white; font-weight: bold;",
+                                    "JD"
+                                }
+                            },
+                            action: rsx! {
+                                button {
+                                    style: "background: none; border: none; cursor: pointer; font-size: 1.25rem;",
+                                    "⋮"
+                                }
                             }
                         }
-                        div {
-                            class: "card-content",
-                            h3 { "Card with Media" },
-                            p { "Cards can seamlessly include images and other media." }
+
+                        CardContent {
+                            p { "John Doe is a senior software engineer with expertise in web development and system architecture." }
                         }
-                    },
+
+                        CardActions {
+                            button { style: "margin-right: 0.5rem;", "Message" }
+                            button { style: "background: var(--color-primary); color: white; border: none; padding: 0.5rem 1rem; border-radius: 0.25rem;", "Connect" }
+                        }
+                    }
+
+                    // Media card example
+                    MediaCard {
+                        title: "Beautiful Landscape".to_string(),
+                        image_src: "https://images.unsplash.com/photo-1506905925346-21bda4d32df4?w=400&h=200&fit=crop".to_string(),
+                        image_alt: "Mountain landscape".to_string(),
+                        variant: Some(CardVariant::Elevated),
+                        actions: rsx! {
+                            button { style: "margin-right: 0.5rem;", "Share" }
+                            button { style: "background: var(--color-primary); color: white; border: none; padding: 0.5rem 1rem; border-radius: 0.25rem;", "Download" }
+                        },
+
+                        p { "A stunning mountain landscape captured during golden hour." }
+                        p { "This media card showcases how to combine images with content and actions." }
+                    }
+                }
+            }
+
+            // Card without padding
+            section {
+                h3 { "Custom Layouts" }
+                div { style: "max-width: 400px; margin-bottom: 2rem;",
+
                     Card {
-                        variant: "outlined",
-                        elevation: 0,
-                        div {
-                            class: "card-content",
-                            h3 { "Card with Actions" },
-                            p { "The footer is perfect for buttons and links." }
+                        variant: CardVariant::Outlined,
+
+                        CardContent {
+                            padded: false,
+                            div { style: "padding: 1rem; border-bottom: 1px solid var(--border-primary);",
+                                h4 { style: "margin: 0;", "Custom Layout" }
+                            }
+                            div { style: "padding: 1rem;",
+                                p { style: "margin: 0;", "This card uses custom padding and borders for a unique layout." }
+                            }
                         }
-                        div {
-                            class: "card-actions",
-                            button { class: "action-button", "Details" },
-                            button { class: "action-button primary", "Confirm" }
+
+                        CardActions {
+                            full_width: true,
+                            button { style: "width: 100%; padding: 1rem; background: var(--color-primary); color: white; border: none; cursor: pointer;", "Full Width Action" }
                         }
                     }
                 }
             }
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_card_variant_classes() {
+        assert_eq!(CardVariant::Elevated.as_class(), "card--elevated");
+        assert_eq!(CardVariant::Outlined.as_class(), "card--outlined");
+        assert_eq!(CardVariant::Filled.as_class(), "card--filled");
+    }
+
+    #[test]
+    fn test_card_size_classes() {
+        assert_eq!(CardSize::Small.as_class(), "card--sm");
+        assert_eq!(CardSize::Medium.as_class(), "card--md");
+        assert_eq!(CardSize::Large.as_class(), "card--lg");
+    }
+
+    #[test]
+    fn test_defaults() {
+        assert_eq!(CardVariant::default(), CardVariant::Elevated);
+        assert_eq!(CardSize::default(), CardSize::Medium);
+        assert_eq!(CardInteraction::default(), CardInteraction::None);
     }
 }
