@@ -1,5 +1,7 @@
 //! Integration tests for Course Pilot backend functionality
 //!
+//! Tests for duration extraction, aggregation, and serialization.
+
 //! This module tests the core backend components to ensure they work correctly
 //! before integrating with the UI.
 
@@ -66,6 +68,68 @@ fn test_nlp_course_structuring() {
 
     // Verify metadata was generated
     assert!(structure.metadata.total_videos > 0);
+}
+
+use course_pilot::types::{CourseStructure, Module, Section, StructureMetadata};
+use std::time::Duration;
+
+#[test]
+fn test_module_and_course_duration_aggregation() {
+    // Create sections with known durations
+    let sections = vec![
+        Section {
+            title: "A".to_string(),
+            video_index: 0,
+            duration: Duration::from_secs(60),
+        },
+        Section {
+            title: "B".to_string(),
+            video_index: 1,
+            duration: Duration::from_secs(120),
+        },
+        Section {
+            title: "C".to_string(),
+            video_index: 2,
+            duration: Duration::from_secs(180),
+        },
+    ];
+    let module = Module {
+        title: "Test Module".to_string(),
+        sections: sections.clone(),
+        total_duration: sections.iter().map(|s| s.duration).sum(),
+    };
+    let metadata = StructureMetadata {
+        total_videos: 0,
+        total_duration: Duration::from_secs(0),
+        estimated_duration_hours: None,
+        difficulty_level: None,
+    };
+    let structure = CourseStructure {
+        modules: vec![module],
+        metadata,
+    }
+    .with_aggregated_metadata();
+
+    // Check aggregation
+    assert_eq!(structure.metadata.total_videos, 3);
+    assert_eq!(
+        structure.metadata.total_duration,
+        Duration::from_secs(60 + 120 + 180)
+    );
+}
+
+#[test]
+fn test_duration_serialization_as_seconds() {
+    use serde_json;
+    let section = Section {
+        title: "Test".to_string(),
+        video_index: 0,
+        duration: Duration::from_secs(90),
+    };
+    let json = serde_json::to_string(&section).unwrap();
+    assert!(json.contains("\"duration\":90"));
+    let deserialized: Section = serde_json::from_str(&json).unwrap();
+    assert_eq!(deserialized.duration, Duration::from_secs(90));
 }
 
 #[test]

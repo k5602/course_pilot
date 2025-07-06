@@ -1,26 +1,29 @@
 //! Local folder import functionality
 //!
 //! This module provides functionality to scan local directories for video files
-//! and extract their titles for course creation.
+//! and extract their titles and durations for course creation.
 
 use crate::ImportError;
 use std::fs;
 use std::path::Path;
 use std::time::SystemTime;
 
-/// Import video titles from a local folder containing video files
+/// Struct representing a local video section with title and duration
+#[derive(Debug, Clone)]
+pub struct LocalVideoSection {
+    pub title: String,
+    pub duration: std::time::Duration,
+}
+
+/// Import video titles and durations from a local folder containing video files
 ///
 /// # Arguments
 /// * `path` - The directory path to scan for video files
 ///
 /// # Returns
-/// * `Ok(Vec<String>)` - Vector of video titles derived from filenames
+/// * `Ok(Vec<LocalVideoSection>)` - Vector of video sections (title, duration) in playlist order
 /// * `Err(ImportError)` - Error if import fails
-///
-/// # Errors
-/// * `ImportError::FileSystem` - If the directory cannot be read or doesn't exist
-/// * `ImportError::NoContent` - If no video files are found in the directory
-pub fn import_from_local_folder(path: &Path) -> Result<Vec<String>, ImportError> {
+pub fn import_from_local_folder(path: &Path) -> Result<Vec<LocalVideoSection>, ImportError> {
     // Validate that the path exists and is a directory
     if !path.exists() {
         return Err(ImportError::FileSystem(format!(
@@ -100,17 +103,27 @@ pub fn import_from_local_folder(path: &Path) -> Result<Vec<String>, ImportError>
     // Sort files using natural sorting (handles numbers properly)
     video_files.sort_by(|a, b| natural_sort_compare(&a.path, &b.path));
 
-    // Extract titles from filenames
-    let titles: Vec<String> = video_files
-        .into_iter()
-        .filter_map(|file_info| extract_title_from_path(&file_info.path))
-        .collect();
+    // Extract titles and durations from video files
+    let mut sections = Vec::new();
+    for file_info in video_files {
+        let title = extract_title_from_path(&file_info.path).unwrap_or_else(|| {
+            file_info
+                .path
+                .file_stem()
+                .unwrap_or_default()
+                .to_string_lossy()
+                .to_string()
+        });
+        let duration = probe_video_duration(&file_info.path)
+            .unwrap_or_else(|| std::time::Duration::from_secs(0));
+        sections.push(LocalVideoSection { title, duration });
+    }
 
-    if titles.is_empty() {
+    if sections.is_empty() {
         return Err(ImportError::NoContent);
     }
 
-    Ok(titles)
+    Ok(sections)
 }
 
 /// Information about a video file for sorting purposes
@@ -118,6 +131,46 @@ pub fn import_from_local_folder(path: &Path) -> Result<Vec<String>, ImportError>
 struct VideoFileInfo {
     path: std::path::PathBuf,
     created: SystemTime,
+}
+
+/// Probe video duration using rust-ffmpeg, fallback to ffprobe CLI if needed
+fn probe_video_duration(path: &std::path::Path) -> Option<std::time::Duration> {
+    // Try rust-ffmpeg first
+    #[cfg(feature = "ffmpeg")]
+    {
+        if let Ok(_) = ffmpeg_next::init() {
+            if let Ok(mut ictx) = ffmpeg_next::format::input(&path) {
+                if let Some(stream) = ictx.streams().best(ffmpeg_next::media::Type::Video) {
+                    let duration = stream.duration();
+                    let time_base = stream.time_base();
+                    if let Some(dur) = duration {
+                        let secs = dur as f64 * f64::from(time_base);
+                        return Some(std::time::Duration::from_secs_f64(secs));
+                    }
+                }
+            }
+        }
+    }
+    // Fallback to ffprobe CLI
+    use std::process::Command;
+    let output = Command::new("ffprobe")
+        .args(&[
+            "-v",
+            "error",
+            "-show_entries",
+            "format=duration",
+            "-of",
+            "default=noprint_wrappers=1:nokey=1",
+            path.to_string_lossy().as_ref(),
+        ])
+        .output()
+        .ok()?;
+    if !output.status.success() {
+        return None;
+    }
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    let secs = stdout.trim().parse::<f64>().ok()?;
+    Some(std::time::Duration::from_secs_f64(secs))
 }
 
 /// Check if a file has a video extension

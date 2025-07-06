@@ -206,6 +206,9 @@ fn create_hierarchical_structure(
             modules.push(Module {
                 title: current_module_title.clone(),
                 sections: std::mem::take(&mut current_sections),
+                total_duration: modules.last().map_or(Duration::from_secs(0), |m: &Module| {
+                    m.sections.iter().map(|s| s.duration).sum::<Duration>()
+                }),
             });
             current_module_title = extract_module_title(title);
         } else if is_module_indicator(title) {
@@ -216,7 +219,8 @@ fn create_hierarchical_structure(
         current_sections.push(Section {
             title: title.clone(),
             video_index: i,
-            estimated_duration: estimate_video_duration(title),
+            duration: estimate_video_duration(title)
+                .unwrap_or_else(|| std::time::Duration::from_secs(0)),
         });
     }
 
@@ -224,7 +228,8 @@ fn create_hierarchical_structure(
     if !current_sections.is_empty() {
         modules.push(Module {
             title: current_module_title,
-            sections: current_sections,
+            sections: current_sections.clone(),
+            total_duration: current_sections.iter().map(|s| s.duration).sum(),
         });
     }
 
@@ -247,13 +252,15 @@ fn create_sequential_structure(
             .map(|(section_index, title)| Section {
                 title: title.clone(),
                 video_index: module_index * chunk_size + section_index,
-                estimated_duration: estimate_video_duration(title),
+                duration: estimate_video_duration(title)
+                    .unwrap_or_else(|| std::time::Duration::from_secs(0)),
             })
             .collect();
 
         modules.push(Module {
             title: module_title,
-            sections,
+            sections: sections.clone(),
+            total_duration: sections.iter().map(|s| s.duration).sum(),
         });
     }
 
@@ -274,13 +281,15 @@ fn create_thematic_structure(
             .map(|index| Section {
                 title: titles[index].clone(),
                 video_index: index,
-                estimated_duration: estimate_video_duration(&titles[index]),
+                duration: estimate_video_duration(&titles[index])
+                    .unwrap_or_else(|| std::time::Duration::from_secs(0)),
             })
             .collect();
 
         modules.push(Module {
             title: theme_name,
-            sections,
+            sections: sections.clone(),
+            total_duration: sections.iter().map(|s| s.duration).sum(),
         });
     }
 
@@ -300,13 +309,15 @@ fn create_fallback_structure(titles: &[String]) -> Result<Vec<Module>, NlpError>
             .map(|(section_index, title)| Section {
                 title: title.clone(),
                 video_index: module_index * chunk_size + section_index,
-                estimated_duration: estimate_video_duration(title),
+                duration: estimate_video_duration(title)
+                    .unwrap_or_else(|| std::time::Duration::from_secs(0)),
             })
             .collect();
 
         modules.push(Module {
             title: module_title,
-            sections,
+            sections: sections.clone(),
+            total_duration: sections.iter().map(|s| s.duration).sum(),
         });
     }
 
@@ -447,7 +458,7 @@ fn generate_metadata(titles: &[String], modules: &[Module]) -> StructureMetadata
     let estimated_duration_hours = modules
         .iter()
         .flat_map(|m| &m.sections)
-        .filter_map(|s| s.estimated_duration)
+        .map(|s| s.duration)
         .map(|d| d.as_secs_f32() / 3600.0)
         .sum::<f32>();
 
@@ -460,6 +471,7 @@ fn generate_metadata(titles: &[String], modules: &[Module]) -> StructureMetadata
 
     StructureMetadata {
         total_videos,
+        total_duration: modules.iter().map(|m| m.total_duration).sum(),
         estimated_duration_hours: Some(estimated_duration_hours),
         difficulty_level,
     }

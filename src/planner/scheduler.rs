@@ -140,7 +140,7 @@ fn generate_time_based_plan(
                 module_title: module.title.clone(),
                 section_title: section.title.clone(),
                 video_index: section.video_index,
-                estimated_duration: section.estimated_duration,
+                duration: section.duration,
             });
         }
     }
@@ -155,9 +155,7 @@ fn generate_time_based_plan(
 
         // Fill session up to time limit
         while let Some(video) = video_queue.front() {
-            let video_duration = video
-                .estimated_duration
-                .unwrap_or_else(|| Duration::from_secs(10 * 60)); // 10 min default
+            let video_duration = video.duration;
 
             if session_duration + video_duration <= session_limit || session_videos.is_empty() {
                 let video = video_queue.pop_front().unwrap();
@@ -221,7 +219,7 @@ struct VideoItem {
     module_title: String,
     section_title: String,
     video_index: usize,
-    estimated_duration: Option<Duration>,
+    duration: Duration,
 }
 
 /// Helper struct for session planning
@@ -306,9 +304,7 @@ fn plan_module_sessions(
     let mut current_session_duration = Duration::from_secs(0);
 
     for section in &module.sections {
-        let section_duration = section
-            .estimated_duration
-            .unwrap_or_else(|| Duration::from_secs(10 * 60));
+        let section_duration = section.duration;
 
         // Check if adding this section would exceed session limit
         if current_session_duration + section_duration > session_limit
@@ -470,26 +466,29 @@ mod tests {
                         Section {
                             title: "Welcome".to_string(),
                             video_index: 0,
-                            estimated_duration: Some(Duration::from_secs(600)),
+                            duration: Duration::from_secs(600),
                         },
                         Section {
                             title: "Setup".to_string(),
                             video_index: 1,
-                            estimated_duration: Some(Duration::from_secs(900)),
+                            duration: Duration::from_secs(900),
                         },
                     ],
+                    total_duration: Duration::from_secs(600 + 900),
                 },
                 Module {
                     title: "Advanced Topics".to_string(),
                     sections: vec![Section {
                         title: "Complex Example".to_string(),
                         video_index: 2,
-                        estimated_duration: Some(Duration::from_secs(1800)),
+                        duration: Duration::from_secs(1800),
                     }],
+                    total_duration: Duration::from_secs(1800),
                 },
             ],
             metadata: StructureMetadata {
                 total_videos: 3,
+                total_duration: Duration::from_secs(600 + 900 + 1800),
                 estimated_duration_hours: Some(1.0),
                 difficulty_level: Some("Intermediate".to_string()),
             },

@@ -5,7 +5,7 @@
 //! - NLP-powered course structure analysis
 //! - Intelligent study plan generation
 //! - SQLite-based persistence
-//! - Dioxus-based desktop UI
+//!
 
 // Main modules
 pub mod app;
@@ -15,17 +15,11 @@ pub mod planner;
 pub mod state;
 pub mod storage;
 pub mod types;
-pub mod ui;
 
 // Re-export commonly used types for convenience
 pub use types::{
     AppState, Course, CourseStructure, ImportJob, ImportStatus, Module, Plan, PlanItem,
     PlanSettings, Route, Section, StructureMetadata,
-};
-
-// Re-export main UI components
-pub use ui::components::{
-    add_course_dialog::AddCourseDialog, course_dashboard::course_dashboard, plan_view::PlanView,
 };
 
 // Re-export core functionality

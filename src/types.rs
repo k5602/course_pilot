@@ -18,9 +18,23 @@ pub struct CourseStructure {
     pub metadata: StructureMetadata,
 }
 
+impl CourseStructure {
+    pub fn aggregate_total_duration(&self) -> Duration {
+        self.modules.iter().map(|m| m.total_duration).sum()
+    }
+    pub fn with_aggregated_metadata(mut self) -> Self {
+        let total_videos = self.modules.iter().map(|m| m.sections.len()).sum();
+        let total_duration = self.aggregate_total_duration();
+        self.metadata.total_videos = total_videos;
+        self.metadata.total_duration = total_duration;
+        self
+    }
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub struct StructureMetadata {
     pub total_videos: usize,
+    pub total_duration: std::time::Duration,
     pub estimated_duration_hours: Option<f32>,
     pub difficulty_level: Option<String>,
 }
@@ -29,13 +43,43 @@ pub struct StructureMetadata {
 pub struct Module {
     pub title: String,
     pub sections: Vec<Section>,
+    pub total_duration: Duration,
 }
+
+impl Module {
+    pub fn aggregate_total_duration(&self) -> Duration {
+        self.sections.iter().map(|s| s.duration).sum()
+    }
+}
+
+use serde::de::Error as DeError;
+use serde::{Deserializer, Serializer};
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub struct Section {
     pub title: String,
     pub video_index: usize,
-    pub estimated_duration: Option<Duration>,
+    #[serde(
+        serialize_with = "serialize_duration_as_secs",
+        deserialize_with = "deserialize_duration_from_secs"
+    )]
+    pub duration: Duration,
+}
+
+// Custom serde for Duration as seconds
+fn serialize_duration_as_secs<S>(duration: &Duration, serializer: S) -> Result<S::Ok, S::Error>
+where
+    S: Serializer,
+{
+    serializer.serialize_u64(duration.as_secs())
+}
+
+fn deserialize_duration_from_secs<'de, D>(deserializer: D) -> Result<Duration, D::Error>
+where
+    D: Deserializer<'de>,
+{
+    let secs = u64::deserialize(deserializer)?;
+    Ok(Duration::from_secs(secs))
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]

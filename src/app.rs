@@ -1,41 +1,8 @@
 //! Main Application Component
 //
-//! This is the root Dioxus component that manages application state, routing,
-//! and provides the overall application structure.
+//! This is the root application module for backend logic only.
 
-use crate::types::AppState;
-use crate::ui::Layout;
-use crate::ui::{ThemeProvider};
-use crate::ui::components::ErrorBoundary;
-use dioxus::prelude::*;
-use dioxus_toast::{ToastFrame, ToastManager};
-
-/// Root application component
-#[component]
-pub fn App() -> Element {
-    let app_state = use_signal(|| {
-        let mut state = AppState::default();
-        #[cfg(debug_assertions)]
-        {
-            state.courses = load_demo_data();
-        }
-        state
-    });
-
-    // Toast manager signal
-    let toast = use_signal(|| ToastManager::default());
-    use_context_provider(|| app_state);
-    use_context_provider(|| toast);
-
-    rsx! {
-        ThemeProvider {
-            ErrorBoundary {
-                ToastFrame { manager: toast.clone() }
-                Layout {}
-            }
-        }
-    }
-}
+/// No frontend logic present.
 
 /// Initialize the application with any required setup
 pub fn initialize_app() -> Result<(), Box<dyn std::error::Error>> {
@@ -81,14 +48,15 @@ pub fn load_demo_data() -> Vec<crate::types::Course> {
                             Section {
                                 title: "Introduction to Rust".to_string(),
                                 video_index: 0,
-                                estimated_duration: Some(Duration::from_secs(15 * 60)),
+                                duration: Duration::from_secs(15 * 60),
                             },
                             Section {
                                 title: "Setting up the Development Environment".to_string(),
                                 video_index: 1,
-                                estimated_duration: Some(Duration::from_secs(20 * 60)),
+                                duration: Duration::from_secs(20 * 60),
                             },
                         ],
+                        total_duration: Duration::from_secs(15 * 60 + 20 * 60),
                     },
                     Module {
                         title: "Core Concepts".to_string(),
@@ -96,23 +64,27 @@ pub fn load_demo_data() -> Vec<crate::types::Course> {
                             Section {
                                 title: "Variables and Data Types".to_string(),
                                 video_index: 2,
-                                estimated_duration: Some(Duration::from_secs(25 * 60)),
+                                duration: Duration::from_secs(25 * 60),
                             },
                             Section {
                                 title: "Control Flow and Functions".to_string(),
                                 video_index: 3,
-                                estimated_duration: Some(Duration::from_secs(30 * 60)),
+                                duration: Duration::from_secs(30 * 60),
                             },
                             Section {
                                 title: "Ownership and Borrowing".to_string(),
                                 video_index: 4,
-                                estimated_duration: Some(Duration::from_secs(35 * 60)),
+                                duration: Duration::from_secs(35 * 60),
                             },
                         ],
+                        total_duration: Duration::from_secs(25 * 60 + 30 * 60 + 35 * 60),
                     },
                 ],
                 metadata: StructureMetadata {
                     total_videos: 10,
+                    total_duration: Duration::from_secs(
+                        15 * 60 + 20 * 60 + 25 * 60 + 30 * 60 + 35 * 60,
+                    ),
                     estimated_duration_hours: Some(4.5),
                     difficulty_level: Some("Intermediate".to_string()),
                 },
