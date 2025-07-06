@@ -12,6 +12,7 @@
 //! - Theme-aware styling with CSS variables
 //! - Performance optimized with minimal re-renders
 
+use dioxus::events::Key;
 use dioxus::prelude::*;
 
 /// Button size variants
@@ -106,7 +107,7 @@ pub struct ButtonProps {
 
     /// Click event handler
     #[props(optional)]
-    pub onclick: Option<EventHandler<MouseEvent>>,
+    pub onclick: Option<EventHandler<()>>,
 
     /// Button style variant
     #[props(optional, default = ButtonVariant::Primary)]
@@ -225,18 +226,22 @@ pub fn Button(props: ButtonProps) -> Element {
 
     // Handle keyboard navigation
     let handle_keydown = move |evt: KeyboardEvent| {
-        if evt.key() == Key::Enter || evt.key() == Key::Space {
-            if let Some(handler) = &onclick {
-                handler.call(MouseEvent::new(evt.data(), false));
+        let key = evt.key();
+        let is_space = matches!(key, Key::Character(ref s) if s == " ");
+        if key == Key::Enter || is_space {
+            if !is_disabled {
+                if let Some(handler) = &onclick {
+                    handler.call(());
+                }
             }
         }
     };
 
     // Handle click events
-    let handle_click = move |evt: MouseEvent| {
+    let handle_click = move |_| {
         if !is_disabled {
             if let Some(handler) = &onclick {
-                handler.call(evt);
+                handler.call(());
             }
         }
     };
@@ -446,7 +451,7 @@ pub fn ButtonGroup(props: ButtonGroupProps) -> Element {
 #[component]
 pub fn IconButton(
     icon: Element,
-    #[props(optional)] onclick: Option<EventHandler<MouseEvent>>,
+    #[props(optional)] onclick: Option<EventHandler<()>>,
     #[props(optional, default = ButtonVariant::Ghost)] variant: ButtonVariant,
     #[props(optional, default = ButtonSize::Medium)] size: ButtonSize,
     #[props(optional, default = false)] disabled: bool,
@@ -464,7 +469,7 @@ pub fn IconButton(
             icon: Some(icon),
             icon_position: IconPosition::Only,
             onclick,
-            aria_label,
+            aria_label: aria_label.clone(),
             class,
             title,
             span { class: "sr-only", {aria_label.as_ref().map(|s| s.as_str()).unwrap_or("Button")} }
@@ -476,7 +481,7 @@ pub fn IconButton(
 #[component]
 pub fn LoadingButton(
     children: Element,
-    #[props(optional)] onclick: Option<EventHandler<MouseEvent>>,
+    #[props(optional)] onclick: Option<EventHandler<()>>,
     #[props(optional, default = ButtonVariant::Primary)] variant: ButtonVariant,
     #[props(optional, default = ButtonSize::Medium)] size: ButtonSize,
     #[props(optional, default = false)] loading: bool,
@@ -505,7 +510,7 @@ pub fn LoadingButton(
 #[component]
 pub fn SubmitButton(
     children: Element,
-    #[props(optional)] onclick: Option<EventHandler<MouseEvent>>,
+    #[props(optional)] onclick: Option<EventHandler<()>>,
     #[props(optional, default = ButtonVariant::Primary)] variant: ButtonVariant,
     #[props(optional, default = ButtonSize::Medium)] size: ButtonSize,
     #[props(optional, default = false)] disabled: bool,

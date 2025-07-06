@@ -25,7 +25,38 @@ impl Default for ThemeMode {
 
 /// Core design tokens - the foundation of the design system
 const DESIGN_TOKENS: &str = r#"
+/* PHASE 1: THEME SYSTEM UNIFICATION */
 :root {
+  /* === LEGACY TOKEN BRIDGE (DEPRECATED) === */
+  /* These are temporary and will be removed in a future release. */
+  --primary-color: var(--color-primary); /* DEPRECATED: use --color-primary */
+  --primary-color-3: var(--color-primary-hover); /* DEPRECATED: use --color-primary-hover */
+  --primary-color-4: var(--color-primary-active); /* DEPRECATED: use --color-primary-active */
+  --primary-color-5: var(--color-primary-active); /* DEPRECATED: use --color-primary-active */
+  --primary-color-6: var(--color-primary-active); /* DEPRECATED: use --color-primary-active */
+  --primary-color-7: var(--color-primary-active); /* DEPRECATED: use --color-primary-active */
+  --secondary-color-2: var(--color-secondary-light); /* DEPRECATED: use --color-secondary-light */
+  --secondary-color-4: var(--color-secondary); /* DEPRECATED: use --color-secondary */
+  --color-gray-50: var(--neutral-50); /* DEPRECATED: use --neutral-50 */
+  --color-gray-100: var(--neutral-100); /* DEPRECATED: use --neutral-100 */
+  --color-gray-200: var(--neutral-200); /* DEPRECATED: use --neutral-200 */
+  --color-gray-300: var(--neutral-300); /* DEPRECATED: use --neutral-300 */
+  --color-gray-400: var(--neutral-400); /* DEPRECATED: use --neutral-400 */
+  --color-gray-500: var(--neutral-500); /* DEPRECATED: use --neutral-500 */
+  --color-gray-600: var(--neutral-600); /* DEPRECATED: use --neutral-600 */
+  --color-gray-700: var(--neutral-700); /* DEPRECATED: use --neutral-700 */
+  --color-gray-800: var(--neutral-800); /* DEPRECATED: use --neutral-800 */
+  --color-gray-900: var(--neutral-900); /* DEPRECATED: use --neutral-900 */
+  /* Add compile-time warning for legacy usage (Rust-side) */
+
+  /* === PRINT & HIGH-CONTRAST SUPPORT === */
+  --print-bg: #fff !important;
+  --print-text: #000 !important;
+  --overlay-bg-light: rgba(255,255,255,0.8);
+  --overlay-bg-dark: rgba(0,0,0,0.8);
+  --overlay-backdrop: rgba(0,0,0,0.3);
+  --sidebar-active: var(--color-primary);
+}
   /* === COLOR PALETTE === */
 
   /* Neutral Scale */
@@ -502,15 +533,25 @@ pub fn ThemeProvider(children: Element) -> Element {
     };
 
     // Apply theme to document root
-    use_effect(move || {
-        if let Some(window) = web_sys::window() {
-            if let Some(document) = window.document() {
-                if let Some(html) = document.document_element() {
-                    let _ = html.set_attribute("data-theme", theme_data_attr);
+    #[cfg(target_arch = "wasm32")]
+    {
+        use_effect(move || {
+            if let Some(window) = web_sys::window() {
+                if let Some(document) = window.document() {
+                    if let Some(html) = document.document_element() {
+                        let _ = html.set_attribute("data-theme", theme_data_attr);
+                    }
                 }
             }
-        }
-    });
+        });
+    }
+
+    #[cfg(not(target_arch = "wasm32"))]
+    {
+        use_effect(move || {
+            // No-op for desktop/native
+        });
+    }
 
     rsx! {
         // Inject design tokens
@@ -543,42 +584,20 @@ pub fn ThemeToggle() -> Element {
         theme_mode.set(new_mode);
     };
 
+    let icon = if is_dark { "☀️" } else { "🌙" };
+    let label = if is_dark { "Switch to light mode" } else { "Switch to dark mode" };
     rsx! {
         button {
             class: "theme-toggle",
             onclick: toggle_theme,
-            aria_label: if is_dark { "Switch to light mode" } else { "Switch to dark mode" },
-            title: if is_dark { "Switch to light mode" } else { "Switch to dark mode" },
-            style: "
-                background: var(--btn-ghost-bg);
-                border: 1px solid var(--btn-ghost-border);
-                color: var(--btn-ghost-text);
-                cursor: pointer;
-                font-size: 1.2rem;
-                border-radius: var(--radius-md);
-                width: 2.5rem;
-                height: 2.5rem;
-                display: flex;
-                align-items: center;
-                justify-content: center;
-                transition: all var(--transition-fast);
-            ",
+            aria_label: label,
+            title: label,
+            style: "background: var(--btn-ghost-bg); border: 1px solid var(--btn-ghost-border); color: var(--btn-ghost-text); cursor: pointer; font-size: 1.2rem; border-radius: var(--radius-md); width: 2.5rem; height: 2.5rem; display: flex; align-items: center; justify-content: center; transition: all var(--transition-fast);",
             onmouseenter: |_| {},
             onmouseleave: |_| {},
-
-            if is_dark { "☀️" } else { "🌙" }
+            {icon}
         }
-
-        style {{ "
-            .theme-toggle:hover {{
-                background: var(--btn-ghost-bg-hover);
-                transform: scale(1.05);
-            }}
-
-            .theme-toggle:active {{
-                transform: scale(0.95);
-            }}
-        " }}
+        style { dangerous_inner_html: ".theme-toggle:hover { background: var(--btn-ghost-bg-hover); transform: scale(1.05); } .theme-toggle:active { transform: scale(0.95); }" }
     }
 }
 

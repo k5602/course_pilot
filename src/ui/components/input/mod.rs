@@ -1,19 +1,19 @@
-//! Enhanced Input Component with Unified Theme System
-//!
-//! This module provides a comprehensive input component that follows modern
-//! design principles and integrates seamlessly with the unified theme system.
-//!
-//! Features:
-//! - Multiple input variants (filled, outlined, standard)
-//! - Various input types (text, password, email, number, etc.)
-//! - Different sizes and states
-//! - Icon support with flexible positioning
-//! - Helper text and error messages
-//! - Full accessibility support
-//! - Label integration
-//! - Validation states
-//! - Theme-aware styling
-//! - Responsive design
+// Input Components with Unified Theme System
+//
+// This module provides a comprehensive set of input components that follow modern
+// design principles and integrate seamlessly with the unified theme system.
+//
+// Features:
+// - Multiple input variants (filled, outlined, standard)
+// - Various input types (text, password, email, number, etc.)
+// - Different sizes and states
+// - Icon support with flexible positioning
+// - Helper text and error messages
+// - Full accessibility support
+// - Label integration
+// - Validation states
+// - Theme-aware styling
+// - Responsive design
 
 use dioxus::prelude::*;
 
@@ -436,8 +436,8 @@ pub fn Input(props: InputProps) -> Element {
                     r#type: input_type.as_str(),
                     id: input_id,
                     name: name.unwrap_or_default(),
-                    value: value.unwrap_or_default(),
-                    placeholder: placeholder.unwrap_or_default(),
+                    value: value.as_deref().unwrap_or(""),
+                    placeholder: placeholder.as_deref().unwrap_or(""),
                     disabled: disabled,
                     readonly: readonly,
                     required: required,
@@ -697,8 +697,8 @@ pub fn TextArea(props: TextAreaProps) -> Element {
                     class: textarea_class,
                     id: textarea_id,
                     name: name.unwrap_or_default(),
-                    value: value.unwrap_or_default(),
-                    placeholder: placeholder.unwrap_or_default(),
+                    value: value.as_deref().unwrap_or(""),
+                    placeholder: placeholder.as_deref().unwrap_or(""),
                     rows: rows.to_string(),
                     cols: cols.map(|c| c.to_string()).unwrap_or_default(),
                     disabled: disabled,
@@ -708,7 +708,7 @@ pub fn TextArea(props: TextAreaProps) -> Element {
                     maxlength: maxlength.map(|l| l.to_string()).unwrap_or_default(),
 
                     // Accessibility
-                    aria_describedby: if display_message.is_some() { message_id } else { "" },
+                    aria_describedby: if display_message.is_some() { message_id.as_str() } else { "" },
                     aria_invalid: if matches!(state, InputState::Error) { "true" } else { "false" },
                     aria_required: required.to_string(),
 
@@ -899,7 +899,7 @@ pub(crate) fn Demo() -> Element {
                         label: Some("Filled Input".to_string()),
                         placeholder: Some("Enter text...".to_string()),
                         value: Some(text_value().clone()),
-                        oninput: move |evt: Event<web_sys::Event>| text_value.set(evt.value()),
+                        oninput: move |evt: FormEvent| text_value.set(evt.value()),
                     }
 
                     Input {
@@ -987,20 +987,20 @@ pub(crate) fn Demo() -> Element {
                         label: Some("Email Input".to_string()),
                         placeholder: Some("user@example.com".to_string()),
                         value: Some(email_value().clone()),
-                        oninput: move |evt| email_value.set(evt.value()),
+                        oninput: move |evt: FormEvent| email_value.set(evt.value()),
                         left_icon: rsx! { span { "✉️" } }
                     }
 
                     PasswordInput {
                         label: Some("Password Input".to_string()),
                         value: Some(password_value().clone()),
-                        oninput: move |evt| password_value.set(evt.value()),
+                        oninput: move |evt: FormEvent| password_value.set(evt.value()),
                         required: Some(true)
                     }
 
                     SearchInput {
                         value: Some(search_value().clone()),
-                        oninput: move |evt| search_value.set(evt.value()),
+                        oninput: move |evt: FormEvent| search_value.set(evt.value()),
                         full_width: Some(true)
                     }
 
@@ -1010,7 +1010,7 @@ pub(crate) fn Demo() -> Element {
                         min: Some("0".to_string()),
                         max: Some("100".to_string()),
                         step: Some("1".to_string()),
-                        oninput: move |evt| number_value.set(evt.value_of()),
+                        oninput: move |evt: FormEvent| number_value.set(evt.value()),
                     }
                 }
             }
@@ -1024,8 +1024,8 @@ pub(crate) fn Demo() -> Element {
                         label: Some("Message".to_string()),
                         placeholder: Some("Enter your message...".to_string()),
                         value: Some(textarea_value().clone()),
-                        oninput: move |evt: Event<web_sys::Event>| textarea_value.set(evt.value_of()),
-                        rows: 4,
+                        oninput: move |evt: FormEvent| textarea_value.set(evt.value()),
+                        rows: 4u32,
                         helper_text: Some("Maximum 500 characters".to_string()),
                         maxlength: Some(500)
                     }
@@ -1034,7 +1034,7 @@ pub(crate) fn Demo() -> Element {
                         variant: InputVariant::Filled,
                         label: Some("Filled TextArea".to_string()),
                         placeholder: Some("Filled variant...".to_string()),
-                        rows: 6,
+                        rows: 6u32,
                         resizable: false
                     }
 
@@ -1042,7 +1042,7 @@ pub(crate) fn Demo() -> Element {
                         variant: InputVariant::Standard,
                         label: Some("Standard TextArea".to_string()),
                         placeholder: Some("Standard variant...".to_string()),
-                        rows: 5,
+                        rows: 5u32,
                         required: true
                     }
                 }
@@ -1089,7 +1089,7 @@ pub(crate) fn Demo() -> Element {
                         TextArea {
                             label: Some("Bio".to_string()),
                             placeholder: Some("Tell us about yourself...".to_string()),
-                            rows: 4,
+                            rows: 4u32,
                             full_width: true,
                             helper_text: Some("Optional - share a bit about yourself".to_string())
                         }

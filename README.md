@@ -4,7 +4,7 @@
 
 A modern Rust desktop application that automatically analyzes video-based courses, creates logical learning structures, and generates personalized study schedules. Built with performance, accessibility, and user experience at its core.
 
-![Rust](https://img.shields.io/badge/rust-1.70+-orange.svg)
+![Rust](https://img.shields.io/badge/rust-1.80+-orange.svg)
 ![Dioxus](https://img.shields.io/badge/dioxus-0.6+-blue.svg)
 ![License](https://img.shields.io/badge/license-MIT-green.svg)
 
@@ -59,6 +59,7 @@ Course Pilot bridges the gap between scattered video content and structured lear
 #### **Interactive Checklist & Progress Tracking** (Highest Priority)
 Transform passive video watching into active learning with:
 - **Per-Video Checkboxes**: Mark videos as complete with persistent state
+- **Built-in Youtube Player**: built in youtube player ti ease the whole track
 - **Visual Progress Indicators**: Progress bars and completion rings on dashboard
 - **Course Completion Tracking**: Overall progress across entire courses
 - **Milestone Celebrations**: Visual feedback for achieving learning goals
@@ -331,7 +332,7 @@ I welcome contributions! Here's how to get involved:
 
 ### **Q2 2026: AI Integration**
 - [ ] Advanced NLP with machine learning models
-- [ ] Automatic quiz generation from notes
+- [ ] Automatic quiz generation from notes With AI
 - [ ] Intelligent content recommendations
 - [ ] Voice notes and transcription
 
@@ -357,3 +358,5 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 **Ready to transform your learning experience?** Download Course Pilot and turn your video chaos into structured success!
 
 [📥 Download Latest Release](https://github.com/course_pilot/course-pilot/releases) | [📖 Documentation](https://docs.course-pilot.dev) 
+
+**Made With Insistence By Khaled**

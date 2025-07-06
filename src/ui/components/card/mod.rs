@@ -101,7 +101,7 @@ pub struct CardProps {
 
     /// Click event handler
     #[props(optional)]
-    pub onclick: Option<EventHandler<MouseEvent>>,
+    pub onclick: Option<EventHandler<()>>,
 
     /// Whether the card is disabled
     #[props(optional, default = false)]
@@ -278,18 +278,20 @@ pub fn Card(props: CardProps) -> Element {
 
     // Handle keyboard events for interactive cards
     let handle_keydown = move |evt: KeyboardEvent| {
-        if is_interactive && !disabled && (evt.key() == Key::Enter || evt.key() == Key::Space) {
+        let key = evt.key();
+        let is_space = matches!(key, Key::Character(ref s) if s == " ");
+        if is_interactive && !disabled && (key == Key::Enter || is_space) {
             if let Some(handler) = &onclick {
-                handler.call(MouseEvent::new(evt.data(), false));
+                handler.call(());
             }
         }
     };
 
     // Handle click events
-    let handle_click = move |evt: MouseEvent| {
+    let handle_click = move |_| {
         if is_interactive && !disabled && !loading {
             if let Some(handler) = &onclick {
-                handler.call(evt);
+                handler.call(());
             }
         }
     };
@@ -488,7 +490,7 @@ pub fn SimpleCard(
     children: Element,
     #[props(optional)] variant: Option<CardVariant>,
     #[props(optional)] size: Option<CardSize>,
-    #[props(optional)] onclick: Option<EventHandler<MouseEvent>>,
+    #[props(optional)] onclick: Option<EventHandler<()>>,
     #[props(optional)] class: Option<String>,
 ) -> Element {
     rsx! {
@@ -550,7 +552,7 @@ pub fn MediaCard(
     children: Element,
     #[props(optional)] variant: Option<CardVariant>,
     #[props(optional)] size: Option<CardSize>,
-    #[props(optional)] onclick: Option<EventHandler<MouseEvent>>,
+    #[props(optional)] onclick: Option<EventHandler<()>>,
     #[props(optional)] actions: Option<Element>,
     #[props(optional)] class: Option<String>,
 ) -> Element {

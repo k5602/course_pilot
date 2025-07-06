@@ -24,7 +24,7 @@ pub use types::{
 };
 
 // Re-export main UI components
-pub use ui::{
+pub use ui::components::{
     add_course_dialog::AddCourseDialog, course_dashboard::course_dashboard, plan_view::PlanView,
 };
 

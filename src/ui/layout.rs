@@ -10,8 +10,12 @@
 
 use crate::types::{AppState, Route};
 use crate::ui::navigation::handle_navigation_with_fallback;
-use crate::ui::theme_unified::{ThemeProvider, ThemeToggle, use_theme};
+use crate::ui::theme_unified::{ThemeProvider, ThemeToggle};
+use dioxus::events::SerializedMouseData;
 use dioxus::prelude::*;
+use std::rc::Rc;
+
+#[cfg(target_arch = "wasm32")]
 use wasm_bindgen::JsCast;
 
 /// Sidebar navigation item
@@ -39,8 +43,7 @@ const NAV_ITEMS: &[NavItem] = &[
 ];
 
 /// Layout state for managing UI preferences
-#[derive(Clone, Debug, PartialEq)]
-#[derive(serde::Serialize, serde::Deserialize)]
+#[derive(Clone, Debug, PartialEq, serde::Serialize, serde::Deserialize)]
 pub struct LayoutState {
     pub sidebar_collapsed: bool,
     pub mobile_nav_open: bool,
@@ -63,7 +66,7 @@ pub fn use_layout_state() -> Signal<LayoutState> {
 /// Sidebar Navigation Component
 #[component]
 fn Sidebar() -> Element {
-    let _app_state = use_context::<Signal<AppState>>();
+    let app_state = use_context::<Signal<AppState>>();
     let mut layout_state = use_layout_state();
     let current_route = app_state.read().current_route.clone();
 
@@ -76,24 +79,16 @@ fn Sidebar() -> Element {
         save_layout_preferences(&layout_state.read());
     };
 
-    let close_mobile_nav = move |_| {
+    let mut close_mobile_nav = move |_| {
         let mut state = layout_state.read().clone();
         state.mobile_nav_open = false;
         layout_state.set(state);
     };
 
-    let handle_nav = move |route: Route| {
+    let mut handle_nav = move |route: Route| {
         handle_navigation_with_fallback(app_state, route);
-        let dummy_mouse_data = Rc::new(MouseData::new(
-            dioxus::events::Coordinates::new(0.0, 0.0),
-            dioxus::events::Coordinates::new(0.0, 0.0),
-            None,
-            None,
-            false,
-            false,
-            false,
-            false,
-        ));
+        // Use SerializedMouseData::default() as dummy mouse data per Dioxus event API
+        let dummy_mouse_data = Rc::new(MouseData::new(SerializedMouseData::default()));
         close_mobile_nav(MouseEvent::new(dummy_mouse_data, false));
     };
 
@@ -173,7 +168,7 @@ fn Sidebar() -> Element {
 #[component]
 fn AppBar() -> Element {
     let mut layout_state = use_layout_state();
-    let _app_state = use_context::<Signal<AppState>>();
+    let app_state = use_context::<Signal<AppState>>();
     let has_active_import = app_state.read().active_import.is_some();
 
     let toggle_mobile_nav = move |_| {
@@ -222,7 +217,7 @@ fn AppBar() -> Element {
 #[component]
 fn MainContent() -> Element {
     use crate::ui::{AddCourseDialog, PlanView, course_dashboard};
-    let _app_state = use_context::<Signal<AppState>>();
+    let app_state = use_context::<Signal<AppState>>();
     let current_route = app_state.read().current_route.clone();
 
     rsx! {
@@ -250,6 +245,7 @@ pub fn Layout() -> Element {
     use_context_provider(|| layout_state);
 
     // Handle responsive behavior
+    #[cfg(target_arch = "wasm32")]
     use_effect(move || {
         // Add resize listener for responsive behavior
         if let Some(window) = web_sys::window() {
@@ -262,6 +258,10 @@ pub fn Layout() -> Element {
 
             closure.forget(); // Keep closure alive
         }
+    });
+    #[cfg(not(target_arch = "wasm32"))]
+    use_effect(move || {
+        // No-op on desktop
     });
 
     rsx! {
@@ -282,6 +282,8 @@ pub fn Layout() -> Element {
 }
 
 /// Handle window resize for responsive behavior
+#[cfg(target_arch = "wasm32")]
+#[cfg(target_arch = "wasm32")]
 fn handle_window_resize(layout_state: &mut Signal<LayoutState>) {
     if let Some(window) = web_sys::window() {
         let width = window
@@ -302,7 +304,17 @@ fn handle_window_resize(layout_state: &mut Signal<LayoutState>) {
     }
 }
 
+#[cfg(not(target_arch = "wasm32"))]
+fn handle_window_resize(_layout_state: &mut Signal<LayoutState>) {
+    // No-op for desktop/native
+}
+
+#[cfg(not(target_arch = "wasm32"))]
+
 /// Load layout preferences from localStorage
+#[cfg(target_arch = "wasm32")]
+#[cfg(target_arch = "wasm32")]
+#[cfg(target_arch = "wasm32")]
 fn load_layout_preferences() -> LayoutState {
     if let Some(window) = web_sys::window() {
         if let Some(storage) = window.local_storage().ok().flatten() {
@@ -316,7 +328,17 @@ fn load_layout_preferences() -> LayoutState {
     LayoutState::default()
 }
 
+#[cfg(not(target_arch = "wasm32"))]
+fn load_layout_preferences() -> LayoutState {
+    LayoutState::default()
+}
+
+#[cfg(not(target_arch = "wasm32"))]
+
 /// Save layout preferences to localStorage
+#[cfg(target_arch = "wasm32")]
+#[cfg(target_arch = "wasm32")]
+#[cfg(target_arch = "wasm32")]
 fn save_layout_preferences(state: &LayoutState) {
     if let Some(window) = web_sys::window() {
         if let Some(storage) = window.local_storage().ok().flatten() {
@@ -326,6 +348,13 @@ fn save_layout_preferences(state: &LayoutState) {
         }
     }
 }
+
+#[cfg(not(target_arch = "wasm32"))]
+fn save_layout_preferences(_state: &LayoutState) {
+    // No-op for desktop/native
+}
+
+#[cfg(not(target_arch = "wasm32"))]
 
 /// Layout component styles
 const LAYOUT_STYLES: &str = r#"

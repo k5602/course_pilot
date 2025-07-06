@@ -146,7 +146,7 @@ fn course_card(props: CourseCardProps) -> Element {
                     crate::ui::components::alert_dialog::AlertDialogActions {
                         crate::ui::components::alert_dialog::AlertDialogCancel {
                             class: "alert-dialog-cancel",
-                            on_click: move |_| show_delete_dialog.set(false),
+                            on_click: move |_: dioxus::events::MouseEvent| show_delete_dialog.set(false),
                             "Cancel"
                         }
                         crate::ui::components::alert_dialog::AlertDialogAction {
@@ -188,7 +188,7 @@ fn course_card(props: CourseCardProps) -> Element {
                     crate::ui::components::alert_dialog::AlertDialogActions {
                         crate::ui::components::alert_dialog::AlertDialogCancel {
                             class: "alert-dialog-cancel",
-                            on_click: move |_| show_duplicate_dialog.set(false),
+                            on_click: move |_: dioxus::events::MouseEvent| show_duplicate_dialog.set(false),
                             "Cancel"
                         }
                         crate::ui::components::alert_dialog::AlertDialogAction {
@@ -258,7 +258,7 @@ fn course_card(props: CourseCardProps) -> Element {
                         onmouseleave: move |_| {
                             scale_duplicate.animate_to(1.0, AnimationConfig::new(AnimationMode::Spring(Spring::default())));
                         },
-                        onclick: move |_| show_duplicate_dialog.set(true),
+                        onclick: move |_: dioxus::events::MouseEvent| show_delete_dialog.set(false),
                         Icon { width: 12, height: 12, fill: "currentColor", icon: MdContentCopy }
                     }
 
@@ -272,7 +272,7 @@ fn course_card(props: CourseCardProps) -> Element {
                         onmouseleave: move |_| {
                             scale_delete.animate_to(1.0, AnimationConfig::new(AnimationMode::Spring(Spring::default())));
                         },
-                        onclick: move |_| show_delete_dialog.set(true),
+                        onclick: move |_: dioxus::events::MouseEvent| show_duplicate_dialog.set(false),
                         Icon { width: 12, height: 12, fill: "currentColor", icon: MdDelete }
                     }
                 }

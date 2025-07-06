@@ -51,45 +51,56 @@ use crate::ui::{Button, Card, Input};
 use crate::ui::prelude::*;
 ```
 
+
 ## Theme System
 
-### Theme Modes
+### Unified Theme System
 
-The design system supports automatic light/dark mode switching:
-
-```rust
-use crate::ui::{ThemeToggle, use_theme, ThemeMode};
-
-#[component]
-fn MyComponent() -> Element {
-    let theme = use_theme();
-    let is_dark = matches!(*theme.read(), ThemeMode::Dark);
-    
-    rsx! {
-        div {
-            class: if is_dark { "dark-specific-class" } else { "light-specific-class" },
-            ThemeToggle {}
-            "Current theme: {if is_dark { 'Dark' } else { 'Light' }}"
-        }
-    }
-}
-```
-
-### CSS Variables
-
-All components use CSS variables that automatically adapt to the current theme:
+All theming is now managed by `theme_unified.rs`. The legacy `theme.rs` is removed. Use only unified theme variables:
 
 ```css
-/* Core colors */
---bg-primary: #fafafa;           /* Light theme background */
---text-primary: #18181b;         /* Light theme text */
---color-primary: #2563eb;        /* Primary brand color */
-
-/* Component-specific tokens */
---btn-primary-bg: var(--color-primary);
---card-bg: var(--bg-elevated);
---input-border: var(--border-primary);
+--color-primary: #2563eb;
+--color-secondary: #52525b;
+--neutral-100: #f4f4f5;
+--appbar-bg: var(--bg-elevated);
+--sidebar-active: var(--color-primary);
+--overlay-bg-light: rgba(255,255,255,0.8);
+--overlay-bg-dark: rgba(0,0,0,0.8);
+--print-bg: #fff;
+--print-text: #000;
 ```
+
+#### Migration Guide
+
+1. Remove all imports of `theme.rs` and legacy variables.
+2. Replace any `--primary-color-*` or `--secondary-color-*` with unified equivalents from `theme_unified.rs`.
+3. Use only the variables defined in `theme_unified.rs` for all component and custom CSS.
+
+### Accessibility Utilities
+
+All accessibility hooks and helpers are in `src/ui/accessibility.rs`:
+
+* `use_focus_trap` - Trap focus in modals/dialogs
+* `use_roving_tabindex` - Keyboard navigation for menus
+* `use_focus_restore` - Restore focus after modal/menu close
+* `announce_to_screen_reader` - Live region announcements
+
+#### ARIA Patterns
+
+* Use `aria-label`, `aria-labelledby`, `aria-describedby` as needed
+* Use `role` attributes for dialogs, menus, tooltips, etc.
+* All interactive components must be keyboard accessible
+
+### Error Boundary
+
+Use the `ErrorBoundary` component to catch UI errors and provide fallback UI. See `src/ui/components/error_boundary.rs` for usage.
+
+### Troubleshooting
+
+* If a component is not themed, check for hardcoded colors or legacy variable usage
+* Use the accessibility hooks for all custom dialogs/menus/popovers
+* Test with both light and dark themes
+* Use the UI test suite in `tests/ui_tests.rs` for regression and accessibility checks
 
 ## Design Tokens
 

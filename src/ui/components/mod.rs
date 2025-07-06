@@ -65,6 +65,9 @@ pub mod add_course_dialog;
 pub mod course_dashboard;
 pub mod plan_view;
 
+// Error handling
+pub mod error_boundary;
+
 // Re-export all main components for easier importing
 
 // Form Components
@@ -104,6 +107,7 @@ pub use plan_view::PlanView;
 // Utility re-exports for specialized components
 pub use context_menu::ContextMenu;
 pub use hover_card::HoverCard;
+pub use error_boundary::ErrorBoundary;
 
 /// Prelude module for importing common components
 pub mod prelude {

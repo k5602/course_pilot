@@ -50,7 +50,9 @@ pub mod layout;
 pub mod navigation;
 
 // Theme system modules
-pub mod theme;
+// pub mod theme; // Legacy theme system removed
+pub mod accessibility;
+pub use components::error_boundary::ErrorBoundary;
 pub mod theme_unified;
 
 // Re-export the unified theme system as the primary theme
@@ -110,6 +112,7 @@ pub use components::{
     NumberInput,
     PasswordInput,
 
+    PlanView,
     Progress,
     RadioGroup,
     RadioItem,
@@ -123,7 +126,6 @@ pub use components::{
     TextArea,
 
     course_dashboard,
-    PlanView,
 };
 
 /// UI Prelude - Import common UI components and utilities

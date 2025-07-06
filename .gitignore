@@ -17,6 +17,7 @@ node_modules
 *.rej
 *.gz
 *.zip
+Readme.pdf
 *.tar
 *.tar.gz
 *.tgz

@@ -5,7 +5,8 @@
 
 use crate::types::AppState;
 use crate::ui::Layout;
-use crate::ui::theme::UnifiedThemeProvider;
+use crate::ui::{ThemeProvider};
+use crate::ui::components::ErrorBoundary;
 use dioxus::prelude::*;
 use dioxus_toast::{ToastFrame, ToastManager};
 
@@ -27,9 +28,11 @@ pub fn App() -> Element {
     use_context_provider(|| toast);
 
     rsx! {
-        UnifiedThemeProvider {
-            ToastFrame { manager: toast.clone() }
-            Layout {}
+        ThemeProvider {
+            ErrorBoundary {
+                ToastFrame { manager: toast.clone() }
+                Layout {}
+            }
         }
     }
 }
