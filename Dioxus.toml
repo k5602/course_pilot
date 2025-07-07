@@ -1,0 +1,15 @@
+# Dioxus project configuration file
+
+[application]
+# The name of your application
+name = "course_pilot"
+
+# The default platform to run, build, or serve
+default_platform = "desktop"
+
+# The directory where assets are stored
+asset_dir = "assets"
+
+[desktop.watcher]
+# The paths to watch for changes
+watch_path = ["src", "assets"]

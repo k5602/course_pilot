@@ -1,5 +1,7 @@
 /target
+/css/target
 **/*.rs.bk
+/node_modules
 **/*.swp
 **/*.swo
 **/*.tmp

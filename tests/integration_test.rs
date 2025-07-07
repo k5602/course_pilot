@@ -204,6 +204,7 @@ fn test_course_structured_status() {
         modules: vec![],
         metadata: course_pilot::types::StructureMetadata {
             total_videos: 1,
+            total_duration: std::time::Duration::from_secs(36000),
             estimated_duration_hours: Some(10.0),
             difficulty_level: Some("Beginner".to_string()),
         },

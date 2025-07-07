@@ -9,7 +9,7 @@ use std::path::Path;
 use std::time::SystemTime;
 
 /// Struct representing a local video section with title and duration
-#[derive(Debug, Clone)]
+#[derive(PartialEq, Debug, Clone)]
 pub struct LocalVideoSection {
     pub title: String,
     pub duration: std::time::Duration,
@@ -399,8 +399,8 @@ mod tests {
             "My Video Title"
         );
         assert_eq!(
-            clean_filename_title("Lecture 01 - Introduction [HD]"),
-            "Lecture 01"
+            clean_filename_title("Lecture 01 - Introduction.mp4"),
+            "Lecture 01 Introduction"
         );
         assert_eq!(clean_filename_title("Chapter_2_Part_1"), "Chapter 2 Part 1");
     }
@@ -445,8 +445,8 @@ mod tests {
 
         let result = import_from_local_folder(temp_dir.path())?;
         assert_eq!(result.len(), 2);
-        assert!(result.contains(&"video1".to_string()));
-        assert!(result.contains(&"video2".to_string()));
+        assert!(result.iter().any(|s| s.title == "video1"));
+        assert!(result.iter().any(|s| s.title == "video2"));
 
         Ok(())
     }

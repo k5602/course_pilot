@@ -352,11 +352,8 @@ mod tests {
 
     #[test]
     fn test_database_operations() {
-        // Create in-memory database for testing
-        let conn = Connection::open_in_memory().unwrap();
-
-        // Initialize database
-        init_db(Path::new(":memory:")).unwrap();
+        // Create and initialize an in-memory database for testing
+        let conn = init_db(Path::new(":memory:")).unwrap();
 
         // Create test course
         let course = Course {
@@ -370,11 +367,13 @@ mod tests {
                     sections: vec![Section {
                         title: "Section 1".to_string(),
                         video_index: 0,
-                        estimated_duration: Some(Duration::from_secs(3600)),
+                        duration: Duration::from_secs(3600),
                     }],
+                    total_duration: Duration::from_secs(3600),
                 }],
                 metadata: StructureMetadata {
                     total_videos: 2,
+                    total_duration: Duration::from_secs(3600),
                     estimated_duration_hours: Some(2.0),
                     difficulty_level: Some("Beginner".to_string()),
                 },

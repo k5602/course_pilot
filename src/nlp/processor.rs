@@ -45,6 +45,7 @@ pub fn structure_course(titles: Vec<String>) -> Result<CourseStructure, NlpError
 
 /// Analysis results for title patterns
 #[derive(Debug)]
+#[allow(dead_code)]
 struct TitleAnalysis {
     has_numeric_sequence: bool,
     has_explicit_modules: bool,

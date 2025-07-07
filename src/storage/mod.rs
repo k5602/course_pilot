@@ -4,6 +4,7 @@
 //! using SQLite for reliable data storage.
 
 pub mod database;
+pub mod notes;
 
 // Re-export main database functions
 pub use database::{
@@ -13,6 +14,9 @@ pub use database::{
 
 // Re-export error types
 pub use crate::DatabaseError;
+
+// Re-export notes functions for convenience
+pub use notes::{get_notes_by_course, init_notes_table};
 
 // Re-export Connection type for convenience
 pub use rusqlite::Connection;

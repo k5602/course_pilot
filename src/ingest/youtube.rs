@@ -61,23 +61,26 @@ pub async fn import_from_youtube(
         #[derive(Deserialize)]
         struct PlaylistItemsResponse {
             items: Vec<PlaylistItem>,
-            nextPageToken: Option<String>,
+            #[serde(rename = "nextPageToken")]
+            next_page_token: Option<String>,
         }
         #[derive(Deserialize)]
         struct PlaylistItem {
-            contentDetails: ContentDetails,
+            #[serde(rename = "contentDetails")]
+            content_details: ContentDetails,
         }
         #[derive(Deserialize)]
         struct ContentDetails {
-            videoId: String,
+            #[serde(rename = "videoId")]
+            video_id: String,
         }
         let playlist_resp: PlaylistItemsResponse = resp.json().await.map_err(|e| {
             ImportError::Network(format!("Failed to parse playlist items response: {}", e))
         })?;
         for item in playlist_resp.items {
-            video_ids.push(item.contentDetails.videoId);
+            video_ids.push(item.content_details.video_id);
         }
-        if let Some(token) = playlist_resp.nextPageToken {
+        if let Some(token) = playlist_resp.next_page_token {
             next_page_token = Some(token);
         } else {
             break;
@@ -106,7 +109,8 @@ pub async fn import_from_youtube(
         #[derive(Deserialize)]
         struct VideoItem {
             snippet: Snippet,
-            contentDetails: VideoContentDetails,
+            #[serde(rename = "contentDetails")]
+            content_details: VideoContentDetails,
         }
         #[derive(Deserialize)]
         struct Snippet {
@@ -121,7 +125,7 @@ pub async fn import_from_youtube(
         })?;
         for item in videos_resp.items {
             let title = clean_video_title(&item.snippet.title);
-            let duration = parse_iso8601_duration(&item.contentDetails.duration)
+            let duration = parse_iso8601_duration(&item.content_details.duration)
                 .unwrap_or_else(|| Duration::from_secs(0));
             sections.push(YoutubeSection { title, duration });
         }
@@ -195,17 +199,17 @@ async fn validate_playlist_real(url: &str, api_key: &str) -> Result<bool, Import
     }
     #[derive(serde::Deserialize)]
     struct PlaylistPrivacyStatus {
-        privacyStatus: String,
+        #[serde(rename = "privacyStatus")]
+        privacy_status: String,
     }
     let playlist_resp: PlaylistStatusResponse = resp.json().await.map_err(|e| {
         ImportError::Network(format!("Failed to parse playlist status response: {}", e))
     })?;
-    if playlist_resp.items.is_empty() {
-        return Ok(false);
+    if let Some(item) = playlist_resp.items.get(0) {
+        Ok(item.status.privacy_status == "public" || item.status.privacy_status == "unlisted")
+    } else {
+        Ok(false)
     }
-    let privacy = &playlist_resp.items[0].status.privacyStatus;
-    // Accept public and unlisted playlists, reject private
-    Ok(privacy == "public" || privacy == "unlisted")
 }
 
 /// Clean and normalize video titles
@@ -291,7 +295,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_import_invalid_url() {
-        let result = import_from_youtube("not a url").await;
+        let result = import_from_youtube("not a url", "dummy_api_key").await;
         assert!(matches!(result, Err(ImportError::InvalidUrl(_))));
     }
 }

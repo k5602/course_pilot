@@ -52,7 +52,6 @@ impl Module {
     }
 }
 
-use serde::de::Error as DeError;
 use serde::{Deserializer, Serializer};
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
@@ -128,15 +127,21 @@ pub enum ImportStatus {
 #[derive(Debug, Clone)]
 pub struct AppState {
     pub courses: Vec<Course>,
+    pub plans: Vec<Plan>,
+    pub notes: Vec<Note>,
     pub current_route: Route,
     pub active_import: Option<ImportJob>,
+    pub contextual_panel: ContextualPanelState,
+    pub sidebar_open_mobile: bool,
 }
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, Copy, PartialEq, Default)]
 pub enum Route {
+    #[default]
     Dashboard,
     AddCourse,
     PlanView(Uuid),
+    Settings,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
@@ -146,14 +151,52 @@ pub enum CourseStatus {
     Pending,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ContextualPanelTab {
+    Notes,
+    Player,
+}
+
+#[derive(Debug, Clone, Copy)]
+pub struct ContextualPanelState {
+    pub is_open: bool,
+    pub active_tab: ContextualPanelTab,
+}
+
+impl Default for ContextualPanelState {
+    fn default() -> Self {
+        Self {
+            is_open: false,
+            active_tab: ContextualPanelTab::Notes,
+        }
+    }
+}
+
 impl Default for AppState {
     fn default() -> Self {
         Self {
             courses: Vec::new(),
+            plans: Vec::new(),
+            notes: Vec::new(),
             current_route: Route::Dashboard,
             active_import: None,
+            contextual_panel: ContextualPanelState::default(),
+            sidebar_open_mobile: false,
         }
     }
+}
+
+/// Represents a user note tied to a specific video (section) in a course.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+pub struct Note {
+    pub id: Uuid,
+    pub course_id: Uuid, // Always present: which course this note belongs to
+    pub video_id: Option<Uuid>, // None for course-level notes, Some for video-level notes
+    pub content: String, // Markdown or rich text
+    pub timestamp: Option<u32>, // Seconds into the video
+    pub tags: Vec<String>, // Tagging support
+    pub created_at: DateTime<Utc>,
+    pub updated_at: DateTime<Utc>,
 }
 
 impl Course {

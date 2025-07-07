@@ -1,87 +1,84 @@
 [package]
 name = "course_pilot"
 version = "0.1.0"
-edition = "2024"
+edition = "2021"
+
+[lib]
+doctest = false
+
+[build-dependencies]
+dioxus-daisyui = "*"
+dioxus-tailwindcss = { version = "=0.8.0" }
+
 [dependencies]
-# Core UI framework for the desktop app
-dioxus = { version = "0.6.3", features = ["desktop","macro", "hooks"] }
+# Core UI framework
+dioxus = { version = "0.6.3", features = ["desktop", "macro", "hooks"] }
+dioxus-desktop = "0.6.3"
 dioxus-router = { version = "0.6.3" }
-tracing = { version = "0.1", features = ["std"] }
+dioxus-sdk = "0.6.0"
+
+# UI Components & Styling
+dioxus-daisyui = { version = "0.8.0" }
+dioxus-tailwindcss = { version = "=0.8.0" }
 dioxus-toast = "0.6.0"
 dioxus-free-icons = { version = "0.9", features = [
     "material-design-icons-action",
     "material-design-icons-content",
     "material-design-icons-editor",
     "material-design-icons-av",
-    "material-design-icons-device"
+    "material-design-icons-device",
+    "font-awesome-solid",
+    "font-awesome-brands"
 ] }
 dioxus-motion = { version = "0.3.1", default-features = false, features = ["desktop"] }
-dioxus-sdk = "0.6.0"
-dioxus-desktop = "0.6.3"
-scroll-rs = "0.2.3"
-freyr = "0.2.3"
-rfd = { version = "0.14", default-features = false, features = ["tokio"] }
 
-rand = "0.8.5" # For random ID generation
-
-# For web-specific APIs used in Dioxus desktop (e.g., local storage)
-wasm-bindgen = "0.2"
-web-sys = { version = "0.3", features = ["Window", "Storage"] }
-# HTTP client for making API requests
-reqwest = { version = "0.12", features = ["json"] }
-# YouTube metadata extractor
-ytextract = "0.10"
-
-# Async runtime for Dioxus desktop and other async tasks
-tokio = { version = "1", features = ["rt", "rt-multi-thread", "macros", "time", "fs", "io-util"] }
-
-# NLP processing capabilities (using regex-based approach for MVP)
-# rust-bert = "0.22"  # Commented out due to PyTorch build issues
-
-# SQLite database with embedded SQLite
-rusqlite = { version = "0.36", features = ["bundled"] }
-
-# Struct serialization
-serde = { version = "1.0", features = ["derive"] }
-
-# JSON serialization/deserialization
-serde_json = "1.0"
-
-# Custom error types
-thiserror = "1.0"
-
-# Error handling convenience
-anyhow = "1.0"
-
-# Date/time handling in scheduling
-chrono = { version = "0.4", features = ["serde"] }
-
-# Unique identifiers
-uuid = { version = "1.0", features = ["v4", "serde"] }
-
-# Regular expressions for pattern matching
-regex = "1.0"
-
-# Directory utilities
-dirs = "5.0"
-
-# Logging for development
-env_logger = "0.10"
-log = "0.4"
-
-# Temporary files for testing
-tempfile = "3.8"
-
-# Async utilities for stream handling
+# Async Runtime & Utilities
+tokio = { version = "1", features = ["rt-multi-thread", "macros"] }
 futures-util = "0.3"
 
-# Additional utilities
-once_cell = "1.0"
+# Data Handling & Serialization
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+rusqlite = { version = "0.36", features = ["bundled"] }
+chrono = { version = "0.4.38", default-features = false, features = ["serde", "clock"] }
+uuid = { version = "1.0", features = ["v4", "serde"] }
+regex = "1.0"
+# Error Handling & Logging
+anyhow = "1.0"
+thiserror = "1.0"
+log = "0.4"
+env_logger = "0.10"
+tracing = { version = "0.1", features = ["std"] }
 
-# Web utilities for async timeouts and UUID generation
-gloo-timers = { version = "0.3", features = ["futures"] }
-# Native video probing (rust-ffmpeg, optional, enable with feature)
+# File & System Utilities
+dirs = "5.0"
+lazy_static = "=1.5.0"
+once_cell = "1.19.0"
+tempfile = "3.8"
+rfd = { version = "0.14", default-features = false, features = ["tokio"] }
+fs = "0.0.5"
+
+# App-specific Logic
+ytextract = "0.10.8"
+reqwest = { version = "0.12", features = ["json"] }
+markdown = "1.0.0"
+
+# Optional Features
 ffmpeg-next = { version = "6.0", optional = true }
 
+[profile.release]
+strip = true
+
+[profile.wasm-dev]
+inherits = "dev"
+opt-level = 1
+
+[profile.server-dev]
+inherits = "dev"
+
+[profile.android-dev]
+inherits = "dev"
+
 [features]
+default = []
 ffmpeg = ["ffmpeg-next"]

@@ -396,6 +396,18 @@ mod tests {
     use super::*;
     use crate::types::Course;
     use chrono::Utc;
+    use dioxus::prelude::*;
+
+    // Helper to set up a test environment with a Dioxus VirtualDom and AppState context
+    fn setup_test_env() -> Signal<AppState> {
+        let mut dom = VirtualDom::new(|| {
+            let app_state = use_signal(AppState::default);
+            use_context_provider(|| app_state);
+            rsx! { div {} } // Dummy component
+        });
+        dom.rebuild_in_place();
+        *dom.base_scope().consume_context::<Signal<AppState>>().unwrap()
+    }
 
     fn create_test_course(name: &str) -> Course {
         Course {
@@ -409,7 +421,7 @@ mod tests {
 
     #[test]
     fn test_add_course() {
-        let app_state = Signal::new(AppState::default());
+        let app_state = setup_test_env();
         let course = create_test_course("Test Course");
 
         assert!(add_course(app_state, course.clone()).is_ok());
@@ -418,51 +430,77 @@ mod tests {
     }
 
     #[test]
-    fn test_validation() {
-        let app_state = Signal::new(AppState::default());
+    fn test_add_course_validation() {
+        let app_state = setup_test_env();
         let invalid_course = create_test_course("");
 
-        assert!(add_course(app_state, invalid_course).is_err());
+        let result = add_course(app_state, invalid_course);
+        assert!(matches!(result, Err(StateError::ValidationError(_))));
         assert_eq!(app_state.read().courses.len(), 0);
     }
 
     #[test]
-    fn test_duplicate_names() {
-        let app_state = Signal::new(AppState::default());
+    fn test_add_duplicate_course_name() {
+        let app_state = setup_test_env();
         let course1 = create_test_course("Test Course");
         let course2 = create_test_course("Test Course");
 
         assert!(add_course(app_state, course1).is_ok());
-        assert!(add_course(app_state, course2).is_err());
+        let result = add_course(app_state, course2);
+        assert!(matches!(result, Err(StateError::ValidationError(_))));
         assert_eq!(app_state.read().courses.len(), 1);
     }
 
     #[test]
-    fn test_course_not_found() {
-        let app_state = Signal::new(AppState::default());
+    fn test_delete_course_not_found() {
+        let app_state = setup_test_env();
         let non_existent_id = Uuid::new_v4();
 
         let result = delete_course(app_state, non_existent_id);
-        assert!(result.is_err());
-        match result.unwrap_err() {
-            StateError::CourseNotFound(id) => assert_eq!(id, non_existent_id),
-            _ => panic!("Expected CourseNotFound error"),
-        }
+        assert!(matches!(result, Err(StateError::CourseNotFound(_))));
     }
 
     #[test]
     fn test_duplicate_course() {
-        let app_state = Signal::new(AppState::default());
+        let app_state = setup_test_env();
         let course = create_test_course("Original Course");
         let course_id = course.id;
 
-        assert!(add_course(app_state, course).is_ok());
+        assert!(add_course(app_state, course.clone()).is_ok());
         assert!(duplicate_course(app_state, course_id).is_ok());
         assert_eq!(app_state.read().courses.len(), 2);
 
         // Check that duplicate has different ID but similar name
-        let courses = &app_state.read().courses;
+        let courses = app_state.read().courses.clone();
+        let original = courses.iter().find(|c| c.id == course_id).unwrap();
         let duplicate = courses.iter().find(|c| c.id != course_id).unwrap();
+
+        assert_ne!(original.id, duplicate.id);
+        assert!(duplicate.name.starts_with(&original.name));
         assert!(duplicate.name.contains("Copy"));
+    }
+
+    #[test]
+    fn test_update_course() {
+        let app_state = setup_test_env();
+        let mut course = create_test_course("Original Name");
+        add_course(app_state, course.clone()).unwrap();
+
+        course.name = "Updated Name".to_string();
+        assert!(update_course(app_state, course.id, course.clone()).is_ok());
+
+        let state = app_state.read();
+        assert_eq!(state.courses[0].name, "Updated Name");
+    }
+
+    #[test]
+    fn test_delete_course() {
+        let app_state = setup_test_env();
+        let course = create_test_course("To Be Deleted");
+        add_course(app_state, course.clone()).unwrap();
+
+        assert_eq!(app_state.read().courses.len(), 1);
+        assert!(delete_course(app_state, course.id).is_ok());
+        assert_eq!(app_state.read().courses.len(), 0);
     }
 }

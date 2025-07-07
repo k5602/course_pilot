@@ -313,9 +313,9 @@ I welcome contributions! Here's how to get involved:
 ## 📈 Roadmap
 
 ### **Q3 2025: Interactive Learning**
-- [x] Enhanced UI component library with unified theme system
+- [x] Per-video note-taking with rich text editor
 - [ ] Interactive progress tracking with checkboxes and visual indicators
-- [ ] Per-video note-taking with rich text editor
+- [ ] UI Design with Dioxus-DaisyUI
 - [ ] Basic export functionality for notes
 
 ### **Q4 2025: Productivity Features**
@@ -357,6 +357,6 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 
 **Ready to transform your learning experience?** Download Course Pilot and turn your video chaos into structured success!
 
-[📥 Download Latest Release](https://github.com/course_pilot/course-pilot/releases) | [📖 Documentation](https://docs.course-pilot.dev) 
+[📥 Download Latest Release](https://github.com/course_pilot/course-pilot/releases) | [📖 Documentation](https://docs.course-pilot.dev)
 
 **Made With Insistence By Khaled**
