@@ -19,38 +19,7 @@ fn main() {
             <head>
               <title>Course Pilot</title>
               <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-              <style id="tailwind-css">
-                /* CSS will be injected here by the build script */
-              </style>
-              <script>
-                // Load CSS dynamically
-                document.addEventListener('DOMContentLoaded', function() {
-                  // Try to load from /assets first, then fall back to root
-                  const cssPaths = [
-                    '/assets/tailwind.out.css',
-                    '/tailwind.out.css',
-                    'tailwind.out.css',
-                    './assets/tailwind.out.css',
-                    './tailwind.out.css'
-                  ];
-                  
-                  function tryLoadCSS(path, index) {
-                    if (index >= cssPaths.length) {
-                      console.error('Failed to load Tailwind CSS: All paths exhausted');
-                      return;
-                    }
-                    
-                    const link = document.createElement('link');
-                    link.rel = 'stylesheet';
-                    link.href = cssPaths[index];
-                    link.onerror = () => tryLoadCSS(cssPaths, index + 1);
-                    link.onload = () => console.log('Successfully loaded CSS from:', cssPaths[index]);
-                    document.head.appendChild(link);
-                  }
-                  
-                  tryLoadCSS(cssPaths, 0);
-                });
-              </script>
+              <link rel="stylesheet" href="assets/tailwind.out.css">
               <link data-hot-reload data-dioxus-hot-reload>
             </head>
             <body class="min-h-screen bg-base-100">

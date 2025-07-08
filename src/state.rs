@@ -1,4 +1,4 @@
-//! Simplified State Management System
+//! State Management System
 //!
 //! This module provides safe state operations that prevent corruption
 //! by eliminating direct mutations and providing atomic updates.

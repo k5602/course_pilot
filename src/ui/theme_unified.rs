@@ -38,11 +38,9 @@ pub fn use_theme_context() -> ThemeContext {
 
 /// Call this at the root of your app to provide theme context
 pub fn provide_theme_context() {
-    let theme = use_signal(|| AppTheme::Lofi);
-
-
-
-    provide_context(ThemeContext { theme });
+    use_context_provider(|| ThemeContext {
+        theme: Signal::new(AppTheme::Lofi),
+    });
 }
 
 /// Theme toggle button (example usage)
@@ -55,7 +53,10 @@ pub fn ThemeToggleButton() -> Element {
         button {
             class: "btn btn-ghost btn-sm flex items-center gap-2",
             onclick: move |_| {
-                theme_ctx.theme.with_mut(|theme| *theme = theme.toggle());
+                theme_ctx.theme.with_mut(|theme| {
+            *theme = theme.toggle();
+            log::info!("🎨 Theme toggled to: {}", theme.as_str());
+        });
             },
 
             if is_lofi {

@@ -1,7 +1,6 @@
 use std::process::Command;
 use std::fs;
 use std::path::Path;
-use std::io::Write;
 
 fn main() {
     println!("cargo:rerun-if-changed=assets/tailwind.css");
@@ -19,7 +18,7 @@ fn main() {
     // Install dependencies if needed
     println!("🔄 Checking/installing npm dependencies...");
     let install_status = Command::new("npm")
-        .args(["install", "tailwindcss@latest", "postcss@latest", "autoprefixer@latest", "daisyui@latest"])
+        .arg("install")
         .current_dir(&current_dir)
         .status();
     
@@ -59,6 +58,11 @@ fn main() {
     let css_content = fs::read_to_string(&output_path).expect("Failed to read generated CSS");
     if css_content.trim().is_empty() {
         panic!("❌ Generated CSS file is empty");
+    } else {
+        println!("✅ CSS content generated. Head:");
+        // Print the first 500 characters of the CSS file
+        let head = css_content.chars().take(500).collect::<String>();
+        println!("{}", head);
     }
     
     println!("✅ Tailwind CSS build completed successfully at {:?}", output_path);

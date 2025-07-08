@@ -13,8 +13,8 @@ use dioxus_toast::ToastManager;
 
 // Layout constants
 #[allow(dead_code)]
-const SIDEBAR_WIDTH_DESKTOP: &str = "w-20";
-const SIDEBAR_WIDTH_EXPANDED: &str = "w-56";
+const SIDEBAR_WIDTH_DESKTOP: &str = "w-15";
+const SIDEBAR_WIDTH_EXPANDED: &str = "w-50";
 const SIDEBAR_BG: &str = "bg-base-200 bg-opacity-70 backdrop-blur-md border-r border-base-300";
 const MAIN_BG: &str = "bg-base-100";
 const CONTEXT_PANEL_WIDTH: &str = "w-0 md:w-96";
@@ -39,6 +39,18 @@ pub fn AppShell() -> Element {
         main_y.animate_to(0.0, AnimationConfig::new(AnimationMode::Tween(Tween::default())));
     });
 
+    use_effect(move || {
+        let theme = theme_ctx.theme.read();
+        let theme_name = theme.as_str().to_string();
+        log::info!("🎨 Applying theme: {}", theme_name);
+        spawn(async move {
+            let js = format!("console.log('Applying theme: {}'); document.documentElement.setAttribute('data-theme', '{}');", theme_name, theme_name);
+            if let Err(e) = document::eval(&js).await {
+                log::error!("Failed to apply theme: {:?}", e);
+            }
+        });
+    });
+
     let main_content_style = use_memo(move || {
         format!(
             "opacity: {}; transform: translateY({}px);",
@@ -47,13 +59,17 @@ pub fn AppShell() -> Element {
         )
     });
 
+    let main_class = format!(
+        "flex-1 flex flex-col overflow-hidden {}",
+        if is_hovered() { "ml-56" } else { "ml-20" }
+    );
+
     rsx! {
         div {
             class: "h-screen w-screen bg-base-100 font-sans transition-colors duration-300",
-            "data-theme": "{theme_ctx.theme.read().as_str()}",
             dioxus_toast::ToastFrame { manager: toast }
             div {
-                class: "h-full",
+                class: "h-full flex flex-row",
                 Sidebar { 
                     route: route, 
                     on_route_change: move |new_route| app_state.write().current_route = new_route, 
@@ -62,10 +78,10 @@ pub fn AppShell() -> Element {
                     on_hover: move |hover_state| is_hovered.set(hover_state)
                 }
                 div {
-                    class: "flex-1 flex flex-col overflow-hidden",
+                    class: "{main_class}",
                     style: "{main_content_style}",
                     TopBar {}
-                    MainContent { route: route, sidebar_hovered: is_hovered() }
+                    MainContent { route: route }
                 }
                 ContextualPanel {}
             }
@@ -105,17 +121,15 @@ fn Sidebar(route: Route, on_route_change: EventHandler<Route>, is_mobile_open: b
 
 // MainContent: The central workspace area
 #[component]
-fn MainContent(route: Route, sidebar_hovered: bool) -> Element {
+fn MainContent(route: Route) -> Element {
     let app_state = use_app_state();
     let panel_is_open = app_state.read().contextual_panel.is_open;
     
     let margin_right = if panel_is_open { "md:mr-96" } else { "md:mr-0" };
-    // On mobile, margin is 0. On desktop, it adjusts to the sidebar state.
-    let margin_left = if sidebar_hovered { "md:ml-56" } else { "md:ml-20" };
 
     rsx! {
         main {
-            class: "flex-1 {margin_left} {margin_right} overflow-y-auto {MAIN_BG} transition-all duration-300",
+            class: "flex-1 {margin_right} overflow-y-auto {MAIN_BG} transition-all duration-300",
             match route {
                 Route::Dashboard => rsx!(Dashboard {}),
                 Route::PlanView(course_id) => rsx!(PlanView { course_id: course_id }),
