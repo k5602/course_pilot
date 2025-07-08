@@ -4,18 +4,29 @@ _A scalable, modular, and future-proof roadmap for Dioxus Desktop UI & Backend I
 
 ---
 
-## **Dioxus UI Crates Used**
+## **Dioxus UI Crates & Dependencies**
 
-- **dioxus-daisyui:** For all core UI components, theming, layout, and advanced UI patterns (cards, buttons, progress bars, modals, dropdowns, tabs, accordions, etc.).
-- **dioxus-tailwindcss:** For utility-first, responsive styling and rapid iteration.
-- **dioxus-free-icons:** For Material Design iconography in navigation, actions, and context menus.
-- **dioxus-motion:** For purposeful, non-jarring presence/layout/hover animations.
-- **dioxus-toast:** For sleek, non-intrusive notifications and feedback.
-- **dioxus-sdk:** For state management, hooks, and platform utilities.
+### Core UI
+- **dioxus-daisyui v0.5.0+**: For all core UI components, theming, and layout patterns
+- **daisyui v5.0.46+**: For Tailwind CSS v4 plugin system and component styles
+- **@tailwindcss/cli v4.0.0-beta.7+**: For processing Tailwind CSS with plugin support
 
-_All UI components and flows should be built using the Dioxus ecosystem: DaisyUI for structure and theming, TailwindCSS for utility styling, Free Icons for visual cues, Motion for animation, Toast for feedback, and SDK for state/platform integration._
-## **must use**
-- **context7-mcp** must use context7 for all Dioxus hooks and component lifetimes and Crates  and all syntaxes that you aren't sure about.
+### Styling & Theming
+- **Tailwind CSS v4+**: For utility-first responsive design
+- **Autoprefixer**: For cross-browser compatibility
+
+### Icons & Interactions
+- **dioxus-free-icons**: For Material Design iconography
+- **dioxus-motion**: For animations and transitions
+- **dioxus-toast**: For user notifications and feedback
+
+### State Management
+- **dioxus-sdk**: For application state and hooks
+- **context7-mcp**: For Dioxus hooks and component lifetimes
+
+### Build & Tooling
+- **Node.js v22.16.0+**: Required for Tailwind CSS v4
+- **npm v10.9.2+**: For dependency management
 
 ---
 
@@ -166,30 +177,28 @@ _All UI components and flows should be built using the Dioxus ecosystem: DaisyUI
 ## Current Status & Blockers (as of last cargo check)
 
 ### ✅ Complete & Functional
-- TailwindCSS/DaisyUI configured and used in all UI
-- Theme context and switching (lofi/forest)
-- Three-panel layout (sidebar, main, contextual panel)
-- Sidebar navigation (Dioxus Free Icons, DaisyUI)
-- Dashboard, PlanView, NotesPanel: UI scaffolded, backend CRUD logic present
-- AppState loads from SQLite DB at startup, hooks update both DB and AppState
-- Loading skeletons and error handling in all major panels
-- Markdown rendering for notes (markdown-rs)
-- DaisyUI advanced patterns (dropdowns, context menus) present
-- Toast feedback (currently logs, not visual)
+- **Tailwind CSS v4 + DaisyUI v5** integration complete with proper build pipeline
+- Theme system with lofi (light) and night (dark) themes
+- Responsive three-panel layout (sidebar, main, contextual panel)
+- Sidebar navigation with Dioxus Free Icons and DaisyUI components
+- Dashboard, PlanView, and NotesPanel UI scaffolding
+- AppState management with SQLite persistence
+- Basic error handling and loading states
+- Markdown rendering for notes
+- DaisyUI component patterns integrated
+- Build system configured for development and production
 
-### ⚠️ Blockers / Failing Areas
-- ❌ **Build Fails:** Dioxus API usage errors, module import errors, and component signature issues
-- ❌ **Hooks:** Incorrect use of Dioxus hooks (`use_signal`, `use_context`, `use_memo`), component lifetimes, and tuple arguments
-- ❌ **Module Imports:** Some modules/files missing or misdeclared
-- ❌ **Icon Imports:** Some icon imports and DaisyUI component usage need correction
-- ❌ **No Visual Toasts:** Toasts are logged, not shown in the UI
-- ❌ **No Real Routing:** State-based routing only; no deep linking
+### ⚠️ Current Focus Areas
+- **UI Polish**: Refining component styling and theming
+- **Component Library**: Building out reusable UI components with DaisyUI
+- **State Management**: Implementing proper state management patterns
+- **Testing**: Adding unit and integration tests
 
-### 🟡 In Progress / Needs Fix
-- Systematically fix Dioxus API usage errors and module import issues
-- Confirm all modules exist and are properly declared
-- Use MCP/context7 to verify correct Dioxus hook/component syntax
-- Only proceed with implementation after confirming the right approach for each error
+### 🚧 In Progress
+- **Component Development**: Building out core UI components with DaisyUI
+- **State Management**: Implementing proper state management with Dioxus hooks
+- **Theming System**: Finalizing the theming implementation
+- **Documentation**: Updating documentation for the new setup
 
 ---
 
@@ -197,7 +206,18 @@ _All UI components and flows should be built using the Dioxus ecosystem: DaisyUI
 
 | Area                        | Status           |
 |-----------------------------|------------------|
-| Theming/Context             | ✅ Complete      |
+| **Build System**            | ✅ Complete      |
+| - Tailwind CSS v4           | ✅ Complete      |
+| - DaisyUI v5 Integration    | ✅ Complete      |
+| - Build Pipeline            | ✅ Complete      |
+| **Theming**                 | 🟡 In Progress   |
+| - Light/Dark Themes         | ✅ Complete      |
+| - Theme Switching           | ✅ Complete      |
+| - Component Theming         | 🟡 In Progress   |
+| **UI Components**           | 🚧 In Development|
+| - Core Components          | 🟡 In Progress   |
+| - Layout System            | ✅ Complete      |
+| - Navigation               | ✅ Complete      |
 | Layout (3-panel)            | ✅ Complete      |
 | Sidebar Navigation          | ✅ Complete      |
 | Dashboard                   | ✅ Functional (AppState/DB) |
@@ -209,7 +229,7 @@ _All UI components and flows should be built using the Dioxus ecosystem: DaisyUI
 | Toast Feedback              | ⚠️ Log only, not visual |
 | Loading/Error Handling      | ✅ Complete      |
 | Accessibility/Responsive    | ⚠️ Needs audit   |
-| Build/Run                   | ❌ Fails (see above) |
+| Build/Run                   | ✅Works|
 
 ---
 

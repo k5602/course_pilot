@@ -6,7 +6,6 @@ use dioxus_free_icons::icons::fa_solid_icons::{FaMoon, FaSun};
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum AppTheme {
     Lofi,
-    #[allow(dead_code)]
     Night,
 }
 
@@ -18,7 +17,6 @@ impl AppTheme {
         }
     }
 
-    #[allow(dead_code)]
     pub fn toggle(&self) -> AppTheme {
         match self {
             AppTheme::Lofi => AppTheme::Night,
@@ -51,16 +49,15 @@ pub fn provide_theme_context() {
 #[component]
 pub fn ThemeToggleButton() -> Element {
     let mut theme_ctx = use_theme_context();
-
-        let is_lofi = *theme_ctx.theme.read() == AppTheme::Lofi;
+    let is_lofi = *theme_ctx.theme.read() == AppTheme::Lofi;
 
     rsx! {
         button {
             class: "btn btn-ghost btn-sm flex items-center gap-2",
             onclick: move |_| {
-                let current_theme = *theme_ctx.theme.read();
-                theme_ctx.theme.set(current_theme.toggle());
+                theme_ctx.theme.with_mut(|theme| *theme = theme.toggle());
             },
+
             if is_lofi {
                 Icon { icon: FaSun, class: "w-5 h-5" }
                 "Light Theme"

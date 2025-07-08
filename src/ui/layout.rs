@@ -53,7 +53,7 @@ pub fn AppShell() -> Element {
             "data-theme": "{theme_ctx.theme.read().as_str()}",
             dioxus_toast::ToastFrame { manager: toast }
             div {
-                class: "flex flex-row h-full",
+                class: "h-full",
                 Sidebar { 
                     route: route, 
                     on_route_change: move |new_route| app_state.write().current_route = new_route, 
@@ -110,11 +110,12 @@ fn MainContent(route: Route, sidebar_hovered: bool) -> Element {
     let panel_is_open = app_state.read().contextual_panel.is_open;
     
     let margin_right = if panel_is_open { "md:mr-96" } else { "md:mr-0" };
+    // On mobile, margin is 0. On desktop, it adjusts to the sidebar state.
     let margin_left = if sidebar_hovered { "md:ml-56" } else { "md:ml-20" };
 
     rsx! {
         main {
-            class: "flex-1 ml-16 {margin_left} {margin_right} overflow-y-auto {MAIN_BG} transition-all duration-300",
+            class: "flex-1 {margin_left} {margin_right} overflow-y-auto {MAIN_BG} transition-all duration-300",
             match route {
                 Route::Dashboard => rsx!(Dashboard {}),
                 Route::PlanView(course_id) => rsx!(PlanView { course_id: course_id }),

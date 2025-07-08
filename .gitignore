@@ -1,71 +1,98 @@
+# Dioxus build artifacts
 /target
-/css/target
+/dist
+/build
+*.wasm
+*.wasm.d.ts
+
+# Dioxus component build artifacts
+src/ui/components/preview/
+src/ui/components/primitives/
+src/ui/components/*/docs.md
+src/ui/components/**/*.md
+
+# Rust artifacts
 **/*.rs.bk
+Cargo.lock
+*.rlib
+
+# CSS/Tailwind artifacts
+/css/target
+assets/tailwind.out.css
+*.css.map
+
+# Node.js/npm artifacts
 /node_modules
+node_modules/
+package-lock.json
+pnpm-lock.yaml
+yarn.lock
+*.npmrc
+
+# Environment files
+*.env
+*.env.local
+*.env.development
+*.env.production
+/.envrc
+/.direnv
+
+# IDE/Editor files
+/.idea
+/.vscode
+*.iml
+*.sublime-workspace
+*.sublime-project
+*.code-workspace
+
+# OS files
+*.DS_Store
+.DS_Store
+Thumbs.db
+
+# Temporary files
 **/*.swp
 **/*.swo
 **/*.tmp
 **/*.log
-Cargo.lock
-/.idea
-/.vscode
-node_modules
-*.iml
-*.DS_Store
-*.env
 *.old
 *.bak
 *.orig
 *.rej
-*.gz
-*.zip
-Readme.pdf
-*.tar
-*.tar.gz
-*.tgz
-*.7z
-*.rar
-*.sublime-workspace
-*.sublime-project
-*.code-workspace
+*.out
+*.test
+
+# Python cache (if using Python tooling)
 /.pytest_cache
 /.mypy_cache
 /.coverage
 /.cache
 /.eggs
 *.egg-info
+__pycache__/
+*.pyc
+*.pyo
+
+# Virtual environments
 /.venv
 venv/
-/.env
-/.envrc
-/.direnv
+env/
 
-# Dioxus/Component build artifacts
-src/ui/components/preview/
-src/ui/components/primitives/
-src/ui/components/*/docs.md
+# Archives
+*.gz
+*.zip
+*.tar
+*.tar.gz
+*.tgz
+*.7z
+*.rar
 
-# Editor/OS junk
-*.tmp
-*.bak
-*.swp
-*.swo
-*.DS_Store
+# Documentation
+Readme.pdf
 
-# Remove any leftover markdown docs in components
-src/ui/components/**/*.md
-
-# Remove any leftover build/test output
-*.out
-*.test
+# Test coverage
 *.coverage
 *.lcov
 
-# Remove npm/pnpm/yarn lock files if present
-package-lock.json
-pnpm-lock.yaml
-yarn.lock
+# Misc
 hover_car
-
-# Remove any leftover build artifacts
-.gitignore
