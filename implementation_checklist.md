@@ -25,7 +25,7 @@ A scalable, modular, and future-proof roadmap for Dioxus Desktop UI & Backend In
 ### State Management
 
 - dioxus-sdk: For application state and hooks
-- context7-mcp: For Dioxus hooks and component lifetimes
+- context7-mcp: understnding Documentation
 
 ### Build & Tooling
 
@@ -47,6 +47,8 @@ A scalable, modular, and future-proof roadmap for Dioxus Desktop UI & Backend In
   - DaisyUI lofi (light) and night (dark) themes via dioxus-daisyui.
   - Theme toggle in App shell, propagated via context/signal.
   - All DaisyUI components inherit theme instantly.
+  - Theme preference is persisted in a desktop-native config file (`theme_config.toml`), not browser localStorage.
+  - No JS interop is used for theme switching in desktop mode; all logic is Rust-native and future-proofed for web.
   - Scalability: Context-driven theme system, supporting future custom themes or branding.
 
 - [x] Establish AppState Signal/Context

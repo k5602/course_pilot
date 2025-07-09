@@ -1,12 +1,9 @@
 /** @type {import('tailwindcss').Config} */
 module.exports = {
-  content: [
-    "./src/**/*.rs",
-    "./assets/index.html",
-  ],
+  content: ["./src/**/*.rs", "./assets/index.html"],
   // In Tailwind v4, plugins are now imported in the CSS file
   plugins: [],
-  
+
   // DaisyUI configuration
   daisyui: {
     // DaisyUI themes - using lofi and night
@@ -22,20 +19,20 @@ module.exports = {
     // Show logs in console
     logs: true,
   },
-  
+
   // Core Tailwind CSS configuration
   corePlugins: {
     // Reset and base styles
     preflight: true,
   },
-  
+
   // Theme configuration
   theme: {
     extend: {},
   },
-  
+
   // Variant configuration
   variants: {
     extend: {},
   },
-};};
+};

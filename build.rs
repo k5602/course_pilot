@@ -70,6 +70,7 @@ fn main() {
     // Copy the CSS file to the target directory for development
     let target_dir = current_dir.join("target/debug/assets");
     fs::create_dir_all(&target_dir).expect("Failed to create target assets directory");
+
     
     let target_css = target_dir.join("tailwind.out.css");
     fs::copy(&output_path, &target_css).expect("Failed to copy CSS to target directory");

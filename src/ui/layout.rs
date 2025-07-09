@@ -9,8 +9,6 @@ use course_pilot::types::{ContextualPanelTab, Route};
 use dioxus::prelude::*;
 use dioxus_motion::prelude::*;
 
-use dioxus_toast::ToastManager;
-
 // Layout constants
 #[allow(dead_code)]
 const SIDEBAR_WIDTH_DESKTOP: &str = "w-15";
@@ -24,11 +22,9 @@ const CONTEXT_PANEL_BG: &str =
 // AppShell: The root layout for the application
 #[component]
 pub fn AppShell() -> Element {
-    let theme_signal = use_theme_context();
     let mut app_state = use_app_state();
     let route = app_state.read().current_route;
     let sidebar_open_mobile = app_state.read().sidebar_open_mobile;
-    let toast = use_context::<Signal<ToastManager>>();
     let mut is_hovered = use_signal(|| false);
 
     let mut main_opacity = use_motion(0.0f32);
@@ -44,15 +40,6 @@ pub fn AppShell() -> Element {
             AnimationConfig::new(AnimationMode::Tween(Tween::default())),
         );
     });
-
-    // Theme application is now centralized in AppRoot; no-op here to avoid redundant DOM updates.
-    // If additional per-layout logic is needed on theme change, add it here.
-    // use_effect intentionally left empty.
-
-    // Toggle theme handler
-    let on_toggle_theme = move |_: Event<()>| {
-        theme_unified::toggle_theme();
-    };
 
     let main_content_style = use_memo(move || {
         format!(
@@ -70,7 +57,7 @@ pub fn AppShell() -> Element {
     rsx! {
         div {
             class: "h-screen w-screen bg-base-100 font-sans transition-colors duration-300",
-            dioxus_toast::ToastFrame { manager: toast }
+            // REMOVED: The conflicting ToastFrame was here.
             div {
                 class: "h-full flex flex-row",
                 Sidebar {
@@ -131,7 +118,7 @@ fn Sidebar(
             onmouseleave: move |_| on_hover.call(false),
             SidebarNav { current_route: route, on_route_change: on_route_change, is_expanded: is_hovered || is_mobile_open }
             div { class: "flex-1" }
-            ThemeToggleButton {}
+            ThemeToggleButton { icon_only: !(is_hovered || is_mobile_open) }
         }
     }
 }
@@ -158,8 +145,8 @@ fn MainContent(route: Route) -> Element {
                     }
                 },
                 Route::AddCourse => rsx! { div { "Add Course UI - Not Implemented" } },
-                #[cfg(debug_assertions)]
-                Route::ToastTest => rsx! { crate::ui::components::toast_test::ToastTest {} },
+                #[allow(unreachable_patterns)]
+                _ => rsx! { div { "Not Implemented" } },
             }
         }
     }
