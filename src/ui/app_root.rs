@@ -8,7 +8,7 @@ use std::rc::Rc;
 use crate::ui::components::toast;
 use crate::ui::components::ToastContainer;
 use crate::ui::layout::AppShell;
-use crate::ui::theme_unified::{self, AppTheme, ThemeContext};
+use crate::ui::theme_unified::{AppTheme, ThemeContext};
 use course_pilot::storage::{
     get_notes_by_course, get_plan_by_course_id, init_db, init_notes_table, load_courses,
 };

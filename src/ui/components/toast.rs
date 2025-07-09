@@ -35,7 +35,7 @@ pub fn ToastContainer() -> Element {
 
     rsx! {
         div {
-            class: "fixed toast-bottom toast-right z-50 mt-6 mr-6 p-4 gap-2",
+            class: "toast toast-end toast-bottom fixed z-50 mt-6 mr-6 p-4 gap-2",
             DioxusToastFrame {
                 manager: manager.clone(),
             }

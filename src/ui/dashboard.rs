@@ -1,6 +1,8 @@
 use crate::ui::components::course_card::CourseCard;
+use crate::ui::components::toast::toast;
 use crate::ui::hooks::use_courses;
 use dioxus::prelude::*;
+use dioxus_motion::prelude::*;
 
 /// Dashboard: Responsive grid of CourseCards, wired to AppState/backend
 #[component]
@@ -12,6 +14,29 @@ pub fn Dashboard() -> Element {
     let has_error = false; // Set to true to simulate error
 
     let courses_guard = courses.read();
+
+    // Animate CourseCard presence/layout
+    let mut grid_opacity = use_motion(0.0f32);
+    let mut grid_y = use_motion(-24.0f32);
+
+    use_effect(move || {
+        grid_opacity.animate_to(
+            1.0,
+            AnimationConfig::new(AnimationMode::Tween(Tween::default())),
+        );
+        grid_y.animate_to(
+            0.0,
+            AnimationConfig::new(AnimationMode::Spring(Spring::default())),
+        );
+    });
+
+    let grid_style = use_memo(move || {
+        format!(
+            "opacity: {}; transform: translateY({}px);",
+            grid_opacity.get_value(),
+            grid_y.get_value()
+        )
+    });
 
     rsx! {
         section {
@@ -45,9 +70,10 @@ pub fn Dashboard() -> Element {
             } else {
                 div {
                     class: "grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6",
-                    {courses_guard.iter().map(|course| rsx! {
+                    style: "{grid_style}",
+                    {courses_guard.iter().enumerate().map(|(idx, course)| rsx! {
                         CourseCard {
-                            id: 0, // Use a unique integer if available, or 0 as placeholder
+                            id: idx, // Use index as unique id for now
                             title: course.name.clone(),
                             video_count: course.raw_titles.len(),
                             total_duration: course.structure.as_ref().map(|s| {
@@ -63,4 +89,9 @@ pub fn Dashboard() -> Element {
             }
         }
     }
+}
+
+// Example stub: show toast on course action (to be wired to real actions)
+fn _on_course_action(action: &str) {
+    toast::info(format!("Course action: {}", action));
 }

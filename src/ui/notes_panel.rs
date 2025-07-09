@@ -1,8 +1,11 @@
+use crate::ui::components::modal::Modal;
+use crate::ui::components::toast::toast;
 use dioxus::prelude::*;
-use dioxus_free_icons::Icon;
 use dioxus_free_icons::icons::fa_solid_icons::{
     FaBars, FaCirclePlay, FaDownload, FaEllipsis, FaFloppyDisk, FaPen, FaTrash,
 };
+use dioxus_free_icons::Icon;
+use dioxus_motion::prelude::*;
 
 // Use real Note type from backend/types
 use uuid::Uuid;
@@ -162,9 +165,36 @@ fn NoteCard(props: NoteCardProps) -> Element {
     };
     let rendered_html = course_pilot::storage::notes::render_note_html(&note_for_render);
 
+    // Animation for note card presence
+    let mut card_opacity = use_motion(0.0f32);
+    let mut card_y = use_motion(12.0f32);
+
+    use_effect(move || {
+        card_opacity.animate_to(
+            1.0,
+            AnimationConfig::new(AnimationMode::Tween(Tween::default())),
+        );
+        card_y.animate_to(
+            0.0,
+            AnimationConfig::new(AnimationMode::Spring(Spring::default())),
+        );
+    });
+
+    let card_style = use_memo(move || {
+        format!(
+            "opacity: {}; transform: translateY({}px); transition: opacity 0.3s, transform 0.3s;",
+            card_opacity.get_value(),
+            card_y.get_value()
+        )
+    });
+
+    // Modal state for delete confirmation
+    let mut show_delete_modal = use_signal(|| false);
+
     rsx! {
         div {
             class: "card bg-base-200 shadow-sm p-4 relative",
+            style: "{card_style}",
             // Dropdown/context menu for note actions
             div {
                 class: "absolute top-2 right-2 dropdown dropdown-end z-10",
@@ -179,7 +209,7 @@ fn NoteCard(props: NoteCardProps) -> Element {
                     li {
                         button {
                             class: "flex items-center gap-2",
-                            // on_click: move |_| { /* export note logic */ },
+                            onclick: move |_| toast::info("Exported note (stub)"),
                             Icon { icon: FaDownload, class: "w-4 h-4" }
                             "Export"
                         }
@@ -187,7 +217,7 @@ fn NoteCard(props: NoteCardProps) -> Element {
                     li {
                         button {
                             class: "flex items-center gap-2",
-                            // on_click: move |_| { /* edit note logic */ },
+                            onclick: move |_| toast::info("Edit note (stub)"),
                             Icon { icon: FaPen, class: "w-4 h-4" }
                             "Edit"
                         }
@@ -195,7 +225,7 @@ fn NoteCard(props: NoteCardProps) -> Element {
                     li {
                         button {
                             class: "flex items-center gap-2 text-error",
-                            // on_click: move |_| { /* delete note logic */ },
+                            onclick: move |_| show_delete_modal.set(true),
                             Icon { icon: FaTrash, class: "w-4 h-4" }
                             "Delete"
                         }
@@ -222,6 +252,28 @@ fn NoteCard(props: NoteCardProps) -> Element {
             div {
                 class: "text-xs text-base-content/40 mt-1",
                 "Updated: {props.updated_at}"
+            }
+            // Modal for delete confirmation
+            Modal {
+                open: show_delete_modal(),
+                on_close: move |_| show_delete_modal.set(false),
+                title: Some("Delete Note".to_string()),
+                actions: Some(rsx! {
+                    button {
+                        class: "btn btn-error btn-sm",
+                        onclick: move |_| {
+                            show_delete_modal.set(false);
+                            toast::success("Note deleted (stub)");
+                        },
+                        "Delete"
+                    }
+                    button {
+                        class: "btn btn-ghost btn-sm",
+                        onclick: move |_| show_delete_modal.set(false),
+                        "Cancel"
+                    }
+                }),
+                div { "Are you sure you want to delete this note? This action cannot be undone." }
             }
         }
     }

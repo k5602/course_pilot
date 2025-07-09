@@ -120,6 +120,10 @@ fn SidebarNavItem(
     is_expanded: bool,
     on_click: EventHandler<MouseEvent>,
 ) -> Element {
+    use dioxus_motion::prelude::*;
+    let mut scale = use_motion(1.0f32);
+    let mut bg_opacity = use_motion(if active { 1.0 } else { 0.0 });
+
     let base_class = "flex items-center gap-4 px-4 py-2 rounded-lg cursor-pointer transition-colors duration-200";
     let active_class = if active {
         "bg-primary text-primary-content"
@@ -127,11 +131,44 @@ fn SidebarNavItem(
         "hover:bg-base-300"
     };
 
+    use_effect(move || {
+        if active {
+            scale.animate_to(
+                1.05,
+                AnimationConfig::new(AnimationMode::Spring(Spring::default())),
+            );
+            bg_opacity.animate_to(
+                1.0,
+                AnimationConfig::new(AnimationMode::Tween(Tween::default())),
+            );
+        } else {
+            scale.animate_to(
+                1.0,
+                AnimationConfig::new(AnimationMode::Spring(Spring::default())),
+            );
+            bg_opacity.animate_to(
+                0.0,
+                AnimationConfig::new(AnimationMode::Tween(Tween::default())),
+            );
+        }
+    });
+
+    let style = use_memo(move || {
+        format!(
+            "transform: scale({}); background-color: rgba(var(--p), {}); transition: transform 0.2s, background-color 0.2s;",
+            scale.get_value(),
+            bg_opacity.get_value()
+        )
+    });
+
     rsx! {
         li {
             class: "w-full",
             button {
                 class: "{base_class} {active_class} w-full",
+                style: "{style}",
+                onmouseenter: move |_| scale.animate_to(1.08, AnimationConfig::new(AnimationMode::Spring(Spring::default()))),
+                onmouseleave: move |_| if !active { scale.animate_to(1.0, AnimationConfig::new(AnimationMode::Spring(Spring::default()))) },
                 onclick: move |evt| on_click.call(evt),
                 {icon}
                 if is_expanded {

@@ -19,8 +19,8 @@ pub enum AppTheme {
 impl AppTheme {
     pub fn as_str(&self) -> &'static str {
         match self {
-            AppTheme::Corporate => "corporate",
-            AppTheme::Business => "business",
+            AppTheme::Corporate => "Light",
+            AppTheme::Business => "Dark",
         }
     }
 

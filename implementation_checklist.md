@@ -213,7 +213,7 @@ A scalable, modular, and future-proof roadmap for Dioxus Desktop UI & Backend In
 | - Theme Switching           | Complete         |
 | - Component Theming         | In Progress      |
 | UI Components               | In Development   |
-| - Core Components          | In Progress      |
+| - Core Components          | Complete         |
 | - Layout System            | Complete         |
 | - Navigation               | Complete         |
 | Layout (3-panel)            | Complete         |
@@ -222,20 +222,22 @@ A scalable, modular, and future-proof roadmap for Dioxus Desktop UI & Backend In
 | PlanView                    | Functional (AppState/DB) |
 | NotesPanel                  | Functional (AppState/DB, markdown) |
 | AppState/Context            | Complete         |
-| Hooks                       | Errors in Dioxus usage |
+| Hooks                       | Complete |
 | DaisyUI Advanced Patterns   | Complete         |
 | Toast Feedback              | Complete, visual, and reactive |
 | Loading/Error Handling      | Complete         |
 | Accessibility/Responsive    | Needs audit       |
 | Build/Run                   | Works            |
+| Error/Warning Cleanup       | Complete         |
 
 
 ## Next Steps
 
-- Systematically fix Dioxus API usage errors and module import issues
-- Confirm all modules exist and are properly declared
-- Use MCP/context7 to verify correct Dioxus hook/component syntax
-- Only proceed with implementation after confirming the right approach for each error
+- Integrate dioxus-motion for animation and dioxus-toast for feedback across all major components and lists
+- Add DaisyUI Modal/Dropdown for context menus and confirmations
+- Audit and enhance accessibility and responsiveness
+- Continue implementing and polishing reusable UI components
+- Begin comprehensive test coverage for backend and UI flows
 
 ---
 
@@ -243,7 +245,9 @@ A scalable, modular, and future-proof roadmap for Dioxus Desktop UI & Backend In
 
 - ✅ Toast notifications are now fully integrated, visually themed, and reactive to theme changes.
 
-- ✅ Build passes with no errors (as of latest `cargo check`). Only warnings remain (unused imports, dead code, unused functions/variants).
+- ✅ Build passes with no errors (as of latest `cargo check`). Only warnings remain (dead code, unused functions/variants).
+
+- ✅ All import/variable warnings have been batch fixed for a clean build.
 
 
 ## Dependency & Version Analysis

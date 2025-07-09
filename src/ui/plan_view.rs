@@ -1,8 +1,10 @@
+use crate::ui::components::toast::toast;
 use crate::ui::hooks::use_plan;
 use course_pilot::types;
 use dioxus::prelude::*;
-use dioxus_free_icons::Icon;
 use dioxus_free_icons::icons::fa_solid_icons::{FaCheckDouble, FaSquare};
+use dioxus_free_icons::Icon;
+use dioxus_motion::prelude::*;
 use uuid::Uuid;
 
 /// PlanView: Checklist of modules and sections with progress and session controls, wired to AppState/backend
@@ -15,6 +17,7 @@ pub fn PlanView(course_id: Uuid) -> Element {
     let has_error = false; // Set to true to simulate error
 
     if has_error {
+        toast::error("Failed to load study plan. Please try again.");
         return rsx! {
             section {
                 class: "w-full max-w-3xl mx-auto px-4 py-8 flex flex-col items-center justify-center",
@@ -24,6 +27,7 @@ pub fn PlanView(course_id: Uuid) -> Element {
     }
 
     if is_loading {
+        toast::info("Loading study plan...");
         return rsx! {
             section {
                 class: "w-full max-w-3xl mx-auto px-4 py-8",
@@ -56,6 +60,29 @@ pub fn PlanView(course_id: Uuid) -> Element {
         0
     };
 
+    // Animate checklist presence
+    let mut list_opacity = use_motion(0.0f32);
+    let mut list_y = use_motion(-16.0f32);
+
+    use_effect(move || {
+        list_opacity.animate_to(
+            1.0,
+            AnimationConfig::new(AnimationMode::Tween(Tween::default())),
+        );
+        list_y.animate_to(
+            0.0,
+            AnimationConfig::new(AnimationMode::Spring(Spring::default())),
+        );
+    });
+
+    let list_style = use_memo(move || {
+        format!(
+            "opacity: {}; transform: translateY({}px);",
+            list_opacity.get_value(),
+            list_y.get_value()
+        )
+    });
+
     rsx! {
         section {
             class: "w-full max-w-3xl mx-auto px-4 py-8",
@@ -71,8 +98,9 @@ pub fn PlanView(course_id: Uuid) -> Element {
             // Checklist
             ul {
                 class: "space-y-4",
-                {plan.items.iter().enumerate().map(|(_i, item)| rsx! {
-                    PlanChecklistItem { item: item.clone() }
+                style: "{list_style}",
+                {plan.items.iter().enumerate().map(|(idx, item)| rsx! {
+                    PlanChecklistItem { item: item.clone(), idx }
                 })}
             }
         }
@@ -81,7 +109,7 @@ pub fn PlanView(course_id: Uuid) -> Element {
 
 /// PlanChecklistItem: Single checklist item for a plan section/video
 #[component]
-fn PlanChecklistItem(item: types::PlanItem) -> Element {
+fn PlanChecklistItem(item: types::PlanItem, idx: usize) -> Element {
     let check_icon = if item.completed {
         rsx! {
             Icon { icon: FaCheckDouble, class: "w-5 h-5 text-success" }
@@ -98,9 +126,33 @@ fn PlanChecklistItem(item: types::PlanItem) -> Element {
         "text-base-content"
     };
 
+    // Animate checklist item presence/completion
+    let mut item_opacity = use_motion(0.0f32);
+    let mut item_x = use_motion(-12.0f32);
+
+    use_effect(move || {
+        item_opacity.animate_to(
+            1.0,
+            AnimationConfig::new(AnimationMode::Tween(Tween::default())),
+        );
+        item_x.animate_to(
+            0.0,
+            AnimationConfig::new(AnimationMode::Spring(Spring::default())),
+        );
+    });
+
+    let item_style = use_memo(move || {
+        format!(
+            "opacity: {}; transform: translateX({}px); transition: opacity 0.3s, transform 0.3s;",
+            item_opacity.get_value(),
+            item_x.get_value()
+        )
+    });
+
     rsx! {
         li {
             class: "flex items-center gap-3 px-2 py-2 rounded hover:bg-base-300 transition-colors cursor-pointer",
+            style: "{item_style}",
             // on_click: move |_| { ...toggle complete... },
             {check_icon}
             span { class: "flex-1 text-sm {text_classes}", "{item.module_title} / {item.section_title}" }

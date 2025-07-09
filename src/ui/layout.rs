@@ -4,7 +4,7 @@ use crate::ui::dashboard::Dashboard;
 use crate::ui::hooks::use_app_state;
 use crate::ui::notes_panel::NotesPanel;
 use crate::ui::plan_view::PlanView;
-use crate::ui::theme_unified::{self, use_theme_context, ThemeToggleButton};
+use crate::ui::theme_unified::ThemeToggleButton;
 use course_pilot::types::{ContextualPanelTab, Route};
 use dioxus::prelude::*;
 use dioxus_motion::prelude::*;
