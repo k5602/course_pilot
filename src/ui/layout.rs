@@ -1,11 +1,11 @@
 use crate::ui::components::sidebar_nav::SidebarNav;
 use crate::ui::components::top_bar::TopBar;
 use crate::ui::dashboard::Dashboard;
+use crate::ui::hooks::use_app_state;
 use crate::ui::notes_panel::NotesPanel;
 use crate::ui::plan_view::PlanView;
+use crate::ui::theme_unified::{self, use_theme_context, ThemeToggleButton};
 use course_pilot::types::{ContextualPanelTab, Route};
-use crate::ui::theme_unified::{use_theme_context, ThemeToggleButton};
-use crate::ui::hooks::use_app_state;
 use dioxus::prelude::*;
 use dioxus_motion::prelude::*;
 
@@ -24,7 +24,7 @@ const CONTEXT_PANEL_BG: &str =
 // AppShell: The root layout for the application
 #[component]
 pub fn AppShell() -> Element {
-    let theme_ctx = use_theme_context();
+    let theme_signal = use_theme_context();
     let mut app_state = use_app_state();
     let route = app_state.read().current_route;
     let sidebar_open_mobile = app_state.read().sidebar_open_mobile;
@@ -35,21 +35,24 @@ pub fn AppShell() -> Element {
     let mut main_y = use_motion(-16.0f32);
 
     use_effect(move || {
-        main_opacity.animate_to(1.0, AnimationConfig::new(AnimationMode::Tween(Tween::default())));
-        main_y.animate_to(0.0, AnimationConfig::new(AnimationMode::Tween(Tween::default())));
+        main_opacity.animate_to(
+            1.0,
+            AnimationConfig::new(AnimationMode::Tween(Tween::default())),
+        );
+        main_y.animate_to(
+            0.0,
+            AnimationConfig::new(AnimationMode::Tween(Tween::default())),
+        );
     });
 
-    use_effect(move || {
-        let theme = theme_ctx.theme.read();
-        let theme_name = theme.as_str().to_string();
-        log::info!("🎨 Applying theme: {}", theme_name);
-        spawn(async move {
-            let js = format!("console.log('Applying theme: {}'); document.documentElement.setAttribute('data-theme', '{}');", theme_name, theme_name);
-            if let Err(e) = document::eval(&js).await {
-                log::error!("Failed to apply theme: {:?}", e);
-            }
-        });
-    });
+    // Theme application is now centralized in AppRoot; no-op here to avoid redundant DOM updates.
+    // If additional per-layout logic is needed on theme change, add it here.
+    // use_effect intentionally left empty.
+
+    // Toggle theme handler
+    let on_toggle_theme = move |_: Event<()>| {
+        theme_unified::toggle_theme();
+    };
 
     let main_content_style = use_memo(move || {
         format!(
@@ -70,9 +73,9 @@ pub fn AppShell() -> Element {
             dioxus_toast::ToastFrame { manager: toast }
             div {
                 class: "h-full flex flex-row",
-                Sidebar { 
-                    route: route, 
-                    on_route_change: move |new_route| app_state.write().current_route = new_route, 
+                Sidebar {
+                    route: route,
+                    on_route_change: move |new_route| app_state.write().current_route = new_route,
                     is_mobile_open: sidebar_open_mobile,
                     is_hovered: is_hovered(),
                     on_hover: move |hover_state| is_hovered.set(hover_state)
@@ -91,12 +94,26 @@ pub fn AppShell() -> Element {
 
 // Sidebar: Navigation and theme toggle
 #[component]
-fn Sidebar(route: Route, on_route_change: EventHandler<Route>, is_mobile_open: bool, is_hovered: bool, on_hover: EventHandler<bool>) -> Element {
+fn Sidebar(
+    route: Route,
+    on_route_change: EventHandler<Route>,
+    is_mobile_open: bool,
+    is_hovered: bool,
+    on_hover: EventHandler<bool>,
+) -> Element {
     let mut app_state = use_app_state();
 
-    let sidebar_width = if is_hovered { SIDEBAR_WIDTH_EXPANDED } else { SIDEBAR_WIDTH_DESKTOP };
-    
-    let mobile_translate = if is_mobile_open { "translate-x-0" } else { "-translate-x-full" };
+    let sidebar_width = if is_hovered {
+        SIDEBAR_WIDTH_EXPANDED
+    } else {
+        SIDEBAR_WIDTH_DESKTOP
+    };
+
+    let mobile_translate = if is_mobile_open {
+        "translate-x-0"
+    } else {
+        "-translate-x-full"
+    };
 
     rsx! {
         // Backdrop for mobile
@@ -124,7 +141,7 @@ fn Sidebar(route: Route, on_route_change: EventHandler<Route>, is_mobile_open: b
 fn MainContent(route: Route) -> Element {
     let app_state = use_app_state();
     let panel_is_open = app_state.read().contextual_panel.is_open;
-    
+
     let margin_right = if panel_is_open { "md:mr-96" } else { "md:mr-0" };
 
     rsx! {
@@ -141,6 +158,8 @@ fn MainContent(route: Route) -> Element {
                     }
                 },
                 Route::AddCourse => rsx! { div { "Add Course UI - Not Implemented" } },
+                #[cfg(debug_assertions)]
+                Route::ToastTest => rsx! { crate::ui::components::toast_test::ToastTest {} },
             }
         }
     }
@@ -176,14 +195,14 @@ fn ContextualPanel() -> Element {
             class: "{container_class}",
             style: "{panel_style}",
             div { role: "tablist", class: "tabs tabs-boxed p-2 bg-transparent",
-                a { 
-                    role: "tab", 
+                a {
+                    role: "tab",
                     class: if active_tab == ContextualPanelTab::Notes { "tab tab-active" } else { "tab" },
                     onclick: move |_| app_state.write().contextual_panel.active_tab = ContextualPanelTab::Notes,
                     "Notes"
                 }
-                a { 
-                    role: "tab", 
+                a {
+                    role: "tab",
                     class: if active_tab == ContextualPanelTab::Player { "tab tab-active" } else { "tab" },
                     onclick: move |_| app_state.write().contextual_panel.active_tab = ContextualPanelTab::Player,
                     "Player"

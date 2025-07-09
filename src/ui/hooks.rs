@@ -11,6 +11,9 @@ use rusqlite::Connection;
 use std::rc::Rc;
 use uuid::Uuid;
 
+// Re-export for convenience
+pub use crate::ui::components::toast::ToastVariant;
+
 // --- AppState Hook ---
 
 /// Provides global access to the AppState signal.
@@ -57,11 +60,11 @@ pub fn use_add_course() -> Rc<dyn FnMut(Course) -> Result<()>> {
         match database::save_course(&conn, &course) {
             Ok(_) => {
                 state.courses.push(course);
-                show_toast("Course added", ToastKind::Success);
+                show_toast("Course added", ToastVariant::Success);
                 Ok(())
             }
             Err(e) => {
-                show_toast("Failed to add course", ToastKind::Error);
+                show_toast("Failed to add course", ToastVariant::Error);
                 Err(e.into())
             }
         }
@@ -100,11 +103,11 @@ pub fn use_save_note() -> Rc<dyn FnMut(Note) -> Result<()>> {
                     if let Some(existing) = state.notes.iter_mut().find(|n| n.id == note.id) {
                         *existing = note;
                     }
-                    show_toast("Note updated", ToastKind::Success);
+                    show_toast("Note updated", ToastVariant::Success);
                     Ok(())
                 }
                 Err(e) => {
-                    show_toast("Failed to update note", ToastKind::Error);
+                    show_toast("Failed to update note", ToastVariant::Error);
                     Err(e.into())
                 }
             }
@@ -113,11 +116,11 @@ pub fn use_save_note() -> Rc<dyn FnMut(Note) -> Result<()>> {
                 Ok(_) => {
                     let mut state = app_state.write();
                     state.notes.push(note);
-                    show_toast("Note added", ToastKind::Success);
+                    show_toast("Note added", ToastVariant::Success);
                     Ok(())
                 }
                 Err(e) => {
-                    show_toast("Failed to add note", ToastKind::Error);
+                    show_toast("Failed to add note", ToastVariant::Error);
                     Err(e.into())
                 }
             }
@@ -137,7 +140,7 @@ pub fn use_delete_note() -> Rc<dyn FnMut(Uuid) -> Result<()>> {
         let before = state.notes.len();
         state.notes.retain(|n| n.id != note_id);
         if state.notes.len() < before {
-            show_toast("Note deleted", ToastKind::Success);
+            show_toast("Note deleted", ToastVariant::Success);
         }
         Ok(())
     })
@@ -166,42 +169,23 @@ pub fn use_save_plan() -> Rc<dyn FnMut(Plan) -> Result<()>> {
             } else {
                 state.plans.push(plan);
             }
-            show_toast("Plan saved", ToastKind::Success);
+            show_toast("Plan saved", ToastVariant::Success);
             Ok(())
         }
         Err(e) => {
-            show_toast("Failed to save plan", ToastKind::Error);
+            show_toast("Failed to save plan", ToastVariant::Error);
             Err(e.into())
         }
     })
 }
 
-// --- Utility: Toast Feedback (placeholder) ---
+// --- Utility: Toast Feedback ---
 
-/// Shows a toast notification using dioxus-toast (or fallback log).
-#[allow(dead_code)]
-pub fn use_show_toast() -> Rc<dyn Fn(&str, ToastKind)> {
-    // Replace this with actual dioxus-toast integration.
-    Rc::new(move |msg: &str, kind: ToastKind| {
-        // Example: dioxus_toast::show(msg, kind);
-        // For now, just log to console.
-        let prefix = match kind {
-            ToastKind::Success => "[SUCCESS]",
-            ToastKind::Error => "[ERROR]",
-            ToastKind::Info => "[INFO]",
-            ToastKind::Warning => "[WARN]",
-        };
-        log::info!("{} {}", prefix, msg);
+/// Shows a toast notification using dioxus-toast.
+pub fn use_show_toast() -> Rc<dyn Fn(&str, ToastVariant)> {
+    Rc::new(move |message: &str, variant: ToastVariant| {
+        crate::ui::components::toast::show_toast(message, variant);
     })
-}
-
-#[derive(Clone, Copy)]
-#[allow(dead_code)]
-pub enum ToastKind {
-    Success,
-    Error,
-    Info,
-    Warning,
 }
 
 // --- End of hooks.rs ---

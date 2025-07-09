@@ -142,6 +142,8 @@ pub enum Route {
     AddCourse,
     PlanView(Uuid),
     Settings,
+    #[cfg(debug_assertions)]
+    ToastTest,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]

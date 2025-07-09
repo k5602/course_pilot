@@ -7,9 +7,9 @@ A scalable, modular, and future-proof roadmap for Dioxus Desktop UI & Backend In
 
 ### Core UI
 
-- dioxus-daisyui v0.5.0+: For all core UI components, theming, and layout patterns
+- dioxus-daisyui v0.8.0+: For all core UI components, theming, and layout patterns
 - daisyui v5.0.46+: For Tailwind CSS v4 plugin system and component styles
-- @tailwindcss/cli v4.0.0-beta.7+: For processing Tailwind CSS with plugin support
+- @tailwindcss/cli v4.1.11+: For processing Tailwind CSS with plugin support
 
 ### Styling & Theming
 
@@ -222,7 +222,7 @@ A scalable, modular, and future-proof roadmap for Dioxus Desktop UI & Backend In
 | AppState/Context            | Complete         |
 | Hooks                       | Errors in Dioxus usage |
 | DaisyUI Advanced Patterns   | Complete         |
-| Toast Feedback              | Log only, not visual |
+| Toast Feedback              | Complete, visual, and reactive |
 | Loading/Error Handling      | Complete         |
 | Accessibility/Responsive    | Needs audit       |
 | Build/Run                   | Works            |
@@ -234,5 +234,13 @@ A scalable, modular, and future-proof roadmap for Dioxus Desktop UI & Backend In
 - Confirm all modules exist and are properly declared
 - Use MCP/context7 to verify correct Dioxus hook/component syntax
 - Only proceed with implementation after confirming the right approach for each error
+
+---
+
+## Recent Updates
+
+- ✅ Toast notifications are now fully integrated, visually themed, and reactive to theme changes.
+- ✅ The "Test Toasts" button has been removed from the sidebar navigation for a cleaner UI.
+- ✅ Checklist and plan updated to reflect completed toast integration and sidebar cleanup.
 
 You are at the “fix build errors and polish” stage of Phase 1. Once the build passes, you’ll have a fully functional, persistent, and production-ready foundation.

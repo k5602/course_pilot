@@ -1,28 +1,48 @@
-use dioxus::prelude::*;
-use dioxus_free_icons::Icon;
-use dioxus_free_icons::icons::fa_solid_icons::{FaBook, FaGauge, FaGear};
 use course_pilot::types::Route;
+use dioxus::prelude::*;
+use dioxus_free_icons::icons::fa_solid_icons::{FaBook, FaBug, FaGauge, FaGear};
+use dioxus_free_icons::Icon;
 use uuid::Uuid;
 
-const NAV_ITEMS: [NavItem; 3] = [
-    NavItem {
-        icon: IconData::Dashboard,
-        label: "Dashboard",
-        route: Route::Dashboard,
-    },
-    NavItem {
-        icon: IconData::LibraryBooks,
-        label: "All Courses",
-        // TODO: This should lead to a dedicated 'all courses' view, not a specific plan.
-        // For now, we'll use a placeholder ID. A better approach would be a new Route variant.
-        route: Route::PlanView(Uuid::nil()),
-    },
-    NavItem {
-        icon: IconData::Settings,
-        label: "Settings",
-        route: Route::Settings,
-    },
-];
+const NAV_ITEMS: &[NavItem] = if cfg!(debug_assertions) {
+    &[
+        NavItem {
+            icon: IconData::Dashboard,
+            label: "Dashboard",
+            route: Route::Dashboard,
+        },
+        NavItem {
+            icon: IconData::LibraryBooks,
+            label: "All Courses",
+            // TODO: This should lead to a dedicated 'all courses' view, not a specific plan.
+            // For now, we'll use a placeholder ID. A better approach would be a new Route variant.
+            route: Route::PlanView(Uuid::nil()),
+        },
+        NavItem {
+            icon: IconData::Settings,
+            label: "Settings",
+            route: Route::Settings,
+        },
+    ]
+} else {
+    &[
+        NavItem {
+            icon: IconData::Dashboard,
+            label: "Dashboard",
+            route: Route::Dashboard,
+        },
+        NavItem {
+            icon: IconData::LibraryBooks,
+            label: "All Courses",
+            route: Route::PlanView(Uuid::nil()),
+        },
+        NavItem {
+            icon: IconData::Settings,
+            label: "Settings",
+            route: Route::Settings,
+        },
+    ]
+};
 
 /// SidebarNav: Vertical navigation for the sidebar.
 /// - Icon-only by default, expands to show labels on hover (desktop)
@@ -68,11 +88,13 @@ enum IconData {
     Dashboard,
     LibraryBooks,
     Settings,
+    Bug,
 }
 
 impl IconData {
     fn render(self) -> Element {
         match self {
+            IconData::Bug => rsx! { Icon { icon: FaBug, width: 20, height: 20 } },
             IconData::Dashboard => rsx!(Icon {
                 icon: FaGauge,
                 class: "w-6 h-6",
