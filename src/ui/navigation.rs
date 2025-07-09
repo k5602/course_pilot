@@ -46,19 +46,19 @@ pub fn Navigation() -> Element {
         nav {
             class: "sidebar-nav flex flex-col gap-2",
             ul {
-                {nav_items.iter().enumerate().map(|(idx, item)| {
+                {nav_items.iter().cloned().enumerate().map(|(idx, item)| {
                     let label = item.label;
                     let icon = item.icon;
                     let sidebar_open = sidebar_open.clone();
+                    let route = item.route.clone();
                     rsx! {
                         li {
                             key: "{idx}",
                             button {
                                 class: "sidebar-link flex items-center gap-2 px-4 py-2 rounded hover:bg-base-200 transition-colors",
                                 onclick: move |_| {
-                                    // Use app state to change route
-                                    // Example: let mut app_state = use_app_state();
-                                    // app_state.write().current_route = route.clone();
+                                    let mut app_state = crate::ui::hooks::use_app_state();
+                                    app_state.write().current_route = route.clone();
                                 },
                                 // Render icon if present
                                 {icon.map(|icon| rsx!(

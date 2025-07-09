@@ -6,8 +6,8 @@ module.exports = {
 
   // DaisyUI configuration
   daisyui: {
-    // DaisyUI themes - using lofi and night
-    themes: ["lofi", "night"],
+    // DaisyUI themes - using corporate and business
+    themes: ["corporate", "business"],
     // We will control the theme through the data-theme attribute in Dioxus
     darkTheme: false,
     // Enable DaisyUI base styles
