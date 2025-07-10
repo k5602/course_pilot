@@ -10,6 +10,9 @@ doctest = false
 dioxus-daisyui = "*"
 dioxus-tailwindcss = { version = "=0.8.0" }
 
+[dev-dependencies]
+dioxus-ssr = "0.6"
+
 [dependencies]
 # Core UI framework
 dioxus = { version = "0.6.3", features = ["desktop", "macro", "hooks"] }

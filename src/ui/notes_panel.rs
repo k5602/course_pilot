@@ -1,8 +1,10 @@
-use crate::ui::components::modal::Modal;
+use crate::ui::components::modal_confirmation::{
+    ActionMenu, AdvancedTabs, Badge, DropdownItem, ModalConfirmation, TabData,
+};
 use crate::ui::components::toast::toast;
 use dioxus::prelude::*;
 use dioxus_free_icons::icons::fa_solid_icons::{
-    FaBars, FaCirclePlay, FaDownload, FaEllipsis, FaFloppyDisk, FaPen, FaTrash,
+    FaBars, FaCirclePlay, FaDownload, FaFloppyDisk, FaPen, FaTrash,
 };
 use dioxus_free_icons::Icon;
 use dioxus_motion::prelude::*;
@@ -13,9 +15,6 @@ use uuid::Uuid;
 /// NotesPanel: Contextual panel with tabs for Notes and Player
 #[component]
 pub fn NotesPanel() -> Element {
-    // Tab state: 0 = Notes, 1 = Player
-    let mut tab = use_signal(|| 0);
-
     // For demo, use a fixed course_id and video_id (replace with router param or prop)
     let course_id = Uuid::nil();
     let video_id = None;
@@ -49,33 +48,31 @@ pub fn NotesPanel() -> Element {
         };
     }
 
+    // AdvancedTabs for Notes/Player
+    let tabs = vec![
+        crate::ui::components::modal_confirmation::TabData {
+            label: "Notes".to_string(),
+            content: rsx!(NotesTab {
+                course_id,
+                video_id
+            }),
+            closable: false,
+        },
+        crate::ui::components::modal_confirmation::TabData {
+            label: "Player".to_string(),
+            content: rsx!(PlayerTab {}),
+            closable: false,
+        },
+    ];
+    let mut selected = use_signal(|| 0);
+
     rsx! {
         div {
             class: "flex flex-col h-full w-full",
-            // Tabs
-            div {
-                class: "tabs tabs-boxed flex gap-2 p-2 bg-base-100/80",
-                button {
-                    class: if *tab.read() == 0 { "tab tab-active flex items-center gap-1" } else { "tab flex items-center gap-1" },
-                    onclick: move |_| tab.set(0),
-                    Icon { icon: FaBars, class: "w-5 h-5" },
-                    "Notes"
-                }
-                button {
-                    class: if *tab.read() == 1 { "tab tab-active flex items-center gap-1" } else { "tab flex items-center gap-1" },
-                    onclick: move |_| tab.set(1),
-                    Icon { icon: FaCirclePlay, class: "w-5 h-5" },
-                    "Player"
-                }
-            }
-            // Tab content
-            div {
-                class: "flex-1 overflow-y-auto p-4",
-                match *tab.read() {
-                    0 => rsx!(NotesTab { course_id, video_id }),
-                    1 => rsx!(PlayerTab {}),
-                    _ => rsx!({}),
-                }
+            AdvancedTabs {
+                tabs: tabs.clone(),
+                selected: selected(),
+                on_select: move |idx| selected.set(idx),
             }
         }
     }
@@ -191,52 +188,57 @@ fn NoteCard(props: NoteCardProps) -> Element {
     // Modal state for delete confirmation
     let mut show_delete_modal = use_signal(|| false);
 
+    // ActionMenu for note actions
+    let actions = vec![
+        crate::ui::components::modal_confirmation::DropdownItem {
+            label: "Export".to_string(),
+            icon: Some(rsx!(Icon {
+                icon: FaDownload,
+                class: "w-4 h-4"
+            })),
+            on_select: Some(EventHandler::new(|_| toast::info("Exported note (stub)"))),
+            children: None,
+            disabled: false,
+        },
+        crate::ui::components::modal_confirmation::DropdownItem {
+            label: "Edit".to_string(),
+            icon: Some(rsx!(Icon {
+                icon: FaPen,
+                class: "w-4 h-4"
+            })),
+            on_select: Some(EventHandler::new(|_| toast::info("Edit note (stub)"))),
+            children: None,
+            disabled: false,
+        },
+        crate::ui::components::modal_confirmation::DropdownItem {
+            label: "Delete".to_string(),
+            icon: Some(rsx!(Icon {
+                icon: FaTrash,
+                class: "w-4 h-4"
+            })),
+            on_select: Some(EventHandler::new({
+                let mut show_delete_modal = show_delete_modal.clone();
+                move |_| show_delete_modal.set(true)
+            })),
+            children: None,
+            disabled: false,
+        },
+    ];
+
     rsx! {
         div {
             class: "card bg-base-200 shadow-sm p-4 relative",
             style: "{card_style}",
-            // Dropdown/context menu for note actions
+            // ActionMenu for note actions
             div {
-                class: "absolute top-2 right-2 dropdown dropdown-end z-10",
-                tabindex: "0",
-                button {
-                    class: "btn btn-ghost btn-xs rounded-full hover:bg-base-300",
-                    tabindex: "0",
-                    Icon { icon: FaEllipsis, class: "w-5 h-5" }
-                }
-                ul {
-                    class: "dropdown-content menu p-2 shadow bg-base-200 rounded-box w-36 z-50",
-                    li {
-                        button {
-                            class: "flex items-center gap-2",
-                            onclick: move |_| toast::info("Exported note (stub)"),
-                            Icon { icon: FaDownload, class: "w-4 h-4" }
-                            "Export"
-                        }
-                    }
-                    li {
-                        button {
-                            class: "flex items-center gap-2",
-                            onclick: move |_| toast::info("Edit note (stub)"),
-                            Icon { icon: FaPen, class: "w-4 h-4" }
-                            "Edit"
-                        }
-                    }
-                    li {
-                        button {
-                            class: "flex items-center gap-2 text-error",
-                            onclick: move |_| show_delete_modal.set(true),
-                            Icon { icon: FaTrash, class: "w-4 h-4" }
-                            "Delete"
-                        }
-                    }
-                }
+                class: "absolute top-2 right-2 z-10",
+                ActionMenu { actions: actions.clone() }
             }
             div {
                 class: "flex items-center gap-2 mb-1",
                 span { class: "text-xs text-base-content/60", "{props.created_at}" }
                 if ts.len() > 0 {
-                    span { class: "badge badge-outline badge-xs ml-2", "{ts}" }
+                    Badge { label: ts.clone(), color: Some("accent".to_string()), class: Some("badge-outline badge-xs ml-2".to_string()) }
                 }
             }
             div {
@@ -246,34 +248,26 @@ fn NoteCard(props: NoteCardProps) -> Element {
             div {
                 class: "flex gap-2 flex-wrap",
                 {props.tags.iter().map(|tag| rsx! {
-                    span { class: "badge badge-accent badge-outline badge-xs", "#{tag}" }
+                    Badge { label: format!("#{tag}"), color: Some("accent".to_string()), class: Some("badge-outline badge-xs".to_string()) }
                 })}
             }
             div {
                 class: "text-xs text-base-content/40 mt-1",
                 "Updated: {props.updated_at}"
             }
-            // Modal for delete confirmation
-            Modal {
+            // ModalConfirmation for delete
+            ModalConfirmation {
                 open: show_delete_modal(),
-                on_close: move |_| show_delete_modal.set(false),
-                title: Some("Delete Note".to_string()),
-                actions: Some(rsx! {
-                    button {
-                        class: "btn btn-error btn-sm",
-                        onclick: move |_| {
-                            show_delete_modal.set(false);
-                            toast::success("Note deleted (stub)");
-                        },
-                        "Delete"
-                    }
-                    button {
-                        class: "btn btn-ghost btn-sm",
-                        onclick: move |_| show_delete_modal.set(false),
-                        "Cancel"
-                    }
-                }),
-                div { "Are you sure you want to delete this note? This action cannot be undone." }
+                title: "Delete Note",
+                message: "Are you sure you want to delete this note? This action cannot be undone.",
+                confirm_label: Some("Delete".to_string()),
+                cancel_label: Some("Cancel".to_string()),
+                confirm_color: Some("error".to_string()),
+                on_confirm: move |_| {
+                    show_delete_modal.set(false);
+                    toast::success("Note deleted (stub)");
+                },
+                on_cancel: move |_| show_delete_modal.set(false),
             }
         }
     }

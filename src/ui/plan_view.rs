@@ -55,7 +55,7 @@ pub fn PlanView(course_id: Uuid) -> Element {
     let total_sections = plan.items.len();
     let completed_sections = plan.items.iter().filter(|s| s.completed).count();
     let progress = if total_sections > 0 {
-        (completed_sections as f32 / total_sections as f32 * 100.0).round() as u32
+        (completed_sections as f32 / total_sections as f32 * 100.0).round() as u8
     } else {
         0
     };
@@ -87,12 +87,34 @@ pub fn PlanView(course_id: Uuid) -> Element {
         section {
             class: "w-full max-w-3xl mx-auto px-4 py-8",
             h1 { class: "text-2xl font-bold mb-6", "Study Plan" }
-            // Progress bar
-            div {
-                class: "w-full bg-base-300 rounded-full h-4 mb-6",
-                div {
-                    class: "bg-accent h-4 rounded-full transition-all duration-500",
-                    style: "width: {progress}%;"
+            // Circular progress indicator
+            div { class: "flex items-center gap-4 mb-6",
+                crate::ui::components::modal_confirmation::CircularProgress {
+                    value: progress,
+                    size: Some(56),
+                    color: Some("accent".to_string()),
+                    label: Some(format!("{}/{} Complete", completed_sections, total_sections)),
+                    class: Some("mr-2".to_string()),
+                }
+                crate::ui::components::modal_confirmation::Badge {
+                    label: if progress == 100 { "Completed".to_string() } else { "In Progress".to_string() },
+                    color: Some(if progress == 100 { "success".to_string() } else { "accent".to_string() }),
+                    class: Some("ml-2".to_string()),
+                }
+                // Example destructive action
+                crate::ui::components::modal_confirmation::ActionMenu {
+                    actions: vec![
+                        crate::ui::components::modal_confirmation::DropdownItem {
+                            label: "Clear Plan".to_string(),
+                            icon: None,
+                            on_select: Some(EventHandler::new(|_| {
+                                crate::ui::components::toast::toast::warning("Clear plan (stub)");
+                            })),
+                            children: None,
+                            disabled: false,
+                        }
+                    ],
+                    class: Some("ml-auto".to_string()),
                 }
             }
             // Checklist
@@ -117,6 +139,13 @@ fn PlanChecklistItem(item: types::PlanItem, idx: usize) -> Element {
     } else {
         rsx! {
             Icon { icon: FaSquare, class: "w-5 h-5 text-base-content/40" }
+        }
+    };
+    let status_badge = rsx! {
+        crate::ui::components::modal_confirmation::Badge {
+            label: if item.completed { "Done".to_string() } else { "Pending".to_string() },
+            color: Some(if item.completed { "success".to_string() } else { "accent".to_string() }),
+            class: Some("ml-2".to_string()),
         }
     };
 
@@ -149,6 +178,9 @@ fn PlanChecklistItem(item: types::PlanItem, idx: usize) -> Element {
         )
     });
 
+    // Modal state for destructive action
+    let mut show_delete_modal = use_signal(|| false);
+
     rsx! {
         li {
             class: "flex items-center gap-3 px-2 py-2 rounded hover:bg-base-300 transition-colors cursor-pointer",
@@ -156,7 +188,42 @@ fn PlanChecklistItem(item: types::PlanItem, idx: usize) -> Element {
             // on_click: move |_| { ...toggle complete... },
             {check_icon}
             span { class: "flex-1 text-sm {text_classes}", "{item.module_title} / {item.section_title}" }
+            {status_badge}
             span { class: "text-xs text-base-content/60", "{item.date.format(\"%Y-%m-%d\")}" }
+            crate::ui::components::modal_confirmation::ActionMenu {
+                actions: vec![
+                    crate::ui::components::modal_confirmation::DropdownItem {
+                        label: "Delete".to_string(),
+                        icon: None,
+                        on_select: Some(EventHandler::new({
+                            let mut show_delete_modal = show_delete_modal.clone();
+                            move |_| show_delete_modal.set(true)
+                        })),
+                        children: None,
+                        disabled: false,
+                    }
+                ],
+                class: Some("ml-2".to_string()),
+            }
+            crate::ui::components::modal_confirmation::ModalConfirmation {
+                open: show_delete_modal(),
+                title: "Delete Plan Item".to_string(),
+                message: "Are you sure you want to delete this plan item? This action cannot be undone.".to_string(),
+                confirm_label: Some("Delete".to_string()),
+                cancel_label: Some("Cancel".to_string()),
+                confirm_color: Some("error".to_string()),
+                on_confirm: Some(EventHandler::new({
+                    let mut show_delete_modal = show_delete_modal.clone();
+                    move |_| {
+                        show_delete_modal.set(false);
+                        crate::ui::components::toast::toast::success("Plan item deleted (stub)");
+                    }
+                })),
+                on_cancel: Some(EventHandler::new({
+                    let mut show_delete_modal = show_delete_modal.clone();
+                    move |_| show_delete_modal.set(false)
+                })),
+            }
         }
     }
 }

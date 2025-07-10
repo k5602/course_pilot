@@ -1,4 +1,7 @@
+use crate::ui::components::badge::Badge;
 use crate::ui::components::course_card::CourseCard;
+use crate::ui::components::modal_confirmation::{ActionMenu, CircularProgress, DropdownItem};
+use crate::ui::components::progress_ring::ProgressRing;
 use crate::ui::components::toast::toast;
 use crate::ui::hooks::use_courses;
 use dioxus::prelude::*;
@@ -71,18 +74,88 @@ pub fn Dashboard() -> Element {
                 div {
                     class: "grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6",
                     style: "{grid_style}",
-                    {courses_guard.iter().enumerate().map(|(idx, course)| rsx! {
-                        CourseCard {
-                            id: idx, // Use index as unique id for now
-                            title: course.name.clone(),
-                            video_count: course.raw_titles.len(),
-                            total_duration: course.structure.as_ref().map(|s| {
-                                let secs = s.aggregate_total_duration().as_secs();
-                                let hours = secs / 3600;
-                                let mins = (secs % 3600) / 60;
-                                format!("{}h {}m", hours, mins)
-                            }).unwrap_or_else(|| "N/A".to_string()),
-                            progress: 0.0, // TODO: wire up real progress
+                    {courses_guard.iter().enumerate().map(|(idx, course)| {
+                        let progress = 0.0; // TODO: wire up real progress
+                        let status = if progress >= 1.0 {
+                            "Completed".to_string()
+                        } else if progress > 0.0 {
+                            "In Progress".to_string()
+                        } else {
+                            "Not Started".to_string()
+                        };
+                        let badge_color = if progress >= 1.0 {
+                            Some("success".to_string())
+                        } else if progress > 0.0 {
+                            Some("accent".to_string())
+                        } else {
+                            Some("base-300".to_string())
+                        };
+                        let actions = vec![
+                            DropdownItem {
+                                label: "Edit Course".to_string(),
+                                icon: None,
+                                on_select: None,
+                                children: None,
+                                disabled: false,
+                            },
+                            DropdownItem {
+                                label: "Export".to_string(),
+                                icon: None,
+                                on_select: None,
+                                children: None,
+                                disabled: false,
+                            },
+                            DropdownItem {
+                                label: "Delete".to_string(),
+                                icon: None,
+                                on_select: None,
+                                children: None,
+                                disabled: false,
+                            },
+                        ];
+                        rsx! {
+                            div {
+                                class: "relative",
+                                CourseCard {
+                                    id: idx,
+                                    title: course.name.clone(),
+                                    video_count: course.raw_titles.len(),
+                                    total_duration: course.structure.as_ref().map(|s| {
+                                        let secs = s.aggregate_total_duration().as_secs();
+                                        let hours = secs / 3600;
+                                        let mins = (secs % 3600) / 60;
+                                        format!("{}h {}m", hours, mins)
+                                    }).unwrap_or_else(|| "N/A".to_string()),
+                                    progress,
+                                }
+                                div {
+                                    class: "absolute top-2 left-2 z-10",
+                                    Badge {
+                                        label: status.clone(),
+                                        color: badge_color.clone(),
+                                        icon: None,
+                                        class: None,
+                                    }
+                                }
+                                div {
+                                    class: "absolute top-2 right-2 z-10",
+                                    ActionMenu {
+                                        actions: actions.clone(),
+                                        class: None,
+                                    }
+                                }
+                                div {
+                                    class: "absolute bottom-2 right-2 z-10",
+                                    ProgressRing {
+                                        value: (progress * 100.0).round() as u32,
+                                        max: Some(100),
+                                        color: Some("primary".to_string()),
+                                        size: Some(36),
+                                        thickness: Some(4),
+                                        label: None,
+                                    }
+                                }
+                            }
                         }
                     })}
                 }

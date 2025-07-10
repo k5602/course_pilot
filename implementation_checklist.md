@@ -36,18 +36,19 @@ A scalable, modular, and future-proof roadmap for Dioxus Desktop UI & Backend In
 ## Phase 1: Global Foundation & Theming
 
 - [x] Scaffold Three-Panel Layout
-  - Use dioxus-daisyui for layout primitives and panel structure.
-  - Sidebar (glassmorphism, icon-only, expands on hover, collapses on mobile) with dioxus-free-icons for navigation.
-  - Main Content (dashboard, plan view, settings)
-  - Contextual Panel (slide-in for notes/player, tabs for switching) using DaisyUI Tabs/Accordion.
-  - dioxus-tailwindcss for responsive utility classes and spacing.
-  - Scalability: Responsive, modular layout ready for additional panels or platform-specific tweaks.
+  - [x] Use dioxus-daisyui for layout primitives and panel structure.
+  - [x] Sidebar with dioxus-free-icons for navigation
+  - [x] Main Content (dashboard, plan view, settings)
+  - [x] Contextual Panel with tabs for switching
+  - [x] Responsive design with dioxus-tailwindcss
+  - [x] Fixed sidebar overlap issue in `layout.rs`
+  - [x] Implemented proper theme toggle functionality
 
 - [x] Implement Global Theming
-  - DaisyUI lofi (light) and night (dark) themes via dioxus-daisyui.
-  - Theme toggle in App shell, propagated via context/signal.
-  - All DaisyUI components inherit theme instantly.
-  - Theme preference is persisted in a desktop-native config file (`theme_config.toml`), not browser localStorage.
+  - [x] DaisyUI lofi (light) and night (dark) themes
+  - [x] Theme toggle in App shell with context/signal
+  - [x] Theme persistence in desktop-native config
+  - [x] Fixed theme toggle functionality in `theme_unified.rs`
   - No JS interop is used for theme switching in desktop mode; all logic is Rust-native and future-proofed for web.
   - Scalability: Context-driven theme system, supporting future custom themes or branding.
 
@@ -208,11 +209,11 @@ A scalable, modular, and future-proof roadmap for Dioxus Desktop UI & Backend In
 | - Tailwind CSS v4           | Complete         |
 | - DaisyUI v5 Integration    | Complete         |
 | - Build Pipeline            | Complete         |
-| Theming                     | In Progress      |
+| Theming                     | Complete         |
 | - Light/Dark Themes         | Complete         |
 | - Theme Switching           | Complete         |
-| - Component Theming         | In Progress      |
-| UI Components               | In Development   |
+| - Component Theming         | Complete         |
+| UI Components               | In Progress      |
 | - Core Components          | Complete         |
 | - Layout System            | Complete         |
 | - Navigation               | Complete         |
@@ -222,32 +223,37 @@ A scalable, modular, and future-proof roadmap for Dioxus Desktop UI & Backend In
 | PlanView                    | Functional (AppState/DB) |
 | NotesPanel                  | Functional (AppState/DB, markdown) |
 | AppState/Context            | Complete         |
-| Hooks                       | Complete |
+| Hooks                       | Complete         |
 | DaisyUI Advanced Patterns   | Complete         |
 | Toast Feedback              | Complete, visual, and reactive |
 | Loading/Error Handling      | Complete         |
-| Accessibility/Responsive    | Needs audit       |
+| Accessibility/Responsive    | Skipped (by user)|
 | Build/Run                   | Works            |
 | Error/Warning Cleanup       | Complete         |
 
 
 ## Next Steps
 
-- Integrate dioxus-motion for animation and dioxus-toast for feedback across all major components and lists
-- Add DaisyUI Modal/Dropdown for context menus and confirmations
-- Audit and enhance accessibility and responsiveness
 - Continue implementing and polishing reusable UI components
-- Begin comprehensive test coverage for backend and UI flows
+- Implement advanced UI patterns: Modal Confirmation, Command Palette, advanced Dropdowns, tabbed panels, progress rings, badges, and dashboard visualizations
+- Polish CourseCard and Planner UI with badges, progress rings, and action menus
+- Prepare for backend integration and further feature work
+- Accessibility and comprehensive test coverage: Skipped for now (by user request)
 
 ---
 
 ## Recent Updates
 
-- ✅ Toast notifications are now fully integrated, visually themed, and reactive to theme changes.
-
+- ✅ Theme logic is now unified, DaisyUI-compatible, and context-driven. Theme switching and persistence are robust and idiomatic.
+- ✅ Sidebar navigation and global AppState routing are fully functional and idiomatic.
+- ✅ All core UI modules and reusable components are implemented and follow Dioxus 0.6 idioms.
+- ✅ Animation and feedback (dioxus-motion, dioxus-toast, DaisyUI Modal/Dropdown) are integrated across Dashboard, PlanView, NotesPanel, and Sidebar.
+- ✅ Toast notifications now appear bottom-right as per DaisyUI best practices.
+- ✅ All Dioxus API usage errors and import/variable warnings have been batch fixed.
 - ✅ Build passes with no errors (as of latest `cargo check`). Only warnings remain (dead code, unused functions/variants).
+- ✅ Accessibility and comprehensive test coverage are deferred/skipped by user request.
+- ⏩ Next: Focus on advanced UI polish/features (Modal Confirmation, Command Palette, advanced Dropdowns, tabbed panels, progress rings, badges, dashboard visualizations).
 
-- ✅ All import/variable warnings have been batch fixed for a clean build.
 
 
 ## Dependency & Version Analysis

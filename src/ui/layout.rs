@@ -5,9 +5,11 @@ use crate::ui::hooks::use_app_state;
 use crate::ui::notes_panel::NotesPanel;
 use crate::ui::plan_view::PlanView;
 use crate::ui::theme_unified::ThemeToggleButton;
+// use command_palette::{CommandAction, CommandPalette};
 use course_pilot::types::{ContextualPanelTab, Route};
 use dioxus::prelude::*;
 use dioxus_motion::prelude::*;
+use std::rc::Rc;
 
 // Layout constants
 #[allow(dead_code)]
@@ -30,16 +32,66 @@ pub fn AppShell() -> Element {
     let mut main_opacity = use_motion(0.0f32);
     let mut main_y = use_motion(-16.0f32);
 
-    use_effect(move || {
-        main_opacity.animate_to(
-            1.0,
-            AnimationConfig::new(AnimationMode::Tween(Tween::default())),
-        );
-        main_y.animate_to(
-            0.0,
-            AnimationConfig::new(AnimationMode::Tween(Tween::default())),
-        );
-    });
+    // --- CommandPalette state and logic ---
+    // let mut show_palette = use_signal(|| false);
+
+    // Example actions for the palette (replace with real actions as needed)
+    // let actions = Rc::new(vec![
+    //     CommandAction {
+    //         label: "Go to Dashboard".to_string(),
+    //         on_select: Rc::new(|| {
+    //             // Example: could set route here via app_state if needed
+    //         }),
+    //     },
+    //     CommandAction {
+    //         label: "Open Settings".to_string(),
+    //         on_select: Rc::new(|| {
+    //             // Example: could set route here via app_state if needed
+    //         }),
+    //     },
+    // ]);
+
+    // Global keyboard shortcut: Ctrl+K/Cmd+K to open, Escape to close
+    // {
+    //     let mut show_palette = show_palette.clone();
+    //     use_effect(move || {
+    //         use dioxus::events::{Key, KeyboardEvent};
+    //         // SAFETY: This is a desktop app, so we can use the web_sys API directly for global events.
+    //         let closure = std::rc::Rc::new(std::cell::RefCell::new(None));
+    //         let closure2 = closure.clone();
+    //         *closure2.borrow_mut() = Some(Closure::wrap(Box::new(
+    //             move |event: web_sys::KeyboardEvent| {
+    //                 // Ctrl+K or Cmd+K
+    //                 let k = event.key();
+    //                 let ctrl = event.ctrl_key();
+    //                 let meta = event.meta_key();
+    //                 if (ctrl || meta) && k.eq_ignore_ascii_case("k") {
+    //                     show_palette.set(true);
+    //                     event.prevent_default();
+    //                 }
+    //                 if k == "Escape" {
+    //                     show_palette.set(false);
+    //                     event.prevent_default();
+    //                 }
+    //             },
+    //         ) as Box<dyn FnMut(_)>));
+    //         web_sys::window()
+    //             .unwrap()
+    //             .add_event_listener_with_callback(
+    //                 "keydown",
+    //                 closure.borrow().as_ref().unwrap().as_ref().unchecked_ref(),
+    //             )
+    //             .unwrap();
+    //         move || {
+    //             if let Some(c) = closure.borrow_mut().take() {
+    //                 web_sys::window()
+    //                     .unwrap()
+    //                     .remove_event_listener_with_callback("keydown", c.as_ref().unchecked_ref())
+    //                     .unwrap();
+    //             }
+    //         }
+    //     });
+    // }
 
     let main_content_style = use_memo(move || {
         format!(
@@ -57,7 +109,12 @@ pub fn AppShell() -> Element {
     rsx! {
         div {
             class: "h-screen w-screen bg-base-100 font-sans transition-colors duration-300",
-            // REMOVED: The conflicting ToastFrame was here.
+            // CommandPalette modal (global, not inside flex row)
+            // CommandPalette {
+            //     open: show_palette(),
+            //     actions: actions.clone(),
+            //     on_close: move |_| show_palette.set(false),
+            // }
             div {
                 class: "h-full flex flex-row",
                 Sidebar {

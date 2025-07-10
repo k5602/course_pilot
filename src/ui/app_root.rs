@@ -17,6 +17,8 @@ use dioxus_signals::Signal;
 use dioxus_toast::ToastManager;
 use log::info;
 
+// CommandPalette and CommandAction imports removed (feature deferred)
+
 /// AppRoot: The root entry point for the Dioxus app.
 #[component]
 pub fn AppRoot() -> Element {
@@ -84,6 +86,8 @@ pub fn AppRoot() -> Element {
     rsx! {
         // The ToastContainer is the single source for rendering all notifications.
         ToastContainer {}
+
+        // Command Palette modal is deferred (feature commented out for now)
 
         // App shell which contains the rest of the UI
         AppShell {}

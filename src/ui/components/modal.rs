@@ -1,4 +1,5 @@
 use dioxus::prelude::*;
+use dioxus_motion::prelude::*;
 
 /// DaisyUI-based reusable Modal component for Dioxus Desktop.
 /// Provides a flexible modal dialog with customizable content, actions, and theming.
@@ -13,6 +14,9 @@ pub fn Modal(
     /// Optional modal title.
     #[props(optional)]
     title: Option<String>,
+    /// Optional icon to display in the title.
+    #[props(optional)]
+    icon: Option<Element>,
     /// Optional actions (e.g., buttons) for the modal footer.
     #[props(optional)]
     actions: Option<Element>,
@@ -22,6 +26,31 @@ pub fn Modal(
     if !open {
         return rsx! {};
     }
+
+    let mut scale = use_motion(0.95f32);
+    let mut opacity = use_motion(0.0f32);
+
+    use_effect(move || {
+        scale.animate_to(
+            1.0,
+            AnimationConfig::new(AnimationMode::Spring(Spring {
+                stiffness: 120.0,
+                damping: 16.0,
+                mass: 1.0,
+                velocity: 0.0,
+            })),
+        );
+        opacity.animate_to(
+            1.0,
+            AnimationConfig::new(AnimationMode::Spring(Spring::default())),
+        );
+    });
+
+    let style = format!(
+        "transform: scale({}); opacity: {}; transition: transform 0.3s, opacity 0.3s;",
+        scale.get_value(),
+        opacity.get_value()
+    );
 
     rsx! {
         // Modal overlay
@@ -35,9 +64,15 @@ pub fn Modal(
             // Prevent click propagation to overlay from modal content
             div {
                 class: "modal-box bg-base-100 shadow-xl relative max-w-lg w-full mx-4",
+                style: "{style}",
                 onclick: move |evt| evt.stop_propagation(),
                 {if let Some(title) = &title {
-                    rsx!(h3 { class: "font-bold text-lg mb-2", "{title}" })
+                    rsx!(h3 { class: "font-bold text-lg mb-2 flex items-center gap-2",
+                        if let Some(icon) = &icon {
+                            {icon.clone()}
+                        }
+                        "{title}"
+                    })
                 } else { rsx!{} }}
                 div {
                     class: "py-2",
