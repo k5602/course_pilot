@@ -92,6 +92,12 @@ pub enum DatabaseError {
 
     #[error("Serialization error: {0}")]
     Serialization(#[from] serde_json::Error),
+    
+    #[error("I/O error: {0}")]
+    Io(#[from] std::io::Error),
+    
+    #[error("Connection pool error: {0}")]
+    Pool(#[from] r2d2::Error),
 
     #[error("Data not found: {0}")]
     NotFound(String),

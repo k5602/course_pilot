@@ -7,7 +7,6 @@ use course_pilot::storage::database;
 use course_pilot::storage::notes;
 use course_pilot::types::{AppState, Course, Note, Plan};
 use dioxus::prelude::*;
-use rusqlite::Connection;
 use std::rc::Rc;
 use uuid::Uuid;
 
@@ -22,9 +21,9 @@ pub fn use_app_state() -> Signal<AppState> {
     use_context::<Signal<AppState>>()
 }
 
-/// Provides access to the global rusqlite DB connection.
-pub fn use_db_conn() -> Rc<Connection> {
-    use_context::<Rc<Connection>>()
+/// Provides access to the global Database instance.
+pub fn use_db() -> Rc<course_pilot::storage::database::Database> {
+    use_context::<Rc<course_pilot::storage::database::Database>>()
 }
 
 // --- Courses Hooks ---
@@ -53,11 +52,11 @@ pub fn use_course(id: uuid::Uuid) -> Memo<Option<Course>> {
 #[allow(dead_code)]
 pub fn use_add_course() -> Rc<dyn FnMut(Course) -> Result<()>> {
     let mut app_state = use_app_state();
-    let conn = use_db_conn();
+    let db = use_db();
     let show_toast = use_show_toast();
     Rc::new(move |course: Course| {
         let mut state = app_state.write();
-        match database::save_course(&conn, &course) {
+        match database::save_course(&db, &course) {
             Ok(_) => {
                 state.courses.push(course);
                 show_toast("Course added", ToastVariant::Success);
@@ -77,8 +76,9 @@ pub fn use_add_course() -> Rc<dyn FnMut(Course) -> Result<()>> {
 /// If video_id is Some, returns video-level notes; if None, returns course-level notes.
 /// Always queries the DB for latest notes.
 pub fn use_notes(course_id: Uuid, video_id: Option<Uuid>) -> Memo<Vec<Note>> {
-    let conn = use_db_conn();
+    let db = use_db();
     use_memo(move || {
+        let conn = db.get_conn().expect("Failed to get DB connection");
         if let Some(video_id) = video_id {
             notes::get_notes_by_video(&conn, video_id).unwrap_or_default()
         } else {
@@ -91,9 +91,10 @@ pub fn use_notes(course_id: Uuid, video_id: Option<Uuid>) -> Memo<Vec<Note>> {
 #[allow(dead_code)]
 pub fn use_save_note() -> Rc<dyn FnMut(Note) -> Result<()>> {
     let mut app_state = use_app_state();
-    let conn = use_db_conn();
+    let db = use_db();
     let show_toast = use_show_toast();
     Rc::new(move |note: Note| {
+        let conn = db.get_conn().expect("Failed to get DB connection");
         // If note exists, update; else, create
         let exists = notes::get_note_by_id(&conn, note.id)?.is_some();
         if exists {
@@ -132,9 +133,10 @@ pub fn use_save_note() -> Rc<dyn FnMut(Note) -> Result<()>> {
 #[allow(dead_code)]
 pub fn use_delete_note() -> Rc<dyn FnMut(Uuid) -> Result<()>> {
     let mut app_state = use_app_state();
-    let conn = use_db_conn();
+    let db = use_db();
     let show_toast = use_show_toast();
     Rc::new(move |note_id: Uuid| {
+        let conn = db.get_conn().expect("Failed to get DB connection");
         notes::delete_note(&conn, note_id)?;
         let mut state = app_state.write();
         let before = state.notes.len();
@@ -151,17 +153,17 @@ pub fn use_delete_note() -> Rc<dyn FnMut(Uuid) -> Result<()>> {
 /// Returns a memoized plan for a given course (always queries DB).
 pub fn use_plan(course_id: Uuid) -> Memo<Option<Plan>> {
     let _app_state = use_app_state();
-    let conn = use_db_conn();
-    use_memo(move || database::get_plan_by_course_id(&conn, &course_id).unwrap_or(None))
+    let db = use_db();
+    use_memo(move || database::get_plan_by_course_id(&db, &course_id).unwrap_or(None))
 }
 
 /// Save or update a plan and persist to DB.
 #[allow(dead_code)]
 pub fn use_save_plan() -> Rc<dyn FnMut(Plan) -> Result<()>> {
     let mut app_state = use_app_state();
-    let conn = use_db_conn();
+    let db = use_db();
     let show_toast = use_show_toast();
-    Rc::new(move |plan: Plan| match database::save_plan(&conn, &plan) {
+    Rc::new(move |plan: Plan| match database::save_plan(&db, &plan) {
         Ok(_) => {
             let mut state = app_state.write();
             if let Some(existing) = state.plans.iter_mut().find(|p| p.id == plan.id) {

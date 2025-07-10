@@ -1612,64 +1612,6 @@
       opacity: 20%;
     }
   }
-  .radio {
-    position: relative;
-    display: inline-block;
-    flex-shrink: 0;
-    cursor: pointer;
-    appearance: none;
-    border-radius: calc(infinity * 1px);
-    padding: calc(0.25rem * 1);
-    vertical-align: middle;
-    border: var(--border) solid var(--input-color, currentColor);
-    @supports (color: color-mix(in lab, red, red)) {
-      border: var(--border) solid var(--input-color, color-mix(in srgb, currentColor 20%, #0000));
-    }
-    box-shadow: 0 1px oklch(0% 0 0 / calc(var(--depth) * 0.1)) inset;
-    --size: calc(var(--size-selector, 0.25rem) * 6);
-    width: var(--size);
-    height: var(--size);
-    color: var(--input-color, currentColor);
-    &:before {
-      display: block;
-      width: 100%;
-      height: 100%;
-      border-radius: calc(infinity * 1px);
-      --tw-content: "";
-      content: var(--tw-content);
-      background-size: auto, calc(var(--noise) * 100%);
-      background-image: none, var(--fx-noise);
-    }
-    &:focus-visible {
-      outline: 2px solid currentColor;
-    }
-    &:checked, &[aria-checked="true"] {
-      animation: radio 0.2s ease-out;
-      border-color: currentColor;
-      background-color: var(--color-base-100);
-      &:before {
-        background-color: currentColor;
-        box-shadow: 0 -1px oklch(0% 0 0 / calc(var(--depth) * 0.1)) inset, 0 8px 0 -4px oklch(100% 0 0 / calc(var(--depth) * 0.1)) inset, 0 1px oklch(0% 0 0 / calc(var(--depth) * 0.1));
-      }
-      @media (forced-colors: active) {
-        &:before {
-          outline-style: var(--tw-outline-style);
-          outline-width: 1px;
-          outline-offset: calc(1px * -1);
-        }
-      }
-      @media print {
-        &:before {
-          outline: 0.25rem solid;
-          outline-offset: -1rem;
-        }
-      }
-    }
-    &:disabled {
-      cursor: not-allowed;
-      opacity: 20%;
-    }
-  }
   .progress {
     position: relative;
     height: calc(0.25rem * 2);

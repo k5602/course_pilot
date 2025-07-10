@@ -57,43 +57,50 @@ A scalable, modular, and future-proof roadmap for Dioxus Desktop UI & Backend In
   - Scalability: Centralized state enables easy extension for new features and cross-component communication.
 
 
-## Phase 2: Core Component Structure
+## Phase 2: Core Component Structure (Complete ✅)
 
-- [ ] Create Modular File Structure
-  - ui/layout.rs: App shell, theming, sidebar, main, contextual panel
-  - ui/components/: DaisyUI-based reusable components (Card, Button, Progress, Modal, Toast, Dropdown, Tabs, Accordion, etc.) using dioxus-daisyui.
-  - ui/dashboard.rs: Dashboard grid and CourseCard
-  - ui/plan_view.rs: Plan checklist and progress
-  - ui/notes_panel.rs: Notes editor (per-course/video), search, tagging, export
-  - ui/theme_unified.rs: Theme context and switching logic
-  - ui/navigation.rs: Routing and sidebar logic
-  - ui/hooks.rs: Custom hooks for backend actions/state
-  - dioxus-free-icons for all iconography.
-  - dioxus-tailwindcss for utility styling and responsive design.
-  - Scalability: Modular structure supports rapid feature addition and platform-specific overrides.
+- [x] Create Modular File Structure
+  - [x] `ui/layout.rs`: App shell, theming, sidebar, main, contextual panel
+  - [x] `ui/theme_unified.rs`: Theme context and switching logic
+  - [x] `ui/navigation.rs`: Routing and sidebar logic
+  - [x] `ui/hooks.rs`: Custom hooks for backend actions/state
+  - [x] `ui/dashboard.rs`: Dashboard grid and CourseCard
+  - [x] `ui/plan_view.rs`: Plan checklist and progress
+  - [x] `ui/notes_panel.rs`: Notes editor, search, tagging, export
+  - [x] `ui/components/`: Directory for DaisyUI-based reusable components
+  - [x] Toast (`toast.rs`) - Complete with theming, animations, and accessibility
 
-- [ ] Integrate dioxus-motion, dioxus-toast, and DaisyUI Feedback
-  - Animate presence/layout for all major components and list items with dioxus-motion.
-  - Toast notifications for feedback with dioxus-toast.
-  - Use DaisyUI Modal/Dropdown for context menus and confirmations.
-  - Scalability: Animation and feedback systems are reusable across new features.
+- [x] Integrate dioxus-motion, dioxus-toast, and DaisyUI Feedback
+  - [x] Animate presence/layout for all major components and list items with dioxus-motion
+  - [x] Toast notifications for feedback with dioxus-toast
+  - [x] DaisyUI Modal/Dropdown used for context menus and confirmations
+  - [x] Animation and feedback systems are reusable across new features
 
 
-## Phase 3: Backend Integration & State Management
+## Phase 3: Backend Integration & State Management (In Progress ✅)
+
+- [x] Database Connection Pooling
+  - [x] Added `r2d2` and `r2d2-sqlite` dependencies
+  - [x] Implemented `Database` struct with connection pooling
+  - [x] Refactored all database functions to use connection pool
+  - [x] Updated `AppRoot` to use new `Database` interface
+  - [x] Ensured proper connection lifecycle management
 
 - [ ] Connect UI to Backend via Async Actions/Hooks
-  - All backend CRUD/search/export exposed as async actions/hooks using dioxus-sdk for state and effect management.
-  - UI never touches DB directly—always via backend API.
-  - Scalability: Backend API is decoupled from UI, enabling future migration to web/mobile or cloud sync.
+  - [ ] Expose backend CRUD/search/export as async actions/hooks using dioxus-sdk
+  - [ ] Ensure UI only interacts with backend API, never directly with DB
+  - [ ] Implement proper state management for async operations
 
 - [ ] Elegant Error & Loading Handling
-  - All mutations trigger toast notifications with dioxus-toast.
-  - Error/loading states surfaced with DaisyUI skeletons, toasts, or inline feedback.
-  - Scalability: Centralized error/loading handling simplifies maintenance and future enhancements.
+  - [ ] Integrate toast notifications for all mutations
+  - [ ] Implement loading states with DaisyUI skeletons
+  - [ ] Add inline feedback for form validation and errors
 
 - [ ] Prepare for Async DB (tokio)
-  - Structure allows easy migration to async DB ops for responsiveness.
-  - Scalability: Ready for high-concurrency or cloud-backed scenarios.
+  - [ ] Structure code for easy migration to async DB operations
+  - [ ] Implement proper error handling and timeouts
+  - [ ] Add retry logic for transient failures
+  - [ ] Add connection pool metrics and monitoring
 
 
 ## Phase 4: Feature Mapping & UI Flows

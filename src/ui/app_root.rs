@@ -9,9 +9,7 @@ use crate::ui::components::toast;
 use crate::ui::components::ToastContainer;
 use crate::ui::layout::AppShell;
 use crate::ui::theme_unified::{AppTheme, ThemeContext};
-use course_pilot::storage::{
-    get_notes_by_course, get_plan_by_course_id, init_db, init_notes_table, load_courses,
-};
+use course_pilot::storage::database::Database;
 use course_pilot::types::{AppState, Route};
 use dioxus_signals::Signal;
 use dioxus_toast::ToastManager;
@@ -27,18 +25,21 @@ pub fn AppRoot() -> Element {
 
     // --- DATABASE AND STATE INITIALIZATION ---
     let db_path = PathBuf::from("course_pilot.db");
-    let conn = Rc::new(init_db(&db_path).expect("Failed to open DB"));
-    init_notes_table(&conn).expect("Failed to init notes table");
+    let db = Rc::new(Database::new(&db_path).expect("Failed to initialize database"));
 
-    let courses = load_courses(&conn).unwrap_or_default();
+    // Load initial data
+    let courses = course_pilot::storage::load_courses(&db).unwrap_or_default();
     let mut plans = Vec::new();
     let mut notes = Vec::new();
+
     for course in &courses {
-        if let Ok(Some(plan)) = get_plan_by_course_id(&conn, &course.id) {
+        if let Ok(Some(plan)) = course_pilot::storage::get_plan_by_course_id(&db, &course.id) {
             plans.push(plan);
         }
-        if let Ok(mut course_notes) = get_notes_by_course(&conn, course.id) {
-            notes.append(&mut course_notes);
+        if let Ok(mut conn) = db.get_conn() {
+            if let Ok(mut course_notes) = course_pilot::storage::get_notes_by_course(&conn, course.id) {
+                notes.append(&mut course_notes);
+            }
         }
     }
 
@@ -60,7 +61,7 @@ pub fn AppRoot() -> Element {
     use_context_provider(|| Signal::new(ToastManager::default()));
 
     // Provide other contexts
-    provide_context(conn.clone());
+    provide_context(db);
     provide_context(app_state.clone());
 
     // --- THEME SYNCHRONIZATION ---
