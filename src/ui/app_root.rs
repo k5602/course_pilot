@@ -14,6 +14,8 @@ use course_pilot::types::{AppState, Route};
 use dioxus_signals::Signal;
 use dioxus_toast::ToastManager;
 use log::info;
+use std::sync::Arc;
+use crate::ui::backend_adapter::Backend;
 
 // CommandPalette and CommandAction imports removed (feature deferred)
 
@@ -25,9 +27,10 @@ pub fn AppRoot() -> Element {
 
     // --- DATABASE AND STATE INITIALIZATION ---
     let db_path = PathBuf::from("course_pilot.db");
-    let db = Rc::new(Database::new(&db_path).expect("Failed to initialize database"));
+    let db = Arc::new(Database::new(&db_path).expect("Failed to initialize database"));
+    let backend_adapter: Arc<Backend> = Arc::new(Backend::new(db.clone()));
 
-    // Load initial data
+    // Load initial data (sync, for initial AppState)
     let courses = course_pilot::storage::load_courses(&db).unwrap_or_default();
     let mut plans = Vec::new();
     let mut notes = Vec::new();
@@ -61,7 +64,7 @@ pub fn AppRoot() -> Element {
     use_context_provider(|| Signal::new(ToastManager::default()));
 
     // Provide other contexts
-    provide_context(db);
+    provide_context(backend_adapter);
     provide_context(app_state.clone());
 
     // --- THEME SYNCHRONIZATION ---

@@ -6,7 +6,8 @@ use anyhow::Result;
 use course_pilot::storage::database;
 use course_pilot::storage::notes;
 use course_pilot::types::{AppState, Course, Note, Plan};
-use dioxus::prelude::*;
+use dioxus::prelude::{UseFuture, use_future, spawn, *};
+use rusqlite::Connection;
 use std::rc::Rc;
 use uuid::Uuid;
 
@@ -24,6 +25,11 @@ pub fn use_app_state() -> Signal<AppState> {
 /// Provides access to the global Database instance.
 pub fn use_db() -> Rc<course_pilot::storage::database::Database> {
     use_context::<Rc<course_pilot::storage::database::Database>>()
+}
+
+/// Provides access to the async backend adapter.
+pub fn use_backend_adapter() -> std::sync::Arc<crate::ui::backend_adapter::Backend> {
+    use_context::<std::sync::Arc<crate::ui::backend_adapter::Backend>>()
 }
 
 // --- Courses Hooks ---
@@ -51,23 +57,25 @@ pub fn use_course(id: uuid::Uuid) -> Memo<Option<Course>> {
 /// Add a new course and persist to DB.
 #[allow(dead_code)]
 pub fn use_add_course() -> Rc<dyn FnMut(Course) -> Result<()>> {
-    let mut app_state = use_app_state();
-    let db = use_db();
-    let show_toast = use_show_toast();
-    Rc::new(move |course: Course| {
-        let mut state = app_state.write();
-        match database::save_course(&db, &course) {
-            Ok(_) => {
-                state.courses.push(course);
-                show_toast("Course added", ToastVariant::Success);
-                Ok(())
-            }
-            Err(e) => {
-                show_toast("Failed to add course", ToastVariant::Error);
-                Err(e.into())
-            }
-        }
-    })
+   let mut app_state = use_app_state();
+   let backend_adapter = use_backend_adapter();
+   let show_toast = use_show_toast();
+   Rc::new(move |course: Course| {
+       // NOTE: This should be refactored to async for true async integration.
+       // For now, call blocking for compatibility.
+       let mut state = app_state.write();
+       match futures::executor::block_on(backend_adapter.as_ref().create_course(course.clone())) {
+           Ok(_) => {
+               state.courses.push(course);
+               show_toast("Course added", ToastVariant::Success);
+               Ok(())
+           }
+           Err(e) => {
+               show_toast("Failed to add course", ToastVariant::Error);
+               Err(e.into())
+           }
+       }
+   })
 }
 
 // --- Notes Hooks ---
@@ -75,14 +83,13 @@ pub fn use_add_course() -> Rc<dyn FnMut(Course) -> Result<()>> {
 /// Returns a memoized list of notes for a given course or video.
 /// If video_id is Some, returns video-level notes; if None, returns course-level notes.
 /// Always queries the DB for latest notes.
-pub fn use_notes(course_id: Uuid, video_id: Option<Uuid>) -> Memo<Vec<Note>> {
-    let db = use_db();
-    use_memo(move || {
-        let conn = db.get_conn().expect("Failed to get DB connection");
+pub fn use_notes(course_id: Uuid, video_id: Option<Uuid>) -> UseFuture {
+    let backend_adapter = use_backend_adapter();
+    use_future(move || async move {
         if let Some(video_id) = video_id {
-            notes::get_notes_by_video(&conn, video_id).unwrap_or_default()
+            backend_adapter.as_ref().list_notes_by_video(video_id).await.unwrap_or_default()
         } else {
-            notes::get_notes_by_course(&conn, course_id).unwrap_or_default()
+            backend_adapter.as_ref().list_notes_by_course(course_id).await.unwrap_or_default()
         }
     })
 }
@@ -91,39 +98,26 @@ pub fn use_notes(course_id: Uuid, video_id: Option<Uuid>) -> Memo<Vec<Note>> {
 #[allow(dead_code)]
 pub fn use_save_note() -> Rc<dyn FnMut(Note) -> Result<()>> {
     let mut app_state = use_app_state();
-    let db = use_db();
+    let backend_adapter = use_backend_adapter();
     let show_toast = use_show_toast();
     Rc::new(move |note: Note| {
-        let conn = db.get_conn().expect("Failed to get DB connection");
-        // If note exists, update; else, create
-        let exists = notes::get_note_by_id(&conn, note.id)?.is_some();
-        if exists {
-            match notes::update_note(&conn, &note) {
-                Ok(_) => {
-                    let mut state = app_state.write();
-                    if let Some(existing) = state.notes.iter_mut().find(|n| n.id == note.id) {
-                        *existing = note;
-                    }
+        // NOTE: This should be refactored to async for true async integration.
+        // For now, call blocking for compatibility.
+        match futures::executor::block_on(backend_adapter.as_ref().save_note(note.clone())) {
+            Ok(_) => {
+                let mut state = app_state.write();
+                if let Some(existing) = state.notes.iter_mut().find(|n| n.id == note.id) {
+                    *existing = note;
                     show_toast("Note updated", ToastVariant::Success);
-                    Ok(())
-                }
-                Err(e) => {
-                    show_toast("Failed to update note", ToastVariant::Error);
-                    Err(e.into())
-                }
-            }
-        } else {
-            match notes::create_note(&conn, &note) {
-                Ok(_) => {
-                    let mut state = app_state.write();
+                } else {
                     state.notes.push(note);
                     show_toast("Note added", ToastVariant::Success);
-                    Ok(())
                 }
-                Err(e) => {
-                    show_toast("Failed to add note", ToastVariant::Error);
-                    Err(e.into())
-                }
+                Ok(())
+            }
+            Err(e) => {
+                show_toast("Failed to save note", ToastVariant::Error);
+                Err(e.into())
             }
         }
     })
@@ -133,50 +127,63 @@ pub fn use_save_note() -> Rc<dyn FnMut(Note) -> Result<()>> {
 #[allow(dead_code)]
 pub fn use_delete_note() -> Rc<dyn FnMut(Uuid) -> Result<()>> {
     let mut app_state = use_app_state();
-    let db = use_db();
+    let backend_adapter = use_backend_adapter();
     let show_toast = use_show_toast();
     Rc::new(move |note_id: Uuid| {
-        let conn = db.get_conn().expect("Failed to get DB connection");
-        notes::delete_note(&conn, note_id)?;
-        let mut state = app_state.write();
-        let before = state.notes.len();
-        state.notes.retain(|n| n.id != note_id);
-        if state.notes.len() < before {
-            show_toast("Note deleted", ToastVariant::Success);
+        // NOTE: This should be refactored to async for true async integration.
+        // For now, call blocking for compatibility.
+        match futures::executor::block_on(backend_adapter.as_ref().delete_note(note_id)) {
+            Ok(_) => {
+                let mut state = app_state.write();
+                let before = state.notes.len();
+                state.notes.retain(|n| n.id != note_id);
+                if state.notes.len() < before {
+                    show_toast("Note deleted", ToastVariant::Success);
+                }
+                Ok(())
+            }
+            Err(e) => {
+                show_toast("Failed to delete note", ToastVariant::Error);
+                Err(e.into())
+            }
         }
-        Ok(())
     })
 }
 
 // --- Planner Hooks ---
 
 /// Returns a memoized plan for a given course (always queries DB).
-pub fn use_plan(course_id: Uuid) -> Memo<Option<Plan>> {
-    let _app_state = use_app_state();
-    let db = use_db();
-    use_memo(move || database::get_plan_by_course_id(&db, &course_id).unwrap_or(None))
+pub fn use_plan(course_id: Uuid) -> UseFuture {
+    let backend_adapter = use_backend_adapter();
+    use_future(move || async move {
+        backend_adapter.as_ref().get_plan_by_course(course_id).await.unwrap_or(None)
+    })
 }
 
 /// Save or update a plan and persist to DB.
 #[allow(dead_code)]
 pub fn use_save_plan() -> Rc<dyn FnMut(Plan) -> Result<()>> {
     let mut app_state = use_app_state();
-    let db = use_db();
+    let backend_adapter = use_backend_adapter();
     let show_toast = use_show_toast();
-    Rc::new(move |plan: Plan| match database::save_plan(&db, &plan) {
-        Ok(_) => {
-            let mut state = app_state.write();
-            if let Some(existing) = state.plans.iter_mut().find(|p| p.id == plan.id) {
-                *existing = plan;
-            } else {
-                state.plans.push(plan);
+    Rc::new(move |plan: Plan| {
+        // NOTE: This should be refactored to async for true async integration.
+        // For now, call blocking for compatibility.
+        match futures::executor::block_on(backend_adapter.as_ref().save_plan(plan.clone())) {
+            Ok(_) => {
+                let mut state = app_state.write();
+                if let Some(existing) = state.plans.iter_mut().find(|p| p.id == plan.id) {
+                    *existing = plan;
+                } else {
+                    state.plans.push(plan);
+                }
+                show_toast("Plan saved", ToastVariant::Success);
+                Ok(())
             }
-            show_toast("Plan saved", ToastVariant::Success);
-            Ok(())
-        }
-        Err(e) => {
-            show_toast("Failed to save plan", ToastVariant::Error);
-            Err(e.into())
+            Err(e) => {
+                show_toast("Failed to save plan", ToastVariant::Error);
+                Err(e.into())
+            }
         }
     })
 }
