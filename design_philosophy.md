@@ -39,9 +39,9 @@ Tooling: dioxus-daisyui
 
 Implementation Details:
 
-    Light Mode Theme: Utilize the lofi theme from DaisyUI. This theme evokes the feeling of a clean, organized workspace. Its high-contrast, black-and-white nature with sharp corners minimizes visual noise, making it perfect for long reading and study sessions.
+    Light Mode Theme: Utilize the cooporate theme from DaisyUI. This theme evokes the feeling of a clean, organized workspace. Its high-contrast, black-and-white nature with sharp corners minimizes visual noise, making it perfect for long reading and study sessions.
 
-    Dark Mode Theme: Utilize the night theme from DaisyUI. This theme creates an immersive, focused environment. The deep navy base with carefully chosen blue and purple accents provides a futuristic, "synthwave" feel that is both aesthetically pleasing and easy on the eyes in low-light conditions.
+    Dark Mode Theme: Utilize the buissnes theme from DaisyUI. This theme creates an immersive, focused environment. The deep navy base with carefully chosen blue and purple accents provides a futuristic, "synthwave" feel that is both aesthetically pleasing and easy on the eyes in low-light conditions.
 
     Mechanism: The root App component will manage a shared state that controls the data-theme attribute on the main HTML element. This will allow for seamless theme switching that instantly propagates through all DaisyUI components, ensuring a consistent and predictable look.
 

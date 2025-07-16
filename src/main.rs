@@ -2,8 +2,7 @@ use dioxus::prelude::*;
 use dioxus_desktop::tao::dpi::LogicalSize;
 use dioxus_desktop::{Config, WindowBuilder};
 
-mod ui;
-use ui::app_root::AppRoot;
+use course_pilot::ui::app_root::AppRoot;
 
 fn main() {
     let config = Config::new()

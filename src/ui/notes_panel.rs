@@ -1,10 +1,10 @@
 use crate::ui::components::modal_confirmation::{
-    ActionMenu, AdvancedTabs, Badge, DropdownItem, ModalConfirmation, TabData,
+    ActionMenu, AdvancedTabs, Badge, ModalConfirmation,
 };
 use crate::ui::components::toast::toast;
 use dioxus::prelude::*;
 use dioxus_free_icons::icons::fa_solid_icons::{
-    FaBars, FaCirclePlay, FaDownload, FaFloppyDisk, FaPen, FaTrash,
+    FaDownload, FaFloppyDisk, FaPen, FaTrash,
 };
 use dioxus_free_icons::Icon;
 use dioxus_motion::prelude::*;
@@ -19,11 +19,11 @@ pub fn NotesPanel() -> Element {
     let course_id = Uuid::nil();
     let video_id = None;
 
-    // Use async notes hook and handle loading/error state
-    let notes_future = crate::ui::hooks::use_notes(course_id, video_id);
+    // Use async notes resource and handle loading/error state
+    let notes_resource = crate::ui::hooks::use_notes_resource(course_id, video_id);
 
-    match notes_future.state().as_value() {
-        Some(UseFutureState::Pending) => {
+    match &*notes_resource.read_unchecked() {
+        None => {
             return rsx! {
                 div {
                     class: "flex flex-col h-full w-full p-4",
@@ -38,7 +38,7 @@ pub fn NotesPanel() -> Element {
                 }
             };
         }
-        Some(UseFutureState::Errored(_err)) => {
+        Some(Err(_err)) => {
             return rsx! {
                 div {
                     class: "flex flex-col h-full w-full items-center justify-center",
@@ -46,7 +46,7 @@ pub fn NotesPanel() -> Element {
                 }
             };
         }
-        Some(UseFutureState::Ready) => {
+        Some(Ok(_notes)) => {
             // AdvancedTabs for Notes/Player
             let tabs = vec![
                 crate::ui::components::modal_confirmation::TabData {
@@ -98,10 +98,10 @@ pub fn NotesPanel() -> Element {
 /// NotesTab: List of notes and markdown editor (wired to backend)
 #[component]
 fn NotesTab(course_id: uuid::Uuid, video_id: Option<uuid::Uuid>) -> Element {
-    let notes_future = crate::ui::hooks::use_notes(course_id, video_id);
+    let notes_resource = crate::ui::hooks::use_notes_resource(course_id, video_id);
 
-    match notes_future.state().as_value() {
-        Some(UseFutureState::Pending) => {
+    match &*notes_resource.read_unchecked() {
+        None => {
             return rsx! {
                 div {
                     class: "space-y-6",
@@ -115,16 +115,15 @@ fn NotesTab(course_id: uuid::Uuid, video_id: Option<uuid::Uuid>) -> Element {
                 }
             };
         }
-        Some(UseFutureState::Errored(_err)) => {
+        Some(Err(_err)) => {
             return rsx! {
                 div {
-                    class: "flex flex-col h-full w-full items-center justify-center",
-                    div { class: "text-error", "Failed to load notes" }
+                    class: "space-y-6 text-error",
+                    "Failed to load notes."
                 }
             };
         }
-        Some(UseFutureState::Ready) => {
-            let notes_vec = notes_future.data().unwrap_or(&vec![]);
+        Some(Ok(notes_vec)) => {
             rsx! {
                 div {
                     class: "space-y-6",
@@ -136,8 +135,8 @@ fn NotesTab(course_id: uuid::Uuid, video_id: Option<uuid::Uuid>) -> Element {
                                 content: note.content.clone(),
                                 timestamp: note.timestamp,
                                 tags: note.tags.clone(),
-                                created_at: note.created_at.to_string(),
-                                updated_at: note.updated_at.to_string()
+                                created_at: note.created_at.format("%Y-%m-%d %H:%M").to_string(),
+                                updated_at: note.updated_at.format("%Y-%m-%d %H:%M").to_string(),
                             }
                         })}
                     }
@@ -203,7 +202,7 @@ fn NoteCard(props: NoteCardProps) -> Element {
         .map(|t| format!(" at {}s", t))
         .unwrap_or_default();
 
-    let note_for_render = course_pilot::types::Note {
+    let note_for_render = crate::types::Note {
         content: props.content.to_string(),
         // The rest are dummy fields, only content is used for rendering
         id: uuid::Uuid::nil(),
@@ -214,7 +213,7 @@ fn NoteCard(props: NoteCardProps) -> Element {
         created_at: chrono::Utc::now(),
         updated_at: chrono::Utc::now(),
     };
-    let rendered_html = course_pilot::storage::notes::render_note_html(&note_for_render);
+    let rendered_html = crate::storage::notes::render_note_html(&note_for_render);
 
     // Animation for note card presence
     let mut card_opacity = use_motion(0.0f32);

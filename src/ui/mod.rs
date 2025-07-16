@@ -1,10 +1,11 @@
 pub mod app_root;
+pub mod backend_adapter;
 pub mod components;
 pub mod dashboard;
+pub mod error_handling;
 pub mod hooks;
 pub mod layout;
 pub mod navigation;
 pub mod notes_panel;
 pub mod plan_view;
 pub mod theme_unified;
-pub mod backend_adapter;

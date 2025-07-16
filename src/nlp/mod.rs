@@ -11,7 +11,6 @@ pub use processor::structure_course;
 // Re-export error types
 pub use crate::NlpError;
 
-// Common NLP utilities and patterns
 use regex::Regex;
 use std::sync::OnceLock;
 

@@ -1,4 +1,4 @@
-use course_pilot::types::Route;
+use crate::types::Route;
 use dioxus::prelude::*;
 use dioxus_free_icons::icons::fa_solid_icons::{FaBook, FaBug, FaGauge, FaGear};
 use dioxus_free_icons::Icon;

@@ -1,5 +1,4 @@
 use dioxus::prelude::*;
-use dioxus_free_icons::Icon;
 use dioxus_motion::prelude::*;
 
 /// Single accordion item (title + content + optional icon)

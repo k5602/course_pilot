@@ -2,12 +2,20 @@ use std::sync::Arc;
 use uuid::Uuid;
 use anyhow::Result;
 use dioxus::prelude::*;
-use course_pilot::types::{Course, Plan, Note};
-use course_pilot::storage::database::Database;
+use crate::types::{Course, Plan, Note};
+use crate::storage::{self, database::Database, notes};
+
+/// Progress information for plans and courses
+#[derive(Debug, Clone)]
+pub struct ProgressInfo {
+    pub completed_count: usize,
+    pub total_count: usize,
+    pub percentage: f32,
+    pub estimated_time_remaining: Option<std::time::Duration>,
+}
 
 /// Async backend API trait for CRUD/search/export operations.
 /// All methods are async and return Results for robust error handling.
-use async_trait::async_trait;
 
 /// Concrete backend implementation using the pooled Database.
 pub struct Backend {
@@ -25,7 +33,7 @@ impl Backend {
     pub async fn list_courses(&self) -> Result<Vec<Course>> {
         let db = self.db.clone();
         tokio::task::spawn_blocking(move || {
-            storage::load_courses(&db)
+            storage::load_courses(&db).map_err(Into::into)
         })
         .await
         .unwrap_or_else(|e| Err(anyhow::anyhow!("Join error: {e}")))
@@ -33,39 +41,166 @@ impl Backend {
     pub async fn get_course(&self, id: Uuid) -> Result<Option<Course>> {
         let db = self.db.clone();
         tokio::task::spawn_blocking(move || {
-            storage::get_course_by_id(&db, &id)
+            storage::get_course_by_id(&db, &id).map_err(Into::into)
         })
         .await
         .unwrap_or_else(|e| Err(anyhow::anyhow!("Join error: {e}")))
     }
     pub async fn create_course(&self, course: Course) -> Result<()> {
-        unimplemented!()
+        let db = self.db.clone();
+        tokio::task::spawn_blocking(move || {
+            storage::save_course(&db, &course).map_err(Into::into)
+        })
+        .await
+        .unwrap_or_else(|e| Err(anyhow::anyhow!("Join error: {}", e)))
     }
+    
     pub async fn update_course(&self, course: Course) -> Result<()> {
-        unimplemented!()
+        let db = self.db.clone();
+        tokio::task::spawn_blocking(move || {
+            // Verify course exists first
+            let existing = storage::get_course_by_id(&db, &course.id)?;
+            if existing.is_none() {
+                return Err(anyhow::anyhow!("Course with id {} not found", course.id).into());
+            }
+            
+            // Update the course
+            storage::save_course(&db, &course).map_err(Into::into)
+        })
+        .await
+        .unwrap_or_else(|e| Err(anyhow::anyhow!("Join error: {}", e)))
     }
-    pub async fn delete_course(&self, id: Uuid) -> Result<()> {
-        unimplemented!()
+    
+    pub async fn delete_course(&self, course_id: Uuid) -> Result<()> {
+        let db = self.db.clone();
+        tokio::task::spawn_blocking(move || {
+            storage::delete_course(&db, &course_id).map_err(Into::into)
+        })
+        .await
+        .unwrap_or_else(|e| Err(anyhow::anyhow!("Join error: {}", e)))
     }
 
     // --- Plans ---
     pub async fn get_plan_by_course(&self, course_id: Uuid) -> Result<Option<Plan>> {
         let db = self.db.clone();
-        tokio::task::spawn_blocking(move || storage::get_plan_by_course_id(&db, &course_id))
+        tokio::task::spawn_blocking(move || storage::get_plan_by_course_id(&db, &course_id).map_err(Into::into))
             .await
             .unwrap_or_else(|e| Err(anyhow::anyhow!("Join error: {e}")))
     }
     pub async fn save_plan(&self, plan: Plan) -> Result<()> {
         let db = self.db.clone();
-        tokio::task::spawn_blocking(move || storage::save_plan(&db, &plan))
+        tokio::task::spawn_blocking(move || storage::save_plan(&db, &plan).map_err(Into::into))
             .await
             .unwrap_or_else(|e| Err(anyhow::anyhow!("Join error: {e}")))
     }
     pub async fn delete_plan(&self, plan_id: Uuid) -> Result<()> {
         let db = self.db.clone();
-        tokio::task::spawn_blocking(move || storage::delete_plan(&db, &plan_id))
+        tokio::task::spawn_blocking(move || storage::delete_plan(&db, &plan_id).map_err(Into::into))
             .await
             .unwrap_or_else(|e| Err(anyhow::anyhow!("Join error: {e}")))
+    }
+    
+    pub async fn update_plan_item_completion(
+        &self, 
+        plan_id: Uuid, 
+        item_index: usize, 
+        completed: bool
+    ) -> Result<()> {
+        let db = self.db.clone();
+        tokio::task::spawn_blocking(move || {
+            // Load plan
+            let mut plan = storage::load_plan(&db, &plan_id)?
+                .ok_or_else(|| anyhow::anyhow!("Plan not found: {}", plan_id))?;
+            
+            // Validate item index
+            if item_index >= plan.items.len() {
+                return Err(anyhow::anyhow!(
+                    "Plan item index {} out of bounds (plan has {} items)", 
+                    item_index, 
+                    plan.items.len()
+                ));
+            }
+            
+            // Update item completion status
+            plan.items[item_index].completed = completed;
+            
+            // Save updated plan
+            storage::save_plan(&db, &plan).map_err(Into::into)
+        })
+        .await
+        .unwrap_or_else(|e| Err(anyhow::anyhow!("Join error: {}", e)))
+    }
+    
+    pub async fn get_plan_progress(&self, plan_id: Uuid) -> Result<ProgressInfo> {
+        let db = self.db.clone();
+        tokio::task::spawn_blocking(move || {
+            let plan = storage::load_plan(&db, &plan_id)?
+                .ok_or_else(|| anyhow::anyhow!("Plan not found: {}", plan_id))?;
+            
+            let total_count = plan.items.len();
+            let completed_count = plan.items.iter().filter(|item| item.completed).count();
+            let percentage = if total_count > 0 {
+                (completed_count as f32 / total_count as f32) * 100.0
+            } else {
+                0.0
+            };
+            
+            let estimated_time_remaining = if completed_count < total_count {
+                let remaining_items = total_count - completed_count;
+                let session_duration = std::time::Duration::from_secs(
+                    (plan.settings.session_length_minutes as u64) * 60
+                );
+                Some(session_duration * remaining_items as u32)
+            } else {
+                None
+            };
+            
+            Ok(ProgressInfo {
+                completed_count,
+                total_count,
+                percentage,
+                estimated_time_remaining,
+            })
+        })
+        .await
+        .unwrap_or_else(|e| Err(anyhow::anyhow!("Join error: {}", e)))
+    }
+    
+    pub async fn get_course_progress(&self, course_id: Uuid) -> Result<Option<ProgressInfo>> {
+        let db = self.db.clone();
+        tokio::task::spawn_blocking(move || {
+            // Get plan for this course
+            if let Some(plan) = storage::get_plan_by_course_id(&db, &course_id)? {
+                let total_count = plan.items.len();
+                let completed_count = plan.items.iter().filter(|item| item.completed).count();
+                let percentage = if total_count > 0 {
+                    (completed_count as f32 / total_count as f32) * 100.0
+                } else {
+                    0.0
+                };
+                
+                let estimated_time_remaining = if completed_count < total_count {
+                    let remaining_items = total_count - completed_count;
+                    let session_duration = std::time::Duration::from_secs(
+                        (plan.settings.session_length_minutes as u64) * 60
+                    );
+                    Some(session_duration * remaining_items as u32)
+                } else {
+                    None
+                };
+                
+                Ok(Some(ProgressInfo {
+                    completed_count,
+                    total_count,
+                    percentage,
+                    estimated_time_remaining,
+                }))
+            } else {
+                Ok(None)
+            }
+        })
+        .await
+        .unwrap_or_else(|e| Err(anyhow::anyhow!("Join error: {}", e)))
     }
 
     // --- Notes ---
@@ -152,8 +287,11 @@ pub fn use_backend_adapter() -> std::sync::Arc<Backend> {
 /// Example: use_async_courses returns a signal with the list of courses and loading/error state.
 pub fn use_async_courses() -> UseFuture {
     let backend = use_backend_adapter();
-    use_future(move || async move {
-        backend.list_courses().await.unwrap_or_default()
+    use_future(move || {
+        let backend = backend.clone();
+        async move {
+            backend.list_courses().await
+        }
     })
 }
 

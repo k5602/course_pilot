@@ -1,5 +1,4 @@
 use dioxus::prelude::*;
-use dioxus_free_icons::Icon;
 
 /// DaisyUI Badge component for Dioxus.
 /// - `label`: The badge text.
@@ -54,7 +53,8 @@ mod tests {
             class: None,
         };
         let mut dom = VirtualDom::new_with_props(Badge, props);
-        let _ = dom.rebuild();
+        let mut to = Vec::new();
+        dom.rebuild(&mut to);
         let rendered = render(&dom);
         assert!(rendered.contains("Test"));
         assert!(rendered.contains("badge-primary"));
@@ -70,7 +70,8 @@ mod tests {
             class: None,
         };
         let mut dom = VirtualDom::new_with_props(Badge, props);
-        let _ = dom.rebuild();
+        let mut to = Vec::new();
+        dom.rebuild(&mut to);
         let rendered = render(&dom);
         assert!(rendered.contains("WithIcon"));
         assert!(rendered.contains("badge-success"));

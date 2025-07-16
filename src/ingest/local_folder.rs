@@ -2,17 +2,262 @@
 //!
 //! This module provides functionality to scan local directories for video files
 //! and extract their titles and durations for course creation.
+//! Enhanced with recursive directory scanning and nested folder support.
 
 use crate::ImportError;
+use std::collections::HashSet;
 use std::fs;
-use std::path::Path;
+use std::path::{Path, PathBuf};
 use std::time::SystemTime;
+use walkdir::WalkDir;
 
 /// Struct representing a local video section with title and duration
 #[derive(PartialEq, Debug, Clone)]
 pub struct LocalVideoSection {
     pub title: String,
     pub duration: std::time::Duration,
+}
+
+/// Enhanced local ingest with nested folder support
+pub struct EnhancedLocalIngest {
+    video_extensions: HashSet<String>,
+}
+
+impl EnhancedLocalIngest {
+    pub fn new() -> Self {
+        let mut video_extensions = HashSet::new();
+        video_extensions.extend([
+            "mp4", "avi", "mkv", "mov", "wmv", "flv", "webm", 
+            "m4v", "3gp", "ogv", "ts", "mts", "m2ts", "mpg", 
+            "mpeg", "f4v", "asf", "rm", "rmvb", "vob", "drc"
+        ].iter().map(|s| s.to_string()));
+        
+        Self { video_extensions }
+    }
+    
+    /// Scans a directory recursively for video files
+    pub fn scan_directory_recursive(
+        &self, 
+        root_path: &Path,
+        progress_callback: Option<&dyn Fn(f32, String)>
+    ) -> Result<Vec<VideoFile>, ImportError> {
+        log::info!("Recursively scanning directory: {}", root_path.display());
+        
+        if !root_path.exists() {
+            return Err(ImportError::FileSystem(format!(
+                "Path does not exist: {}",
+                root_path.display()
+            )));
+        }
+
+        if !root_path.is_dir() {
+            return Err(ImportError::FileSystem(format!(
+                "Path is not a directory: {}",
+                root_path.display()
+            )));
+        }
+        
+        // First pass: count total files for progress reporting
+        let mut total_files = 0;
+        if progress_callback.is_some() {
+            progress_callback.unwrap()(0.0, "Counting video files...".to_string());
+            
+            for entry in WalkDir::new(root_path)
+                .follow_links(false)
+                .into_iter()
+                .filter_map(|e| e.ok())
+                .filter(|e| e.file_type().is_file())
+            {
+                if self.is_video_file(entry.path()) {
+                    total_files += 1;
+                }
+            }
+            
+            progress_callback.unwrap()(0.0, format!("Found {} video files", total_files));
+        }
+        
+        // Second pass: process files
+        let mut video_files = Vec::new();
+        let mut processed_files = 0;
+        
+        for entry in WalkDir::new(root_path)
+            .follow_links(false)
+            .into_iter()
+            .filter_map(|e| match e {
+                Ok(entry) => Some(entry),
+                Err(err) => {
+                    log::warn!("Error accessing path: {}", err);
+                    None
+                }
+            })
+            .filter(|e| e.file_type().is_file())
+        {
+            if self.is_video_file(entry.path()) {
+                processed_files += 1;
+                
+                if let Some(cb) = progress_callback {
+                    let progress = if total_files > 0 {
+                        (processed_files as f32 / total_files as f32) * 100.0
+                    } else {
+                        0.0
+                    };
+                    
+                    cb(progress, format!("Processing: {}", entry.path().display()));
+                }
+                
+                let video_file = VideoFile {
+                    path: entry.path().to_path_buf(),
+                    name: entry.file_name().to_string_lossy().to_string(),
+                    size: entry.metadata().map(|m| m.len()).unwrap_or(0),
+                    relative_path: entry.path()
+                        .strip_prefix(root_path)
+                        .unwrap_or(entry.path())
+                        .to_path_buf(),
+                };
+                
+                video_files.push(video_file);
+            }
+        }
+        
+        if video_files.is_empty() {
+            return Err(ImportError::NoContent);
+        }
+        
+        log::info!("Found {} video files in {} (recursive)", video_files.len(), root_path.display());
+        Ok(video_files)
+    }
+    
+    /// Asynchronously scans a directory recursively for video files with cancellation support
+    pub async fn scan_directory_recursive_async(
+        &self,
+        root_path: PathBuf,
+        progress_callback: impl Fn(f32, String) + Send + 'static,
+        batch_size: Option<usize>,
+        cancel_token: Option<tokio_util::sync::CancellationToken>
+    ) -> Result<Vec<VideoFile>, ImportError> {
+        // Use tokio to avoid blocking the async runtime
+        let video_extensions = self.video_extensions.clone();
+        
+        tokio::task::spawn_blocking(move || {
+            let mut total_files = 0;
+            let mut processed_files = 0;
+            let mut video_files = Vec::new();
+            
+            // First pass: count total files
+            progress_callback(0.0, "Counting video files...".to_string());
+            
+            for entry in WalkDir::new(&root_path)
+                .follow_links(false)
+                .into_iter()
+                .filter_map(|e| e.ok())
+                .filter(|e| e.file_type().is_file())
+            {
+                if let Some(ext) = entry.path().extension() {
+                    let ext_lower = ext.to_string_lossy().to_lowercase();
+                    if video_extensions.contains(&ext_lower) {
+                        total_files += 1;
+                    }
+                }
+            }
+            
+            progress_callback(0.0, format!("Found {} video files", total_files));
+            
+            // Second pass: process files in batches if requested
+            let batch_size = batch_size.unwrap_or(usize::MAX); // Default to processing all at once
+            let entries: Vec<_> = WalkDir::new(&root_path)
+                .follow_links(false)
+                .into_iter()
+                .filter_map(|e| match e {
+                    Ok(entry) => Some(entry),
+                    Err(err) => {
+                        log::warn!("Error accessing path: {}", err);
+                        None
+                    }
+                })
+                .filter(|e| e.file_type().is_file())
+                .collect();
+            
+            // Process in batches
+            for chunk in entries.chunks(batch_size) {
+                // Check for cancellation between batches
+                if let Some(token) = &cancel_token {
+                    if token.is_cancelled() {
+                        log::info!("Directory scan cancelled by user");
+                        return Ok(video_files);
+                    }
+                }
+                
+                for entry in chunk {
+                    if let Some(ext) = entry.path().extension() {
+                        let ext_lower = ext.to_string_lossy().to_lowercase();
+                        if video_extensions.contains(&ext_lower) {
+                            processed_files += 1;
+                            
+                            let progress = if total_files > 0 {
+                                (processed_files as f32 / total_files as f32) * 100.0
+                            } else {
+                                0.0
+                            };
+                            
+                            progress_callback(progress, format!("Processing: {}", entry.path().display()));
+                            
+                            let video_file = VideoFile {
+                                path: entry.path().to_path_buf(),
+                                name: entry.file_name().to_string_lossy().to_string(),
+                                size: entry.metadata().map(|m| m.len()).unwrap_or(0),
+                                relative_path: entry.path()
+                                    .strip_prefix(&root_path)
+                                    .unwrap_or(entry.path())
+                                    .to_path_buf(),
+                            };
+                            
+                            video_files.push(video_file);
+                        }
+                    }
+                }
+                
+                // Small delay to allow cancellation
+                if batch_size < usize::MAX {
+                    std::thread::sleep(std::time::Duration::from_millis(1));
+                }
+            }
+            
+            if video_files.is_empty() {
+                Err(ImportError::NoContent)
+            } else {
+                Ok(video_files)
+            }
+        })
+        .await
+        .unwrap_or_else(|e| Err(ImportError::FileSystem(format!("Join error: {}", e))))
+    }
+    
+    /// Checks if a file is a video based on its extension
+    fn is_video_file(&self, path: &Path) -> bool {
+        if let Some(ext) = path.extension() {
+            let ext = ext.to_string_lossy().to_lowercase();
+            self.video_extensions.contains(&ext)
+        } else {
+            false
+        }
+    }
+}
+
+/// Represents a video file discovered during scanning
+#[derive(Debug, Clone)]
+pub struct VideoFile {
+    pub path: PathBuf,
+    pub name: String,
+    pub size: u64,
+    pub relative_path: PathBuf,
+}
+
+/// Legacy function for backward compatibility
+pub fn scan_directory(path: &Path) -> Result<Vec<PathBuf>, ImportError> {
+    log::info!("Using legacy scan_directory (non-recursive)");
+    let ingest = EnhancedLocalIngest::new();
+    let video_files = ingest.scan_directory_recursive(path, None)?;
+    Ok(video_files.into_iter().map(|vf| vf.path).collect())
 }
 
 /// Import video titles and durations from a local folder containing video files

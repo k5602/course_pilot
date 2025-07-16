@@ -2,15 +2,15 @@ use dioxus::prelude::*;
 use dioxus_desktop::use_window; // Import the hook to interact with the desktop window
 use std::fmt;
 use std::path::PathBuf;
-use std::rc::Rc;
+
 
 // Local imports
 use crate::ui::components::toast;
 use crate::ui::components::ToastContainer;
 use crate::ui::layout::AppShell;
 use crate::ui::theme_unified::{AppTheme, ThemeContext};
-use course_pilot::storage::database::Database;
-use course_pilot::types::{AppState, Route};
+use crate::storage::database::Database;
+use crate::types::{AppState, Route};
 use dioxus_signals::Signal;
 use dioxus_toast::ToastManager;
 use log::info;
@@ -31,16 +31,16 @@ pub fn AppRoot() -> Element {
     let backend_adapter: Arc<Backend> = Arc::new(Backend::new(db.clone()));
 
     // Load initial data (sync, for initial AppState)
-    let courses = course_pilot::storage::load_courses(&db).unwrap_or_default();
+    let courses = crate::storage::load_courses(&db).unwrap_or_default();
     let mut plans = Vec::new();
     let mut notes = Vec::new();
 
     for course in &courses {
-        if let Ok(Some(plan)) = course_pilot::storage::get_plan_by_course_id(&db, &course.id) {
+        if let Ok(Some(plan)) = crate::storage::get_plan_by_course_id(&db, &course.id) {
             plans.push(plan);
         }
-        if let Ok(mut conn) = db.get_conn() {
-            if let Ok(mut course_notes) = course_pilot::storage::get_notes_by_course(&conn, course.id) {
+        if let Ok(conn) = db.get_conn() {
+            if let Ok(mut course_notes) = crate::storage::get_notes_by_course(&conn, course.id) {
                 notes.append(&mut course_notes);
             }
         }

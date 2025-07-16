@@ -398,15 +398,10 @@ mod tests {
     use chrono::Utc;
     use dioxus::prelude::*;
 
-    // Helper to set up a test environment with a Dioxus VirtualDom and AppState context
+    // Helper to set up a test environment with AppState
     fn setup_test_env() -> Signal<AppState> {
-        let mut dom = VirtualDom::new(|| {
-            let app_state = use_signal(AppState::default);
-            use_context_provider(|| app_state);
-            rsx! { div {} } // Dummy component
-        });
-        dom.rebuild_in_place();
-        *dom.base_scope().consume_context::<Signal<AppState>>().unwrap()
+        // For unit tests, we'll create the signal directly
+        Signal::new(AppState::default())
     }
 
     fn create_test_course(name: &str) -> Course {

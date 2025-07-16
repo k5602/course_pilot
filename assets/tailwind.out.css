@@ -838,6 +838,9 @@
   .collapse {
     visibility: collapse;
   }
+  .invisible {
+    visibility: hidden;
+  }
   .visible {
     visibility: visible;
   }
@@ -1513,38 +1516,6 @@
       outline: 2px solid currentColor;
     }
   }
-  .swap {
-    position: relative;
-    display: inline-grid;
-    cursor: pointer;
-    place-content: center;
-    vertical-align: middle;
-    webkit-user-select: none;
-    user-select: none;
-    input {
-      appearance: none;
-      border: none;
-    }
-    > * {
-      grid-column-start: 1;
-      grid-row-start: 1;
-      transition-property: transform, rotate, opacity;
-      transition-duration: 0.2s;
-      transition-timing-function: cubic-bezier(0, 0, 0.2, 1);
-    }
-    .swap-on, .swap-indeterminate, input:indeterminate ~ .swap-on {
-      opacity: 0%;
-    }
-    input:is(:checked, :indeterminate) {
-      & ~ .swap-off {
-        opacity: 0%;
-      }
-    }
-    input:checked ~ .swap-on, input:indeterminate ~ .swap-indeterminate {
-      opacity: 100%;
-      backface-visibility: visible;
-    }
-  }
   .collapse-title {
     grid-column-start: 1;
     grid-row-start: 1;
@@ -1643,13 +1614,6 @@
       cursor: not-allowed;
       opacity: 20%;
     }
-  }
-  .stats {
-    position: relative;
-    display: inline-grid;
-    grid-auto-flow: column;
-    overflow-x: auto;
-    border-radius: var(--radius-box);
   }
   .progress {
     position: relative;
@@ -2042,9 +2006,6 @@
   }
   .mr-2 {
     margin-right: calc(var(--spacing) * 2);
-  }
-  .mr-6 {
-    margin-right: calc(var(--spacing) * 6);
   }
   .mb-1 {
     margin-bottom: calc(var(--spacing) * 1);
@@ -2443,19 +2404,6 @@
   .transform {
     transform: var(--tw-rotate-x,) var(--tw-rotate-y,) var(--tw-rotate-z,) var(--tw-skew-x,) var(--tw-skew-y,);
   }
-  .skeleton {
-    border-radius: var(--radius-box);
-    background-color: var(--color-base-300);
-    @media (prefers-reduced-motion: reduce) {
-      transition-duration: 15s;
-    }
-    will-change: background-position;
-    animation: skeleton 1.8s ease-in-out infinite;
-    background-image: linear-gradient( 105deg, #0000 0% 40%, var(--color-base-100) 50%, #0000 60% 100% );
-    background-size: 200% auto;
-    background-repeat: no-repeat;
-    background-position-x: -50%;
-  }
   .animate-pulse {
     animation: var(--animate-pulse);
   }
@@ -2661,6 +2609,9 @@
   }
   .pb-4 {
     padding-bottom: calc(var(--spacing) * 4);
+  }
+  .text-center {
+    text-align: center;
   }
   .text-right {
     text-align: right;

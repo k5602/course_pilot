@@ -402,11 +402,11 @@ pub fn AdvancedTabs(
     let class = class.as_deref().unwrap_or("tabs tabs-boxed");
     let mut mounted_tabs = use_signal(|| HashSet::new());
 
-    // Mark the selected tab as mounted
-    {
+    // Mark the selected tab as mounted using an effect to avoid render-time signal writes
+    use_effect(move || {
         let mut set = mounted_tabs.write();
         set.insert(selected);
-    }
+    });
 
     let tabs_rc = Rc::new(tabs);
     let on_select_clone = on_select.clone();

@@ -64,7 +64,8 @@ mod tests {
             label: None,
         };
         let mut dom = VirtualDom::new_with_props(ProgressRing, props);
-        let _ = dom.rebuild();
+        let mut to = Vec::new();
+        dom.rebuild(&mut to);
         let rendered = dioxus_ssr::render(&dom);
         assert!(rendered.contains("radial-progress"));
         assert!(rendered.contains("text-accent"));
@@ -83,7 +84,8 @@ mod tests {
             label: Some(label),
         };
         let mut dom = VirtualDom::new_with_props(ProgressRing, props);
-        let _ = dom.rebuild();
+        let mut to = Vec::new();
+        dom.rebuild(&mut to);
         let rendered = dioxus_ssr::render(&dom);
         assert!(rendered.contains("Done"));
         assert!(rendered.contains("radial-progress"));

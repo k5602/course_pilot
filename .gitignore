@@ -6,7 +6,7 @@
 *.wasm.d.ts
 
 # Dioxus component build artifacts
-src/ui/components/preview/
+src/ui/compone// Convert to 0.0-1.0 rangents/preview/
 src/ui/components/primitives/
 src/ui/components/*/docs.md
 src/ui/components/**/*.md
@@ -44,6 +44,7 @@ yarn.lock
 *.sublime-workspace
 *.sublime-project
 *.code-workspace
+/.kiro
 
 # OS files
 *.DS_Store

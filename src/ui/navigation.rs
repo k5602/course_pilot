@@ -1,6 +1,6 @@
 /// Navigation and sidebar logic for Course Pilot UI.
 /// Uses project Route enum for route management and sidebar state.
-use course_pilot::types::Route;
+use crate::types::Route;
 use dioxus::prelude::*;
 use uuid::Uuid;
 

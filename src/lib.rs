@@ -15,6 +15,7 @@ pub mod planner;
 pub mod state;
 pub mod storage;
 pub mod types;
+pub mod ui;
 
 // Re-export commonly used types for convenience
 pub use types::{
@@ -101,6 +102,45 @@ pub enum DatabaseError {
 
     #[error("Data not found: {0}")]
     NotFound(String),
+}
+
+// Phase 3 specific error types for backend integration and progress tracking
+#[derive(Error, Debug)]
+pub enum Phase3Error {
+    #[error("Backend operation failed: {0}")]
+    Backend(#[from] anyhow::Error),
+    
+    #[error("Plan item not found: plan_id={plan_id}, item_index={item_index}")]
+    PlanItemNotFound { plan_id: uuid::Uuid, item_index: usize },
+    
+    #[error("Ingest operation failed: {0}")]
+    Ingest(String),
+    
+    #[error("UI state synchronization failed: {0}")]
+    StateSyncError(String),
+}
+
+/// Helper function to handle async errors consistently
+pub fn handle_async_error(error: anyhow::Error, operation: &str) {
+    log::error!("Async operation '{}' failed: {}", operation, error);
+    
+    let user_message = match error.downcast_ref::<Phase3Error>() {
+        Some(Phase3Error::PlanItemNotFound { .. }) => {
+            "The item you're trying to update no longer exists. Please refresh the page."
+        }
+        Some(Phase3Error::Backend(_)) => {
+            "A server error occurred. Please try again in a moment."
+        }
+        Some(Phase3Error::Ingest(msg)) => {
+            &format!("Import failed: {}", msg)
+        }
+        Some(Phase3Error::StateSyncError(_)) => {
+            "UI state synchronization failed. Please refresh the page."
+        }
+        _ => "An unexpected error occurred. Please try again."
+    };
+    
+    log::info!("User-friendly error message: {}", user_message);
 }
 
 // Global result type for convenience

@@ -6,10 +6,10 @@ use crate::ui::notes_panel::NotesPanel;
 use crate::ui::plan_view::PlanView;
 use crate::ui::theme_unified::ThemeToggleButton;
 // use command_palette::{CommandAction, CommandPalette};
-use course_pilot::types::{ContextualPanelTab, Route};
+use crate::types::{ContextualPanelTab, Route};
 use dioxus::prelude::*;
 use dioxus_motion::prelude::*;
-use std::rc::Rc;
+
 
 // Layout constants
 #[allow(dead_code)]
@@ -29,8 +29,9 @@ pub fn AppShell() -> Element {
     let sidebar_open_mobile = app_state.read().sidebar_open_mobile;
     let mut is_hovered = use_signal(|| false);
 
-    let mut main_opacity = use_motion(0.0f32);
-    let mut main_y = use_motion(-16.0f32);
+    // Remove problematic animation for now - main content should be immediately visible
+    // let mut main_opacity = use_motion(1.0f32);
+    // let mut main_y = use_motion(0.0f32);
 
     // --- CommandPalette state and logic ---
     // let mut show_palette = use_signal(|| false);
@@ -93,13 +94,14 @@ pub fn AppShell() -> Element {
     //     });
     // }
 
-    let main_content_style = use_memo(move || {
-        format!(
-            "opacity: {}; transform: translateY({}px);",
-            main_opacity.get_value(),
-            main_y.get_value()
-        )
-    });
+    // Remove the problematic style that was making content invisible
+    // let main_content_style = use_memo(move || {
+    //     format!(
+    //         "opacity: {}; transform: translateY({}px);",
+    //         main_opacity.get_value(),
+    //         main_y.get_value()
+    //     )
+    // });
 
     let main_class = format!(
         "flex-1 flex flex-col overflow-hidden {}",
@@ -126,7 +128,6 @@ pub fn AppShell() -> Element {
                 }
                 div {
                     class: "{main_class}",
-                    style: "{main_content_style}",
                     TopBar {}
                     MainContent { route: route }
                 }

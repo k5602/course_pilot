@@ -249,6 +249,53 @@ impl Plan {
     }
 }
 
+/// Identifier for a plan item using composite key
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+pub struct PlanItemIdentifier {
+    pub plan_id: Uuid,
+    pub item_index: usize,
+}
+
+impl PlanItemIdentifier {
+    pub fn new(plan_id: Uuid, item_index: usize) -> Self {
+        Self { plan_id, item_index }
+    }
+}
+
+/// Extension trait for Plan operations
+pub trait PlanExt {
+    fn get_item_identifier(&self, index: usize) -> PlanItemIdentifier;
+    fn update_item_completion(&mut self, index: usize, completed: bool) -> Result<(), String>;
+    fn calculate_progress(&self) -> (usize, usize, f32);
+}
+
+impl PlanExt for Plan {
+    fn get_item_identifier(&self, index: usize) -> PlanItemIdentifier {
+        PlanItemIdentifier::new(self.id, index)
+    }
+    
+    fn update_item_completion(&mut self, index: usize, completed: bool) -> Result<(), String> {
+        if let Some(item) = self.items.get_mut(index) {
+            item.completed = completed;
+            Ok(())
+        } else {
+            Err(format!("Plan item index {} out of bounds", index))
+        }
+    }
+    
+    fn calculate_progress(&self) -> (usize, usize, f32) {
+        let total_count = self.items.len();
+        let completed_count = self.items.iter().filter(|item| item.completed).count();
+        let percentage = if total_count > 0 {
+            (completed_count as f32 / total_count as f32) * 100.0
+        } else {
+            0.0
+        };
+        
+        (completed_count, total_count, percentage)
+    }
+}
+
 impl ImportJob {
     pub fn new(message: String) -> Self {
         Self {

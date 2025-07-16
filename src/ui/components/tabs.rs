@@ -1,5 +1,4 @@
 use dioxus::prelude::*;
-use dioxus_free_icons::Icon;
 use dioxus_motion::prelude::*;
 
 /// DaisyUI Tabs component (Dioxus idioms, 0.6+)

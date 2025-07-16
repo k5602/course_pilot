@@ -1,6 +1,6 @@
 use crate::ui::components::toast::toast;
-use crate::ui::hooks::use_plan;
-use course_pilot::types;
+use crate::ui::hooks::use_plan_resource;
+use crate::types::{self, PlanExt};
 use dioxus::prelude::*;
 use dioxus_free_icons::icons::fa_solid_icons::{FaCheckDouble, FaSquare};
 use dioxus_free_icons::Icon;
@@ -10,10 +10,19 @@ use uuid::Uuid;
 /// PlanView: Checklist of modules and sections with progress and session controls, wired to AppState/backend
 #[component]
 pub fn PlanView(course_id: Uuid) -> Element {
-    let plan_future = use_plan(course_id);
-    match plan_future.state() {
-        UseFutureState::Pending => {
-            toast::info("Loading study plan...");
+    let plan_resource = use_plan_resource(course_id);
+    
+    // Show loading toast only once when plan is None - separate the read and write
+    use_effect(use_reactive!(|plan_resource| {
+        if plan_resource.read().is_none() {
+            spawn(async move {
+                toast::info("Loading study plan...");
+            });
+        }
+    }));
+    
+    match &*plan_resource.read_unchecked() {
+        None => {
             return rsx! {
                 section {
                     class: "w-full max-w-3xl mx-auto px-4 py-8",
@@ -24,36 +33,23 @@ pub fn PlanView(course_id: Uuid) -> Element {
                 }
             };
         }
-        UseFutureState::Errored(err) => {
-            toast::error(format!("Failed to load study plan: {err}"));
+        Some(Err(err)) => {
+            let error_msg = format!("Failed to load study plan: {err}");
+            // Show error toast in a spawn to avoid render-time signal writes
+            spawn(async move {
+                toast::error(error_msg);
+            });
             return rsx! {
                 section {
                     class: "w-full max-w-3xl mx-auto px-4 py-8 flex flex-col items-center justify-center",
-                    div { class: "text-error", {format!("Failed to load study plan: {err}")}}
+                    div { class: "text-error", "Failed to load study plan." }
                 }
             };
         }
-        UseFutureState::Ready => {
-            let plan_opt = plan_future.data();
-            let plan = match plan_opt.and_then(|x| x.as_ref()) {
-                Some(plan) => plan,
-                None => {
-                    return rsx! {
-                        section {
-                            class: "w-full max-w-3xl mx-auto px-4 py-8 flex flex-col items-center justify-center",
-                            div { class: "text-base-content/60", "No study plan found for this course." }
-                        }
-                    };
-                }
-            };
-
-            let total_sections = plan.items.len();
-            let completed_sections = plan.items.iter().filter(|s| s.completed).count();
-            let progress = if total_sections > 0 {
-                (completed_sections as f32 / total_sections as f32 * 100.0).round() as u8
-            } else {
-                0
-            };
+        Some(Ok(Some(plan))) => {
+            // Use enhanced progress calculation
+            let (completed_sections, total_sections, progress_percentage) = plan.calculate_progress();
+            let progress = progress_percentage.round() as u8;
 
             // Animate checklist presence
             let mut list_opacity = use_motion(0.0f32);
@@ -117,8 +113,35 @@ pub fn PlanView(course_id: Uuid) -> Element {
                         class: "space-y-4",
                         style: "{list_style}",
                         {plan.items.iter().enumerate().map(|(idx, item)| rsx! {
-                            PlanChecklistItem { item: item.clone(), idx }
+                            PlanChecklistItem { 
+                                plan_id: plan.id,
+                                item: item.clone(), 
+                                item_index: idx 
+                            }
                         })}
+                    }
+                }
+            };
+        }
+        Some(Ok(None)) => {
+            // No plan exists for this course
+            return rsx! {
+                section {
+                    class: "w-full max-w-3xl mx-auto px-4 py-8 flex flex-col items-center justify-center",
+                    h1 { class: "text-2xl font-bold mb-6", "Study Plan" }
+                    div { class: "text-base-content/60 text-center", 
+                        "No study plan found for this course."
+                        br {}
+                        "Create a plan to start tracking your progress."
+                    }
+                    button {
+                        class: "btn btn-primary mt-4",
+                        onclick: move |_| {
+                            spawn(async move {
+                                toast::info("Plan creation not implemented yet");
+                            });
+                        },
+                        "Create Study Plan"
                     }
                 }
             };
@@ -128,8 +151,30 @@ pub fn PlanView(course_id: Uuid) -> Element {
 
 /// PlanChecklistItem: Single checklist item for a plan section/video
 #[component]
-fn PlanChecklistItem(item: types::PlanItem, idx: usize) -> Element {
-    let check_icon = if item.completed {
+fn PlanChecklistItem(
+    plan_id: Uuid,
+    item: types::PlanItem, 
+    item_index: usize
+) -> Element {
+    let toggle_completion = crate::ui::hooks::use_toggle_plan_item_action();
+    let mut local_completed = use_signal(|| item.completed);
+    
+    // Sync local state with prop changes
+    use_effect(move || {
+        local_completed.set(item.completed);
+    });
+    
+    let toggle_handler = move |_| {
+        let new_state = !local_completed();
+        
+        // Optimistic update
+        local_completed.set(new_state);
+        
+        // Call backend
+        toggle_completion(plan_id, item_index, new_state);
+    };
+
+    let check_icon = if local_completed() {
         rsx! {
             Icon { icon: FaCheckDouble, class: "w-5 h-5 text-success" }
         }
@@ -140,13 +185,13 @@ fn PlanChecklistItem(item: types::PlanItem, idx: usize) -> Element {
     };
     let status_badge = rsx! {
         crate::ui::components::modal_confirmation::Badge {
-            label: if item.completed { "Done".to_string() } else { "Pending".to_string() },
-            color: Some(if item.completed { "success".to_string() } else { "accent".to_string() }),
+            label: if local_completed() { "Done".to_string() } else { "Pending".to_string() },
+            color: Some(if local_completed() { "success".to_string() } else { "accent".to_string() }),
             class: Some("ml-2".to_string()),
         }
     };
 
-    let text_classes = if item.completed {
+    let text_classes = if local_completed() {
         "line-through text-base-content/40"
     } else {
         "text-base-content"
@@ -175,62 +220,15 @@ fn PlanChecklistItem(item: types::PlanItem, idx: usize) -> Element {
         )
     });
 
-    // Modal state for destructive action
-    let mut show_delete_modal = use_signal(|| false);
-
     rsx! {
         li {
             class: "flex items-center gap-3 px-2 py-2 rounded hover:bg-base-300 transition-colors cursor-pointer",
             style: "{item_style}",
-            // on_click: move |_| { ...toggle complete... },
+            onclick: toggle_handler,
             {check_icon}
             span { class: "flex-1 text-sm {text_classes}", "{item.module_title} / {item.section_title}" }
             {status_badge}
             span { class: "text-xs text-base-content/60", "{item.date.format(\"%Y-%m-%d\")}" }
-            crate::ui::components::modal_confirmation::ActionMenu {
-                actions: vec![
-                    crate::ui::components::modal_confirmation::DropdownItem {
-                        label: "Delete".to_string(),
-                        icon: None,
-                        on_select: Some(EventHandler::new({
-                            let mut show_delete_modal = show_delete_modal.clone();
-                            move |_| show_delete_modal.set(true)
-                        })),
-                        children: None,
-                        disabled: false,
-                    }
-                ],
-                class: Some("ml-2".to_string()),
-            }
-            crate::ui::components::modal_confirmation::ModalConfirmation {
-                open: show_delete_modal(),
-                title: "Delete Plan Item".to_string(),
-                message: "Are you sure you want to delete this plan item? This action cannot be undone.".to_string(),
-                confirm_label: Some("Delete".to_string()),
-                cancel_label: Some("Cancel".to_string()),
-                confirm_color: Some("error".to_string()),
-                on_confirm: Some(EventHandler::new({
-                    let mut show_delete_modal = show_delete_modal.clone();
-    // PlanItem has no id field; use another unique identifier if needed
-    // let plan_id = item.id;
-                    move |_| {
-                        show_delete_modal.set(false);
-                        // Async delete using backend_adapter
-                        let backend_adapter = crate::ui::hooks::use_backend_adapter();
-                        let show_toast = crate::ui::hooks::use_show_toast();
-                        spawn(async move {
-                            match backend_adapter.delete_plan(plan_id).await {
-                                Ok(_) => show_toast("Plan item deleted", crate::ui::components::toast::ToastVariant::Success),
-                                Err(e) => show_toast(&format!("Failed to delete plan item: {e}"), crate::ui::components::toast::ToastVariant::Error),
-                            }
-                        });
-                    }
-                })),
-                on_cancel: Some(EventHandler::new({
-                    let mut show_delete_modal = show_delete_modal.clone();
-                    move |_| show_delete_modal.set(false)
-                })),
-            }
         }
     }
 }
