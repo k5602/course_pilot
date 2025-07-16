@@ -21,6 +21,9 @@ dioxus-router = { version = "0.6.3" }
 dioxus-sdk = "0.6.0"
 dioxus-signals = "0.6.0"
 
+# Asset management
+manganis = "0.6.2"
+
 # UI Components & Styling
 dioxus-daisyui = { version = "0.8.0" }
 dioxus-tailwindcss = { version = "=0.8.0" }

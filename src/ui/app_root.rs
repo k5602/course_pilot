@@ -1,9 +1,7 @@
 use dioxus::prelude::*;
-use dioxus_desktop::use_window; // Import the hook to interact with the desktop window
+use dioxus_desktop::use_window; 
 use std::fmt;
 use std::path::PathBuf;
-
-
 // Local imports
 use crate::ui::components::toast;
 use crate::ui::components::ToastContainer;

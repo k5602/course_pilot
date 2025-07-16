@@ -45,7 +45,7 @@ A scalable, modular, and future-proof roadmap for Dioxus Desktop UI & Backend In
   - [x] Implemented proper theme toggle functionality
 
 - [x] Implement Global Theming
-  - [x] DaisyUI lofi (light) and night (dark) themes
+  - [x] DaisyUI cooporate (light) and buissnes (dark) themes
   - [x] Theme toggle in App shell with context/signal
   - [x] Theme persistence in desktop-native config
   - [x] Fixed theme toggle functionality in `theme_unified.rs`
@@ -189,7 +189,7 @@ A scalable, modular, and future-proof roadmap for Dioxus Desktop UI & Backend In
 ### Complete & Functional
 
 - Tailwind CSS v4 + DaisyUI v5 integration complete with proper build pipeline
-- Theme system with lofi (light) and night (dark) themes
+- Theme system with cooporate (light) and night (buisness) themes
 - Responsive three-panel layout (sidebar, main, contextual panel)
 - Sidebar navigation with Dioxus Free Icons and DaisyUI components
 - Dashboard, PlanView, and NotesPanel UI scaffolding
@@ -345,7 +345,7 @@ A scalable, modular, and future-proof roadmap for Dioxus Desktop UI & Backend In
 - autoprefixer: ^10.4.21
 
 **Tailwind/DaisyUI Integration:**
-- tailwind.config.js and package.json confirm Tailwind v4 and DaisyUI v5, with DaisyUI themes set to "lofi" and "night".
+- tailwind.config.js and package.json confirm Tailwind v4 and DaisyUI v5, with DaisyUI themes set to "cooporate" and "buissnes".
 - All plugin and utility configuration is up-to-date for Tailwind v4+ and DaisyUI v5+.
 
 **Platform Focus:**

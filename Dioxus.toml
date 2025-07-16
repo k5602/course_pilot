@@ -1,7 +1,6 @@
 # Dioxus project configuration file
 
 [application]
-# The name of your application
 name = "course_pilot"
 
 # The default platform to run, build, or serve

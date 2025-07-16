@@ -37,24 +37,43 @@ pub fn ToastContainer() -> Element {
         div {
             class: "toast toast-end toast-bottom",
             DioxusToastFrame {
-                manager: manager.clone(),
+                manager: manager,
             }
         }
     }
 }
 
 /// Show a toast notification with the given message and variant
+/// This function can be called from event handlers and other contexts
 pub fn show_toast(message: impl Into<String>, variant: ToastVariant) {
     let msg = message.into();
-    let mut manager = use_toast_manager();
-    manager.with_mut(|manager| {
-        let info = match variant {
-            ToastVariant::Success => ToastInfo::success(msg.as_str(), "Success"),
-            ToastVariant::Error => ToastInfo::error(msg.as_str(), "Error"),
-            ToastVariant::Warning => ToastInfo::warning(msg.as_str(), "Warning"),
-            ToastVariant::Info => ToastInfo::simple(msg.as_str()),
-        };
-        let _ = manager.popup(info);
+    
+    // Use spawn to ensure this runs in the correct async context
+    spawn(async move {
+        // Try to get the toast manager from context
+        // This will work if called from within a component's event handler
+        if let Some(mut manager) = try_consume_context::<Signal<ToastManager>>() {
+            manager.with_mut(|toast_manager| {
+                let info = match variant {
+                    ToastVariant::Success => ToastInfo::success(&msg, "Success"),
+                    ToastVariant::Error => ToastInfo::error(&msg, "Error"),
+                    ToastVariant::Warning => ToastInfo::warning(&msg, "Warning"),
+                    ToastVariant::Info => ToastInfo::simple(&msg),
+                };
+                let _ = toast_manager.popup(info);
+            });
+        } else {
+            // Fallback: log the toast if context is not available
+            log::info!("Toast: {} - {}", 
+                match variant {
+                    ToastVariant::Success => "SUCCESS",
+                    ToastVariant::Error => "ERROR", 
+                    ToastVariant::Warning => "WARNING",
+                    ToastVariant::Info => "INFO",
+                },
+                msg
+            );
+        }
     });
 }
 
