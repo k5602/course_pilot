@@ -20,7 +20,6 @@ use crate::ui::backend_adapter::Backend;
 /// AppRoot: The root entry point for the Dioxus app.
 #[component]
 pub fn AppRoot() -> Element {
-    // Get a handle to the desktop window to run JavaScript
     let window = use_window();
 
     // --- DATABASE AND STATE INITIALIZATION ---
@@ -66,7 +65,6 @@ pub fn AppRoot() -> Element {
     provide_context(app_state.clone());
 
     // --- THEME SYNCHRONIZATION ---
-    // This effect hook is the key to the solution.
     // It runs whenever the theme_signal changes, ensuring the WebView UI is always in sync.
     let theme_signal = crate::ui::theme_unified::use_theme_context();
     use_effect(move || {
@@ -74,7 +72,6 @@ pub fn AppRoot() -> Element {
         info!("🎨 Applying theme to WebView: {}", theme_name);
 
         // This command sends JavaScript to the WebView to set the theme attribute.
-        // We use evaluate_script, which is the correct method on the wry::WebView object.
         let _ = window.webview.evaluate_script(&format!(
             "document.documentElement.setAttribute('data-theme', '{}');",
             theme_name
@@ -86,6 +83,11 @@ pub fn AppRoot() -> Element {
 
     // --- RENDER ---
     rsx! {
+        // Load CSS stylesheet
+        document::Stylesheet {
+            href: asset!("/assets/tailwind.out.css")
+        }
+
         // The ToastContainer is the single source for rendering all notifications.
         ToastContainer {}
 
