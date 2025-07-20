@@ -14,9 +14,9 @@ use uuid::Uuid;
 
 /// NotesPanel: Contextual panel with tabs for Notes and Player
 #[component]
-pub fn NotesPanel() -> Element {
-    // For demo, use a fixed course_id and video_id (replace with router param or prop)
-    let course_id = Uuid::nil();
+pub fn NotesPanel(course_id: Option<Uuid>) -> Element {
+    // Use the provided course_id or fall back to nil for backward compatibility
+    let course_id = course_id.unwrap_or(Uuid::nil());
     let video_id = None;
 
     // Use async notes resource and handle loading/error state
@@ -52,8 +52,8 @@ pub fn NotesPanel() -> Element {
                 crate::ui::components::modal_confirmation::TabData {
                     label: "Notes".to_string(),
                     content: rsx!(NotesTab {
-                        course_id,
-                        video_id
+                        course_id: course_id,
+                        video_id: video_id
                     }),
                     closable: false,
                 },
@@ -73,22 +73,6 @@ pub fn NotesPanel() -> Element {
                         selected: selected(),
                         on_select: move |idx| selected.set(idx),
                     }
-                }
-            }
-        }
-        _ => {
-            // fallback: loading
-            rsx! {
-                div {
-                    class: "flex flex-col h-full w-full p-4",
-                    div { class: "tabs tabs-boxed flex gap-2 p-2 bg-base-100/80 mb-4 animate-pulse" }
-                    {(0..3).map(|_| rsx! {
-                        div { class: "card bg-base-200 shadow-sm p-4 mb-4 animate-pulse",
-                            div { class: "h-4 w-1/2 bg-base-300 rounded mb-2" }
-                            div { class: "h-3 w-full bg-base-300 rounded mb-2" }
-                            div { class: "h-2 w-1/3 bg-base-300 rounded" }
-                        }
-                    })}
                 }
             }
         }
@@ -164,21 +148,6 @@ fn NotesTab(course_id: uuid::Uuid, video_id: Option<uuid::Uuid>) -> Element {
                             }
                         }
                     }
-                }
-            }
-        }
-        _ => {
-            // fallback: loading
-            rsx! {
-                div {
-                    class: "space-y-6",
-                    {(0..3).map(|_| rsx! {
-                        div { class: "card bg-base-200 shadow-sm p-4 mb-4 animate-pulse",
-                            div { class: "h-4 w-1/2 bg-base-300 rounded mb-2" }
-                            div { class: "h-3 w-full bg-base-300 rounded mb-2" }
-                            div { class: "h-2 w-1/3 bg-base-300 rounded" }
-                        }
-                    })}
                 }
             }
         }

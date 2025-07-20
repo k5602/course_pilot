@@ -146,10 +146,15 @@ pub fn ActionMenu(actions: Vec<DropdownItem>, #[props(optional)] class: Option<S
     };
 
     rsx! {
-        div { class: format!("relative inline-block {}", class),
+        div { 
+            class: format!("relative inline-block {}", class),
+            onclick: move |evt| evt.stop_propagation(), // Prevent event bubbling to parent
             button {
                 class: "btn btn-sm btn-outline flex items-center gap-2",
-                onclick: move |_| is_open.set(!is_open()),
+                onclick: move |evt| {
+                    evt.stop_propagation(); // Prevent event bubbling
+                    is_open.set(!is_open());
+                },
                 Icon { icon: FaCow, class: "w-5 h-5" }
                 span { class: "ml-1", "▼" }
             }
@@ -157,6 +162,7 @@ pub fn ActionMenu(actions: Vec<DropdownItem>, #[props(optional)] class: Option<S
                 div {
                     tabindex: "0",
                     onkeydown: onkeydown,
+                    onclick: move |evt: MouseEvent| evt.stop_propagation(), // Prevent event bubbling from dropdown
                     style: "outline: none;",
                     {
                         // Move render_menu inside the component so it can close over selected
@@ -171,7 +177,7 @@ pub fn ActionMenu(actions: Vec<DropdownItem>, #[props(optional)] class: Option<S
                             rsx! {
                                 ul {
                                     class: format!(
-                                        "menu menu-compact bg-base-200 rounded shadow-lg z-50 min-w-[10rem] absolute {} mt-2",
+                                        "menu menu-compact bg-base-200 rounded shadow-lg z-50 w-32 absolute {} mt-2",
                                         if depth == 0 { "right-0" } else { "left-full top-0 ml-2" }
                                     ),
                                     {
@@ -190,7 +196,8 @@ pub fn ActionMenu(actions: Vec<DropdownItem>, #[props(optional)] class: Option<S
                                                     onclick: {
                                                         let cb = item.on_select.clone();
                                                         let mut open_submenu_signal = open_submenu_signal.clone();
-                                                        move |_| {
+                                                        move |evt: MouseEvent| {
+                                                            evt.stop_propagation(); // Prevent event bubbling to parent card
                                                             if has_children {
                                                                 open_submenu_signal.set(Some(idx));
                                                             } else if let Some(f) = cb {
@@ -513,7 +520,7 @@ pub fn CircularProgress(
 ) -> Element {
     let value = value.clamp(0, 100);
     let size = size.unwrap_or(48);
-    let color = color.as_deref().unwrap_or("primary");
+    let _color = color.as_deref().unwrap_or("primary");
     let extra_class = class.as_deref().unwrap_or("");
     let radius = (size as f32) / 2.0 - 6.0;
     let circumference = 2.0 * std::f32::consts::PI * radius;

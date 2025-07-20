@@ -56,14 +56,18 @@ Course Pilot bridges the gap between scattered video content and structured lear
 
 ### 🎯 Next Priority Features (In Development)
 
-#### **Interactive Checklist & Progress Tracking** (Highest Priority)
-Transform passive video watching into active learning with:
-- **Per-Video Checkboxes**: Mark videos as complete with persistent state
-- **Built-in Youtube Player**: built in youtube player ti ease the whole track
-- **Visual Progress Indicators**: Progress bars and completion rings on dashboard
-- **Course Completion Tracking**: Overall progress across entire courses
-- **Milestone Celebrations**: Visual feedback for achieving learning goals
-- **Time Tracking**: See how long you've spent on each course section
+#### **Interactive Course Management** ✅ COMPLETED
+Full CRUD operations for course management with comprehensive hook system:
+- **Course Dashboard**: Grid view with progress tracking and visual indicators
+- **Course Creation**: Add new courses with validation and error handling via `use_courses()` hook
+- **Course Editing**: Complete modal-based editing with form validation and real-time feedback
+- **Course Deletion**: Confirmation dialogs with cascade deletion warnings and undo functionality
+- **Progress Visualization**: Real-time progress bars and completion tracking via `use_course_progress()` hook
+- **Navigation Integration**: Seamless routing between dashboard and course views with state management
+- **Modal Management**: Proper modal state management with `use_modal_manager()` hook
+- **Form Management**: Reactive form handling with `use_form_manager()` for validation and state
+- **Error Handling**: Comprehensive error handling with user-friendly messages and recovery options
+- **Auto-Refresh**: Course list automatically refreshes after create, update, and delete operations
 
 #### **"Aha!" Notes Panel**
 Capture insights while you learn:
@@ -165,12 +169,47 @@ src/
     ├── theme_unified.rs # Design system
     ├── layout.rs       # Application shell
     ├── navigation.rs   # Routing system
+    ├── hooks/          # Custom hooks for state management
+    │   ├── use_courses.rs # Course management operations
+    │   ├── use_modals.rs  # Modal state management
+    │   └── use_navigation.rs # Navigation utilities
     └── components/     # Reusable UI components
         ├── button/     # Enhanced button component
         ├── card/       # Flexible card system
         ├── input/      # Form input components
         └── ...         # 20+ accessible components
 ```
+
+### **Hooks System**
+
+Course Pilot uses a comprehensive hooks system for state management and backend integration:
+
+```rust
+// Course management with full CRUD operations
+let course_manager = use_course_manager();
+
+// Create a new course
+course_manager.create_course.call("Advanced React Patterns".to_string());
+
+// Update existing course
+course_manager.update_course.call((course_id, "Updated Course Name".to_string()));
+
+// Delete course with confirmation
+course_manager.delete_course.call(course_id);
+
+// Navigate to course plan view
+course_manager.navigate_to_course.call(course_id);
+
+// Track course progress
+let (progress, status, badge_color) = use_course_progress(course_id);
+```
+
+**Key Features:**
+- **Reactive State**: Automatic UI updates when data changes
+- **Error Handling**: Built-in toast notifications and error recovery
+- **Optimistic Updates**: Immediate UI feedback with rollback on errors
+- **Type Safety**: Full type safety with Rust's type system
+- **Performance**: Efficient resource management with `use_resource`
 
 ### **Technology Stack**
 

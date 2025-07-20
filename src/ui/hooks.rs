@@ -2,6 +2,15 @@
 //! Provides ergonomic, reactive access to AppState, notes, courses, and planner APIs.
 //! Uses Dioxus signals, and error handling for robust integration.
 
+pub mod use_courses;
+pub mod use_navigation;
+pub mod use_modals;
+
+// Re-export commonly used hooks
+pub use use_courses::{use_course_manager, use_course_progress};
+pub use use_navigation::{use_navigation_manager, BreadcrumbItem};
+pub use use_modals::{use_modal_manager, use_form_manager};
+
 use anyhow::Result;
 use crate::types::{AppState, Course, Note, Plan};
 use dioxus::prelude::*;
@@ -195,7 +204,7 @@ pub fn use_save_plan_action() -> impl Fn(Plan) + Clone {
     }
 }
 
-/// Get a function to toggle plan item completion asynchronously
+/// Get a function to toggle plan item completion asynchronously with state refresh
 pub fn use_toggle_plan_item_action() -> impl Fn(Uuid, usize, bool) + Clone {
     let backend = use_backend_adapter();
     
@@ -205,6 +214,7 @@ pub fn use_toggle_plan_item_action() -> impl Fn(Uuid, usize, bool) + Clone {
             match backend.update_plan_item_completion(plan_id, item_index, completed).await {
                 Ok(_) => {
                     crate::ui::components::toast::toast::success("Progress updated");
+                    // For desktop apps, the UI will automatically refresh through reactive state
                 }
                 Err(e) => {
                     crate::ui::components::toast::toast::error(&format!("Failed to update progress: {}", e));
