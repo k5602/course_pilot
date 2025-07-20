@@ -1,6 +1,6 @@
 use dioxus::prelude::*;
 use dioxus_free_icons::icons::fa_solid_icons::{
-    FaCheck, FaCow, FaExclamation, FaMagnifyingGlass, FaXmark,
+    FaCheck, FaEllipsisVertical, FaExclamation, FaMagnifyingGlass, FaXmark,
 };
 use dioxus_free_icons::Icon;
 
@@ -155,7 +155,7 @@ pub fn ActionMenu(actions: Vec<DropdownItem>, #[props(optional)] class: Option<S
                     evt.stop_propagation(); // Prevent event bubbling
                     is_open.set(!is_open());
                 },
-                Icon { icon: FaCow, class: "w-5 h-5" }
+                Icon { icon: FaEllipsisVertical, class: "w-5 h-5" }
                 span { class: "ml-1", "▼" }
             }
             if is_open() {

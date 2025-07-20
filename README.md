@@ -68,6 +68,7 @@ Full CRUD operations for course management with comprehensive hook system:
 - **Form Management**: Reactive form handling with `use_form_manager()` for validation and state
 - **Error Handling**: Comprehensive error handling with user-friendly messages and recovery options
 - **Auto-Refresh**: Course list automatically refreshes after create, update, and delete operations
+- **UI Polish**: Improved ActionMenu component with appropriate ellipsis icon for better UX
 
 #### **"Aha!" Notes Panel**
 Capture insights while you learn:

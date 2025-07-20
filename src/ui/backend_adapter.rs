@@ -257,23 +257,115 @@ impl Backend {
     }
 
     // --- Export ---
-    pub async fn export_course(&self, _course_id: Uuid) -> Result<Vec<u8>> {
-        // Placeholder: implement actual export logic as needed
-        Err(anyhow::anyhow!("Not implemented"))
-    }
-    pub async fn export_plan(&self, _plan_id: Uuid) -> Result<Vec<u8>> {
-        // Placeholder: implement actual export logic as needed
-        Err(anyhow::anyhow!("Not implemented"))
-    }
-    pub async fn export_notes(&self, course_id: Uuid) -> Result<Vec<u8>> {
+    pub async fn export_course(&self, course_id: Uuid, format: crate::export::ExportFormat) -> Result<crate::export::ExportResult> {
         let db = self.db.clone();
         tokio::task::spawn_blocking(move || {
-            let conn = db.get_conn()?;
-            let md = notes::export_notes_markdown_by_course(&conn, course_id)?;
-            Ok(md.into_bytes())
+            use crate::export::Exportable;
+            
+            // Load course data
+            let course = storage::get_course_by_id(&db, &course_id)?
+                .ok_or_else(|| anyhow::anyhow!("Course not found: {}", course_id))?;
+            
+            // Create export options
+            let options = crate::export::ExportOptions {
+                format,
+                include_metadata: true,
+                include_progress: true,
+                include_timestamps: true,
+                progress_callback: None,
+            };
+            
+            // Export with validation and error handling
+            course.export_with_options(options)
+                .map_err(|e| anyhow::anyhow!("Course export failed: {}", e))
         })
         .await
-        .unwrap_or_else(|e| Err(anyhow::anyhow!("Join error: {e}")))
+        .unwrap_or_else(|e| Err(anyhow::anyhow!("Join error: {}", e)))
+    }
+    
+    pub async fn export_plan(&self, plan_id: Uuid, format: crate::export::ExportFormat) -> Result<crate::export::ExportResult> {
+        let db = self.db.clone();
+        tokio::task::spawn_blocking(move || {
+            use crate::export::Exportable;
+            
+            // Load plan data
+            let plan = storage::load_plan(&db, &plan_id)?
+                .ok_or_else(|| anyhow::anyhow!("Plan not found: {}", plan_id))?;
+            
+            // Create export options
+            let options = crate::export::ExportOptions {
+                format,
+                include_metadata: true,
+                include_progress: true,
+                include_timestamps: true,
+                progress_callback: None,
+            };
+            
+            // Export with validation and error handling
+            plan.export_with_options(options)
+                .map_err(|e| anyhow::anyhow!("Plan export failed: {}", e))
+        })
+        .await
+        .unwrap_or_else(|e| Err(anyhow::anyhow!("Join error: {}", e)))
+    }
+    
+    pub async fn export_notes(&self, course_id: Uuid, format: crate::export::ExportFormat) -> Result<crate::export::ExportResult> {
+        let db = self.db.clone();
+        tokio::task::spawn_blocking(move || {
+            use crate::export::Exportable;
+            
+            // Load notes data
+            let conn = db.get_conn()?;
+            let notes = notes::get_notes_by_course(&conn, course_id)?;
+            
+            if notes.is_empty() {
+                return Err(anyhow::anyhow!("No notes found for course: {}", course_id));
+            }
+            
+            // Create export options
+            let options = crate::export::ExportOptions {
+                format,
+                include_metadata: true,
+                include_progress: false, // Notes don't have progress
+                include_timestamps: true,
+                progress_callback: None,
+            };
+            
+            // Export with validation and error handling
+            notes.export_with_options(options)
+                .map_err(|e| anyhow::anyhow!("Notes export failed: {}", e))
+        })
+        .await
+        .unwrap_or_else(|e| Err(anyhow::anyhow!("Join error: {}", e)))
+    }
+    
+    pub async fn export_course_with_progress<F>(&self, course_id: Uuid, format: crate::export::ExportFormat, progress_callback: F) -> Result<crate::export::ExportResult>
+    where
+        F: Fn(f32, String) + Send + Sync + 'static,
+    {
+        let db = self.db.clone();
+        tokio::task::spawn_blocking(move || {
+            use crate::export::Exportable;
+            
+            // Load course data
+            let course = storage::get_course_by_id(&db, &course_id)?
+                .ok_or_else(|| anyhow::anyhow!("Course not found: {}", course_id))?;
+            
+            // Create export options with progress callback
+            let options = crate::export::ExportOptions {
+                format,
+                include_metadata: true,
+                include_progress: true,
+                include_timestamps: true,
+                progress_callback: Some(Box::new(progress_callback)),
+            };
+            
+            // Export with progress tracking
+            course.export_with_options(options)
+                .map_err(|e| anyhow::anyhow!("Course export failed: {}", e))
+        })
+        .await
+        .unwrap_or_else(|e| Err(anyhow::anyhow!("Join error: {}", e)))
     }
 }
 

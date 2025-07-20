@@ -9,6 +9,7 @@
 
 // Main modules
 pub mod app;
+pub mod export;
 pub mod ingest;
 pub mod nlp;
 pub mod planner;
