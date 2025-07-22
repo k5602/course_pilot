@@ -45,8 +45,8 @@ pub fn Dashboard() -> Element {
         move |(source, _input, _settings): (ImportSource, String, ImportSettings)| {
             match source {
                 ImportSource::LocalFolder => {
-                    // Handle local folder import
-                    toast::info("Local folder import functionality will be implemented soon");
+                    // Local folder import is handled by the ImportModal component itself
+                    // Just close the modal as it will handle the actual import process
                     add_course_modal.close.call(());
                 }
                 ImportSource::YouTube => {

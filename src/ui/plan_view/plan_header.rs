@@ -1,9 +1,12 @@
 use dioxus::prelude::*;
 use crate::ui::components::modal_confirmation::{CircularProgress, Badge, ActionMenu, DropdownItem};
 use crate::ui::components::toast::toast;
+use crate::ui::backend_adapter::Backend;
+use crate::export::ExportFormat;
 
 #[derive(Props, PartialEq, Clone)]
 pub struct PlanHeaderProps {
+    pub plan_id: uuid::Uuid,
     pub progress: u8,
     pub completed_sections: usize,
     pub total_sections: usize,
@@ -12,21 +15,98 @@ pub struct PlanHeaderProps {
 /// Clean plan header component with progress and actions
 #[component]
 pub fn PlanHeader(props: PlanHeaderProps) -> Element {
+    let backend = use_context::<std::sync::Arc<Backend>>();
+    
     let actions = vec![
         DropdownItem {
-            label: "Clear Plan".to_string(),
+            label: "Export as JSON".to_string(),
             icon: None,
-            on_select: Some(EventHandler::new(|_| {
-                toast::warning("Clear plan functionality will be implemented");
+            on_select: Some(EventHandler::new({
+                let backend = backend.clone();
+                let plan_id = props.plan_id;
+                move |_| {
+                    let backend = backend.clone();
+                    spawn(async move {
+                        toast::info("Exporting plan as JSON...");
+                        match backend.export_plan(plan_id, ExportFormat::Json).await {
+                            Ok(export_result) => {
+                                match backend.save_export_data(export_result).await {
+                                    Ok(file_path) => {
+                                        toast::success(&format!("Plan exported successfully to {}", file_path.display()));
+                                    },
+                                    Err(e) => {
+                                        toast::error(&format!("Failed to save export: {}", e));
+                                    }
+                                }
+                            },
+                            Err(e) => {
+                                toast::error(&format!("Export failed: {}", e));
+                            }
+                        }
+                    });
+                }
             })),
             children: None,
             disabled: false,
         },
         DropdownItem {
-            label: "Export Plan".to_string(),
+            label: "Export as CSV".to_string(),
             icon: None,
-            on_select: Some(EventHandler::new(|_| {
-                toast::info("Export plan functionality will be implemented");
+            on_select: Some(EventHandler::new({
+                let backend = backend.clone();
+                let plan_id = props.plan_id;
+                move |_| {
+                    let backend = backend.clone();
+                    spawn(async move {
+                        toast::info("Exporting plan as CSV...");
+                        match backend.export_plan(plan_id, ExportFormat::Csv).await {
+                            Ok(export_result) => {
+                                match backend.save_export_data(export_result).await {
+                                    Ok(file_path) => {
+                                        toast::success(&format!("Plan exported successfully to {}", file_path.display()));
+                                    },
+                                    Err(e) => {
+                                        toast::error(&format!("Failed to save export: {}", e));
+                                    }
+                                }
+                            },
+                            Err(e) => {
+                                toast::error(&format!("Export failed: {}", e));
+                            }
+                        }
+                    });
+                }
+            })),
+            children: None,
+            disabled: false,
+        },
+        DropdownItem {
+            label: "Export as PDF".to_string(),
+            icon: None,
+            on_select: Some(EventHandler::new({
+                let backend = backend.clone();
+                let plan_id = props.plan_id;
+                move |_| {
+                    let backend = backend.clone();
+                    spawn(async move {
+                        toast::info("Exporting plan as PDF...");
+                        match backend.export_plan(plan_id, ExportFormat::Pdf).await {
+                            Ok(export_result) => {
+                                match backend.save_export_data(export_result).await {
+                                    Ok(file_path) => {
+                                        toast::success(&format!("Plan exported successfully to {}", file_path.display()));
+                                    },
+                                    Err(e) => {
+                                        toast::error(&format!("Failed to save export: {}", e));
+                                    }
+                                }
+                            },
+                            Err(e) => {
+                                toast::error(&format!("Export failed: {}", e));
+                            }
+                        }
+                    });
+                }
             })),
             children: None,
             disabled: false,

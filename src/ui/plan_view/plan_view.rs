@@ -140,6 +140,7 @@ fn render_plan_content(
             h1 { class: "text-2xl font-bold mb-6", "Study Plan" }
             
             PlanHeader {
+                plan_id: plan.id,
                 progress: progress,
                 completed_sections: completed_sections,
                 total_sections: total_sections,

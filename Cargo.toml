@@ -27,7 +27,6 @@ manganis = "0.6.2"
 # UI Components & Styling
 dioxus-daisyui = { version = "0.8.0" }
 dioxus-tailwindcss = { version = "=0.8.0" }
-dioxus-toast = { version = "0.6.0", features = ["desktop"] }
 dioxus-free-icons = { version = "0.9", features = [
     "material-design-icons-action",
     "material-design-icons-content",
@@ -45,6 +44,7 @@ serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
 simple_logger = "4.0"
 walkdir = "2.5.0"
+instant = "0.1.13"
 # Async Runtime & Utilities
 tokio = { version = "1", features = ["rt-multi-thread", "macros"] }
 tokio-stream = "0.1.17"

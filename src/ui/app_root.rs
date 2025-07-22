@@ -1,7 +1,6 @@
 use dioxus::prelude::*;
 use dioxus_desktop::use_window;
 use dioxus_signals::Signal;
-use dioxus_toast::ToastManager;
 use log::info;
 use std::fmt;
 use std::path::PathBuf;
@@ -22,7 +21,7 @@ pub fn AppRoot() -> Element {
     
     // Provide all contexts
     use_context_provider(|| Signal::new(ThemeContext::new()));
-    use_context_provider(|| Signal::new(ToastManager::default()));
+    toast::provide_toast_manager();
     provide_context(services.backend);
     provide_context(services.app_state);
     

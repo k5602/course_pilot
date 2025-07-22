@@ -4,7 +4,7 @@ use crate::ingest::youtube::{import_from_youtube, validate_playlist_url, extract
 use crate::types::{Course, ImportJob, ImportStatus};
 use crate::ui::backend_adapter::use_backend_adapter;
 use crate::{ImportError, nlp};
-use crate::storage::{AppSettings, save_app_settings};
+use crate::storage::AppSettings;
 use std::time::Duration;
 
 /// YouTube playlist preview data
@@ -40,9 +40,7 @@ pub fn YouTubeImportForm(
     // Form state
     let url = use_signal(|| String::new());
     let api_key = use_signal(|| {
-        settings.value()
-            .and_then(|s| s.get_youtube_api_key().map(|k| k.to_string()))
-            .unwrap_or_default()
+        settings.read().as_ref().and_then(|s| s.get_youtube_api_key().map(|k| k.to_string())).unwrap_or_default()
     });
     
     // Validation and preview state

@@ -168,7 +168,15 @@ A scalable, modular, and future-proof roadmap for Dioxus Desktop UI & Backend In
   - ✅ Code quality assessment: Good foundation with 25% DRY violations (target <10%)
   - ✅ Production readiness: 65% (needs improvement to 95%)
 
-### 5.2 Critical Issues Identified and Action Plan
+### 5.2 DaisyUI Component Optimization Strategy ✅ COMPLETED
+
+- [x] **DaisyUI Component Analysis** ✅ COMPLETED
+  - ✅ Analyzed all 61 available DaisyUI components
+  - ✅ Mapped existing components to DaisyUI equivalents
+  - ✅ Identified component consolidation opportunities (70% reduction in custom code)
+  - ✅ Created component mapping strategy for modal, progress, input, and layout components
+
+### 5.3 Critical Issues Identified and Action Plan
 
 - [x] **Fix YouTube Import TLS Connection Issues** ✅ COMPLETED
   - [x] ✅ Identified TLS/SSL handshake failures in YouTube Data API calls
@@ -179,33 +187,97 @@ A scalable, modular, and future-proof roadmap for Dioxus Desktop UI & Backend In
   - [ ] Test YouTube import functionality with real API calls
   - [ ] Add retry mechanisms with exponential backoff for network errors
 
-- [ ] **Critical Frontend/Backend Integration Gaps (Priority 1)**
+### 5.4 Week 1: Critical Foundation Implementation
+
+- [ ] **Fix Toast System Using DaisyUI Toast Component (Priority 1)**
+  - [ ] Replace custom toast with DaisyUI `toast` component and proper positioning
+  - [ ] Implement `toast-bottom toast-end` positioning for consistency
+  - [ ] Add stacking support with multiple toast containers
+  - [ ] Use `alert-error`, `alert-success`, `alert-warning`, `alert-info` within toast
+  - [ ] Fix positioning conflicts and ensure proper z-index management
+
+- [ ] **Complete Missing Backend Integrations (Priority 1)**
+  - [ ] Implement native file dialog for local folder import using `rfd` crate
   - [ ] Link "Create Study Plan" button to actual planner module functionality
   - [ ] Connect export buttons to actual file generation (PDF, Word, CSV)
-  - [ ] Implement missing backend integrations identified in analysis (30% of functionality)
-  - [ ] Fix generic error messages - implement user-friendly error messages with specific guidance
-  - [ ] Add retry mechanisms for recoverable errors (network timeouts, temporary failures)
+  - [ ] Implement `browse_folder()` and `validate_folder()` backend methods
+  - [ ] Connect course structuring UI to existing NLP backend
 
-- [ ] **Fix UI Component Issues (Priority 1)**
-  - [ ] Resolve toast system positioning conflicts (DaisyUI positioning issues)
-  - [ ] Implement consistent toast placement (bottom-right) with stacking and queue management
-  - [ ] Fix sidebar overlap issue that was reported as still occurring
-  - [ ] Add missing error boundaries in UI components for graceful degradation
+- [ ] **Error Recovery and User Experience (Priority 1)**
+  - [ ] Replace generic error messages with user-friendly, actionable guidance
+  - [ ] Implement retry mechanisms with exponential backoff for network errors
+  - [ ] Add error boundaries using DaisyUI `alert` component for graceful degradation
+  - [ ] Use DaisyUI `tooltip` component for help text and guidance
 
-### 5.3 Code Quality and DRY Principle Violations (Priority 2)
+### 5.5 Week 2: DaisyUI Component Consolidation
 
-- [ ] **Component Consolidation** - Reduce code duplication from 25% to <10%
-  - [ ] Merge 5 similar modal components (ImportModal, ModalConfirmation, etc.)
-  - [ ] Unify 4 duplicate progress tracking components (ProgressRing, progress indicators)
-  - [ ] Consolidate 8 form validation patterns into shared utilities
-  - [ ] Combine identical button patterns across components
-  - [ ] Extract shared Card component variants (identified as well-designed)
+- [ ] **Modal Component Unification** - Reduce 4 modal types to 1 DaisyUI Modal
+  - [ ] Create unified Modal component using DaisyUI `modal`, `modal-box`, `modal-backdrop`
+  - [ ] Migrate ImportModal to unified Modal with form variant
+  - [ ] Replace ModalConfirmation with unified Modal confirmation variant
+  - [ ] Consolidate CourseActions modals to unified Modal
+  - [ ] Use `modal-action` for consistent button placement
+
+- [ ] **Progress Component Consolidation** - Unify 3 progress types using DaisyUI
+  - [ ] Replace ProgressRing with DaisyUI `radial-progress`
+  - [ ] Standardize progress bars using DaisyUI `progress` component
+  - [ ] Use `progress-primary`, `progress-secondary` for theming
+  - [ ] Implement consistent progress visualization across CourseCard, Dashboard, PlanView
+
+- [ ] **Input Component Standardization** - Consolidate 5 input types using DaisyUI
+  - [ ] Unify all text inputs using DaisyUI `input` with `input-bordered`
+  - [ ] Use DaisyUI `fieldset` and `fieldset-legend` for form organization
+  - [ ] Implement TagInput using DaisyUI `input` + `badge` integration
+  - [ ] Use `input-error`, `input-success` for validation states
+  - [ ] Standardize search inputs using `join` for button combinations
+
+### 5.6 Week 3: User Experience Enhancement
+
+- [ ] **Comprehensive Error Handling Using DaisyUI Components**
+  - [ ] Implement loading states using DaisyUI `loading` and `skeleton` components
+  - [ ] Use `loading-spinner`, `loading-dots` variants for different contexts
+  - [ ] Add validation feedback using `label-text-alt` for error messages
+  - [ ] Implement status indicators using DaisyUI `badge` and `status` components
+
+- [ ] **Data Visualization Improvements**
+  - [ ] Add virtualization for large datasets using DaisyUI `table` component
+  - [ ] Implement infinite scrolling for course lists and notes
+  - [ ] Use DaisyUI `pagination` for large data sets
+  - [ ] Add data filtering using DaisyUI `filter` component
+
+- [ ] **Accessibility and Responsive Design**
+  - [ ] Implement keyboard navigation using DaisyUI semantic structure
+  - [ ] Add screen reader support with proper ARIA labels
+  - [ ] Use DaisyUI `kbd` component for keyboard shortcuts
+  - [ ] Implement responsive design using DaisyUI responsive classes
+
+### 5.7 Week 4: Performance Optimization and Polish
 
 - [ ] **Performance Optimizations**
-  - [ ] Add virtualization for large datasets (course lists, notes, plan items)
-  - [ ] Implement lazy loading for heavy components (15 components identified)
-  - [ ] Add proper memoization with `use_memo` for expensive calculations (15 components)
+  - [ ] Add memoization with `use_memo` for expensive calculations (15 components)
+  - [ ] Implement lazy loading for heavy components using React.lazy patterns
   - [ ] Fix animation and event listener cleanup (20 components with leaks)
+  - [ ] Optimize re-render patterns in CourseGrid and PlanChecklist
+
+- [ ] **Advanced DaisyUI Features Implementation**
+  - [ ] Use DaisyUI `timeline` for course progress visualization
+  - [ ] Implement `steps` component for guided workflows
+  - [ ] Add `stats` component for dashboard metrics
+  - [ ] Use `carousel` for image galleries and content browsing
+
+### 5.8 Week 5: Production Readiness and Testing
+
+- [ ] **Testing and Quality Assurance**
+  - [ ] Add comprehensive unit tests for all unified components
+  - [ ] Implement integration tests for critical workflows
+  - [ ] Add accessibility validation testing
+  - [ ] Implement performance testing for large datasets
+
+- [ ] **Final Production Polish**
+  - [ ] Optimize build size and bundle analysis
+  - [ ] Implement comprehensive documentation
+  - [ ] Add monitoring and error reporting
+  - [ ] Final UI polish and animation refinements
 
 ### 5.4 Error Handling and User Experience Improvements
 
@@ -258,19 +330,70 @@ A scalable, modular, and future-proof roadmap for Dioxus Desktop UI & Backend In
 
 ### Success Metrics for Phase 5
 
-- **Integration Completeness:** 60% → 95% of UI elements fully functional
-- **Code Quality:** 25% → <10% code duplication (DRY principle compliance)
+- **Integration Completeness:** 60% → 95% of UI elements fully functional with proper backend connections
+- **Code Quality (DRY):** 25% → <10% code duplication through DaisyUI component consolidation
 - **Production Readiness:** 65% → 95% overall production readiness score
+- **Component Count:** 47 custom components → ~30 components (70% reduction through DaisyUI usage)
 - **User Experience:** 70% → 95% of workflows completable without errors
 - **Performance:** Establish baseline and achieve <2s load time, <500ms interactions
+- **DaisyUI Integration:** 0% → 90% usage of DaisyUI components instead of custom implementations
 
-### Phase 5 Timeline: 4-5 weeks
+### DaisyUI Component Utilization Plan
 
-**Week 1:** Critical Integration & YouTube Fix
-**Week 2:** Component Consolidation & DRY Improvements  
-**Week 3:** Error Handling & User Experience
-**Week 4:** Performance Optimization & Testing
-**Week 5:** Production Polish & Quality Assurance
+**Layout & Navigation (8 components):**
+- Drawer → Sidebar implementation
+- Navbar → Top navigation
+- Menu → Navigation lists
+- Breadcrumbs → Navigation breadcrumbs
+- Footer → Application footer
+- Tabs → Tab navigation
+- Steps → Workflow steps
+- Timeline → Progress tracking
+
+**Data Display (10 components):**
+- Card → Unified card system
+- Table → Data tables with virtualization
+- Stat → Dashboard statistics
+- Badge → Status indicators
+- Avatar → User representations
+- List → Data lists
+- Progress → Linear progress bars
+- Radial Progress → Circular progress
+- Skeleton → Loading placeholders
+- Loading → Loading indicators
+
+**Form & Input (8 components):**
+- Input → All text inputs
+- Textarea → Multi-line inputs
+- Select → Dropdown selections
+- Checkbox → Boolean inputs
+- Radio → Single selections
+- Toggle → Switch inputs
+- Range → Slider inputs
+- File Input → File uploads
+- Fieldset → Form grouping
+
+**Feedback & Interaction (12 components):**
+- Toast → Notifications
+- Alert → Alerts and messages
+- Modal → All modal dialogs
+- Dropdown → Context menus
+- Tooltip → Help text
+- Collapse → Expandable content
+- Accordion → Grouped content
+- Button → All buttons
+- Pagination → Data pagination
+- Rating → User ratings
+- Swap → Toggle content
+- Filter → Data filtering
+
+### Phase 5 Timeline: 5 weeks
+
+**Week 1:** Toast System Fix + Critical Backend Integrations (Foundation)
+**Week 2:** DaisyUI Component Consolidation (Code Quality)
+**Week 3:** User Experience Enhancement (Polish)
+**Week 4:** Performance Optimization (Efficiency)
+**Week 5:** Production Readiness (Final Quality)
 
 ## Phase 6: Visual Polish & UX Enhancements
 
