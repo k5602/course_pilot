@@ -4,6 +4,7 @@ use crate::ingest::youtube::{import_from_youtube, validate_playlist_url, extract
 use crate::types::{Course, ImportJob, ImportStatus};
 use crate::ui::backend_adapter::use_backend_adapter;
 use crate::{ImportError, nlp};
+use crate::storage::{AppSettings, save_app_settings};
 use std::time::Duration;
 
 /// YouTube playlist preview data
@@ -33,9 +34,16 @@ pub fn YouTubeImportForm(
 ) -> Element {
     let backend = use_backend_adapter();
     
+    // Load settings and initialize API key from storage
+    let settings = use_resource(|| async { AppSettings::load().unwrap_or_default() });
+    
     // Form state
     let url = use_signal(|| String::new());
-    let api_key = use_signal(|| String::new());
+    let api_key = use_signal(|| {
+        settings.value()
+            .and_then(|s| s.get_youtube_api_key().map(|k| k.to_string()))
+            .unwrap_or_default()
+    });
     
     // Validation and preview state
     let validation_error = use_signal(|| Option::<String>::None);
@@ -151,7 +159,25 @@ pub fn YouTubeImportForm(
         let mut handle_url_change = handle_url_change.clone();
         
         move |new_api_key: String| {
-            api_key.set(new_api_key);
+            api_key.set(new_api_key.clone());
+            
+            // Save API key to settings asynchronously
+            spawn(async move {
+                if let Ok(mut settings) = AppSettings::load() {
+                    let api_key_to_save = if new_api_key.trim().is_empty() {
+                        None
+                    } else {
+                        Some(new_api_key.trim().to_string())
+                    };
+                    
+                    if let Err(e) = settings.set_youtube_api_key(api_key_to_save) {
+                        log::error!("Failed to save API key: {}", e);
+                        toast::toast::error("Failed to save API key settings");
+                    } else {
+                        log::info!("YouTube API key saved to settings");
+                    }
+                }
+            });
             
             // Re-validate URL if we have one
             if !url().trim().is_empty() {

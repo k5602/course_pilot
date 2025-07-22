@@ -3,7 +3,7 @@ use crate::types::Course;
 use crate::ui::components::card::{Card, CardVariant, ActionItem, BadgeData};
 use crate::ui::components::export_format_dialog::ExportFormatDialog;
 use crate::ui::hooks::{use_course_progress, use_course_manager, use_modal_manager};
-use super::CourseActions;
+use crate::ui::dashboard::course_actions::CourseActions;
 
 #[derive(Props, PartialEq, Clone)]
 pub struct CourseCardProps {
@@ -145,6 +145,41 @@ fn create_course_actions(
                 course_manager.navigate_to_course.call(course_id);
             })),
             disabled: false,
+        },
+        ActionItem {
+            label: "Create Study Plan".to_string(),
+            icon: None,
+            on_select: Some(EventHandler::new({
+                let backend = crate::ui::backend_adapter::use_backend_adapter();
+                let course_manager = course_manager.clone();
+                move |_| {
+                    let backend = backend.clone();
+                    let course_manager = course_manager.clone();
+                    spawn(async move {
+                        crate::ui::components::toast::toast::info("Creating study plan...");
+                        
+                        // Create default plan settings
+                        let settings = crate::types::PlanSettings {
+                            start_date: chrono::Utc::now() + chrono::Duration::days(1),
+                            sessions_per_week: 3,
+                            session_length_minutes: 60,
+                            include_weekends: false,
+                        };
+                        
+                        match backend.generate_plan(course_id, settings).await {
+                            Ok(_plan) => {
+                                crate::ui::components::toast::toast::success("Study plan created successfully!");
+                                // Navigate to the plan view to show the new plan
+                                course_manager.navigate_to_course.call(course_id);
+                            },
+                            Err(e) => {
+                                crate::ui::components::toast::toast::error(&format!("Failed to create study plan: {}", e));
+                            }
+                        }
+                    });
+                }
+            })),
+            disabled: course.structure.is_none(), // Disable if course is not structured
         },
         ActionItem {
             label: "Edit Course".to_string(),

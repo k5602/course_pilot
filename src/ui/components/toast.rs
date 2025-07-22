@@ -35,7 +35,8 @@ pub fn ToastContainer() -> Element {
 
     rsx! {
         div {
-            class: "toast toast-end toast-bottom",
+            // z-60 ensures toasts appear above modals (z-40/z-50) and other overlays
+            class: "toast toast-end toast-bottom z-60",
             DioxusToastFrame {
                 manager: manager,
             }

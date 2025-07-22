@@ -103,7 +103,7 @@ pub fn CourseActions(props: CourseActionsProps) -> Element {
             }
         }
         
-                // Delete confirmation modal
+        // Delete confirmation modal
         ModalConfirmation {
             open: props.delete_modal_open,
             on_cancel: props.on_delete_close.clone(),
