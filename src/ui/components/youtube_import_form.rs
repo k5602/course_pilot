@@ -87,7 +87,7 @@ pub fn YouTubeImportForm(
                         Ok(true) => {
                             // Load preview data
                             match import_from_youtube(&new_url, &api_key_val).await {
-                                Ok(sections) => {
+                                Ok((sections, metadata)) => {
                                     let total_duration = sections.iter()
                                         .map(|s| s.duration)
                                         .sum::<Duration>();
@@ -101,8 +101,8 @@ pub fn YouTubeImportForm(
                                     }).collect::<Vec<_>>();
                                     
                                     let preview_data = YouTubePlaylistPreview {
-                                        title: extract_course_name_from_url(&new_url),
-                                        video_count: videos.len(),
+                                        title: metadata.title,
+                                        video_count: metadata.video_count,
                                         total_duration,
                                         videos,
                                     };
@@ -179,7 +179,7 @@ pub fn YouTubeImportForm(
                 return;
             }
             
-            let course_name = if let Some(preview_data) = preview() {
+            let _course_name = if let Some(preview_data) = preview() {
                 preview_data.title
             } else {
                 extract_course_name_from_url(&url_val)
@@ -210,11 +210,12 @@ pub fn YouTubeImportForm(
                 progress_callback(10.0, "Fetching playlist data...".to_string());
                 
                 match import_from_youtube(&url_val, &api_key_val).await {
-                    Ok(sections) => {
+                    Ok((sections, metadata)) => {
                         progress_callback(40.0, "Processing video data...".to_string());
                         
                         // Convert to course
                         let raw_titles: Vec<String> = sections.iter().map(|s| s.title.clone()).collect();
+                        let course_name = metadata.title;
                         let mut course = Course::new(course_name, raw_titles);
                         
                         // Structure the course using NLP

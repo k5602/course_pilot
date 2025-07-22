@@ -161,7 +161,7 @@ fn render_plan_content(
 /// Render no plan state
 fn render_no_plan_state(course_id: Uuid) -> Element {
     let backend = crate::ui::backend_adapter::use_backend_adapter();
-    let mut is_creating = use_signal(|| false);
+    let is_creating = use_signal(|| false);
     
     let handle_create_plan = {
         let backend = backend.clone();

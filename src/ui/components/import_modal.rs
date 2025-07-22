@@ -253,14 +253,17 @@ pub fn ImportModal(props: ImportModalProps) -> Element {
                     onclick: move |_| props.on_close.call(()),
                     "Cancel"
                 }
-                button {
-                    class: "btn btn-primary",
-                    disabled: !is_valid || is_validating() || props.preview_loading,
-                    onclick: handle_import,
-                    if props.preview_loading {
-                        span { class: "loading loading-spinner loading-sm mr-2" }
+                // Only show import button for non-YouTube tabs (YouTube has its own button)
+                if current_source != ImportSource::YouTube {
+                    button {
+                        class: "btn btn-primary",
+                        disabled: !is_valid || is_validating() || props.preview_loading,
+                        onclick: handle_import,
+                        if props.preview_loading {
+                            span { class: "loading loading-spinner loading-sm mr-2" }
+                        }
+                        "Import Course"
                     }
-                    "Import Course"
                 }
             },
             
@@ -290,7 +293,9 @@ pub fn ImportModal(props: ImportModalProps) -> Element {
                             YouTubeImportFormWrapper {
                                 on_import_complete: move |_course| {
                                     props.on_close.call(());
-                                    toast::toast::success("Course imported successfully!");
+                                    if let Some(refresh_callback) = props.on_course_imported.as_ref() {
+                                        refresh_callback.call(());
+                                    }
                                 },
                             }
                         },

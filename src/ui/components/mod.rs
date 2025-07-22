@@ -6,6 +6,7 @@ pub mod button;
 pub mod card;
 pub mod command_palette;
 pub mod dropdown;
+pub mod export_format_dialog;
 pub mod import_modal;
 pub mod modal;
 pub mod modal_confirmation;

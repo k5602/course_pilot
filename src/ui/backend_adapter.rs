@@ -562,6 +562,43 @@ impl Backend {
         .unwrap_or_else(|e| Err(anyhow::anyhow!("Join error: {}", e)))
     }
     
+    /// Save exported data to a file using native save dialog
+    pub async fn save_export_data(&self, export_result: crate::export::ExportResult) -> Result<PathBuf> {
+        tokio::task::spawn_blocking(move || {
+            use rfd::FileDialog;
+            
+            // Create a suggested filename based on the export result
+            let filename = export_result.filename;
+            
+            // Determine file filter based on format
+            let filter = match export_result.format {
+                crate::export::ExportFormat::Json => ("JSON Files", &["json"]),
+                crate::export::ExportFormat::Csv => ("CSV Files", &["csv"]),
+                crate::export::ExportFormat::Pdf => ("PDF Files", &["pdf"]),
+            };
+            
+            // Show save dialog
+            let file_path = FileDialog::new()
+                .set_title("Save Export")
+                .set_file_name(&filename)
+                .add_filter(filter.0, filter.1)
+                .save_file();
+            
+            match file_path {
+                Some(path) => {
+                    // Write data to file
+                    std::fs::write(&path, &export_result.data)
+                        .map_err(|e| anyhow::anyhow!("Failed to write export file: {}", e))?;
+                    
+                    Ok(path)
+                },
+                None => Err(anyhow::anyhow!("Export cancelled by user")),
+            }
+        })
+        .await
+        .unwrap_or_else(|e| Err(anyhow::anyhow!("Join error: {}", e)))
+    }
+    
     /// Validate folder and scan for video content
     pub async fn validate_folder(&self, path: &Path) -> Result<FolderValidation> {
         let path = path.to_path_buf();
@@ -653,7 +690,7 @@ impl Backend {
                     validation.error_message.unwrap_or_else(|| "Unknown error".to_string())));
             }
             
-            // Use the ingest module to import from local folder
+            // Generate course title
             let course_title = course_title.unwrap_or_else(|| {
                 folder_path.file_name()
                     .and_then(|name| name.to_str())
@@ -661,6 +698,21 @@ impl Backend {
                     .to_string()
             });
             
+            // Check if a course with the same title and similar content already exists
+            let existing_courses = storage::load_courses(&db)?;
+            for existing_course in &existing_courses {
+                if existing_course.name == course_title {
+                    // Check if it's the same folder by comparing video counts
+                    if existing_course.raw_titles.len() == validation.video_count {
+                        return Err(anyhow::anyhow!(
+                            "A course with the title '{}' and similar content already exists. Please choose a different folder or rename the existing course.",
+                            course_title
+                        ));
+                    }
+                }
+            }
+            
+            // Use the ingest module to import from local folder
             crate::ingest::local_folder::import_from_folder(&db, &folder_path, &course_title)
                 .map_err(|e| anyhow::anyhow!("Local folder import failed: {}", e))
         })
@@ -740,6 +792,8 @@ impl Backend {
             error_message,
         })
     }
+    
+
 }
 
 /// Dioxus hooks for async backend actions.

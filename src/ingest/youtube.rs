@@ -7,11 +7,31 @@ use crate::ImportError;
 use serde::Deserialize;
 use std::time::Duration;
 
+/// Create a properly configured HTTP client for YouTube API requests
+fn create_http_client() -> Result<reqwest::Client, ImportError> {
+    reqwest::Client::builder()
+        .timeout(Duration::from_secs(30))
+        .user_agent("CoursePilot/0.1.0")
+        .danger_accept_invalid_certs(false)
+        .use_rustls_tls()
+        .build()
+        .map_err(|e| ImportError::Network(format!("Failed to create HTTP client: {}", e)))
+}
+
 /// Struct representing a YouTube video section with title and duration
 #[derive(Debug, Clone)]
 pub struct YoutubeSection {
     pub title: String,
     pub duration: Duration,
+}
+
+/// YouTube playlist metadata
+#[derive(Debug, Clone)]
+pub struct YoutubePlaylistMetadata {
+    pub title: String,
+    pub description: Option<String>,
+    pub channel_title: Option<String>,
+    pub video_count: usize,
 }
 
 /// Import video titles and durations from a YouTube playlist URL
@@ -21,12 +41,12 @@ pub struct YoutubeSection {
 /// * `api_key` - The YouTube Data API v3 key
 ///
 /// # Returns
-/// * `Ok(Vec<YoutubeSection>)` - Vector of video sections (title, duration) in playlist order
+/// * `Ok((Vec<YoutubeSection>, YoutubePlaylistMetadata))` - Vector of video sections and playlist metadata
 /// * `Err(ImportError)` - Error if import fails
 pub async fn import_from_youtube(
     url: &str,
     api_key: &str,
-) -> Result<Vec<YoutubeSection>, ImportError> {
+) -> Result<(Vec<YoutubeSection>, YoutubePlaylistMetadata), ImportError> {
     if !is_valid_youtube_playlist_url(url) {
         return Err(ImportError::InvalidUrl(format!(
             "Invalid YouTube playlist URL: {}",
@@ -40,6 +60,9 @@ pub async fn import_from_youtube(
             "Could not extract playlist ID".to_string(),
         ));
     }
+
+    // Create a configured HTTP client with proper TLS settings
+    let client = create_http_client()?;
 
     // Step 1: Get all video IDs in the playlist
     let mut video_ids = Vec::new();
@@ -55,7 +78,8 @@ pub async fn import_from_youtube(
             api_url.clone()
         };
 
-        let resp = reqwest::get(&url_with_page)
+        let resp = client.get(&url_with_page)
+            .send()
             .await
             .map_err(|e| ImportError::Network(format!("Failed to fetch playlist items: {}", e)))?;
         #[derive(Deserialize)]
@@ -90,6 +114,9 @@ pub async fn import_from_youtube(
     if video_ids.is_empty() {
         return Err(ImportError::NoContent);
     }
+    
+    // Step 1.5: Fetch playlist metadata
+    let playlist_metadata = fetch_playlist_metadata(playlist_id, api_key, &client).await?;
 
     // Step 2: Fetch video details (title, duration) in batches of 50
     let mut sections = Vec::new();
@@ -99,7 +126,8 @@ pub async fn import_from_youtube(
             "https://www.googleapis.com/youtube/v3/videos?part=contentDetails,snippet&id={}&key={}",
             ids, api_key
         );
-        let resp = reqwest::get(&api_url)
+        let resp = client.get(&api_url)
+            .send()
             .await
             .map_err(|e| ImportError::Network(format!("Failed to fetch video details: {}", e)))?;
         #[derive(Deserialize)]
@@ -131,7 +159,7 @@ pub async fn import_from_youtube(
         }
     }
 
-    Ok(sections)
+    Ok((sections, playlist_metadata))
 }
 
 /// Parse ISO 8601 duration string (e.g., PT1H2M3S) to std::time::Duration
@@ -178,15 +206,75 @@ fn is_valid_youtube_playlist_url(url: &str) -> bool {
     url_lower.contains("playlist") || url_lower.contains("list=")
 }
 
+/// Fetch playlist metadata (title, description, etc.)
+async fn fetch_playlist_metadata(playlist_id: String, api_key: &str, client: &reqwest::Client) -> Result<YoutubePlaylistMetadata, ImportError> {
+    let api_url = format!(
+        "https://www.googleapis.com/youtube/v3/playlists?part=snippet,contentDetails&id={}&key={}",
+        playlist_id, api_key
+    );
+    
+    let resp = client.get(&api_url)
+        .send()
+        .await
+        .map_err(|e| ImportError::Network(format!("Failed to fetch playlist metadata: {}", e)))?;
+    
+    #[derive(Deserialize)]
+    struct PlaylistResponse {
+        items: Vec<PlaylistItem>,
+    }
+    
+    #[derive(Deserialize)]
+    struct PlaylistItem {
+        snippet: PlaylistSnippet,
+        #[serde(rename = "contentDetails")]
+        content_details: PlaylistContentDetails,
+    }
+    
+    #[derive(Deserialize)]
+    struct PlaylistSnippet {
+        title: String,
+        description: String,
+        #[serde(rename = "channelTitle")]
+        channel_title: String,
+    }
+    
+    #[derive(Deserialize)]
+    struct PlaylistContentDetails {
+        #[serde(rename = "itemCount")]
+        item_count: usize,
+    }
+    
+    let playlist_resp: PlaylistResponse = resp.json().await
+        .map_err(|e| ImportError::Network(format!("Failed to parse playlist metadata response: {}", e)))?;
+    
+    if let Some(item) = playlist_resp.items.get(0) {
+        Ok(YoutubePlaylistMetadata {
+            title: item.snippet.title.clone(),
+            description: Some(item.snippet.description.clone()),
+            channel_title: Some(item.snippet.channel_title.clone()),
+            video_count: item.content_details.item_count,
+        })
+    } else {
+        Ok(YoutubePlaylistMetadata {
+            title: format!("YouTube Playlist {}", &playlist_id[..8.min(playlist_id.len())]),
+            description: None,
+            channel_title: None,
+            video_count: 0,
+        })
+    }
+}
+
 /// Validate playlist existence and accessibility using YouTube Data API v3
 async fn validate_playlist_real(url: &str, api_key: &str) -> Result<bool, ImportError> {
+    let client = create_http_client()?;
     let playlist_id = extract_playlist_id(url)
         .ok_or_else(|| ImportError::InvalidUrl("Could not extract playlist ID".to_string()))?;
     let api_url = format!(
         "https://www.googleapis.com/youtube/v3/playlists?part=status&id={}&key={}",
         playlist_id, api_key
     );
-    let resp = reqwest::get(&api_url)
+    let resp = client.get(&api_url)
+        .send()
         .await
         .map_err(|e| ImportError::Network(format!("Failed to fetch playlist: {}", e)))?;
     #[derive(serde::Deserialize)]
@@ -284,7 +372,7 @@ mod tests {
     fn test_playlist_id_extraction() {
         assert_eq!(
             extract_playlist_id("https://youtube.com/playlist?list=PLJEZDlUEtOf5rZjVFnijy6wSW-laKiY0l&si=aLcYFs9uDCcfvNGd"),
-            Some("PLrAXtmRdnEQy".to_string())
+            Some("PLJEZDlUEtOf5rZjVFnijy6wSW-laKiY0l".to_string())
         );
         assert_eq!(
             extract_playlist_id("https://youtube.com/watch?v=abc&list=PLtest&other=param"),

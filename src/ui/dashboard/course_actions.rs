@@ -2,11 +2,15 @@ use dioxus::prelude::*;
 use crate::types::Course;
 use crate::ui::components::modal::Modal;
 use crate::ui::components::modal_confirmation::ModalConfirmation;
-use crate::ui::hooks::{use_form_manager, use_course_manager, use_modal_manager};
+use crate::ui::hooks::{use_form_manager, use_course_manager};
 
 #[derive(Props, PartialEq, Clone)]
 pub struct CourseActionsProps {
     pub course: Course,
+    pub edit_modal_open: bool,
+    pub delete_modal_open: bool,
+    pub on_edit_close: EventHandler<()>,
+    pub on_delete_close: EventHandler<()>,
 }
 
 /// Course actions component handling modals and interactions
@@ -14,13 +18,11 @@ pub struct CourseActionsProps {
 pub fn CourseActions(props: CourseActionsProps) -> Element {
     let course_manager = use_course_manager();
     let course_name_form = use_form_manager(props.course.name.clone());
-    let edit_modal = use_modal_manager(false);
-    let delete_modal = use_modal_manager(false);
     
     // Handle course update
     let handle_update_course = {
         let course_manager = course_manager.clone();
-        let edit_modal = edit_modal.clone();
+        let on_edit_close = props.on_edit_close.clone();
         let course_name_form = course_name_form.clone();
         let course_id = props.course.id;
         let original_name = props.course.name.clone();
@@ -36,31 +38,31 @@ pub fn CourseActions(props: CourseActionsProps) -> Element {
                 course_manager.update_course.call((course_id, new_name));
             }
             
-            edit_modal.close.call(());
+            on_edit_close.call(());
         }
     };
     
     // Handle course deletion
     let handle_delete_course = {
         let course_manager = course_manager.clone();
-        let delete_modal = delete_modal.clone();
+        let on_delete_close = props.on_delete_close.clone();
         let course_id = props.course.id;
         
         move |_| {
             course_manager.delete_course.call(course_id);
-            delete_modal.close.call(());
+            on_delete_close.call(());
         }
     };
 
     rsx! {
         // Edit Course Modal
         Modal {
-            open: edit_modal.is_open,
+            open: props.edit_modal_open,
             on_close: {
-                let edit_modal = edit_modal.clone();
+                let on_edit_close = props.on_edit_close.clone();
                 let course_name_form = course_name_form.clone();
                 move |_| {
-                    edit_modal.close.call(());
+                    on_edit_close.call(());
                     course_name_form.reset.call(());
                 }
             },
@@ -69,10 +71,10 @@ pub fn CourseActions(props: CourseActionsProps) -> Element {
                 button {
                     class: "btn btn-ghost",
                     onclick: {
-                        let edit_modal = edit_modal.clone();
+                        let on_edit_close = props.on_edit_close.clone();
                         let course_name_form = course_name_form.clone();
                         move |_| {
-                            edit_modal.close.call(());
+                            on_edit_close.call(());
                             course_name_form.reset.call(());
                         }
                     },
@@ -101,22 +103,15 @@ pub fn CourseActions(props: CourseActionsProps) -> Element {
             }
         }
         
-        // Delete Confirmation Modal
+                // Delete confirmation modal
         ModalConfirmation {
-            open: delete_modal.is_open,
-            title: "Delete Course",
-            message: format!(
-                "Are you sure you want to delete '{}'? This will also delete all associated plans and notes. This action cannot be undone.", 
-                props.course.name
-            ),
-            confirm_label: Some("Delete Course".to_string()),
-            cancel_label: Some("Cancel".to_string()),
-            confirm_color: Some("error".to_string()),
+            open: props.delete_modal_open,
+            on_cancel: props.on_delete_close.clone(),
             on_confirm: handle_delete_course,
-            on_cancel: {
-                let delete_modal = delete_modal.clone();
-                move |_| delete_modal.close.call(())
-            },
+            title: "Delete Course".to_string(),
+            message: format!("Are you sure you want to delete the course '{}'? This action cannot be undone.", props.course.name),
+            confirm_label: Some("Delete Course".to_string()),
+            confirm_color: Some("error".to_string()),
         }
     }
 }
