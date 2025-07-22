@@ -4,15 +4,17 @@ use crate::ui::components::{modal::Modal, tabs::Tabs, toast, youtube_import_form
 /// Import source types
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub enum ImportSource {
-    YouTube,
     LocalFolder,
+    YouTube,
+    OtherResources,
 }
 
 impl ImportSource {
     pub fn as_str(&self) -> &'static str {
         match self {
+            ImportSource::LocalFolder => "Local Course",
             ImportSource::YouTube => "YouTube",
-            ImportSource::LocalFolder => "Local Folder",
+            ImportSource::OtherResources => "Other Resources",
         }
     }
 }
@@ -80,16 +82,17 @@ pub fn ImportModal(props: ImportModalProps) -> Element {
     let mut is_validating = use_signal(|| false);
     
     // Tab labels and sources
-    let tab_labels = vec!["YouTube".to_string(), "Local Folder".to_string()];
-    let sources = vec![ImportSource::YouTube, ImportSource::LocalFolder];
+    let tab_labels = vec!["Local Course".to_string(), "YouTube".to_string(), "Other Resources".to_string()];
+    let sources = vec![ImportSource::LocalFolder, ImportSource::YouTube, ImportSource::OtherResources];
     
     // Get current source
     let current_source = sources[selected_tab()];
     
     // Validation state
     let is_valid = match current_source {
-        ImportSource::YouTube => !youtube_url().trim().is_empty() && youtube_url().contains("youtube.com"),
         ImportSource::LocalFolder => !local_path().trim().is_empty(),
+        ImportSource::YouTube => !youtube_url().trim().is_empty() && youtube_url().contains("youtube.com"),
+        ImportSource::OtherResources => false, // Always disabled for now
     };
     
     // Handle import action
@@ -102,8 +105,9 @@ pub fn ImportModal(props: ImportModalProps) -> Element {
         move |_| {
             let source = sources[selected_tab()];
             let input = match source {
-                ImportSource::YouTube => youtube_url().trim().to_string(),
                 ImportSource::LocalFolder => local_path().trim().to_string(),
+                ImportSource::YouTube => youtube_url().trim().to_string(),
+                ImportSource::OtherResources => String::new(),
             };
             
             if !input.is_empty() {
@@ -178,6 +182,14 @@ pub fn ImportModal(props: ImportModalProps) -> Element {
                 // Tab content
                 div { class: "min-h-[200px]",
                     match current_source {
+                        ImportSource::LocalFolder => rsx! {
+                            LocalFolderImportForm {
+                                path: local_path(),
+                                on_path_change: move |path| local_path.set(path),
+                                preview: props.preview.clone(),
+                                preview_loading: props.preview_loading,
+                            }
+                        },
                         ImportSource::YouTube => rsx! {
                             YouTubeImportFormWrapper {
                                 on_import_complete: move |_course| {
@@ -186,13 +198,8 @@ pub fn ImportModal(props: ImportModalProps) -> Element {
                                 },
                             }
                         },
-                        ImportSource::LocalFolder => rsx! {
-                            LocalFolderImportForm {
-                                path: local_path(),
-                                on_path_change: move |path| local_path.set(path),
-                                preview: props.preview.clone(),
-                                preview_loading: props.preview_loading,
-                            }
+                        ImportSource::OtherResources => rsx! {
+                            OtherResourcesForm {}
                         },
                     }
                 }
@@ -439,6 +446,91 @@ fn ImportPreviewPanel(preview: ImportPreview) -> Element {
                                 }
                             }
                         }
+                    }
+                }
+            }
+        }
+    }
+}
+
+/// Other resources form component (to be implemented)
+#[component]
+fn OtherResourcesForm() -> Element {
+    rsx! {
+        div { class: "space-y-4",
+            // Coming soon message
+            div { class: "alert alert-info",
+                svg {
+                    class: "stroke-current shrink-0 h-6 w-6",
+                    fill: "none",
+                    view_box: "0 0 24 24",
+                    path {
+                        stroke_linecap: "round",
+                        stroke_linejoin: "round",
+                        stroke_width: "2",
+                        d: "M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"
+                    }
+                }
+                div {
+                    div { class: "font-medium", "Coming Soon!" }
+                    div { class: "text-sm opacity-80", "Support for additional course sources will be added in future updates." }
+                }
+            }
+            
+            // Placeholder content
+            div { class: "card bg-base-200",
+                div { class: "card-body text-center",
+                    h3 { class: "card-title justify-center mb-4", "Additional Import Sources" }
+                    
+                    div { class: "space-y-3 text-base-content/70",
+                        div { class: "flex items-center gap-3 p-3 bg-base-100 rounded",
+                            div { class: "w-8 h-8 bg-primary/20 rounded-full flex items-center justify-center",
+                                svg {
+                                    class: "w-4 h-4 text-primary",
+                                    fill: "currentColor",
+                                    view_box: "0 0 24 24",
+                                    path { d: "M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-2 15l-5-5 1.41-1.41L10 14.17l7.59-7.59L19 8l-9 9z" }
+                                }
+                            }
+                            div { class: "text-left",
+                                div { class: "font-medium text-base-content", "Online Course Platforms" }
+                                div { class: "text-sm", "Udemy, Coursera, edX, Khan Academy" }
+                            }
+                        }
+                        
+                        div { class: "flex items-center gap-3 p-3 bg-base-100 rounded",
+                            div { class: "w-8 h-8 bg-secondary/20 rounded-full flex items-center justify-center",
+                                svg {
+                                    class: "w-4 h-4 text-secondary",
+                                    fill: "currentColor",
+                                    view_box: "0 0 24 24",
+                                    path { d: "M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-2 15l-5-5 1.41-1.41L10 14.17l7.59-7.59L19 8l-9 9z" }
+                                }
+                            }
+                            div { class: "text-left",
+                                div { class: "font-medium text-base-content", "Video Streaming Services" }
+                                div { class: "text-sm", "Vimeo, Twitch, custom video URLs" }
+                            }
+                        }
+                        
+                        div { class: "flex items-center gap-3 p-3 bg-base-100 rounded",
+                            div { class: "w-8 h-8 bg-accent/20 rounded-full flex items-center justify-center",
+                                svg {
+                                    class: "w-4 h-4 text-accent",
+                                    fill: "currentColor",
+                                    view_box: "0 0 24 24",
+                                    path { d: "M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-2 15l-5-5 1.41-1.41L10 14.17l7.59-7.59L19 8l-9 9z" }
+                                }
+                            }
+                            div { class: "text-left",
+                                div { class: "font-medium text-base-content", "Document & Text Sources" }
+                                div { class: "text-sm", "PDFs, web articles, documentation sites" }
+                            }
+                        }
+                    }
+                    
+                    div { class: "mt-6 text-sm text-base-content/60",
+                        "These import sources are planned for future releases. Stay tuned for updates!"
                     }
                 }
             }

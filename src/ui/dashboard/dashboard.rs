@@ -1,11 +1,9 @@
 use dioxus::prelude::*;
 use dioxus_motion::prelude::*;
 
-use crate::ui::components::modal::Modal;
 use crate::ui::components::toast::toast;
-use crate::ui::components::youtube_import_form::YouTubeImportForm;
-use crate::ui::hooks::{use_course_manager, use_modal_manager, use_form_manager};
-use crate::types::Course;
+use crate::ui::components::import_modal::{ImportModal, ImportSource, ImportSettings};
+use crate::ui::hooks::{use_course_manager, use_modal_manager};
 use super::CourseGrid;
 
 /// Clean dashboard component with proper separation of concerns
@@ -13,8 +11,6 @@ use super::CourseGrid;
 pub fn Dashboard() -> Element {
     let course_manager = use_course_manager();
     let add_course_modal = use_modal_manager(false);
-    let import_modal = use_modal_manager(false);
-    let course_name_form = use_form_manager("".to_string());
     
     // Animation for grid entrance
     let mut grid_opacity = use_motion(0.0f32);
@@ -39,45 +35,30 @@ pub fn Dashboard() -> Element {
         )
     });
 
-    // Handle course creation
-    let handle_create_course = {
-        let course_manager = course_manager.clone();
+
+
+    // Handle import from the import modal
+    let handle_import = {
+        let _course_manager = course_manager.clone();
         let add_course_modal = add_course_modal.clone();
-        let course_name_form = course_name_form.clone();
         
-        move |_| {
-            let name = course_name_form.value.trim().to_string();
-            if name.is_empty() {
-                toast::error("Course name cannot be empty");
-                return;
+        move |(source, _input, _settings): (ImportSource, String, ImportSettings)| {
+            match source {
+                ImportSource::LocalFolder => {
+                    // Handle local folder import
+                    toast::info("Local folder import functionality will be implemented soon");
+                    add_course_modal.close.call(());
+                }
+                ImportSource::YouTube => {
+                    // Handle YouTube import - this will be handled by the YouTubeImportForm component
+                    // The form will handle the actual import and close the modal
+                }
+                ImportSource::OtherResources => {
+                    // This shouldn't be called since the button is disabled
+                    toast::info("Other resources import is coming soon");
+                    add_course_modal.close.call(());
+                }
             }
-            
-            course_manager.create_course.call(name);
-            add_course_modal.close.call(());
-            course_name_form.reset.call(());
-        }
-    };
-
-    // Handle import completion
-    let handle_import_complete = {
-        let course_manager = course_manager.clone();
-        let import_modal = import_modal.clone();
-        
-        move |_course: Course| {
-            // Refresh the courses list by triggering the course manager
-            // The course manager will automatically refresh when a new course is created
-            import_modal.close.call(());
-            toast::success("Course imported and added to your library!");
-        }
-    };
-
-    // Handle import error
-    let handle_import_error = {
-        let import_modal = import_modal.clone();
-        
-        move |error: String| {
-            toast::error(&format!("Import failed: {}", error));
-            // Keep modal open so user can try again
         }
     };
 
@@ -90,11 +71,6 @@ pub fn Dashboard() -> Element {
                 class: "flex items-center justify-between mb-6",
                 h1 { class: "text-2xl font-bold", "Your Courses" }
                 div { class: "flex gap-2",
-                    button {
-                        class: "btn btn-outline",
-                        onclick: move |_| import_modal.open.call(()),
-                        "Import Course"
-                    }
                     button {
                         class: "btn btn-primary",
                         onclick: move |_| add_course_modal.open.call(()),
@@ -110,62 +86,11 @@ pub fn Dashboard() -> Element {
             }
         }
 
-        // Add Course Modal
-        Modal {
+        // Add Course Modal (now uses ImportModal with tabs)
+        ImportModal {
             open: add_course_modal.is_open,
-            on_close: move |_| {
-                add_course_modal.close.call(());
-                course_name_form.reset.call(());
-            },
-            title: "Add New Course".to_string(),
-            actions: rsx! {
-                button {
-                    class: "btn btn-ghost",
-                    onclick: move |_| {
-                        add_course_modal.close.call(());
-                        course_name_form.reset.call(());
-                    },
-                    "Cancel"
-                }
-                button {
-                    class: "btn btn-primary",
-                    onclick: handle_create_course,
-                    "Create"
-                }
-            },
-            div {
-                class: "form-control w-full",
-                label {
-                    class: "label",
-                    span { class: "label-text", "Course Name" }
-                }
-                input {
-                    r#type: "text",
-                    placeholder: "Enter course name",
-                    class: "input input-bordered w-full",
-                    value: course_name_form.value,
-                    oninput: move |evt| course_name_form.set_value.call(evt.value()),
-                }
-            }
-        }
-
-        // Import Course Modal
-        Modal {
-            open: import_modal.is_open,
-            on_close: move |_| import_modal.close.call(()),
-            title: "Import Course from YouTube".to_string(),
-            actions: rsx! {
-                button {
-                    class: "btn btn-ghost",
-                    onclick: move |_| import_modal.close.call(()),
-                    "Cancel"
-                }
-            },
-            
-            YouTubeImportForm {
-                on_import_complete: handle_import_complete,
-                on_import_error: handle_import_error,
-            }
+            on_close: move |_| add_course_modal.close.call(()),
+            on_import: handle_import,
         }
     }
 }
