@@ -244,10 +244,7 @@ pub fn ImportModal(props: ImportModalProps) -> Element {
 
     rsx! {
         Modal {
-            open: props.open,
-            on_close: props.on_close.clone(),
-            title: "Import Course Content".to_string(),
-            actions: rsx! {
+            variant: crate::ui::components::modal::form_modal(rsx! {
                 button {
                     class: "btn btn-ghost",
                     onclick: move |_| props.on_close.call(()),
@@ -265,7 +262,10 @@ pub fn ImportModal(props: ImportModalProps) -> Element {
                         "Import Course"
                     }
                 }
-            },
+            }),
+            open: props.open,
+            on_close: props.on_close.clone(),
+            title: "Import Course Content".to_string(),
             
             div { class: "space-y-4",
                 // Source selection tabs

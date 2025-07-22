@@ -18,6 +18,7 @@ pub mod tabs;
 pub mod tag_input;
 pub mod toast;
 pub mod top_bar;
+pub mod unified_dropdown;
 pub mod youtube_import_form;
 
 
@@ -25,3 +26,4 @@ pub mod youtube_import_form;
 pub use toast::ToastContainer;
 pub use tag_input::TagInput;
 pub use search_history::SearchHistory;
+pub use unified_dropdown::{UnifiedDropdown, DropdownItem, DropdownTrigger};

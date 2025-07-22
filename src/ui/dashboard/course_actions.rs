@@ -57,17 +57,7 @@ pub fn CourseActions(props: CourseActionsProps) -> Element {
     rsx! {
         // Edit Course Modal
         Modal {
-            open: props.edit_modal_open,
-            on_close: {
-                let on_edit_close = props.on_edit_close.clone();
-                let course_name_form = course_name_form.clone();
-                move |_| {
-                    on_edit_close.call(());
-                    course_name_form.reset.call(());
-                }
-            },
-            title: "Edit Course".to_string(),
-            actions: rsx! {
+            variant: crate::ui::components::modal::form_modal(rsx! {
                 button {
                     class: "btn btn-ghost",
                     onclick: {
@@ -86,7 +76,17 @@ pub fn CourseActions(props: CourseActionsProps) -> Element {
                     disabled: !course_name_form.is_dirty || course_name_form.value.trim().is_empty(),
                     "Save Changes"
                 }
+            }),
+            open: props.edit_modal_open,
+            on_close: {
+                let on_edit_close = props.on_edit_close.clone();
+                let course_name_form = course_name_form.clone();
+                move |_| {
+                    on_edit_close.call(());
+                    course_name_form.reset.call(());
+                }
             },
+            title: "Edit Course".to_string(),
             div {
                 class: "form-control w-full",
                 label {

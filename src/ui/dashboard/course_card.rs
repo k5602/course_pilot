@@ -1,6 +1,7 @@
 use dioxus::prelude::*;
 use crate::types::Course;
-use crate::ui::components::card::{Card, CardVariant, ActionItem, BadgeData};
+use crate::ui::components::card::{Card, CardVariant, BadgeData};
+use crate::ui::components::unified_dropdown::{UnifiedDropdown, DropdownTrigger, create_course_actions};
 use crate::ui::components::export_format_dialog::ExportFormatDialog;
 use crate::ui::hooks::{use_course_progress, use_course_manager, use_modal_manager};
 use crate::ui::dashboard::course_actions::CourseActions;
@@ -28,8 +29,87 @@ pub fn CourseCard(props: CourseCardProps) -> Element {
         format!("{}h {}m", hours, mins)
     }).unwrap_or_else(|| "N/A".to_string());
     
-    // Create actions for the card
-    let actions = create_course_actions(&props.course, &course_manager, &export_dialog, &edit_modal, &delete_modal);
+    // Create dropdown actions for the course
+    let dropdown_actions = create_course_actions(
+        props.course.id,
+        props.course.structure.is_some(),
+        !props.course.raw_titles.is_empty(),
+        EventHandler::new({
+            let course_manager = course_manager.clone();
+            let course_id = props.course.id;
+            move |_| {
+                course_manager.navigate_to_course.call(course_id);
+            }
+        }),
+        EventHandler::new({
+            let backend = crate::ui::backend_adapter::use_backend_adapter();
+            let course_manager = course_manager.clone();
+            move |_| {
+                let backend = backend.clone();
+                let course_manager = course_manager.clone();
+                spawn(async move {
+                    crate::ui::components::toast::toast::info("Creating study plan...");
+                    
+                    // Create default plan settings
+                    let settings = crate::types::PlanSettings {
+                        start_date: chrono::Utc::now(),
+                        sessions_per_week: 3,
+                        session_length_minutes: 60,
+                        include_weekends: false,
+                    };
+                    
+                    match backend.generate_plan(props.course.id, settings).await {
+                        Ok(_plan) => {
+                            crate::ui::components::toast::toast::success("Study plan created successfully!");
+                            course_manager.refresh.call(());
+                        },
+                        Err(e) => {
+                            crate::ui::components::toast::toast::error(&format!("Failed to create study plan: {}", e));
+                        }
+                    }
+                });
+            }
+        }),
+        EventHandler::new({
+            let edit_modal = edit_modal.clone();
+            move |_| {
+                edit_modal.open.call(());
+            }
+        }),
+        EventHandler::new({
+            let backend = crate::ui::backend_adapter::use_backend_adapter();
+            let course_manager = course_manager.clone();
+            move |_| {
+                let backend = backend.clone();
+                let course_manager = course_manager.clone();
+                spawn(async move {
+                    crate::ui::components::toast::toast::info("Structuring course content...");
+                    
+                    match backend.structure_course(props.course.id).await {
+                        Ok(_) => {
+                            crate::ui::components::toast::toast::success("Course structured successfully!");
+                            course_manager.refresh.call(());
+                        },
+                        Err(e) => {
+                            crate::ui::components::toast::toast::error(&format!("Failed to structure course: {}", e));
+                        }
+                    }
+                });
+            }
+        }),
+        EventHandler::new({
+            let export_dialog = export_dialog.clone();
+            move |_| {
+                export_dialog.open.call(());
+            }
+        }),
+        EventHandler::new({
+            let delete_modal = delete_modal.clone();
+            move |_| {
+                delete_modal.open.call(());
+            }
+        }),
+    );
     
     // Create badges for the card
     let badges = vec![
@@ -95,7 +175,6 @@ pub fn CourseCard(props: CourseCardProps) -> Element {
                 progress: progress,
             },
             title: props.course.name.clone(),
-            actions: Some(actions),
             badges: Some(badges),
             hover_effect: Some(true),
             on_click: Some(EventHandler::new({
@@ -105,6 +184,21 @@ pub fn CourseCard(props: CourseCardProps) -> Element {
                     course_manager.navigate_to_course.call(course_id);
                 }
             })),
+            content: Some(rsx! {
+                // Add the unified dropdown as custom content with proper event isolation
+                div {
+                    class: "flex justify-end mt-2",
+                    // Additional wrapper to ensure click isolation
+                    onclick: move |evt| {
+                        evt.stop_propagation();
+                    },
+                    UnifiedDropdown {
+                        items: dropdown_actions,
+                        trigger: DropdownTrigger::DotsMenu,
+                        position: "dropdown-end".to_string(),
+                    }
+                }
+            }),
         }
         
         // Course actions (modals, etc.)
@@ -126,133 +220,3 @@ pub fn CourseCard(props: CourseCardProps) -> Element {
     }
 }
 
-/// Create action items for course card
-fn create_course_actions(
-    course: &Course, 
-    course_manager: &crate::ui::hooks::use_courses::CourseManager,
-    export_dialog: &crate::ui::hooks::use_modals::ModalManager,
-    edit_modal: &crate::ui::hooks::use_modals::ModalManager,
-    delete_modal: &crate::ui::hooks::use_modals::ModalManager,
-) -> Vec<ActionItem> {
-    let course_id = course.id;
-    let course_manager = course_manager.clone();
-    
-    vec![
-        ActionItem {
-            label: "View Plan".to_string(),
-            icon: None,
-            on_select: Some(EventHandler::new(move |_| {
-                course_manager.navigate_to_course.call(course_id);
-            })),
-            disabled: false,
-        },
-        ActionItem {
-            label: "Create Study Plan".to_string(),
-            icon: None,
-            on_select: Some(EventHandler::new({
-                let backend = crate::ui::backend_adapter::use_backend_adapter();
-                let course_manager = course_manager.clone();
-                move |_| {
-                    let backend = backend.clone();
-                    let course_manager = course_manager.clone();
-                    spawn(async move {
-                        crate::ui::components::toast::toast::info("Creating study plan...");
-                        
-                        // Create default plan settings
-                        let settings = crate::types::PlanSettings {
-                            start_date: chrono::Utc::now() + chrono::Duration::days(1),
-                            sessions_per_week: 3,
-                            session_length_minutes: 60,
-                            include_weekends: false,
-                        };
-                        
-                        match backend.generate_plan(course_id, settings).await {
-                            Ok(_plan) => {
-                                crate::ui::components::toast::toast::success("Study plan created successfully!");
-                                // Navigate to the plan view to show the new plan
-                                course_manager.navigate_to_course.call(course_id);
-                            },
-                            Err(e) => {
-                                crate::ui::components::toast::toast::error(&format!("Failed to create study plan: {}", e));
-                            }
-                        }
-                    });
-                }
-            })),
-            disabled: course.structure.is_none(), // Disable if course is not structured
-        },
-        ActionItem {
-            label: "Edit Course".to_string(),
-            icon: None,
-            on_select: Some(EventHandler::new({
-                let edit_modal = edit_modal.clone();
-                move |_| {
-                    edit_modal.open.call(());
-                }
-            })),
-            disabled: false,
-        },
-        ActionItem {
-            label: "Structure Course".to_string(),
-            icon: None,
-            on_select: Some(EventHandler::new({
-                let backend = crate::ui::backend_adapter::use_backend_adapter();
-                let course_manager = course_manager.clone();
-                move |_| {
-                    let backend = backend.clone();
-                    let course_manager = course_manager.clone();
-                    spawn(async move {
-                        crate::ui::components::toast::toast::info("Analyzing course structure...");
-                        
-                        // Use the progress version for better user feedback
-                        match backend.structure_course_with_progress(
-                            course_id,
-                            |progress, message| {
-                                // Update toast with progress information
-                                let progress_percent = (progress * 100.0).round() as u8;
-                                crate::ui::components::toast::toast::info(&format!("{} ({}%)", message, progress_percent));
-                            }
-                        ).await {
-                            Ok(course) => {
-                                crate::ui::components::toast::toast::success(&format!(
-                                    "Course structured successfully! Created {} modules with {} sections.",
-                                    course.structure.as_ref().map(|s| s.modules.len()).unwrap_or(0),
-                                    course.structure.as_ref().map(|s| s.modules.iter().map(|m| m.sections.len()).sum::<usize>()).unwrap_or(0)
-                                ));
-                                
-                                // Refresh the course manager to show updated structure
-                                course_manager.refresh.call(());
-                            },
-                            Err(e) => {
-                                crate::ui::components::toast::toast::error(&format!("Failed to structure course: {}", e));
-                            }
-                        }
-                    });
-                }
-            })),
-            disabled: course.raw_titles.is_empty() || course.structure.is_some(),
-        },
-        ActionItem {
-            label: "Export".to_string(),
-            icon: None,
-            on_select: Some(EventHandler::new({
-                let export_dialog = export_dialog.clone();
-                move |_| {
-                    export_dialog.open.call(());
-                }
-            })),
-            disabled: false,
-        },
-        ActionItem {
-            label: "Delete".to_string(),
-            icon: None,
-            on_select: Some(EventHandler::new({
-                let delete_modal = delete_modal.clone();
-                move |_| {
-                    delete_modal.open.call(());
-                }
-            })),
-            disabled: false,
-        },
-    ]
-}

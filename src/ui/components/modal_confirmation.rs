@@ -1,12 +1,16 @@
 use dioxus::prelude::*;
+use super::modal::{Modal, confirmation_modal};
 use dioxus_free_icons::icons::fa_solid_icons::{
     FaCheck, FaEllipsisVertical, FaExclamation, FaMagnifyingGlass, FaXmark,
 };
 use dioxus_free_icons::Icon;
 
 // =======================
-// Modal Confirmation
+// Modal Confirmation - Legacy Wrapper
 // =======================
+// This component is deprecated in favor of the unified Modal component.
+// Use Modal with ModalVariant::Confirmation instead:
+// Example: Modal { variant: confirmation_modal("Delete item?", "Delete", "Cancel", "error", on_confirm, on_cancel) }
 
 #[derive(Props, PartialEq, Clone)]
 pub struct ModalConfirmationProps {
@@ -20,60 +24,31 @@ pub struct ModalConfirmationProps {
     #[props(optional)]
     pub confirm_color: Option<String>,
     #[props(optional)]
-    pub on_confirm: Option<EventHandler<()>>,
+    pub on_confirm: Option<Callback<()>>,
     #[props(optional)]
-    pub on_cancel: Option<EventHandler<()>>,
+    pub on_cancel: Option<Callback<()>>,
 }
 
 #[component]
 pub fn ModalConfirmation(props: ModalConfirmationProps) -> Element {
-    if !props.open {
-        return rsx! {};
-    }
     let confirm_label = props.confirm_label.clone().unwrap_or("Confirm".to_string());
     let cancel_label = props.cancel_label.clone().unwrap_or("Cancel".to_string());
     let confirm_color = props.confirm_color.clone().unwrap_or("primary".to_string());
 
+    // Use the unified Modal component with confirmation variant
     rsx! {
-        div {
-            class: "fixed inset-0 z-50 flex items-center justify-center bg-black/40",
-            tabindex: "-1",
-            onclick: move |_| {
-                if let Some(cb) = &props.on_cancel {
-                    cb.call(());
-                }
-            },
-            div {
-                class: "modal-box bg-base-100 shadow-xl relative max-w-md w-full mx-4",
-                onclick: move |evt| evt.stop_propagation(),
-                h3 { class: "font-bold text-lg flex items-center gap-2 mb-2",
-                    Icon { icon: FaExclamation, class: "text-warning w-5 h-5" }
-                    "{props.title}"
-                }
-                p { class: "mb-4 text-base-content/80", "{props.message}" }
-                div { class: "modal-action flex gap-2 justify-end",
-                    button {
-                        class: "btn btn-sm btn-ghost",
-                        onclick: move |_| {
-                            if let Some(cb) = &props.on_cancel {
-                                cb.call(());
-                            }
-                        },
-                        Icon { icon: FaXmark, class: "w-4 h-4" }
-                        "{cancel_label}"
-                    }
-                    button {
-                        class: format!("btn btn-sm btn-{}", confirm_color),
-                        onclick: move |_| {
-                            if let Some(cb) = &props.on_confirm {
-                                cb.call(());
-                            }
-                        },
-                        Icon { icon: FaCheck, class: "w-4 h-4" }
-                        "{confirm_label}"
-                    }
-                }
-            }
+        Modal {
+            variant: confirmation_modal(
+                props.message,
+                confirm_label,
+                cancel_label,
+                confirm_color,
+                props.on_confirm,
+                props.on_cancel
+            ),
+            open: props.open,
+            title: props.title,
+            on_close: props.on_cancel,
         }
     }
 }

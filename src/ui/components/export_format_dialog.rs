@@ -39,10 +39,7 @@ pub fn ExportFormatDialog(props: ExportFormatDialogProps) -> Element {
     
     rsx! {
         Modal {
-            open: props.open,
-            on_close: props.on_close.clone(),
-            title: props.title.clone().unwrap_or_else(|| "Select Export Format".to_string()),
-            actions: rsx! {
+            variant: crate::ui::components::modal::form_modal(rsx! {
                 button {
                     class: "btn btn-ghost",
                     onclick: move |_| props.on_close.call(()),
@@ -53,7 +50,10 @@ pub fn ExportFormatDialog(props: ExportFormatDialogProps) -> Element {
                     onclick: handle_export,
                     "Export"
                 }
-            },
+            }),
+            open: props.open,
+            on_close: props.on_close.clone(),
+            title: props.title.clone().unwrap_or_else(|| "Select Export Format".to_string()),
             
             div { class: "space-y-4",
                 div { class: "form-control",
