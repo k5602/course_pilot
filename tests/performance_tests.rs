@@ -3,8 +3,8 @@
 use std::sync::Arc;
 use std::time::{Duration, Instant};
 use tempfile::TempDir;
-use uuid::Uuid;
 use chrono::Utc;
+// Imports moved to where they're actually used
 
 use course_pilot::types::{Course, Plan, PlanSettings, PlanItem};
 use course_pilot::storage::database::Database;
@@ -101,7 +101,7 @@ async fn test_database_operations_performance() {
     let plan_ops_start = Instant::now();
     
     // Create plans with many items
-    for (i, course_id) in course_ids.iter().enumerate().take(10) {
+    for (_i, course_id) in course_ids.iter().enumerate().take(10) {
         let mut plan = Plan::new(*course_id, PlanSettings {
             start_date: Utc::now(),
             sessions_per_week: 3,

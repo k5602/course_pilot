@@ -59,6 +59,9 @@ pub enum ImportError {
     #[error("File system error: {0}")]
     FileSystem(String),
 
+    #[error("Database error: {0}")]
+    Database(String),
+
     #[error("No valid content found")]
     NoContent,
 }

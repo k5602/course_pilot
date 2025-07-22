@@ -244,7 +244,7 @@ fn test_course_creation() {
 async fn test_complete_plan_item_workflow() {
     use course_pilot::storage::database::Database;
     use course_pilot::ui::backend_adapter::Backend;
-    use course_pilot::types::{PlanItem, PlanExt};
+    use course_pilot::types::PlanItem;
     use std::sync::Arc;
     
     // Setup
@@ -317,7 +317,7 @@ async fn test_complete_plan_item_workflow() {
 
 #[tokio::test]
 async fn test_directory_scanning_workflow() {
-    use course_pilot::ingest::local_folder::{EnhancedLocalIngest, VideoFile};
+    use course_pilot::ingest::local_folder::EnhancedLocalIngest;
     use std::fs::File;
     
     // Setup test directory structure
@@ -337,10 +337,12 @@ async fn test_directory_scanning_workflow() {
     
     // Test enhanced ingest
     let ingest = EnhancedLocalIngest::new();
-    let mut progress_updates = Vec::new();
+    let progress_updates = std::sync::Arc::new(std::sync::Mutex::new(Vec::new()));
+    let progress_updates_clone = progress_updates.clone();
     
-    let progress_callback = |progress: f32, message: String| {
-        progress_updates.push((progress, message));
+    // Using a closure that captures a thread-safe reference
+    let progress_callback = move |progress: f32, message: String| {
+        progress_updates_clone.lock().unwrap().push((progress, message));
     };
     
     let video_files = ingest.scan_directory_recursive(
@@ -355,7 +357,7 @@ async fn test_directory_scanning_workflow() {
     assert!(video_files.iter().any(|f| f.name == "video3.mkv"));
     
     // Verify progress callbacks were called
-    assert!(!progress_updates.is_empty());
+    assert!(!progress_updates.lock().unwrap().is_empty());
     
     // Verify relative paths are preserved
     let video1 = video_files.iter().find(|f| f.name == "video1.mp4").unwrap();

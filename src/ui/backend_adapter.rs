@@ -1,4 +1,5 @@
 use std::sync::Arc;
+use std::path::{Path, PathBuf};
 use uuid::Uuid;
 use anyhow::Result;
 use dioxus::prelude::*;
@@ -13,6 +14,23 @@ pub struct ProgressInfo {
     pub percentage: f32,
     pub estimated_time_remaining: Option<std::time::Duration>,
 }
+
+/// Folder validation result
+#[derive(Debug, Clone, PartialEq)]
+pub struct FolderValidation {
+    pub is_valid: bool,
+    pub video_count: usize,
+    pub supported_files: Vec<PathBuf>,
+    pub unsupported_files: Vec<PathBuf>,
+    pub total_size: u64,
+    pub error_message: Option<String>,
+}
+
+/// Supported video file extensions
+const SUPPORTED_VIDEO_EXTENSIONS: &[&str] = &[
+    "mp4", "avi", "mkv", "mov", "wmv", "flv", "webm", "m4v", 
+    "mpg", "mpeg", "3gp", "ogv", "ts", "mts", "m2ts"
+];
 
 /// Async backend API trait for CRUD/search/export operations.
 /// All methods are async and return Results for robust error handling.
@@ -400,6 +418,328 @@ impl Backend {
         .await
         .unwrap_or_else(|e| Err(anyhow::anyhow!("Join error: {}", e)))
     }
+
+    // --- Plan Generation ---
+    
+    /// Generate a new study plan for a course
+    pub async fn generate_plan(&self, course_id: Uuid, settings: crate::types::PlanSettings) -> Result<crate::types::Plan> {
+        let db = self.db.clone();
+        tokio::task::spawn_blocking(move || {
+            // Load course data
+            let course = storage::get_course_by_id(&db, &course_id)?
+                .ok_or_else(|| anyhow::anyhow!("Course not found: {}", course_id))?;
+            
+            // Generate plan using planner module
+            let plan = crate::planner::generate_plan(&course, &settings)
+                .map_err(|e| anyhow::anyhow!("Plan generation failed: {}", e))?;
+            
+            // Save plan to database
+            storage::save_plan(&db, &plan)?;
+            
+            Ok(plan)
+        })
+        .await
+        .unwrap_or_else(|e| Err(anyhow::anyhow!("Join error: {}", e)))
+    }
+    
+    /// Regenerate an existing plan with new settings while preserving progress
+    pub async fn regenerate_plan(&self, plan_id: Uuid, new_settings: crate::types::PlanSettings) -> Result<crate::types::Plan> {
+        let db = self.db.clone();
+        tokio::task::spawn_blocking(move || {
+            // Load existing plan
+            let existing_plan = storage::load_plan(&db, &plan_id)?
+                .ok_or_else(|| anyhow::anyhow!("Plan not found: {}", plan_id))?;
+            
+            // Load course data
+            let course = storage::get_course_by_id(&db, &existing_plan.course_id)?
+                .ok_or_else(|| anyhow::anyhow!("Course not found: {}", existing_plan.course_id))?;
+            
+            // Generate new plan with new settings
+            let mut new_plan = crate::planner::generate_plan(&course, &new_settings)
+                .map_err(|e| anyhow::anyhow!("Plan regeneration failed: {}", e))?;
+            
+            // Preserve progress from existing plan
+            preserve_plan_progress(&existing_plan, &mut new_plan);
+            
+            // Update the plan ID to maintain continuity
+            new_plan.id = plan_id;
+            
+            // Save updated plan to database
+            storage::save_plan(&db, &new_plan)?;
+            
+            Ok(new_plan)
+        })
+        .await
+        .unwrap_or_else(|e| Err(anyhow::anyhow!("Join error: {}", e)))
+    }
+
+    // --- Course Structuring ---
+    
+    /// Structure a course using NLP analysis
+    pub async fn structure_course(&self, course_id: Uuid) -> Result<Course> {
+        let db = self.db.clone();
+        tokio::task::spawn_blocking(move || {
+            // Load course data
+            let mut course = storage::get_course_by_id(&db, &course_id)?
+                .ok_or_else(|| anyhow::anyhow!("Course not found: {}", course_id))?;
+            
+            // Check if course already has structure
+            if course.structure.is_some() {
+                return Err(anyhow::anyhow!("Course is already structured"));
+            }
+            
+            // Use NLP module to structure the course
+            let structure = crate::nlp::structure_course(course.raw_titles.clone())
+                .map_err(|e| anyhow::anyhow!("Course structuring failed: {}", e))?;
+            
+            // Update course with new structure
+            course.structure = Some(structure);
+            
+            // Save updated course to database
+            storage::save_course(&db, &course)?;
+            
+            Ok(course)
+        })
+        .await
+        .unwrap_or_else(|e| Err(anyhow::anyhow!("Join error: {}", e)))
+    }
+    
+    /// Re-structure a course with progress callback
+    pub async fn structure_course_with_progress<F>(&self, course_id: Uuid, progress_callback: F) -> Result<Course>
+    where
+        F: Fn(f32, String) + Send + Sync + 'static,
+    {
+        let db = self.db.clone();
+        tokio::task::spawn_blocking(move || {
+            progress_callback(0.0, "Loading course data...".to_string());
+            
+            // Load course data
+            let mut course = storage::get_course_by_id(&db, &course_id)?
+                .ok_or_else(|| anyhow::anyhow!("Course not found: {}", course_id))?;
+            
+            progress_callback(25.0, "Analyzing course content...".to_string());
+            
+            // Use NLP module to structure the course
+            let structure = crate::nlp::structure_course(course.raw_titles.clone())
+                .map_err(|e| anyhow::anyhow!("Course structuring failed: {}", e))?;
+            
+            progress_callback(75.0, "Saving structured course...".to_string());
+            
+            // Update course with new structure
+            course.structure = Some(structure);
+            
+            // Save updated course to database
+            storage::save_course(&db, &course)?;
+            
+            progress_callback(100.0, "Course structuring completed!".to_string());
+            
+            Ok(course)
+        })
+        .await
+        .unwrap_or_else(|e| Err(anyhow::anyhow!("Join error: {}", e)))
+    }
+
+    // --- File System Operations ---
+    
+    /// Open native folder browser dialog
+    pub async fn browse_folder(&self) -> Result<Option<PathBuf>> {
+        tokio::task::spawn_blocking(move || {
+            use rfd::AsyncFileDialog;
+            
+            // Use async file dialog for better desktop integration
+            let handle = tokio::runtime::Handle::current();
+            handle.block_on(async {
+                let folder = AsyncFileDialog::new()
+                    .set_title("Select Course Folder")
+                    .set_directory(dirs::home_dir().unwrap_or_else(|| PathBuf::from("/")))
+                    .pick_folder()
+                    .await;
+                
+                Ok(folder.map(|f| f.path().to_path_buf()))
+            })
+        })
+        .await
+        .unwrap_or_else(|e| Err(anyhow::anyhow!("Join error: {}", e)))
+    }
+    
+    /// Validate folder and scan for video content
+    pub async fn validate_folder(&self, path: &Path) -> Result<FolderValidation> {
+        let path = path.to_path_buf();
+        tokio::task::spawn_blocking(move || {
+            if !path.exists() {
+                return Ok(FolderValidation {
+                    is_valid: false,
+                    video_count: 0,
+                    supported_files: Vec::new(),
+                    unsupported_files: Vec::new(),
+                    total_size: 0,
+                    error_message: Some("Folder does not exist".to_string()),
+                });
+            }
+            
+            if !path.is_dir() {
+                return Ok(FolderValidation {
+                    is_valid: false,
+                    video_count: 0,
+                    supported_files: Vec::new(),
+                    unsupported_files: Vec::new(),
+                    total_size: 0,
+                    error_message: Some("Path is not a directory".to_string()),
+                });
+            }
+            
+            let mut supported_files = Vec::new();
+            let mut unsupported_files = Vec::new();
+            let mut total_size = 0u64;
+            
+            // Recursively scan directory for video files
+            for entry in walkdir::WalkDir::new(&path)
+                .follow_links(false)
+                .max_depth(3) // Limit depth to avoid infinite recursion
+                .into_iter()
+                .filter_map(|e| e.ok())
+            {
+                if entry.file_type().is_file() {
+                    if let Some(extension) = entry.path().extension() {
+                        if let Some(ext_str) = extension.to_str() {
+                            let ext_lower = ext_str.to_lowercase();
+                            
+                            // Get file size
+                            if let Ok(metadata) = entry.metadata() {
+                                total_size += metadata.len();
+                            }
+                            
+                            if SUPPORTED_VIDEO_EXTENSIONS.contains(&ext_lower.as_str()) {
+                                supported_files.push(entry.path().to_path_buf());
+                            } else if is_video_like_extension(&ext_lower) {
+                                unsupported_files.push(entry.path().to_path_buf());
+                            }
+                        }
+                    }
+                }
+            }
+            
+            let video_count = supported_files.len();
+            let is_valid = video_count > 0;
+            let error_message = if !is_valid {
+                Some("No supported video files found in the selected folder".to_string())
+            } else {
+                None
+            };
+            
+            Ok(FolderValidation {
+                is_valid,
+                video_count,
+                supported_files,
+                unsupported_files,
+                total_size,
+                error_message,
+            })
+        })
+        .await
+        .unwrap_or_else(|e| Err(anyhow::anyhow!("Join error: {}", e)))
+    }
+    
+    /// Import course from local folder
+    pub async fn import_from_local_folder(&self, folder_path: &Path, course_title: Option<String>) -> Result<Course> {
+        let folder_path = folder_path.to_path_buf();
+        let db = self.db.clone();
+        
+        tokio::task::spawn_blocking(move || {
+            // First validate the folder
+            let validation = Self::validate_folder_sync(&folder_path)?;
+            if !validation.is_valid {
+                return Err(anyhow::anyhow!("Invalid folder: {}", 
+                    validation.error_message.unwrap_or_else(|| "Unknown error".to_string())));
+            }
+            
+            // Use the ingest module to import from local folder
+            let course_title = course_title.unwrap_or_else(|| {
+                folder_path.file_name()
+                    .and_then(|name| name.to_str())
+                    .unwrap_or("Imported Course")
+                    .to_string()
+            });
+            
+            crate::ingest::local_folder::import_from_folder(&db, &folder_path, &course_title)
+                .map_err(|e| anyhow::anyhow!("Local folder import failed: {}", e))
+        })
+        .await
+        .unwrap_or_else(|e| Err(anyhow::anyhow!("Join error: {}", e)))
+    }
+    
+    /// Synchronous version of validate_folder for internal use
+    fn validate_folder_sync(path: &Path) -> Result<FolderValidation> {
+        if !path.exists() {
+            return Ok(FolderValidation {
+                is_valid: false,
+                video_count: 0,
+                supported_files: Vec::new(),
+                unsupported_files: Vec::new(),
+                total_size: 0,
+                error_message: Some("Folder does not exist".to_string()),
+            });
+        }
+        
+        if !path.is_dir() {
+            return Ok(FolderValidation {
+                is_valid: false,
+                video_count: 0,
+                supported_files: Vec::new(),
+                unsupported_files: Vec::new(),
+                total_size: 0,
+                error_message: Some("Path is not a directory".to_string()),
+            });
+        }
+        
+        let mut supported_files = Vec::new();
+        let mut unsupported_files = Vec::new();
+        let mut total_size = 0u64;
+        
+        // Recursively scan directory for video files
+        for entry in walkdir::WalkDir::new(path)
+            .follow_links(false)
+            .max_depth(3) // Limit depth to avoid infinite recursion
+            .into_iter()
+            .filter_map(|e| e.ok())
+        {
+            if entry.file_type().is_file() {
+                if let Some(extension) = entry.path().extension() {
+                    if let Some(ext_str) = extension.to_str() {
+                        let ext_lower = ext_str.to_lowercase();
+                        
+                        // Get file size
+                        if let Ok(metadata) = entry.metadata() {
+                            total_size += metadata.len();
+                        }
+                        
+                        if SUPPORTED_VIDEO_EXTENSIONS.contains(&ext_lower.as_str()) {
+                            supported_files.push(entry.path().to_path_buf());
+                        } else if is_video_like_extension(&ext_lower) {
+                            unsupported_files.push(entry.path().to_path_buf());
+                        }
+                    }
+                }
+            }
+        }
+        
+        let video_count = supported_files.len();
+        let is_valid = video_count > 0;
+        let error_message = if !is_valid {
+            Some("No supported video files found in the selected folder".to_string())
+        } else {
+            None
+        };
+        
+        Ok(FolderValidation {
+            is_valid,
+            video_count,
+            supported_files,
+            unsupported_files,
+            total_size,
+            error_message,
+        })
+    }
 }
 
 /// Dioxus hooks for async backend actions.
@@ -421,3 +761,29 @@ pub fn use_async_courses() -> UseFuture {
 }
 
 // Additional hooks for plans, notes, and exports can be added following this pattern.
+
+/// Helper function to check if an extension might be video-related
+fn is_video_like_extension(ext: &str) -> bool {
+    matches!(ext, 
+        "rm" | "rmvb" | "asf" | "divx" | "vob" | "dat" | "amv" | 
+        "f4v" | "f4p" | "f4a" | "f4b" | "mod" | "tod" | "mxf"
+    )
+}
+
+/// Preserve progress from an existing plan when regenerating
+fn preserve_plan_progress(existing_plan: &crate::types::Plan, new_plan: &mut crate::types::Plan) {
+    use std::collections::HashMap;
+    
+    // Create a map of video indices to completion status from existing plan
+    let mut completion_map: HashMap<Vec<usize>, bool> = HashMap::new();
+    for item in &existing_plan.items {
+        completion_map.insert(item.video_indices.clone(), item.completed);
+    }
+    
+    // Apply completion status to matching items in new plan
+    for item in &mut new_plan.items {
+        if let Some(&completed) = completion_map.get(&item.video_indices) {
+            item.completed = completed;
+        }
+    }
+}

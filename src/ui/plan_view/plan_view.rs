@@ -111,13 +111,27 @@ fn render_plan_content(
         )
     });
 
-    let handle_settings_change = move |_new_settings: PlanSettings| {
-        // TODO: Implement plan regeneration with new settings
-        // This would typically involve calling a backend service to regenerate the plan
-        // while preserving existing progress
-        spawn(async move {
-            toast::info("Plan regeneration with new settings is not yet implemented");
-        });
+    let handle_settings_change = {
+        let backend = crate::ui::backend_adapter::use_backend_adapter();
+        let plan_id = plan.id;
+        
+        move |new_settings: PlanSettings| {
+            let backend = backend.clone();
+            
+            spawn(async move {
+                toast::info("Regenerating plan with new settings...");
+                
+                match backend.regenerate_plan(plan_id, new_settings).await {
+                    Ok(_updated_plan) => {
+                        toast::success("Study plan updated successfully!");
+                        // The plan resource will automatically refresh and show the updated plan
+                    },
+                    Err(e) => {
+                        toast::error(&format!("Failed to update study plan: {}", e));
+                    }
+                }
+            });
+        }
     };
 
     rsx! {
@@ -145,7 +159,45 @@ fn render_plan_content(
 }
 
 /// Render no plan state
-fn render_no_plan_state(_course_id: Uuid) -> Element {
+fn render_no_plan_state(course_id: Uuid) -> Element {
+    let backend = crate::ui::backend_adapter::use_backend_adapter();
+    let mut is_creating = use_signal(|| false);
+    
+    let handle_create_plan = {
+        let backend = backend.clone();
+        let is_creating = is_creating.clone();
+        
+        move |_| {
+            let backend = backend.clone();
+            let mut is_creating = is_creating.clone();
+            
+            spawn(async move {
+                is_creating.set(true);
+                toast::info("Creating study plan...");
+                
+                // Create default plan settings
+                let settings = PlanSettings {
+                    start_date: chrono::Utc::now() + chrono::Duration::days(1),
+                    sessions_per_week: 3,
+                    session_length_minutes: 60,
+                    include_weekends: false,
+                };
+                
+                match backend.generate_plan(course_id, settings).await {
+                    Ok(_plan) => {
+                        toast::success("Study plan created successfully!");
+                        // The plan resource will automatically refresh and show the new plan
+                    },
+                    Err(e) => {
+                        toast::error(&format!("Failed to create study plan: {}", e));
+                    }
+                }
+                
+                is_creating.set(false);
+            });
+        }
+    };
+    
     rsx! {
         section {
             class: "w-full max-w-3xl mx-auto px-4 py-8 flex flex-col items-center justify-center",
@@ -158,12 +210,14 @@ fn render_no_plan_state(_course_id: Uuid) -> Element {
             }
             button {
                 class: "btn btn-primary mt-4",
-                onclick: move |_| {
-                    spawn(async move {
-                        toast::info("Plan creation not implemented yet");
-                    });
-                },
-                "Create Study Plan"
+                disabled: is_creating(),
+                onclick: handle_create_plan,
+                if is_creating() {
+                    span { class: "loading loading-spinner loading-sm mr-2" }
+                    "Creating Plan..."
+                } else {
+                    "Create Study Plan"
+                }
             }
         }
     }

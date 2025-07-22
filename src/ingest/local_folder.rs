@@ -5,11 +5,15 @@
 //! Enhanced with recursive directory scanning and nested folder support.
 
 use crate::ImportError;
+use crate::types::Course;
+use crate::storage::{self, database::Database};
 use std::collections::HashSet;
 use std::fs;
 use std::path::{Path, PathBuf};
 use std::time::SystemTime;
 use walkdir::WalkDir;
+use uuid::Uuid;
+use chrono::Utc;
 
 /// Struct representing a local video section with title and duration
 #[derive(PartialEq, Debug, Clone)]
@@ -605,6 +609,85 @@ pub fn get_sorting_options(path: &Path) -> Result<Vec<SortingOption>, ImportErro
     });
 
     Ok(options)
+}
+
+/// Import course from local folder and save to database
+/// This function integrates with the existing scanning functionality and creates a proper Course
+pub fn import_from_folder(db: &Database, folder_path: &Path, course_title: &str) -> Result<Course, ImportError> {
+    // Use the existing enhanced local ingest functionality
+    let ingest = EnhancedLocalIngest::new();
+    let video_files = ingest.scan_directory_recursive(folder_path, None)?;
+    
+    if video_files.is_empty() {
+        return Err(ImportError::NoContent);
+    }
+    
+    // Extract raw titles from video files
+    let raw_titles: Vec<String> = video_files.iter()
+        .map(|video_file| {
+            extract_title_from_path(&video_file.path)
+                .unwrap_or_else(|| video_file.name.clone())
+        })
+        .collect();
+    
+    // Create sections from video files
+    let mut sections = Vec::new();
+    for (index, video_file) in video_files.iter().enumerate() {
+        let title = extract_title_from_path(&video_file.path)
+            .unwrap_or_else(|| video_file.name.clone());
+        
+        let duration = probe_video_duration(&video_file.path)
+            .unwrap_or_else(|| std::time::Duration::from_secs(0));
+        
+        let section = crate::types::Section {
+            title,
+            video_index: index,
+            duration,
+        };
+        
+        sections.push(section);
+    }
+    
+    // Calculate total duration
+    let total_duration: std::time::Duration = sections.iter()
+        .map(|section| section.duration)
+        .sum();
+    
+    // Create a single module containing all videos
+    let module = crate::types::Module {
+        title: "Course Content".to_string(),
+        sections,
+        total_duration,
+    };
+    
+    // Create course structure
+    let structure = crate::types::CourseStructure {
+        modules: vec![module],
+        metadata: crate::types::StructureMetadata {
+            total_videos: video_files.len(),
+            total_duration,
+            estimated_duration_hours: Some(total_duration.as_secs_f32() / 3600.0),
+            difficulty_level: Some("Beginner".to_string()),
+        },
+    };
+    
+    // Create course
+    let course = Course {
+        id: Uuid::new_v4(),
+        name: course_title.to_string(),
+        created_at: Utc::now(),
+        raw_titles,
+        structure: Some(structure),
+    };
+    
+    // Save course to database
+    storage::save_course(db, &course)
+        .map_err(|e| ImportError::Database(format!("Failed to save course: {}", e)))?;
+    
+    log::info!("Successfully imported course '{}' with {} videos from {}", 
+               course_title, video_files.len(), folder_path.display());
+    
+    Ok(course)
 }
 
 /// Represents different ways to sort the video files

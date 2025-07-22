@@ -91,6 +91,12 @@ pub fn Dashboard() -> Element {
             open: add_course_modal.is_open,
             on_close: move |_| add_course_modal.close.call(()),
             on_import: handle_import,
+            on_course_imported: Some(EventHandler::new({
+                let course_manager = course_manager.clone();
+                move |_| {
+                    course_manager.refresh.call(());
+                }
+            })),
         }
     }
 }

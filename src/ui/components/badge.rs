@@ -41,7 +41,6 @@ pub fn Badge(props: BadgeProps) -> Element {
 mod tests {
     use super::*;
     use dioxus::prelude::*;
-    use dioxus::prelude::*;
     use dioxus_ssr::render;
 
     #[test]
@@ -53,9 +52,7 @@ mod tests {
             class: None,
         };
         let mut dom = VirtualDom::new_with_props(Badge, props);
-        let mut to = Vec::new();
-        dom.rebuild(&mut to);
-        let rendered = render(&dom);
+        let rendered = dioxus_ssr::render(&dom);
         assert!(rendered.contains("Test"));
         assert!(rendered.contains("badge-primary"));
     }
@@ -70,9 +67,7 @@ mod tests {
             class: None,
         };
         let mut dom = VirtualDom::new_with_props(Badge, props);
-        let mut to = Vec::new();
-        dom.rebuild(&mut to);
-        let rendered = render(&dom);
+        let rendered = dioxus_ssr::render(&dom);
         assert!(rendered.contains("WithIcon"));
         assert!(rendered.contains("badge-success"));
         assert!(rendered.contains("icon"));

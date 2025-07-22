@@ -13,6 +13,7 @@ pub struct CourseManager {
     pub update_course: EventHandler<(Uuid, String)>,
     pub delete_course: EventHandler<Uuid>,
     pub navigate_to_course: EventHandler<Uuid>,
+    pub refresh: EventHandler<()>,
 }
 
 pub fn use_course_manager() -> CourseManager {
@@ -117,6 +118,13 @@ pub fn use_course_manager() -> CourseManager {
         }
     });
     
+    let refresh = EventHandler::new({
+        let mut courses_resource = courses_resource.clone();
+        move |_| {
+            courses_resource.restart();
+        }
+    });
+    
     CourseManager {
         courses,
         is_loading,
@@ -125,6 +133,7 @@ pub fn use_course_manager() -> CourseManager {
         update_course,
         delete_course,
         navigate_to_course,
+        refresh,
     }
 }
 

@@ -70,6 +70,9 @@ pub struct ImportModalProps {
     /// Whether preview is loading
     #[props(default = false)]
     pub preview_loading: bool,
+    /// Optional refresh callback for dashboard
+    #[props(optional)]
+    pub on_course_imported: Option<EventHandler<()>>,
 }
 
 /// Import source selection modal with tabs for YouTube and Local Folder
@@ -80,6 +83,9 @@ pub fn ImportModal(props: ImportModalProps) -> Element {
     let mut local_path = use_signal(|| String::new());
     let mut import_settings = use_signal(|| ImportSettings::default());
     let mut is_validating = use_signal(|| false);
+    let mut folder_validation = use_signal(|| None::<crate::ui::backend_adapter::FolderValidation>);
+    
+    let backend = crate::ui::backend_adapter::use_backend_adapter();
     
     // Tab labels and sources
     let tab_labels = vec!["Local Course".to_string(), "YouTube".to_string(), "Other Resources".to_string()];
@@ -90,7 +96,13 @@ pub fn ImportModal(props: ImportModalProps) -> Element {
     
     // Validation state
     let is_valid = match current_source {
-        ImportSource::LocalFolder => !local_path().trim().is_empty(),
+        ImportSource::LocalFolder => {
+            if let Some(validation) = folder_validation() {
+                validation.is_valid
+            } else {
+                false
+            }
+        },
         ImportSource::YouTube => !youtube_url().trim().is_empty() && youtube_url().contains("youtube.com"),
         ImportSource::OtherResources => false, // Always disabled for now
     };
@@ -98,22 +110,66 @@ pub fn ImportModal(props: ImportModalProps) -> Element {
     // Handle import action
     let handle_import = {
         let on_import = props.on_import.clone();
+        let on_close = props.on_close.clone();
         let youtube_url = youtube_url.clone();
         let local_path = local_path.clone();
         let import_settings = import_settings.clone();
+        let backend = backend.clone();
+        let folder_validation = folder_validation.clone();
         
         move |_| {
             let source = sources[selected_tab()];
-            let input = match source {
-                ImportSource::LocalFolder => local_path().trim().to_string(),
-                ImportSource::YouTube => youtube_url().trim().to_string(),
-                ImportSource::OtherResources => String::new(),
-            };
-            
-            if !input.is_empty() {
-                on_import.call((source, input, import_settings()));
-            } else {
-                toast::toast::error("Please provide a valid input");
+            match source {
+                ImportSource::LocalFolder => {
+                    let path = local_path().trim().to_string();
+                    if !path.is_empty() {
+                        if let Some(validation) = folder_validation() {
+                            if validation.is_valid {
+                                // Start local folder import
+                                let backend = backend.clone();
+                                let on_close = on_close.clone();
+                                let path = path.clone();
+                                spawn(async move {
+                                    toast::toast::info("Starting local folder import...");
+                                    match backend.import_from_local_folder(
+                                        std::path::Path::new(&path), 
+                                        None // Let it auto-generate title from folder name
+                                    ).await {
+                                        Ok(course) => {
+                                            toast::toast::success(&format!("Course '{}' imported successfully!", course.name));
+                                            on_close.call(());
+                                            
+                                            // Trigger dashboard refresh if callback provided
+                                            if let Some(refresh_callback) = props.on_course_imported.as_ref() {
+                                                refresh_callback.call(());
+                                            }
+                                        },
+                                        Err(e) => {
+                                            toast::toast::error(&format!("Import failed: {}", e));
+                                        }
+                                    }
+                                });
+                            } else {
+                                toast::toast::error("Please select a valid folder with video files");
+                            }
+                        } else {
+                            toast::toast::error("Please validate the folder first");
+                        }
+                    } else {
+                        toast::toast::error("Please select a folder");
+                    }
+                },
+                ImportSource::YouTube => {
+                    let input = youtube_url().trim().to_string();
+                    if !input.is_empty() {
+                        on_import.call((source, input, import_settings()));
+                    } else {
+                        toast::toast::error("Please provide a valid YouTube URL");
+                    }
+                },
+                ImportSource::OtherResources => {
+                    toast::toast::info("Other resources import coming soon!");
+                }
             }
         }
     };
@@ -138,6 +194,43 @@ pub fn ImportModal(props: ImportModalProps) -> Element {
         }
     };
     
+    // Validate folder when path changes
+    use_effect({
+        let backend = backend.clone();
+        let local_path = local_path.clone();
+        let mut folder_validation = folder_validation.clone();
+        let mut is_validating = is_validating.clone();
+        
+        move || {
+            let path = local_path();
+            if !path.trim().is_empty() && current_source == ImportSource::LocalFolder {
+                is_validating.set(true);
+                let backend = backend.clone();
+                let path = path.clone();
+                spawn(async move {
+                    match backend.validate_folder(std::path::Path::new(&path)).await {
+                        Ok(validation) => {
+                            folder_validation.set(Some(validation));
+                        },
+                        Err(e) => {
+                            folder_validation.set(Some(crate::ui::backend_adapter::FolderValidation {
+                                is_valid: false,
+                                video_count: 0,
+                                supported_files: Vec::new(),
+                                unsupported_files: Vec::new(),
+                                total_size: 0,
+                                error_message: Some(format!("Validation error: {}", e)),
+                            }));
+                        }
+                    }
+                    is_validating.set(false);
+                });
+            } else {
+                folder_validation.set(None);
+            }
+        }
+    });
+
     // Reset form when modal closes
     use_effect(move || {
         if !props.open {
@@ -145,6 +238,7 @@ pub fn ImportModal(props: ImportModalProps) -> Element {
             local_path.set(String::new());
             selected_tab.set(0);
             is_validating.set(false);
+            folder_validation.set(None);
         }
     });
 
@@ -188,6 +282,8 @@ pub fn ImportModal(props: ImportModalProps) -> Element {
                                 on_path_change: move |path| local_path.set(path),
                                 preview: props.preview.clone(),
                                 preview_loading: props.preview_loading,
+                                folder_validation: folder_validation(),
+                                is_validating: is_validating(),
                             }
                         },
                         ImportSource::YouTube => rsx! {
@@ -233,7 +329,10 @@ fn LocalFolderImportForm(
     on_path_change: EventHandler<String>,
     preview: Option<ImportPreview>,
     preview_loading: bool,
+    folder_validation: Option<crate::ui::backend_adapter::FolderValidation>,
+    is_validating: bool,
 ) -> Element {
+    let backend = crate::ui::backend_adapter::use_backend_adapter();
     rsx! {
         div { class: "space-y-4",
             // Path input
@@ -251,9 +350,31 @@ fn LocalFolderImportForm(
                     }
                     button {
                         class: "btn btn-outline",
-                        onclick: move |_| {
-                            // In a desktop app, this would open a folder picker dialog
-                            toast::toast::info("Folder picker would open here in desktop app");
+                        onclick: {
+                            let backend = backend.clone();
+                            let on_path_change = on_path_change.clone();
+                            move |_| {
+                                let backend = backend.clone();
+                                let on_path_change = on_path_change.clone();
+                                spawn(async move {
+                                    match backend.browse_folder().await {
+                                        Ok(Some(folder_path)) => {
+                                            if let Some(path_str) = folder_path.to_str() {
+                                                on_path_change.call(path_str.to_string());
+                                                toast::toast::success("Folder selected successfully!");
+                                            } else {
+                                                toast::toast::error("Invalid folder path selected");
+                                            }
+                                        },
+                                        Ok(None) => {
+                                            // User cancelled the dialog - no action needed
+                                        },
+                                        Err(e) => {
+                                            toast::toast::error(&format!("Failed to open folder dialog: {}", e));
+                                        }
+                                    }
+                                });
+                            }
                         },
                         "Browse"
                     }
@@ -287,12 +408,14 @@ fn LocalFolderImportForm(
             // Preview section
             if let Some(preview_data) = preview {
                 ImportPreviewPanel { preview: preview_data }
-            } else if preview_loading {
+            } else if let Some(validation) = folder_validation {
+                FolderValidationPanel { validation: validation }
+            } else if is_validating {
                 div { class: "card bg-base-200",
                     div { class: "card-body",
                         div { class: "flex items-center gap-3",
                             span { class: "loading loading-spinner loading-md" }
-                            span { "Scanning folder..." }
+                            span { "Validating folder..." }
                         }
                     }
                 }
@@ -444,6 +567,142 @@ fn ImportPreviewPanel(preview: ImportPreview) -> Element {
                                 div { class: "text-center text-sm text-base-content/70 py-2",
                                     "... and {preview.videos.len() - 5} more videos"
                                 }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+/// Folder validation panel showing scan results
+#[component]
+fn FolderValidationPanel(validation: crate::ui::backend_adapter::FolderValidation) -> Element {
+    let total_size_mb = (validation.total_size as f64) / (1024.0 * 1024.0);
+    let size_text = if total_size_mb > 1024.0 {
+        format!("{:.1} GB", total_size_mb / 1024.0)
+    } else {
+        format!("{:.1} MB", total_size_mb)
+    };
+
+    rsx! {
+        div { class: "card bg-base-200 border border-base-300",
+            div { class: "card-body",
+                if validation.is_valid {
+                    h3 { class: "card-title text-lg text-success", 
+                        svg {
+                            class: "w-5 h-5",
+                            fill: "currentColor",
+                            view_box: "0 0 20 20",
+                            path { d: "M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" }
+                        }
+                        "Folder Validation - Success" 
+                    }
+                } else {
+                    h3 { class: "card-title text-lg text-error", 
+                        svg {
+                            class: "w-5 h-5",
+                            fill: "currentColor",
+                            view_box: "0 0 20 20",
+                            path { d: "M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" }
+                        }
+                        "Folder Validation - Error" 
+                    }
+                }
+                
+                if validation.is_valid {
+                    // Success stats
+                    div { class: "stats stats-horizontal shadow-sm bg-base-100 w-full mt-4",
+                        div { class: "stat",
+                            div { class: "stat-title", "Video Files" }
+                            div { class: "stat-value text-primary", "{validation.video_count}" }
+                        }
+                        div { class: "stat",
+                            div { class: "stat-title", "Total Size" }
+                            div { class: "stat-value text-secondary", "{size_text}" }
+                        }
+                        if !validation.unsupported_files.is_empty() {
+                            div { class: "stat",
+                                div { class: "stat-title", "Unsupported" }
+                                div { class: "stat-value text-warning", "{validation.unsupported_files.len()}" }
+                            }
+                        }
+                    }
+                    
+                    // File list preview (first 5 files)
+                    if !validation.supported_files.is_empty() {
+                        div { class: "mt-4",
+                            h4 { class: "font-medium mb-2", "Video Files Found:" }
+                            div { class: "space-y-1 max-h-32 overflow-y-auto",
+                                {validation.supported_files.iter().take(5).enumerate().map(|(idx, file_path)| {
+                                    let file_name = file_path.file_name()
+                                        .and_then(|name| name.to_str())
+                                        .unwrap_or("Unknown");
+                                    
+                                    rsx! {
+                                        div {
+                                            key: "{idx}",
+                                            class: "flex justify-between items-center text-sm p-2 bg-base-100 rounded",
+                                            span { class: "truncate flex-1 mr-2", "{file_name}" }
+                                            span { class: "text-base-content/70 text-xs", 
+                                                {file_path.extension()
+                                                    .and_then(|ext| ext.to_str())
+                                                    .unwrap_or("")
+                                                    .to_uppercase()
+                                                }
+                                            }
+                                        }
+                                    }
+                                })}
+                                
+                                if validation.supported_files.len() > 5 {
+                                    div { class: "text-center text-sm text-base-content/70 py-2",
+                                        "... and {validation.supported_files.len() - 5} more video files"
+                                    }
+                                }
+                            }
+                        }
+                    }
+                    
+                    // Unsupported files warning
+                    if !validation.unsupported_files.is_empty() {
+                        div { class: "alert alert-warning mt-4",
+                            svg {
+                                class: "stroke-current shrink-0 h-6 w-6",
+                                fill: "none",
+                                view_box: "0 0 24 24",
+                                path {
+                                    stroke_linecap: "round",
+                                    stroke_linejoin: "round",
+                                    stroke_width: "2",
+                                    d: "M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-1.964-.833-2.732 0L4.082 16.5c-.77.833.192 2.5 1.732 2.5z"
+                                }
+                            }
+                            div {
+                                div { class: "font-medium", "{validation.unsupported_files.len()} unsupported files found" }
+                                div { class: "text-sm opacity-80", "These files will be skipped during import" }
+                            }
+                        }
+                    }
+                } else {
+                    // Error message
+                    div { class: "alert alert-error mt-4",
+                        svg {
+                            class: "stroke-current shrink-0 h-6 w-6",
+                            fill: "none",
+                            view_box: "0 0 24 24",
+                            path {
+                                stroke_linecap: "round",
+                                stroke_linejoin: "round",
+                                stroke_width: "2",
+                                d: "M10 14l2-2m0 0l2-2m-2 2l-2-2m2 2l2 2m7-2a9 9 0 11-18 0 9 9 0 0118 0z"
+                            }
+                        }
+                        div {
+                            div { class: "font-medium", "Validation Failed" }
+                            div { class: "text-sm opacity-80", 
+                                {validation.error_message.unwrap_or_else(|| "Unknown error occurred".to_string())}
                             }
                         }
                     }
