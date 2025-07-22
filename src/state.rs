@@ -372,6 +372,20 @@ pub fn use_app_state() -> Signal<AppState> {
     use_context::<Signal<AppState>>()
 }
 
+/// Hook for getting tag statistics from notes
+pub fn use_tag_statistics() -> Memo<std::collections::HashMap<String, usize>> {
+    let app_state = use_context::<Signal<AppState>>();
+    use_memo(move || {
+        let mut stats = std::collections::HashMap::new();
+        for note in &app_state.read().notes {
+            for tag in &note.tags {
+                *stats.entry(tag.clone()).or_insert(0) += 1;
+            }
+        }
+        stats
+    })
+}
+
 /// Async-safe course structuring
 pub async fn async_structure_course(
     app_state: Signal<AppState>,
@@ -396,8 +410,6 @@ mod tests {
     use super::*;
     use crate::types::Course;
     use chrono::Utc;
-    use dioxus::prelude::*;
-
     // Helper to set up a test environment with AppState
     fn setup_test_env() -> Signal<AppState> {
         // For unit tests, we'll create the signal directly

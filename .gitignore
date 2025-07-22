@@ -101,3 +101,5 @@ plan.md
 assets/tailwind.out.css
 .fuse_hidden00032d6800000087
 .fuse_hidden00032d6700000086
+.github/copilot-instructions.md
+theme_config.toml

@@ -222,6 +222,39 @@ impl Backend {
         .await
         .unwrap_or_else(|e| Err(anyhow::anyhow!("Join error: {e}")))
     }
+    pub async fn search_notes(&self, query: &str) -> Result<Vec<Note>> {
+        let db = self.db.clone();
+        let query = query.to_string();
+        tokio::task::spawn_blocking(move || {
+            let conn = db.get_conn()?;
+            notes::search_notes(&conn, &query).map_err(Into::into)
+        })
+        .await
+        .unwrap_or_else(|e| Err(anyhow::anyhow!("Join error: {e}")))
+    }
+    pub async fn search_notes_by_tags(&self, tags: &[String]) -> Result<Vec<Note>> {
+        let db = self.db.clone();
+        let tags_clone = tags.to_vec(); // Clone the tags to move into the closure
+        tokio::task::spawn_blocking(move || {
+            let conn = db.get_conn()?;
+            let tag_strs: Vec<&str> = tags_clone.iter().map(|s| s.as_str()).collect();
+            let filters = notes::NoteSearchFilters {
+                course_id: None,
+                video_id: None,
+                content: None,
+                tags: Some(&tag_strs),
+                timestamp_min: None,
+                timestamp_max: None,
+                created_after: None,
+                created_before: None,
+                updated_after: None,
+                updated_before: None,
+            };
+            notes::search_notes_advanced(&conn, filters).map_err(Into::into)
+        })
+        .await
+        .unwrap_or_else(|e| Err(anyhow::anyhow!("Join error: {e}")))
+    }
     pub async fn get_note(&self, note_id: Uuid) -> Result<Option<Note>> {
         let db = self.db.clone();
         tokio::task::spawn_blocking(move || {

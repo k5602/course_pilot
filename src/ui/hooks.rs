@@ -161,6 +161,38 @@ pub fn use_delete_note_action() -> impl Fn(Uuid) + Clone {
     }
 }
 
+/// Search notes using proper async patterns with use_resource
+pub fn use_notes_search_resource(query: String) -> Resource<Result<Vec<Note>>> {
+    let backend = use_backend_adapter();
+    use_resource(move || {
+        let backend = backend.clone();
+        let query = query.clone();
+        async move {
+            if query.is_empty() {
+                Ok(Vec::new())
+            } else {
+                backend.search_notes(&query).await
+            }
+        }
+    })
+}
+
+/// Search notes by tags using proper async patterns with use_resource
+pub fn use_notes_by_tags_resource(tags: Vec<String>) -> Resource<Result<Vec<Note>>> {
+    let backend = use_backend_adapter();
+    use_resource(move || {
+        let backend = backend.clone();
+        let tags = tags.clone();
+        async move {
+            if tags.is_empty() {
+                Ok(Vec::new())
+            } else {
+                backend.search_notes_by_tags(&tags).await
+            }
+        }
+    })
+}
+
 // --- Planner Hooks ---
 
 /// Load plan using proper async patterns with use_resource

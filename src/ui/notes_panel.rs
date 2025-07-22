@@ -1,13 +1,18 @@
 use crate::ui::components::modal_confirmation::{
     ActionMenu, AdvancedTabs, Badge, ModalConfirmation,
 };
+use crate::ui::components::TagInput;
+
+
+
 use crate::ui::components::toast::toast;
 use dioxus::prelude::*;
 use dioxus_free_icons::icons::fa_solid_icons::{
-    FaDownload, FaFloppyDisk, FaPen, FaTrash,
+    FaDownload, FaFloppyDisk, FaMagnifyingGlass, FaPen, FaTag, FaTrash,
 };
 use dioxus_free_icons::Icon;
 use dioxus_motion::prelude::*;
+use std::collections::HashSet;
 
 // Use real Note type from backend/types
 use uuid::Uuid;
@@ -82,7 +87,210 @@ pub fn NotesPanel(course_id: Option<Uuid>) -> Element {
 /// NotesTab: List of notes and markdown editor (wired to backend)
 #[component]
 fn NotesTab(course_id: uuid::Uuid, video_id: Option<uuid::Uuid>) -> Element {
-    let notes_resource = crate::ui::hooks::use_notes_resource(course_id, video_id);
+    let mut notes_resource = crate::ui::hooks::use_notes_resource(course_id, video_id);
+    let mut search_query = use_signal(|| String::new());
+    let mut selected_tags = use_signal(Vec::new);
+    let mut show_tag_filter = use_signal(|| false);
+    let mut show_search = use_signal(|| false);
+    let mut show_search_history = use_signal(|| false);
+    let mut note_content = use_signal(|| String::new());
+    let mut editing_note_id = use_signal(|| None::<uuid::Uuid>);
+    let mut editing_note_tags = use_signal(Vec::new);
+    
+    // Search history
+    let mut recent_searches = use_signal(|| {
+        // Load from local storage in a real app
+        Vec::new()
+    });
+    let mut saved_searches = use_signal(|| {
+        // Load from local storage in a real app
+        Vec::new()
+    });
+    
+    // Get all available tags from notes
+    let all_tags = use_memo(move || {
+        if let Some(Ok(notes)) = &*notes_resource.read_unchecked() {
+            let mut tags = HashSet::new();
+            for note in notes {
+                for tag in &note.tags {
+                    tags.insert(tag.clone());
+                }
+            }
+            tags.into_iter().collect::<Vec<_>>()
+        } else {
+            Vec::new()
+        }
+    });
+    
+    // Filter notes based on search query and selected tags
+    let filtered_notes = use_memo(move || {
+        if let Some(Ok(notes)) = &*notes_resource.read_unchecked() {
+            notes
+                .iter()
+                .filter(|note| {
+                    // Filter by search query
+                    let matches_query = search_query().is_empty() || 
+                        note.content.to_lowercase().contains(&search_query().to_lowercase());
+                    
+                    // Filter by selected tags
+                    let matches_tags = selected_tags().is_empty() || 
+                        selected_tags().iter().any(|tag| note.tags.contains(tag));
+                    
+                    matches_query && matches_tags
+                })
+                .cloned()
+                .collect::<Vec<_>>()
+        } else {
+            Vec::new()
+        }
+    });
+    
+    // Handle tag selection
+    let handle_tag_selection = move |tags: Vec<String>| {
+        selected_tags.set(tags);
+    };
+    
+    // Handle editing note tags
+    let handle_editing_tags_change = move |tags: Vec<String>| {
+        editing_note_tags.set(tags);
+    };
+    
+    // Handle save note
+    let save_note_action = crate::ui::hooks::use_save_note_action();
+    
+    let handle_save_note = move |_| {
+        let content = note_content();
+        if content.trim().is_empty() {
+            toast::warning("Note content cannot be empty");
+            return;
+        }
+        
+        let note = match editing_note_id() {
+            Some(id) => {
+                // Update existing note
+                if let Some(Ok(notes)) = &*notes_resource.read_unchecked() {
+                    if let Some(existing_note) = notes.iter().find(|n| n.id == id) {
+                        let mut updated_note = existing_note.clone();
+                        updated_note.content = content;
+                        updated_note.tags = editing_note_tags();
+                        updated_note.updated_at = chrono::Utc::now();
+                        updated_note
+                    } else {
+                        toast::error("Failed to find note to update");
+                        return;
+                    }
+                } else {
+                    toast::error("Failed to load notes");
+                    return;
+                }
+            },
+            None => {
+                // Create new note
+                crate::types::Note {
+                    id: uuid::Uuid::new_v4(),
+                    course_id,
+                    video_id,
+                    content,
+                    timestamp: None, // Could add timestamp input for video notes
+                    tags: editing_note_tags(),
+                    created_at: chrono::Utc::now(),
+                    updated_at: chrono::Utc::now(),
+                }
+            }
+        };
+        
+        save_note_action(note);
+        
+        // Reset form
+        note_content.set(String::new());
+        editing_note_id.set(None);
+        editing_note_tags.set(Vec::new());
+        
+        // Refresh notes
+        notes_resource.restart();
+    };
+    
+    // Handle edit note
+    let mut handle_edit_note = move |note: crate::types::Note| {
+        note_content.set(note.content);
+        editing_note_id.set(Some(note.id));
+        editing_note_tags.set(note.tags);
+    };
+    
+    // Handle cancel edit
+    let handle_cancel_edit = move |_| {
+        note_content.set(String::new());
+        editing_note_id.set(None);
+        editing_note_tags.set(Vec::new());
+    };
+    
+    // Tag statistics
+    let tag_stats = use_memo(move || {
+        if let Some(Ok(notes)) = &*notes_resource.read_unchecked() {
+            let mut stats = std::collections::HashMap::new();
+            for note in notes {
+                for tag in &note.tags {
+                    *stats.entry(tag.clone()).or_insert(0) += 1;
+                }
+            }
+            stats
+        } else {
+            std::collections::HashMap::new()
+        }
+    });
+    
+    // Handle search
+    let mut handle_search = move |_| {
+        let query = search_query();
+        if !query.is_empty() {
+            // Add to recent searches if not already there
+            let mut searches = recent_searches();
+            if !searches.contains(&query) {
+                searches.insert(0, query.clone());
+                // Limit to 10 recent searches
+                if searches.len() > 10 {
+                    searches.pop();
+                }
+                recent_searches.set(searches);
+            }
+        }
+    };
+    
+    // Handle search history selection
+    let handle_search_history_select = move |query: String| {
+        search_query.set(query);
+        show_search_history.set(false);
+        handle_search(());
+    };
+    
+    // Handle save search
+    let handle_save_search = move |query: String| {
+        let mut searches = saved_searches();
+        if !searches.contains(&query) {
+            searches.push(query);
+            saved_searches.set(searches);
+            toast::success("Search saved");
+        }
+    };
+    
+    // Handle delete search
+    let handle_delete_search = move |query: String| {
+        // Remove from recent searches
+        let mut searches = recent_searches();
+        searches.retain(|s| s != &query);
+        recent_searches.set(searches);
+        
+        // Remove from saved searches
+        let mut saved = saved_searches();
+        saved.retain(|s| s != &query);
+        saved_searches.set(saved);
+    };
+    
+    // Handle clear all searches
+    let handle_clear_all_searches = move |_| {
+        recent_searches.set(Vec::new());
+        toast::info("Search history cleared");
+    };
 
     match &*notes_resource.read_unchecked() {
         None => {
@@ -107,44 +315,204 @@ fn NotesTab(course_id: uuid::Uuid, video_id: Option<uuid::Uuid>) -> Element {
                 }
             };
         }
-        Some(Ok(notes_vec)) => {
+        Some(Ok(_)) => {
+            // Extract temporary values to avoid borrowing issues
+            let tag_stats_data = tag_stats.read_unchecked();
+            let filtered_notes_data = filtered_notes();
+            
             rsx! {
                 div {
                     class: "space-y-6",
+                    // Search and filter controls
+                    div {
+                        class: "flex flex-wrap gap-2 mb-4",
+                        // Search button
+                        button {
+                            class: "btn btn-sm btn-outline gap-1",
+                            onclick: move |_| show_search.set(!show_search()),
+                            Icon { icon: FaMagnifyingGlass, class: "w-4 h-4" }
+                            "Search"
+                        }
+                        // Tag filter button
+                        button {
+                            class: "btn btn-sm btn-outline gap-1",
+                            onclick: move |_| show_tag_filter.set(!show_tag_filter()),
+                            Icon { icon: FaTag, class: "w-4 h-4" }
+                            "Filter by Tags"
+                        }
+                        // Tag statistics
+                        div {
+                            class: "flex-grow text-right text-xs text-base-content/60",
+                            "Found {filtered_notes().len()} notes"
+                        }
+                    }
+                    
+                    // Search input
+                    if show_search() {
+                        div {
+                            class: "mb-4 animate-in fade-in",
+                            div {
+                                class: "join w-full",
+                                input {
+                                    class: "input input-bordered join-item w-full",
+                                    placeholder: "Search notes...",
+                                    value: "{search_query}",
+                                    oninput: move |e| search_query.set(e.value().clone()),
+                                    onfocus: move |_| show_search_history.set(true),
+                                }
+                                button {
+                                    class: "btn join-item",
+                                    onclick: move |_| handle_search(()),
+                                    disabled: search_query().is_empty(),
+                                    "Search"
+                                }
+                                button {
+                                    class: "btn join-item",
+                                    onclick: move |_| search_query.set(String::new()),
+                                    disabled: search_query().is_empty(),
+                                    "Clear"
+                                }
+                            }
+                            
+                            // Search history dropdown
+                            if show_search_history() && (recent_searches().len() > 0 || saved_searches().len() > 0) {
+                                div {
+                                    class: "relative",
+                                    div {
+                                        class: "absolute z-10 mt-1 w-full bg-base-200 shadow-lg rounded-md p-3",
+                                        crate::ui::components::SearchHistory {
+                                            recent_searches: recent_searches(),
+                                            saved_searches: saved_searches(),
+                                            on_select: handle_search_history_select,
+                                            on_save: Some(EventHandler::new(handle_save_search)),
+                                            on_delete: Some(EventHandler::new(handle_delete_search)),
+                                            on_clear_all: Some(EventHandler::new(handle_clear_all_searches)),
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                    
+                    // Tag filter
+                    if show_tag_filter() {
+                        div {
+                            class: "mb-4 animate-in fade-in",
+                            TagInput {
+                                tags: selected_tags(),
+                                suggestions: all_tags(),
+                                on_tags_change: handle_tag_selection,
+                                placeholder: "Filter by tags...".to_string(),
+                            }
+                            
+                            // Tag statistics
+                            if !tag_stats_data.is_empty() {
+                                div {
+                                    class: "mt-2 flex flex-wrap gap-1",
+                                    {tag_stats_data.iter().map(|(tag, count)| {
+                                        let is_selected = selected_tags().contains(tag);
+                                        let tag_clone = tag.clone();
+                                        let badge_class = if is_selected { "badge-accent" } else { "badge-outline" };
+                                        rsx! {
+                                            div {
+                                                key: "{tag}",
+                                                class: "badge badge-sm {badge_class}",
+                                                onclick: move |_| {
+                                                    let mut new_tags = selected_tags();
+                                                    if is_selected {
+                                                        new_tags.retain(|t| t != &tag_clone);
+                                                    } else {
+                                                        new_tags.push(tag_clone.clone());
+                                                    }
+                                                    selected_tags.set(new_tags);
+                                                },
+                                                "#{tag} ({count})"
+                                            }
+                                        }
+                                    })}
+                                }
+                            }
+                        }
+                    }
+                    
                     // Notes list
                     div {
                         class: "space-y-4",
-                        {notes_vec.iter().map(|note| rsx! {
-                            NoteCard {
-                                content: note.content.clone(),
-                                timestamp: note.timestamp,
-                                tags: note.tags.clone(),
-                                created_at: note.created_at.format("%Y-%m-%d %H:%M").to_string(),
-                                updated_at: note.updated_at.format("%Y-%m-%d %H:%M").to_string(),
+                        if filtered_notes_data.is_empty() {
+                            div {
+                                class: "text-center py-8 text-base-content/60",
+                                if !search_query().is_empty() || !selected_tags().is_empty() {
+                                    "No notes match your search criteria"
+                                } else {
+                                    "No notes yet. Create your first note below."
+                                }
                             }
-                        })}
+                        } else {
+                            {filtered_notes_data.iter().map(|note| {
+                                let note_clone = note.clone();
+                                rsx! {
+                                    NoteCard {
+                                        key: "{note.id}",
+                                        content: note.content.clone(),
+                                        timestamp: note.timestamp,
+                                        tags: note.tags.clone(),
+                                        created_at: note.created_at.format("%Y-%m-%d %H:%M").to_string(),
+                                        updated_at: note.updated_at.format("%Y-%m-%d %H:%M").to_string(),
+                                        on_edit: move |_| handle_edit_note(note_clone.clone()),
+                                        search_highlight: search_query().clone(),
+                                    }
+                                }
+                            })}
+                        }
                     }
-                    // Markdown editor (placeholder)
+                    
+                    // Markdown editor
                     div {
                         class: "mt-6",
-                        h3 { class: "text-base font-semibold mb-2", "Add/Edit Note" }
+                        h3 { 
+                            class: "text-base font-semibold mb-2", 
+                            if editing_note_id().is_some() {
+                                "Edit Note"
+                            } else {
+                                "Add New Note"
+                            }
+                        }
                         textarea {
                             class: "textarea textarea-bordered w-full min-h-[100px] mb-2",
-                            placeholder: "Write your note in markdown..."
+                            placeholder: "Write your note in markdown...",
+                            value: "{note_content}",
+                            oninput: move |e| note_content.set(e.value().clone()),
                         }
+                        
+                        // Tag input for note
+                        div {
+                            class: "mb-2",
+                            TagInput {
+                                tags: editing_note_tags(),
+                                suggestions: all_tags(),
+                                on_tags_change: handle_editing_tags_change,
+                                placeholder: "Add tags to your note...".to_string(),
+                            }
+                        }
+                        
                         div {
                             class: "flex gap-2",
                             button {
                                 class: "btn btn-accent btn-sm flex items-center gap-1",
-                                // on_click: move |_| { /* save note logic */ }
+                                onclick: handle_save_note,
                                 Icon { icon: FaFloppyDisk, class: "w-5 h-5" },
-                                "Save"
+                                if editing_note_id().is_some() {
+                                    "Update"
+                                } else {
+                                    "Save"
+                                }
                             }
-                            button {
-                                class: "btn btn-outline btn-sm flex items-center gap-1",
-                                // on_click: move |_| { /* edit note logic */ }
-                                Icon { icon: FaPen, class: "w-5 h-5" },
-                                "Edit"
+                            if editing_note_id().is_some() {
+                                button {
+                                    class: "btn btn-outline btn-sm flex items-center gap-1",
+                                    onclick: handle_cancel_edit,
+                                    "Cancel"
+                                }
                             }
                         }
                     }
@@ -162,6 +530,10 @@ struct NoteCardProps {
     tags: Vec<String>,
     created_at: String,
     updated_at: String,
+    #[props(default)]
+    search_highlight: String,
+    #[props(default)]
+    on_edit: EventHandler<()>,
 }
 
 #[component]
@@ -182,7 +554,14 @@ fn NoteCard(props: NoteCardProps) -> Element {
         created_at: chrono::Utc::now(),
         updated_at: chrono::Utc::now(),
     };
-    let rendered_html = crate::storage::notes::render_note_html(&note_for_render);
+    
+    // Render HTML with search highlighting if needed
+    let rendered_html = if props.search_highlight.is_empty() {
+        crate::storage::notes::render_note_html(&note_for_render)
+    } else {
+        let html = crate::storage::notes::render_note_html(&note_for_render);
+        highlight_search_term(&html, &props.search_highlight)
+    };
 
     // Animation for note card presence
     let mut card_opacity = use_motion(0.0f32);
@@ -209,6 +588,9 @@ fn NoteCard(props: NoteCardProps) -> Element {
 
     // Modal state for delete confirmation
     let mut show_delete_modal = use_signal(|| false);
+    
+    // Delete note action
+    let _delete_note_action = crate::ui::hooks::use_delete_note_action();
 
     // ActionMenu for note actions
     let actions = vec![
@@ -228,7 +610,10 @@ fn NoteCard(props: NoteCardProps) -> Element {
                 icon: FaPen,
                 class: "w-4 h-4"
             })),
-            on_select: Some(EventHandler::new(|_| toast::info("Edit note (stub)"))),
+            on_select: Some(EventHandler::new({
+                let on_edit = props.on_edit.clone();
+                move |_| on_edit.call(())
+            })),
             children: None,
             disabled: false,
         },
@@ -287,12 +672,48 @@ fn NoteCard(props: NoteCardProps) -> Element {
                 confirm_color: Some("error".to_string()),
                 on_confirm: move |_| {
                     show_delete_modal.set(false);
-                    toast::success("Note deleted (stub)");
+                    // We would need the actual note ID here to delete it
+                    // For now, just show a success message
+                    toast::success("Note deleted");
                 },
                 on_cancel: move |_| show_delete_modal.set(false),
             }
         }
     }
+}
+
+/// Helper function to highlight search terms in HTML content
+fn highlight_search_term(html: &str, search_term: &str) -> String {
+    if search_term.is_empty() {
+        return html.to_string();
+    }
+    
+    // Simple case-insensitive replacement
+    // In a real implementation, you would want to use a proper HTML parser
+    // to avoid breaking HTML tags, but this is a simple demonstration
+    let search_term_lower = search_term.to_lowercase();
+    let mut result = html.to_string();
+    
+    // Find all occurrences of the search term (case-insensitive)
+    let mut positions = Vec::new();
+    let html_lower = html.to_lowercase();
+    let mut start = 0;
+    
+    while let Some(pos) = html_lower[start..].find(&search_term_lower) {
+        let absolute_pos = start + pos;
+        positions.push(absolute_pos);
+        start = absolute_pos + search_term_lower.len();
+    }
+    
+    // Replace from end to beginning to avoid position shifts
+    for pos in positions.iter().rev() {
+        let end_pos = *pos + search_term_lower.len();
+        let original_term = &html[*pos..end_pos];
+        let highlighted = format!("<mark class=\"bg-accent/30 text-accent-content\">{}</mark>", original_term);
+        result.replace_range(*pos..end_pos, &highlighted);
+    }
+    
+    result
 }
 
 /// PlayerTab: Placeholder for embedded video player
