@@ -1,7 +1,7 @@
 use dioxus::prelude::*;
 use crate::types::Course;
 use crate::ui::components::card::{Card, CardVariant, ActionItem, BadgeData};
-use crate::ui::hooks::{use_course_progress, use_course_manager, use_modal_manager};
+use crate::ui::hooks::{use_course_progress, use_course_manager};
 use super::CourseActions;
 
 #[derive(Props, PartialEq, Clone)]

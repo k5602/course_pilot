@@ -3,7 +3,9 @@ use dioxus_motion::prelude::*;
 
 use crate::ui::components::modal::Modal;
 use crate::ui::components::toast::toast;
+use crate::ui::components::youtube_import_form::YouTubeImportForm;
 use crate::ui::hooks::{use_course_manager, use_modal_manager, use_form_manager};
+use crate::types::Course;
 use super::CourseGrid;
 
 /// Clean dashboard component with proper separation of concerns
@@ -11,6 +13,7 @@ use super::CourseGrid;
 pub fn Dashboard() -> Element {
     let course_manager = use_course_manager();
     let add_course_modal = use_modal_manager(false);
+    let import_modal = use_modal_manager(false);
     let course_name_form = use_form_manager("".to_string());
     
     // Animation for grid entrance
@@ -55,6 +58,29 @@ pub fn Dashboard() -> Element {
         }
     };
 
+    // Handle import completion
+    let handle_import_complete = {
+        let course_manager = course_manager.clone();
+        let import_modal = import_modal.clone();
+        
+        move |_course: Course| {
+            // Refresh the courses list by triggering the course manager
+            // The course manager will automatically refresh when a new course is created
+            import_modal.close.call(());
+            toast::success("Course imported and added to your library!");
+        }
+    };
+
+    // Handle import error
+    let handle_import_error = {
+        let import_modal = import_modal.clone();
+        
+        move |error: String| {
+            toast::error(&format!("Import failed: {}", error));
+            // Keep modal open so user can try again
+        }
+    };
+
     rsx! {
         section {
             class: "w-full max-w-7xl mx-auto px-4 py-8",
@@ -63,10 +89,17 @@ pub fn Dashboard() -> Element {
             div {
                 class: "flex items-center justify-between mb-6",
                 h1 { class: "text-2xl font-bold", "Your Courses" }
-                button {
-                    class: "btn btn-primary",
-                    onclick: move |_| add_course_modal.open.call(()),
-                    "Add New Course"
+                div { class: "flex gap-2",
+                    button {
+                        class: "btn btn-outline",
+                        onclick: move |_| import_modal.open.call(()),
+                        "Import Course"
+                    }
+                    button {
+                        class: "btn btn-primary",
+                        onclick: move |_| add_course_modal.open.call(()),
+                        "Add New Course"
+                    }
                 }
             }
 
@@ -113,6 +146,25 @@ pub fn Dashboard() -> Element {
                     value: course_name_form.value,
                     oninput: move |evt| course_name_form.set_value.call(evt.value()),
                 }
+            }
+        }
+
+        // Import Course Modal
+        Modal {
+            open: import_modal.is_open,
+            on_close: move |_| import_modal.close.call(()),
+            title: "Import Course from YouTube".to_string(),
+            actions: rsx! {
+                button {
+                    class: "btn btn-ghost",
+                    onclick: move |_| import_modal.close.call(()),
+                    "Cancel"
+                }
+            },
+            
+            YouTubeImportForm {
+                on_import_complete: handle_import_complete,
+                on_import_error: handle_import_error,
             }
         }
     }

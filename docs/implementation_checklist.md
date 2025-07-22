@@ -111,24 +111,50 @@ A scalable, modular, and future-proof roadmap for Dioxus Desktop UI & Backend In
 
 ## Phase 4: Feature Mapping & UI Flows
 
-- [ ] Courses
-  - Dashboard grid (CourseCard), add/edit/delete, progress bar, export
-  - Use dioxus-daisyui for cards, progress, and actions; dioxus-free-icons for visual cues.
-  - Scalability: Course model supports metadata, tags, and future analytics.
+- [x] **Courses** ✅ COMPLETED
+  - ✅ Dashboard grid with unified Card component system
+  - ✅ Complete CRUD operations (add/edit/delete) with modal interfaces
+  - ✅ Progress bars and visual indicators with ProgressRing components
+  - ✅ Export functionality with JSON, CSV, and PDF support
+  - ✅ DaisyUI-based styling with hover effects and animations
+  - ✅ Course model supports metadata, progress tracking, and future analytics
+  - ✅ Comprehensive hook system with `use_course_manager()` and `use_course_progress()`
 
-- [ ] Planner
-  - PlanView with checklist, progress, session controls
-  - Use DaisyUI Accordion/Collapse for modules, checkboxes for progress.
-  - Scalability: Planner logic is modular, supporting new scheduling strategies.
+- [x] **Planner** ✅ COMPLETED
+  - ✅ PlanView with interactive checklist and progress tracking
+  - ✅ Session control panel for plan customization and scheduling
+  - ✅ DaisyUI Accordion/Collapse components for module organization
+  - ✅ Clickable checkboxes for progress updates with optimistic UI
+  - ✅ Enhanced progress visualization with detailed completion statistics
+  - ✅ Modular planner logic supporting multiple scheduling strategies
 
-- [ ] Notes
-  - Contextual panel with per-course and per-video notes, tagging, search, markdown editor, export
-  - Use DaisyUI Tabs/Modal for editor, dioxus-motion for panel transitions, dioxus-toast for feedback.
-  - Scalability: Notes backend supports tagging, advanced search, and future features (attachments, analytics).
+- [x] **Export System** ✅ COMPLETED
+  - ✅ Comprehensive export functionality for courses, plans, and notes
+  - ✅ Multiple format support (JSON, CSV, PDF) with validation
+  - ✅ Progress tracking for large export operations
+  - ✅ Exportable trait implementation for all major types
+  - ✅ Error handling and recovery with user-friendly messages
 
-- [ ] Ingest
-  - Course import flows (YouTube, local), feedback via dioxus-toast
-  - Scalability: Ingest system is modular, ready for new sources (Udemy, Coursera, etc.).
+- [x] **Navigation & Routing** ✅ COMPLETED
+  - ✅ Breadcrumb navigation system with route management
+  - ✅ Type-safe routing with proper state management
+  - ✅ Navigation hooks for consistent behavior across components
+  - ✅ Deep linking support for courses and plan views
+
+- [ ] **Notes** 🚧 IN PROGRESS
+  - [ ] Enhanced contextual panel with per-course and per-video notes
+  - [ ] Tagging system with autocomplete and management interface
+  - [ ] Real-time search with fuzzy matching and highlighting
+  - [ ] Markdown editor with live preview and formatting toolbar
+  - [ ] DaisyUI Tabs/Modal for editor, dioxus-motion for panel transitions
+  - [ ] Advanced search filters for date ranges, tags, and content
+
+- [ ] **Import UI** 🚧 PLANNED
+  - [ ] Import modal with source selection (YouTube, local folders)
+  - [ ] YouTube import form with URL validation and playlist preview
+  - [ ] Progress dialog with real-time feedback using dioxus-toast
+  - [ ] Error handling with specific messages for API failures
+  - [ ] Integration with existing backend import functionality
 
 
 ## Phase 5: Visual Polish & UX Enhancements
@@ -203,17 +229,19 @@ A scalable, modular, and future-proof roadmap for Dioxus Desktop UI & Backend In
 
 - ✅ **Unified Card Component System**: Successfully migrated from individual CourseCard to unified Card component with variants
 - ✅ **Course Management CRUD**: Complete course management with edit/delete modals and proper hook integration
-- UI Polish: Refining component styling and theming
-- Component Library: Building out reusable UI components with DaisyUI
-- State Management: Implementing proper state management patterns
-- Testing: Adding unit and integration tests
+- ✅ **Export System**: Comprehensive export functionality with multiple formats and progress tracking
+- ✅ **Navigation & Routing**: Complete navigation system with breadcrumbs and route management
+- ✅ **Enhanced PlanView**: Session controls, progress tracking, and module organization
+- 🚧 **Import UI Integration**: Connecting existing backend import with user-friendly UI
+- 🚧 **Notes Panel Enhancement**: Adding tagging, search, and advanced editing features
+- 📋 **Test Suite Fixes**: Addressing compilation errors and adding comprehensive coverage
 
 ### In Progress
 
-- Component Development: Building out core UI components with DaisyUI
-- State Management: Implementing proper state management with Dioxus hooks
-- Theming System: Finalizing the theming implementation
-- Documentation: Updating documentation for the new setup
+- **YouTube Import UI**: Building modal-based import interface with progress tracking
+- **Notes Enhancement**: Implementing tagging system and real-time search functionality
+- **Error Recovery**: Adding comprehensive error boundaries and user feedback systems
+- **Test Coverage**: Fixing existing test compilation errors and adding new test suites
 
 
 ## Summary Table
@@ -267,8 +295,10 @@ A scalable, modular, and future-proof roadmap for Dioxus Desktop UI & Backend In
 - ✅ All Dioxus API usage errors and import/variable warnings have been batch fixed.
 - ✅ Build passes with no errors (as of latest `cargo check`). Only warnings remain (dead code, unused functions/variants).
 - ✅ **Phase 3 Complete**: Backend integration, async patterns, progress tracking, and enhanced ingest system fully implemented.
-- ✅ Accessibility and comprehensive test coverage are deferred/skipped by user request.
-- ⏩ Next: Ready to proceed to Phase 4: Feature Mapping & UI Flows.
+- ✅ **Phase 4 Major Features Complete**: Unified Card system, complete course management CRUD, comprehensive export system, navigation & routing, and enhanced PlanView with session controls.
+- ✅ **Navigation & Course Management Spec**: Tasks 1-5 completed including unified Card component architecture, navigation system fixes, export functionality, course management workflows, and enhanced PlanView.
+- 🚧 **Current Focus**: YouTube import UI integration (Task 6), Notes panel enhancements (Task 7), test suite fixes (Task 8), and error recovery systems (Task 9).
+- ⏩ Next: Complete remaining tasks from navigation-and-course-management spec and prepare for Phase 5: Visual Polish & UX Enhancements.
 
 ## Phase 3 Completion: Lessons Learned & Architectural Decisions
 

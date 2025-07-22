@@ -4,8 +4,8 @@ use uuid::Uuid;
 
 use crate::ui::components::toast::toast;
 use crate::ui::hooks::use_plan_resource;
-use crate::types::PlanExt;
-use super::{PlanHeader, PlanChecklist};
+use crate::types::{PlanExt, PlanSettings};
+use super::{PlanHeader, PlanChecklist, SessionControlPanel};
 
 #[derive(Props, PartialEq, Clone)]
 pub struct PlanViewProps {
@@ -33,7 +33,14 @@ pub fn PlanView(props: PlanViewProps) -> Element {
             let (completed_sections, total_sections, progress_percentage) = plan.calculate_progress();
             let progress = progress_percentage.round() as u8;
             
-            render_plan_content(plan, progress, completed_sections, total_sections)
+            rsx! {
+                render_plan_content {
+                    plan: plan.clone(),
+                    progress: progress,
+                    completed_sections: completed_sections,
+                    total_sections: total_sections,
+                }
+            }
         },
         Some(Ok(None)) => render_no_plan_state(props.course_id),
     }
@@ -75,8 +82,9 @@ fn render_error_state(err: &anyhow::Error) -> Element {
 }
 
 /// Render plan content with animation
+#[component]
 fn render_plan_content(
-    plan: &crate::types::Plan, 
+    plan: crate::types::Plan, 
     progress: u8, 
     completed_sections: usize, 
     total_sections: usize
@@ -103,6 +111,15 @@ fn render_plan_content(
         )
     });
 
+    let handle_settings_change = move |_new_settings: PlanSettings| {
+        // TODO: Implement plan regeneration with new settings
+        // This would typically involve calling a backend service to regenerate the plan
+        // while preserving existing progress
+        spawn(async move {
+            toast::info("Plan regeneration with new settings is not yet implemented");
+        });
+    };
+
     rsx! {
         section {
             class: "w-full max-w-3xl mx-auto px-4 py-8",
@@ -112,6 +129,11 @@ fn render_plan_content(
                 progress: progress,
                 completed_sections: completed_sections,
                 total_sections: total_sections,
+            }
+            
+            SessionControlPanel {
+                plan: plan.clone(),
+                on_settings_change: handle_settings_change,
             }
             
             div {

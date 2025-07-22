@@ -283,7 +283,7 @@ mod tests {
     #[test]
     fn test_playlist_id_extraction() {
         assert_eq!(
-            extract_playlist_id("https://www.youtube.com/playlist?list=PLrAXtmRdnEQy"),
+            extract_playlist_id("https://youtube.com/playlist?list=PLJEZDlUEtOf5rZjVFnijy6wSW-laKiY0l&si=aLcYFs9uDCcfvNGd"),
             Some("PLrAXtmRdnEQy".to_string())
         );
         assert_eq!(
