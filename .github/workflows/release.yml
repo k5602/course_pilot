@@ -63,7 +63,7 @@ jobs:
 
       - name: Clean previous build artifacts
         run: cargo clean
-        working-directory: ./course_pilot
+        working-directory: course_pilot
 
       - name: Build Dioxus app for Linux
         run: |
