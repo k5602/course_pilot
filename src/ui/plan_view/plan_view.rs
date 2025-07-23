@@ -123,7 +123,7 @@ fn render_enhanced_plan_content(
     });
 
     let handle_settings_change = {
-        let backend = crate::ui::backend_adapter::use_backend_adapter();
+        let backend = crate::ui::hooks::use_backend_adapter();
         let plan_id = plan.id;
 
         move |new_settings: PlanSettings| {
@@ -145,6 +145,12 @@ fn render_enhanced_plan_content(
         }
     };
 
+    let handle_plan_regenerated = move |_updated_plan: crate::types::Plan| {
+        // The plan resource will automatically refresh and show the updated plan
+        // This handler is called after successful regeneration
+        toast::success("Plan regenerated successfully!");
+    };
+
     // Group plan items by session for better organization
     let session_groups = group_items_by_session(&plan.items);
 
@@ -163,6 +169,7 @@ fn render_enhanced_plan_content(
             SessionControlPanel {
                 plan: plan.clone(),
                 on_settings_change: handle_settings_change,
+                on_plan_regenerated: handle_plan_regenerated,
             }
 
             div {
@@ -181,7 +188,7 @@ fn render_enhanced_plan_content(
 
 /// Render no plan state
 fn render_no_plan_state(course_id: Uuid) -> Element {
-    let backend = crate::ui::backend_adapter::use_backend_adapter();
+    let backend = crate::ui::hooks::use_backend_adapter();
     let is_creating = use_signal(|| false);
 
     let handle_create_plan = {
