@@ -218,6 +218,16 @@ impl Backend {
     }
 
     // --- Notes ---
+    pub async fn list_all_notes(&self) -> Result<Vec<Note>> {
+        let db = self.db.clone();
+        tokio::task::spawn_blocking(move || {
+            let conn = db.get_conn()?;
+            notes::get_all_notes(&conn)
+        })
+        .await
+        .unwrap_or_else(|e| Err(anyhow::anyhow!("Join error: {e}")))
+    }
+    
     pub async fn list_notes_by_course(&self, course_id: Uuid) -> Result<Vec<Note>> {
         let db = self.db.clone();
         tokio::task::spawn_blocking(move || {

@@ -58,6 +58,8 @@ jobs:
 
       - name: Install Dioxus CLI
         run: cargo install dioxus-cli --locked
+        env:
+          RUSTFLAGS: "-C link-args=/LIBPATH:C:\\Windows\\System32 advapi32.lib secur32.lib crypt32.lib ole32.lib userenv.lib"
 
       - name: Clean previous build artifacts
         run: cargo clean
@@ -115,7 +117,7 @@ jobs:
         run: dx build --release --platform desktop
         working-directory: ./course_pilot
         env:
-          RUSTFLAGS: "-C target-feature=+crt-static -C link-arg=/SUBSYSTEM:WINDOWS"
+          RUSTFLAGS: "-C target-feature=+crt-static -C link-arg=/SUBSYSTEM:WINDOWS -C link-args=/LIBPATH:C:\\Windows\\System32 advapi32.lib secur32.lib crypt32.lib ole32.lib userenv.lib"
 
       - name: Package Windows build
         run: |

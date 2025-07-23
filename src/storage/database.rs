@@ -147,6 +147,24 @@ fn init_tables(conn: &mut Connection) -> Result<(), DatabaseError> {
         [],
     )?;
 
+    // Create notes table
+    tx.execute(
+        r#"
+        CREATE TABLE IF NOT EXISTS notes (
+            id          TEXT PRIMARY KEY,
+            course_id   TEXT NOT NULL,
+            video_id    TEXT,
+            content     TEXT NOT NULL,
+            timestamp   INTEGER,
+            created_at  TEXT NOT NULL,
+            updated_at  TEXT NOT NULL,
+            tags        TEXT DEFAULT '[]',
+            FOREIGN KEY(course_id) REFERENCES courses(id) ON DELETE CASCADE
+        );
+        "#,
+        [],
+    )?;
+
     // Create indices for better performance
     tx.execute(
         "CREATE INDEX IF NOT EXISTS idx_plans_course_id ON plans(course_id);",
@@ -155,6 +173,16 @@ fn init_tables(conn: &mut Connection) -> Result<(), DatabaseError> {
 
     tx.execute(
         "CREATE INDEX IF NOT EXISTS idx_courses_created_at ON courses(created_at);",
+        [],
+    )?;
+
+    tx.execute(
+        "CREATE INDEX IF NOT EXISTS idx_notes_course_id ON notes(course_id);",
+        [],
+    )?;
+
+    tx.execute(
+        "CREATE INDEX IF NOT EXISTS idx_notes_video_id ON notes(video_id);",
         [],
     )?;
 

@@ -126,6 +126,15 @@ pub fn use_notes_resource(course_id: Uuid, video_id: Option<Uuid>) -> Resource<R
     })
 }
 
+/// Load all notes across all courses using use_resource
+pub fn use_all_notes_resource() -> Resource<Result<Vec<Note>>> {
+    let backend = use_backend_adapter();
+    use_resource(move || {
+        let backend = backend.clone();
+        async move { backend.list_all_notes().await }
+    })
+}
+
 /// Get a function to save notes asynchronously (for use in event handlers)
 pub fn use_save_note_action() -> impl Fn(Note) + Clone {
     let backend = use_backend_adapter();

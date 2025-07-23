@@ -99,6 +99,17 @@ pub fn delete_note(conn: &Connection, note_id: Uuid) -> Result<()> {
     Ok(())
 }
 
+/// Get all notes across all courses.
+pub fn get_all_notes(conn: &Connection) -> Result<Vec<Note>> {
+    let mut stmt = conn.prepare(
+        "SELECT id, course_id, video_id, content, timestamp, created_at, updated_at, tags FROM notes ORDER BY updated_at DESC",
+    )?;
+    let notes = stmt
+        .query_map([], note_from_row)?
+        .collect::<Result<Vec<_>, _>>()?;
+    Ok(notes)
+}
+
 /// Get all notes for a given course (both course-level and video-level).
 pub fn get_notes_by_course(conn: &Connection, course_id: Uuid) -> Result<Vec<Note>> {
     let mut stmt = conn.prepare(

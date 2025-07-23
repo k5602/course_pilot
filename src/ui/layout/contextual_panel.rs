@@ -1,6 +1,6 @@
 use crate::types::{ContextualPanelTab, Route};
 use crate::ui::hooks::use_app_state;
-use crate::ui::notes_panel::NotesPanel;
+use crate::ui::notes_panel::{NotesPanel, NotesPanelMode};
 use dioxus::prelude::*;
 use dioxus_motion::prelude::*;
 
@@ -78,9 +78,13 @@ pub fn ContextualPanel() -> Element {
 /// Render tab content based on active tab
 fn render_tab_content(active_tab: ContextualPanelTab, course_id: Option<uuid::Uuid>) -> Element {
     match active_tab {
-        ContextualPanelTab::Notes => rsx!(NotesPanel {
-            course_id: course_id
-        }),
+        ContextualPanelTab::Notes => {
+            let mode = match course_id {
+                Some(id) => NotesPanelMode::CourseNotes(id),
+                None => NotesPanelMode::AllNotes,
+            };
+            rsx!(NotesPanel { mode: mode })
+        }
         ContextualPanelTab::Player => rsx! {
             div {
                 class: "p-4",

@@ -6,10 +6,7 @@
 *.wasm.d.ts
 
 # Dioxus component build artifacts
-src/ui/compone// Convert to 0.0-1.0 rangents/preview/
-src/ui/components/primitives/
-src/ui/components/*/docs.md
-src/ui/components/**/*.md
+
 
 # Rust artifacts
 **/*.rs.bk
@@ -50,7 +47,7 @@ yarn.lock
 *.DS_Store
 .DS_Store
 Thumbs.db
-
+course_pilot.db
 # Temporary files
 **/*.swp
 **/*.swo
@@ -103,3 +100,4 @@ assets/tailwind.out.css
 .fuse_hidden00032d6700000086
 .github/copilot-instructions.md
 theme_config.toml
+course_pilot.db
