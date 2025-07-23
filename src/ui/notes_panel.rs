@@ -1,16 +1,14 @@
+use crate::ui::components::TagInput;
 use crate::ui::components::modal_confirmation::{
     ActionMenu, AdvancedTabs, Badge, ModalConfirmation,
 };
-use crate::ui::components::TagInput;
-
-
 
 use crate::ui::components::toast::toast;
 use dioxus::prelude::*;
+use dioxus_free_icons::Icon;
 use dioxus_free_icons::icons::fa_solid_icons::{
     FaDownload, FaFloppyDisk, FaMagnifyingGlass, FaPen, FaTag, FaTrash,
 };
-use dioxus_free_icons::Icon;
 use dioxus_motion::prelude::*;
 use std::collections::HashSet;
 
@@ -88,15 +86,15 @@ pub fn NotesPanel(course_id: Option<Uuid>) -> Element {
 #[component]
 fn NotesTab(course_id: uuid::Uuid, video_id: Option<uuid::Uuid>) -> Element {
     let mut notes_resource = crate::ui::hooks::use_notes_resource(course_id, video_id);
-    let mut search_query = use_signal(|| String::new());
+    let mut search_query = use_signal(String::new);
     let mut selected_tags = use_signal(Vec::new);
     let mut show_tag_filter = use_signal(|| false);
     let mut show_search = use_signal(|| false);
     let mut show_search_history = use_signal(|| false);
-    let mut note_content = use_signal(|| String::new());
+    let mut note_content = use_signal(String::new);
     let mut editing_note_id = use_signal(|| None::<uuid::Uuid>);
     let mut editing_note_tags = use_signal(Vec::new);
-    
+
     // Search history
     let mut recent_searches = use_signal(|| {
         // Load from local storage in a real app
@@ -106,7 +104,7 @@ fn NotesTab(course_id: uuid::Uuid, video_id: Option<uuid::Uuid>) -> Element {
         // Load from local storage in a real app
         Vec::new()
     });
-    
+
     // Get all available tags from notes
     let all_tags = use_memo(move || {
         if let Some(Ok(notes)) = &*notes_resource.read_unchecked() {
@@ -121,7 +119,7 @@ fn NotesTab(course_id: uuid::Uuid, video_id: Option<uuid::Uuid>) -> Element {
             Vec::new()
         }
     });
-    
+
     // Filter notes based on search query and selected tags
     let filtered_notes = use_memo(move || {
         if let Some(Ok(notes)) = &*notes_resource.read_unchecked() {
@@ -129,13 +127,16 @@ fn NotesTab(course_id: uuid::Uuid, video_id: Option<uuid::Uuid>) -> Element {
                 .iter()
                 .filter(|note| {
                     // Filter by search query
-                    let matches_query = search_query().is_empty() || 
-                        note.content.to_lowercase().contains(&search_query().to_lowercase());
-                    
+                    let matches_query = search_query().is_empty()
+                        || note
+                            .content
+                            .to_lowercase()
+                            .contains(&search_query().to_lowercase());
+
                     // Filter by selected tags
-                    let matches_tags = selected_tags().is_empty() || 
-                        selected_tags().iter().any(|tag| note.tags.contains(tag));
-                    
+                    let matches_tags = selected_tags().is_empty()
+                        || selected_tags().iter().any(|tag| note.tags.contains(tag));
+
                     matches_query && matches_tags
                 })
                 .cloned()
@@ -144,27 +145,27 @@ fn NotesTab(course_id: uuid::Uuid, video_id: Option<uuid::Uuid>) -> Element {
             Vec::new()
         }
     });
-    
+
     // Handle tag selection
     let handle_tag_selection = move |tags: Vec<String>| {
         selected_tags.set(tags);
     };
-    
+
     // Handle editing note tags
     let handle_editing_tags_change = move |tags: Vec<String>| {
         editing_note_tags.set(tags);
     };
-    
+
     // Handle save note
     let save_note_action = crate::ui::hooks::use_save_note_action();
-    
+
     let handle_save_note = move |_| {
         let content = note_content();
         if content.trim().is_empty() {
             toast::warning("Note content cannot be empty");
             return;
         }
-        
+
         let note = match editing_note_id() {
             Some(id) => {
                 // Update existing note
@@ -183,7 +184,7 @@ fn NotesTab(course_id: uuid::Uuid, video_id: Option<uuid::Uuid>) -> Element {
                     toast::error("Failed to load notes");
                     return;
                 }
-            },
+            }
             None => {
                 // Create new note
                 crate::types::Note {
@@ -198,32 +199,32 @@ fn NotesTab(course_id: uuid::Uuid, video_id: Option<uuid::Uuid>) -> Element {
                 }
             }
         };
-        
+
         save_note_action(note);
-        
+
         // Reset form
         note_content.set(String::new());
         editing_note_id.set(None);
         editing_note_tags.set(Vec::new());
-        
+
         // Refresh notes
         notes_resource.restart();
     };
-    
+
     // Handle edit note
     let mut handle_edit_note = move |note: crate::types::Note| {
         note_content.set(note.content);
         editing_note_id.set(Some(note.id));
         editing_note_tags.set(note.tags);
     };
-    
+
     // Handle cancel edit
     let handle_cancel_edit = move |_| {
         note_content.set(String::new());
         editing_note_id.set(None);
         editing_note_tags.set(Vec::new());
     };
-    
+
     // Tag statistics
     let tag_stats = use_memo(move || {
         if let Some(Ok(notes)) = &*notes_resource.read_unchecked() {
@@ -238,7 +239,7 @@ fn NotesTab(course_id: uuid::Uuid, video_id: Option<uuid::Uuid>) -> Element {
             std::collections::HashMap::new()
         }
     });
-    
+
     // Handle search
     let mut handle_search = move |_| {
         let query = search_query();
@@ -255,14 +256,14 @@ fn NotesTab(course_id: uuid::Uuid, video_id: Option<uuid::Uuid>) -> Element {
             }
         }
     };
-    
+
     // Handle search history selection
     let handle_search_history_select = move |query: String| {
         search_query.set(query);
         show_search_history.set(false);
         handle_search(());
     };
-    
+
     // Handle save search
     let handle_save_search = move |query: String| {
         let mut searches = saved_searches();
@@ -272,20 +273,20 @@ fn NotesTab(course_id: uuid::Uuid, video_id: Option<uuid::Uuid>) -> Element {
             toast::success("Search saved");
         }
     };
-    
+
     // Handle delete search
     let handle_delete_search = move |query: String| {
         // Remove from recent searches
         let mut searches = recent_searches();
         searches.retain(|s| s != &query);
         recent_searches.set(searches);
-        
+
         // Remove from saved searches
         let mut saved = saved_searches();
         saved.retain(|s| s != &query);
         saved_searches.set(saved);
     };
-    
+
     // Handle clear all searches
     let handle_clear_all_searches = move |_| {
         recent_searches.set(Vec::new());
@@ -319,7 +320,7 @@ fn NotesTab(course_id: uuid::Uuid, video_id: Option<uuid::Uuid>) -> Element {
             // Extract temporary values to avoid borrowing issues
             let tag_stats_data = tag_stats.read_unchecked();
             let filtered_notes_data = filtered_notes();
-            
+
             rsx! {
                 div {
                     class: "space-y-6",
@@ -346,7 +347,7 @@ fn NotesTab(course_id: uuid::Uuid, video_id: Option<uuid::Uuid>) -> Element {
                             "Found {filtered_notes().len()} notes"
                         }
                     }
-                    
+
                     // Search input
                     if show_search() {
                         div {
@@ -373,9 +374,9 @@ fn NotesTab(course_id: uuid::Uuid, video_id: Option<uuid::Uuid>) -> Element {
                                     "Clear"
                                 }
                             }
-                            
+
                             // Search history dropdown
-                            if show_search_history() && (recent_searches().len() > 0 || saved_searches().len() > 0) {
+                            if show_search_history() && (!recent_searches().is_empty() || !saved_searches().is_empty()) {
                                 div {
                                     class: "relative",
                                     div {
@@ -393,7 +394,7 @@ fn NotesTab(course_id: uuid::Uuid, video_id: Option<uuid::Uuid>) -> Element {
                             }
                         }
                     }
-                    
+
                     // Tag filter
                     if show_tag_filter() {
                         div {
@@ -404,7 +405,7 @@ fn NotesTab(course_id: uuid::Uuid, video_id: Option<uuid::Uuid>) -> Element {
                                 on_tags_change: handle_tag_selection,
                                 placeholder: "Filter by tags...".to_string(),
                             }
-                            
+
                             // Tag statistics
                             if !tag_stats_data.is_empty() {
                                 div {
@@ -434,7 +435,7 @@ fn NotesTab(course_id: uuid::Uuid, video_id: Option<uuid::Uuid>) -> Element {
                             }
                         }
                     }
-                    
+
                     // Notes list
                     div {
                         class: "space-y-4",
@@ -465,12 +466,12 @@ fn NotesTab(course_id: uuid::Uuid, video_id: Option<uuid::Uuid>) -> Element {
                             })}
                         }
                     }
-                    
+
                     // Markdown editor
                     div {
                         class: "mt-6",
-                        h3 { 
-                            class: "text-base font-semibold mb-2", 
+                        h3 {
+                            class: "text-base font-semibold mb-2",
                             if editing_note_id().is_some() {
                                 "Edit Note"
                             } else {
@@ -483,7 +484,7 @@ fn NotesTab(course_id: uuid::Uuid, video_id: Option<uuid::Uuid>) -> Element {
                             value: "{note_content}",
                             oninput: move |e| note_content.set(e.value().clone()),
                         }
-                        
+
                         // Tag input for note
                         div {
                             class: "mb-2",
@@ -494,7 +495,7 @@ fn NotesTab(course_id: uuid::Uuid, video_id: Option<uuid::Uuid>) -> Element {
                                 placeholder: "Add tags to your note...".to_string(),
                             }
                         }
-                        
+
                         div {
                             class: "flex gap-2",
                             button {
@@ -540,7 +541,7 @@ struct NoteCardProps {
 fn NoteCard(props: NoteCardProps) -> Element {
     let ts = props
         .timestamp
-        .map(|t| format!(" at {}s", t))
+        .map(|t| format!(" at {t}s"))
         .unwrap_or_default();
 
     let note_for_render = crate::types::Note {
@@ -554,7 +555,7 @@ fn NoteCard(props: NoteCardProps) -> Element {
         created_at: chrono::Utc::now(),
         updated_at: chrono::Utc::now(),
     };
-    
+
     // Render HTML with search highlighting if needed
     let rendered_html = if props.search_highlight.is_empty() {
         crate::storage::notes::render_note_html(&note_for_render)
@@ -588,7 +589,7 @@ fn NoteCard(props: NoteCardProps) -> Element {
 
     // Modal state for delete confirmation
     let mut show_delete_modal = use_signal(|| false);
-    
+
     // Delete note action
     let _delete_note_action = crate::ui::hooks::use_delete_note_action();
 
@@ -611,7 +612,7 @@ fn NoteCard(props: NoteCardProps) -> Element {
                 class: "w-4 h-4"
             })),
             on_select: Some(EventHandler::new({
-                let on_edit = props.on_edit.clone();
+                let on_edit = props.on_edit;
                 move |_| on_edit.call(())
             })),
             children: None,
@@ -624,7 +625,7 @@ fn NoteCard(props: NoteCardProps) -> Element {
                 class: "w-4 h-4"
             })),
             on_select: Some(EventHandler::new({
-                let mut show_delete_modal = show_delete_modal.clone();
+                let mut show_delete_modal = show_delete_modal;
                 move |_| show_delete_modal.set(true)
             })),
             children: None,
@@ -644,7 +645,7 @@ fn NoteCard(props: NoteCardProps) -> Element {
             div {
                 class: "flex items-center gap-2 mb-1",
                 span { class: "text-xs text-base-content/60", "{props.created_at}" }
-                if ts.len() > 0 {
+                if !ts.is_empty() {
                     Badge { label: ts.clone(), color: Some("accent".to_string()), class: Some("badge-outline badge-xs ml-2".to_string()) }
                 }
             }
@@ -687,32 +688,33 @@ fn highlight_search_term(html: &str, search_term: &str) -> String {
     if search_term.is_empty() {
         return html.to_string();
     }
-    
+
     // Simple case-insensitive replacement
     // In a real implementation, you would want to use a proper HTML parser
     // to avoid breaking HTML tags, but this is a simple demonstration
     let search_term_lower = search_term.to_lowercase();
     let mut result = html.to_string();
-    
+
     // Find all occurrences of the search term (case-insensitive)
     let mut positions = Vec::new();
     let html_lower = html.to_lowercase();
     let mut start = 0;
-    
+
     while let Some(pos) = html_lower[start..].find(&search_term_lower) {
         let absolute_pos = start + pos;
         positions.push(absolute_pos);
         start = absolute_pos + search_term_lower.len();
     }
-    
+
     // Replace from end to beginning to avoid position shifts
     for pos in positions.iter().rev() {
         let end_pos = *pos + search_term_lower.len();
         let original_term = &html[*pos..end_pos];
-        let highlighted = format!("<mark class=\"bg-accent/30 text-accent-content\">{}</mark>", original_term);
+        let highlighted =
+            format!("<mark class=\"bg-accent/30 text-accent-content\">{original_term}</mark>");
         result.replace_range(*pos..end_pos, &highlighted);
     }
-    
+
     result
 }
 

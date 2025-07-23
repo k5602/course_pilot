@@ -1,12 +1,12 @@
 use dioxus::prelude::*;
-use dioxus_free_icons::icons::fa_solid_icons::FaPlus;
-use dioxus_free_icons::icons::fa_brands_icons::FaXing as FaTimes;
 use dioxus_free_icons::Icon;
+use dioxus_free_icons::icons::fa_brands_icons::FaXing as FaTimes;
+use dioxus_free_icons::icons::fa_solid_icons::FaPlus;
 use dioxus_motion::prelude::*;
 use std::collections::HashSet;
 
 /// TagInput: A component for entering and managing tags with autocomplete
-#[derive(Props,Clone,PartialEq)]
+#[derive(Props, Clone, PartialEq)]
 pub struct TagInputProps {
     /// Current tags
     pub tags: Vec<String>,
@@ -28,7 +28,7 @@ pub struct TagInputProps {
 
 #[component]
 pub fn TagInput(props: TagInputProps) -> Element {
-    let mut input_value = use_signal(|| String::new());
+    let mut input_value = use_signal(String::new);
     let mut filtered_suggestions = use_signal(Vec::new);
     let mut show_suggestions = use_signal(|| false);
     let mut input_focused = use_signal(|| false);
@@ -36,7 +36,7 @@ pub fn TagInput(props: TagInputProps) -> Element {
     // Clone props for use in closures
     let tags_clone = props.tags.clone();
     let suggestions_clone = props.suggestions.clone();
-    let _on_tags_change = props.on_tags_change.clone(); // Prefix with underscore to indicate intentionally unused
+    let _on_tags_change = props.on_tags_change; // Prefix with underscore to indicate intentionally unused
     let max_tags = props.max_tags;
 
     // Filter suggestions based on input value
@@ -50,7 +50,8 @@ pub fn TagInput(props: TagInputProps) -> Element {
         let matching_suggestions: Vec<String> = suggestions_clone
             .iter()
             .filter(|s| {
-                s.to_lowercase().contains(&input_value().to_lowercase()) && !current_tags.contains(*s)
+                s.to_lowercase().contains(&input_value().to_lowercase())
+                    && !current_tags.contains(*s)
             })
             .cloned()
             .collect();
@@ -61,8 +62,8 @@ pub fn TagInput(props: TagInputProps) -> Element {
     // Handle adding a tag
     let add_tag = {
         let tags_clone = props.tags.clone();
-        let on_tags_change = props.on_tags_change.clone();
-        let mut input_value = input_value.clone();
+        let on_tags_change = props.on_tags_change;
+        let mut input_value = input_value;
         move |tag: String| {
             let tag = tag.trim().to_string();
             if !tag.is_empty() && !tags_clone.contains(&tag) && tags_clone.len() < max_tags {
@@ -77,7 +78,7 @@ pub fn TagInput(props: TagInputProps) -> Element {
     // Handle removing a tag
     let remove_tag = {
         let tags_clone = props.tags.clone();
-        let on_tags_change = props.on_tags_change.clone();
+        let on_tags_change = props.on_tags_change;
         move |index: usize| {
             let mut new_tags = tags_clone.clone();
             if index < new_tags.len() {
@@ -90,7 +91,7 @@ pub fn TagInput(props: TagInputProps) -> Element {
     // Handle key press events
     let handle_key_press = {
         let mut add_tag = add_tag.clone();
-        let input_value = input_value.clone();
+        let input_value = input_value;
         move |event: KeyboardEvent| {
             let key = event.key();
             match key {
@@ -138,7 +139,7 @@ pub fn TagInput(props: TagInputProps) -> Element {
     // Handle add button click
     let handle_add_click = {
         let mut add_tag = add_tag.clone();
-        let input_value = input_value.clone();
+        let input_value = input_value;
         move |_| {
             add_tag(input_value().clone());
         }
@@ -166,12 +167,12 @@ pub fn TagInput(props: TagInputProps) -> Element {
                     let mut tag_scale = use_motion(0.8f32);
                     let animation = tag_animation.clone();
                     let remove_tag = remove_tag.clone();
-                    
+
                     use_effect(move || {
                         tag_opacity.animate_to(1.0, animation.clone());
                         tag_scale.animate_to(1.0, animation.clone());
                     });
-                    
+
                     let tag_style = use_memo(move || {
                         format!(
                             "opacity: {}; transform: scale({});",
@@ -179,7 +180,7 @@ pub fn TagInput(props: TagInputProps) -> Element {
                             tag_scale.get_value()
                         )
                     });
-                    
+
                     rsx! {
                         div {
                             key: "{tag}-{index}",
@@ -195,7 +196,7 @@ pub fn TagInput(props: TagInputProps) -> Element {
                     }
                 })}
             }
-            
+
             // Input with autocomplete
             div {
                 class: "relative",
@@ -217,7 +218,7 @@ pub fn TagInput(props: TagInputProps) -> Element {
                         Icon { icon: FaPlus, class: "w-4 h-4" }
                     }
                 }
-                
+
                 // Suggestions dropdown
                 if show_suggestions() && !current_filtered_suggestions.is_empty() {
                     div {
@@ -237,7 +238,7 @@ pub fn TagInput(props: TagInputProps) -> Element {
                     }
                 }
             }
-            
+
             // Helper text
             div {
                 class: "text-xs text-base-content/60 mt-1",

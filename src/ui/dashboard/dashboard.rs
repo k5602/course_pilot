@@ -1,17 +1,17 @@
 use dioxus::prelude::*;
 use dioxus_motion::prelude::*;
 
-use crate::ui::components::toast::toast;
-use crate::ui::components::import_modal::{ImportModal, ImportSource, ImportSettings};
-use crate::ui::hooks::{use_course_manager, use_modal_manager};
 use super::CourseGrid;
+use crate::ui::components::import_modal::{ImportModal, ImportSettings, ImportSource};
+use crate::ui::components::toast::toast;
+use crate::ui::hooks::{use_course_manager, use_modal_manager};
 
 /// Clean dashboard component with proper separation of concerns
 #[component]
 pub fn Dashboard() -> Element {
     let course_manager = use_course_manager();
     let add_course_modal = use_modal_manager(false);
-    
+
     // Animation for grid entrance
     let mut grid_opacity = use_motion(0.0f32);
     let mut grid_y = use_motion(-24.0f32);
@@ -35,13 +35,11 @@ pub fn Dashboard() -> Element {
         )
     });
 
-
-
     // Handle import from the import modal
     let handle_import = {
         let _course_manager = course_manager.clone();
         let add_course_modal = add_course_modal.clone();
-        
+
         move |(source, _input, _settings): (ImportSource, String, ImportSettings)| {
             match source {
                 ImportSource::LocalFolder => {
@@ -65,7 +63,7 @@ pub fn Dashboard() -> Element {
     rsx! {
         section {
             class: "w-full max-w-7xl mx-auto px-4 py-8",
-            
+
             // Header
             div {
                 class: "flex items-center justify-between mb-6",
@@ -102,7 +100,9 @@ pub fn Dashboard() -> Element {
 }
 
 /// Render dashboard content based on course manager state
-fn render_dashboard_content(course_manager: &crate::ui::hooks::use_courses::CourseManager) -> Element {
+fn render_dashboard_content(
+    course_manager: &crate::ui::hooks::use_courses::CourseManager,
+) -> Element {
     if let Some(error) = &course_manager.error {
         return rsx! {
             div {
@@ -127,7 +127,7 @@ fn render_dashboard_content(course_manager: &crate::ui::hooks::use_courses::Cour
                 {(0..3).map(|_| rsx! {
                     div {
                         class: "card bg-base-200 shadow-xl animate-pulse",
-                        div { 
+                        div {
                             class: "card-body pb-4",
                             div { class: "h-6 w-2/3 bg-base-300 rounded mb-2" }
                             div { class: "h-4 w-1/2 bg-base-300 rounded mb-2" }

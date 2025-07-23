@@ -22,10 +22,10 @@ pub enum StateError {
 impl std::fmt::Display for StateError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            StateError::CourseNotFound(id) => write!(f, "Course not found: {}", id),
-            StateError::InvalidOperation(msg) => write!(f, "Invalid operation: {}", msg),
-            StateError::NavigationError(msg) => write!(f, "Navigation error: {}", msg),
-            StateError::ValidationError(msg) => write!(f, "Validation error: {}", msg),
+            StateError::CourseNotFound(id) => write!(f, "Course not found: {id}"),
+            StateError::InvalidOperation(msg) => write!(f, "Invalid operation: {msg}"),
+            StateError::NavigationError(msg) => write!(f, "Navigation error: {msg}"),
+            StateError::ValidationError(msg) => write!(f, "Validation error: {msg}"),
         }
     }
 }
@@ -92,7 +92,7 @@ pub fn update_course(
 
     // Atomic update
     state.courses[course_index] = updated_course;
-    log::info!("Course {} updated successfully", id);
+    log::info!("Course {id} updated successfully");
     Ok(())
 }
 
@@ -116,7 +116,7 @@ pub fn delete_course(mut app_state: Signal<AppState>, id: Uuid) -> StateResult<(
         }
     }
 
-    log::info!("Course {} deleted successfully", id);
+    log::info!("Course {id} deleted successfully");
     Ok(())
 }
 
@@ -140,7 +140,7 @@ pub fn duplicate_course(app_state: Signal<AppState>, id: Uuid) -> StateResult<()
 
     // Add duplicate
     add_course(app_state, duplicate)?;
-    log::info!("Course {} duplicated successfully", id);
+    log::info!("Course {id} duplicated successfully");
     Ok(())
 }
 
@@ -166,7 +166,7 @@ pub fn structure_course(
 
     // Atomic update
     state.courses[course_index].structure = Some(structure);
-    log::info!("Course {} structured successfully", id);
+    log::info!("Course {id} structured successfully");
     Ok(())
 }
 
@@ -174,12 +174,12 @@ pub fn structure_course(
 fn generate_unique_name(app_state: Signal<AppState>, base_name: &str) -> StateResult<String> {
     let state = app_state.read();
     let mut counter = 1;
-    let mut new_name = format!("{} (Copy)", base_name);
+    let mut new_name = format!("{base_name} (Copy)");
 
     // Keep incrementing until we find a unique name
     while state.courses.iter().any(|c| c.name == new_name) {
         counter += 1;
-        new_name = format!("{} (Copy {})", base_name, counter);
+        new_name = format!("{base_name} (Copy {counter})");
 
         // Prevent infinite loops
         if counter > 1000 {
@@ -195,23 +195,20 @@ fn generate_unique_name(app_state: Signal<AppState>, base_name: &str) -> StateRe
 /// Navigate to a route with validation
 pub fn navigate_to(mut app_state: Signal<AppState>, route: Route) -> StateResult<()> {
     // Validation
-    match &route {
-        Route::PlanView(course_id) => {
-            if *course_id == Uuid::nil() {
-                return Err(StateError::NavigationError(
-                    "Invalid course ID for plan view".to_string(),
-                ));
-            }
-
-            // Verify course exists
-            let state = app_state.read();
-            if !state.courses.iter().any(|c| c.id == *course_id) {
-                return Err(StateError::NavigationError(
-                    "Course not found for plan view".to_string(),
-                ));
-            }
+    if let Route::PlanView(course_id) = &route {
+        if *course_id == Uuid::nil() {
+            return Err(StateError::NavigationError(
+                "Invalid course ID for plan view".to_string(),
+            ));
         }
-        _ => {}
+
+        // Verify course exists
+        let state = app_state.read();
+        if !state.courses.iter().any(|c| c.id == *course_id) {
+            return Err(StateError::NavigationError(
+                "Course not found for plan view".to_string(),
+            ));
+        }
     }
 
     // Atomic update
@@ -305,7 +302,7 @@ pub fn get_courses(app_state: Signal<AppState>) -> Vec<Course> {
 
 /// Get current route
 pub fn get_current_route(app_state: Signal<AppState>) -> Route {
-    app_state.read().current_route.clone()
+    app_state.read().current_route
 }
 
 /// Get active import
@@ -346,7 +343,7 @@ pub fn use_course(id: Uuid) -> Memo<Option<Course>> {
 /// Hook for reactive access to current route
 pub fn use_current_route() -> Memo<Route> {
     let app_state = use_context::<Signal<AppState>>();
-    use_memo(move || app_state.read().current_route.clone())
+    use_memo(move || app_state.read().current_route)
 }
 
 /// Hook for reactive access to active import
@@ -399,8 +396,7 @@ pub async fn async_structure_course(
             Ok(())
         }
         Err(e) => Err(StateError::InvalidOperation(format!(
-            "Failed to structure course: {}",
-            e
+            "Failed to structure course: {e}"
         ))),
     }
 }

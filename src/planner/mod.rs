@@ -44,7 +44,7 @@ pub fn calculate_course_duration_weeks(total_sessions: usize, sessions_per_week:
         return 0;
     }
 
-    (total_sessions + sessions_per_week as usize - 1) / sessions_per_week as usize
+    total_sessions.div_ceil(sessions_per_week as usize)
 }
 
 /// Get next session date based on current date and schedule
@@ -86,7 +86,7 @@ pub fn get_next_session_date(
     // Find next available day
     let mut next_date = current_date;
     for _ in 0..7 {
-        next_date = next_date + chrono::Duration::days(days_between as i64);
+        next_date += chrono::Duration::days(days_between as i64);
         if available_days.contains(&next_date.weekday()) {
             break;
         }

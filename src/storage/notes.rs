@@ -105,9 +105,7 @@ pub fn get_notes_by_course(conn: &Connection, course_id: Uuid) -> Result<Vec<Not
         "SELECT id, course_id, video_id, content, timestamp, created_at, updated_at, tags FROM notes WHERE course_id = ?1 ORDER BY created_at ASC",
     )?;
     let notes = stmt
-        .query_map(params![course_id.to_string()], |row| {
-            Ok(note_from_row(row)?)
-        })?
+        .query_map(params![course_id.to_string()], note_from_row)?
         .collect::<Result<Vec<_>, _>>()?;
     Ok(notes)
 }
@@ -118,7 +116,7 @@ pub fn get_notes_by_video(conn: &Connection, video_id: Uuid) -> Result<Vec<Note>
         "SELECT id, course_id, video_id, content, timestamp, created_at, updated_at, tags FROM notes WHERE video_id = ?1 ORDER BY created_at ASC",
     )?;
     let notes = stmt
-        .query_map(params![video_id.to_string()], |row| Ok(note_from_row(row)?))?
+        .query_map(params![video_id.to_string()], note_from_row)?
         .collect::<Result<Vec<_>, _>>()?;
     Ok(notes)
 }
@@ -129,9 +127,7 @@ pub fn get_course_level_notes(conn: &Connection, course_id: Uuid) -> Result<Vec<
         "SELECT id, course_id, video_id, content, timestamp, created_at, updated_at, tags FROM notes WHERE course_id = ?1 AND video_id IS NULL ORDER BY created_at ASC",
     )?;
     let notes = stmt
-        .query_map(params![course_id.to_string()], |row| {
-            Ok(note_from_row(row)?)
-        })?
+        .query_map(params![course_id.to_string()], note_from_row)?
         .collect::<Result<Vec<_>, _>>()?;
     Ok(notes)
 }
@@ -141,7 +137,7 @@ pub fn get_note_by_id(conn: &Connection, note_id: Uuid) -> Result<Option<Note>> 
     conn.query_row(
         "SELECT id, course_id, video_id, content, timestamp, created_at, updated_at, tags FROM notes WHERE id = ?1",
         params![note_id.to_string()],
-        |row| Ok(note_from_row(row)?),
+        note_from_row,
     )
     .optional()
     .context("Failed to fetch note by id")
@@ -149,12 +145,12 @@ pub fn get_note_by_id(conn: &Connection, note_id: Uuid) -> Result<Option<Note>> 
 
 /// Search notes by content (case-insensitive LIKE).
 pub fn search_notes(conn: &Connection, query: &str) -> Result<Vec<Note>> {
-    let pattern = format!("%{}%", query);
+    let pattern = format!("%{query}%");
     let mut stmt = conn.prepare(
         "SELECT id, course_id, video_id, content, timestamp, created_at, updated_at, tags FROM notes WHERE content LIKE ?1 COLLATE NOCASE ORDER BY updated_at DESC",
     )?;
     let notes = stmt
-        .query_map(params![pattern], |row| Ok(note_from_row(row)?))?
+        .query_map(params![pattern], note_from_row)?
         .collect::<Result<Vec<_>, _>>()?;
     Ok(notes)
 }
@@ -198,13 +194,13 @@ pub fn search_notes_advanced(conn: &Connection, filters: NoteSearchFilters) -> R
     }
     if let Some(content) = filters.content {
         sql.push_str(" AND content LIKE ? ");
-        params.push(Box::new(format!("%{}%", content)));
+        params.push(Box::new(format!("%{content}%")));
     }
     if let Some(tags) = filters.tags {
         // Match any tag in the array (simple LIKE for MVP, can be improved with JSON1 extension)
         for tag in tags {
             sql.push_str(" AND tags LIKE ? ");
-            params.push(Box::new(format!("%{}%", tag)));
+            params.push(Box::new(format!("%{tag}%")));
         }
     }
     if let Some(ts_min) = filters.timestamp_min {
@@ -237,7 +233,7 @@ pub fn search_notes_advanced(conn: &Connection, filters: NoteSearchFilters) -> R
     let notes = stmt
         .query_map(
             rusqlite::params_from_iter(params.iter().map(|b| &**b)),
-            |row| Ok(note_from_row(row)?),
+            note_from_row,
         )?
         .collect::<Result<Vec<_>, _>>()?;
     Ok(notes)
@@ -250,10 +246,10 @@ pub fn export_notes_markdown_by_course(conn: &Connection, course_id: Uuid) -> Re
     for note in notes {
         let ts = note
             .timestamp
-            .map(|t| format!(" at {}s", t))
+            .map(|t| format!(" at {t}s"))
             .unwrap_or_default();
         let video_info = match note.video_id {
-            Some(_) => format!("Video Note{}", ts),
+            Some(_) => format!("Video Note{ts}"),
             None => "Course Note".to_string(),
         };
         md.push_str(&format!(
@@ -273,7 +269,7 @@ pub fn export_notes_markdown_by_video(conn: &Connection, video_id: Uuid) -> Resu
     for note in notes {
         let ts = note
             .timestamp
-            .map(|t| format!(" at {}s", t))
+            .map(|t| format!(" at {t}s"))
             .unwrap_or_default();
         md.push_str(&format!(
             "### Video Note{} ({})\n{}\n\n---\n\n",
@@ -293,7 +289,6 @@ pub fn render_note_html(note: &Note) -> String {
 /// Helper: Map rusqlite row to Note struct.
 fn note_from_row(row: &Row) -> std::result::Result<Note, rusqlite::Error> {
     use rusqlite::Error as SqlError;
-    
 
     let id = Uuid::parse_str(row.get::<_, String>(0)?.as_str())
         .map_err(|e| SqlError::ToSqlConversionFailure(Box::new(e)))?;

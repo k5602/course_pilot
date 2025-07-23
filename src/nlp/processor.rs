@@ -74,9 +74,6 @@ enum StructuringStrategy {
 
 /// Analyze title patterns to understand course structure
 fn analyze_title_patterns(titles: &[String]) -> Result<TitleAnalysis, NlpError> {
-    let has_numeric_sequence;
-    let has_explicit_modules;
-    let has_consistent_naming;
     let mut module_boundaries = Vec::new();
 
     // Check for numeric sequences
@@ -87,7 +84,7 @@ fn analyze_title_patterns(titles: &[String]) -> Result<TitleAnalysis, NlpError> 
             numeric_titles += 1;
         }
     }
-    has_numeric_sequence = numeric_titles > titles.len() / 2;
+    let has_numeric_sequence = numeric_titles > titles.len() / 2;
 
     // Check for explicit module indicators
     let mut module_indicators = 0;
@@ -97,11 +94,11 @@ fn analyze_title_patterns(titles: &[String]) -> Result<TitleAnalysis, NlpError> 
             module_boundaries.push(i);
         }
     }
-    has_explicit_modules = module_indicators > 0;
+    let has_explicit_modules = module_indicators > 0;
 
     // Check for consistent naming patterns
     let patterns = find_naming_patterns(titles);
-    has_consistent_naming = patterns.len() > 1 && patterns.values().any(|&count| count > 2);
+    let has_consistent_naming = patterns.len() > 1 && patterns.values().any(|&count| count > 2);
 
     // Estimate difficulty based on vocabulary complexity
     let estimated_difficulty = estimate_difficulty(titles);
@@ -361,9 +358,9 @@ fn generate_sequential_module_title(module_number: usize, sections: &[String]) -
 
     if words.len() > 1 {
         let theme = words[0..std::cmp::min(2, words.len())].join(" ");
-        format!("Module {}: {}", module_number, theme)
+        format!("Module {module_number}: {theme}")
     } else {
-        format!("Module {}", module_number)
+        format!("Module {module_number}")
     }
 }
 

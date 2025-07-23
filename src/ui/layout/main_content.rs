@@ -1,9 +1,9 @@
-use dioxus::prelude::*;
 use crate::types::Route;
 use crate::ui::components::top_bar::TopBar;
-use crate::ui::navigation::Breadcrumbs;
 use crate::ui::dashboard::Dashboard;
+use crate::ui::navigation::Breadcrumbs;
 use crate::ui::plan_view::PlanView;
+use dioxus::prelude::*;
 
 const MAIN_BG: &str = "bg-base-100";
 
@@ -16,15 +16,19 @@ pub struct MainContentProps {
 /// Clean main content area with routing
 #[component]
 pub fn MainContent(props: MainContentProps) -> Element {
-    let margin_right = if props.panel_is_open { "md:mr-96" } else { "md:mr-0" };
+    let margin_right = if props.panel_is_open {
+        "md:mr-96"
+    } else {
+        "md:mr-0"
+    };
 
     rsx! {
         main {
             class: "flex-1 {margin_right} overflow-y-auto {MAIN_BG} transition-all duration-300",
-            
+
             TopBar {}
             Breadcrumbs { current_route: props.current_route }
-            
+
             div {
                 class: "flex-1",
                 {render_route_content(props.current_route)}
@@ -37,7 +41,9 @@ pub fn MainContent(props: MainContentProps) -> Element {
 fn render_route_content(route: Route) -> Element {
     match route {
         Route::Dashboard => rsx!(Dashboard {}),
-        Route::PlanView(course_id) => rsx!(PlanView { course_id: course_id }),
+        Route::PlanView(course_id) => rsx!(PlanView {
+            course_id: course_id
+        }),
         Route::Settings => rsx! {
             div {
                 class: "p-8",

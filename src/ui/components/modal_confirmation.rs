@@ -1,9 +1,7 @@
-use dioxus::prelude::*;
 use super::modal::{Modal, confirmation_modal};
-use dioxus_free_icons::icons::fa_solid_icons::{
-    FaCheck, FaEllipsisVertical, FaExclamation, FaMagnifyingGlass, FaXmark,
-};
+use dioxus::prelude::*;
 use dioxus_free_icons::Icon;
+use dioxus_free_icons::icons::fa_solid_icons::{FaEllipsisVertical, FaMagnifyingGlass, FaXmark};
 
 // =======================
 // Modal Confirmation - Legacy Wrapper
@@ -83,8 +81,8 @@ pub fn ActionMenu(actions: Vec<DropdownItem>, #[props(optional)] class: Option<S
     let actions_for_closure = actions.clone();
     let actions_len = actions_for_closure.len();
     let onkeydown = {
-        let mut selected = selected.clone();
-        let mut open_submenu = open_submenu.clone();
+        let mut selected = selected;
+        let mut open_submenu = open_submenu;
         move |evt: dioxus::events::KeyboardEvent| {
             match evt.key().to_string().as_str() {
                 "ArrowDown" => {
@@ -121,7 +119,7 @@ pub fn ActionMenu(actions: Vec<DropdownItem>, #[props(optional)] class: Option<S
     };
 
     rsx! {
-        div { 
+        div {
             class: format!("relative inline-block {}", class),
             onclick: move |evt| evt.stop_propagation(), // Prevent event bubbling to parent
             button {
@@ -157,7 +155,7 @@ pub fn ActionMenu(actions: Vec<DropdownItem>, #[props(optional)] class: Option<S
                                     ),
                                     {
                                         items.iter().enumerate().map(|(idx, item)| {
-                                            let has_children = item.children.as_ref().map_or(false, |c| !c.is_empty());
+                                            let has_children = item.children.as_ref().is_some_and(|c| !c.is_empty());
                                             let is_selected = idx == selected_idx;
                                             let is_open = open_submenu == Some(idx);
                                             rsx! {
@@ -169,8 +167,8 @@ pub fn ActionMenu(actions: Vec<DropdownItem>, #[props(optional)] class: Option<S
                                                     ),
                                                     tabindex: "0",
                                                     onclick: {
-                                                        let cb = item.on_select.clone();
-                                                        let mut open_submenu_signal = open_submenu_signal.clone();
+                                                        let cb = item.on_select;
+                                                        let mut open_submenu_signal = *open_submenu_signal;
                                                         move |evt: MouseEvent| {
                                                             evt.stop_propagation(); // Prevent event bubbling to parent card
                                                             if has_children {
@@ -188,7 +186,7 @@ pub fn ActionMenu(actions: Vec<DropdownItem>, #[props(optional)] class: Option<S
                                                         span { class: "ml-auto text-xs opacity-60", "▶" }
                                                         if is_open {
                                                             if let Some(children) = &item.children {
-                                                                {render_menu(children, selected.clone(), None, open_submenu_signal, depth + 1)}
+                                                                {render_menu(children, selected, None, open_submenu_signal, depth + 1)}
                                                             }
                                                         }
                                                     }
@@ -199,7 +197,7 @@ pub fn ActionMenu(actions: Vec<DropdownItem>, #[props(optional)] class: Option<S
                                 }
                             }
                         }
-                        render_menu(&actions, selected.clone(), open_submenu(), &open_submenu, 0)
+                        render_menu(&actions, selected, open_submenu(), &open_submenu, 0)
                     }
                 }
             }
@@ -231,11 +229,11 @@ pub fn CommandPalette(
     #[props(optional)] placeholder: Option<String>,
     #[props(optional)] on_close: Option<EventHandler<()>>,
 ) -> Element {
-    let mut query = use_signal(|| String::new());
+    let mut query = use_signal(String::new);
     let selected = use_signal(|| 0);
 
     let actions_for_filter = actions.clone();
-    let query_for_filter = query.clone();
+    let query_for_filter = query;
     let filtered: Vec<_> = actions_for_filter
         .iter()
         .enumerate()
@@ -246,12 +244,12 @@ pub fn CommandPalette(
         .collect();
 
     let onkeydown = {
-        let selected = selected.clone();
+        let selected = selected;
         let actions = actions.clone();
-        let query = query.clone();
-        let on_close = on_close.clone();
+        let query = query;
+        let on_close = on_close;
         move |evt: dioxus::events::KeyboardEvent| {
-            let mut selected = selected.clone();
+            let mut selected = selected;
             // Recompute filtered inside closure to avoid lifetime issues
             let filtered: Vec<_> = actions
                 .iter()
@@ -263,12 +261,12 @@ pub fn CommandPalette(
                 .collect();
             match evt.key().to_string().as_str() {
                 "ArrowDown" => {
-                    if filtered.len() > 0 {
+                    if !filtered.is_empty() {
                         selected.set((selected() + 1) % filtered.len());
                     }
                 }
                 "ArrowUp" => {
-                    if filtered.len() > 0 {
+                    if !filtered.is_empty() {
                         selected.set((selected() + filtered.len() - 1) % filtered.len());
                     }
                 }
@@ -330,8 +328,8 @@ pub fn CommandPalette(
                                         ),
                                         tabindex: "0",
                                         onclick: {
-                                            let cb = action.on_select.clone();
-                                            let on_close = on_close.clone();
+                                            let cb = action.on_select;
+                                            let on_close = on_close;
                                             move |_| {
                                                 if let Some(f) = cb {
                                                     f.call(());
@@ -382,7 +380,7 @@ pub fn AdvancedTabs(
 ) -> Element {
     use std::collections::HashSet;
     let class = class.as_deref().unwrap_or("tabs tabs-boxed");
-    let mut mounted_tabs = use_signal(|| HashSet::new());
+    let mut mounted_tabs = use_signal(HashSet::new);
 
     // Mark the selected tab as mounted using an effect to avoid render-time signal writes
     use_effect(move || {
@@ -391,14 +389,14 @@ pub fn AdvancedTabs(
     });
 
     let tabs_rc = Rc::new(tabs);
-    let on_select_clone = on_select.clone();
-    let on_close_clone = on_close.clone();
+    let on_select_clone = on_select;
+    let on_close_clone = on_close;
     let tabs_for_keydown = tabs_rc.clone();
     // Keyboard navigation handler for tabs
     let onkeydown = move |evt: dioxus::events::KeyboardEvent| {
         let tabs = tabs_for_keydown.clone();
-        let on_select = on_select_clone.clone();
-        let on_close = on_close_clone.clone();
+        let on_select = on_select_clone;
+        let on_close = on_close_clone;
         let tabs_len = tabs.len();
         match evt.key().to_string().as_str() {
             "ArrowRight" => {

@@ -1,5 +1,7 @@
+use crate::ui::components::{
+    modal::Modal, tabs::Tabs, toast, youtube_import_form::YouTubeImportForm,
+};
 use dioxus::prelude::*;
-use crate::ui::components::{modal::Modal, tabs::Tabs, toast, youtube_import_form::YouTubeImportForm};
 
 /// Import source types
 #[derive(Debug, Clone, Copy, PartialEq)]
@@ -79,21 +81,29 @@ pub struct ImportModalProps {
 #[component]
 pub fn ImportModal(props: ImportModalProps) -> Element {
     let mut selected_tab = use_signal(|| 0usize);
-    let mut youtube_url = use_signal(|| String::new());
-    let mut local_path = use_signal(|| String::new());
-    let mut import_settings = use_signal(|| ImportSettings::default());
+    let mut youtube_url = use_signal(String::new);
+    let mut local_path = use_signal(String::new);
+    let mut import_settings = use_signal(ImportSettings::default);
     let mut is_validating = use_signal(|| false);
     let mut folder_validation = use_signal(|| None::<crate::ui::backend_adapter::FolderValidation>);
-    
+
     let backend = crate::ui::backend_adapter::use_backend_adapter();
-    
+
     // Tab labels and sources
-    let tab_labels = vec!["Local Course".to_string(), "YouTube".to_string(), "Other Resources".to_string()];
-    let sources = vec![ImportSource::LocalFolder, ImportSource::YouTube, ImportSource::OtherResources];
-    
+    let tab_labels = vec![
+        "Local Course".to_string(),
+        "YouTube".to_string(),
+        "Other Resources".to_string(),
+    ];
+    let sources = [
+        ImportSource::LocalFolder,
+        ImportSource::YouTube,
+        ImportSource::OtherResources,
+    ];
+
     // Get current source
     let current_source = sources[selected_tab()];
-    
+
     // Validation state
     let is_valid = match current_source {
         ImportSource::LocalFolder => {
@@ -102,21 +112,23 @@ pub fn ImportModal(props: ImportModalProps) -> Element {
             } else {
                 false
             }
-        },
-        ImportSource::YouTube => !youtube_url().trim().is_empty() && youtube_url().contains("youtube.com"),
+        }
+        ImportSource::YouTube => {
+            !youtube_url().trim().is_empty() && youtube_url().contains("youtube.com")
+        }
         ImportSource::OtherResources => false, // Always disabled for now
     };
-    
+
     // Handle import action
     let handle_import = {
-        let on_import = props.on_import.clone();
-        let on_close = props.on_close.clone();
-        let youtube_url = youtube_url.clone();
-        let local_path = local_path.clone();
-        let import_settings = import_settings.clone();
+        let on_import = props.on_import;
+        let on_close = props.on_close;
+        let youtube_url = youtube_url;
+        let local_path = local_path;
+        let import_settings = import_settings;
         let backend = backend.clone();
-        let folder_validation = folder_validation.clone();
-        
+        let folder_validation = folder_validation;
+
         move |_| {
             let source = sources[selected_tab()];
             match source {
@@ -127,30 +139,40 @@ pub fn ImportModal(props: ImportModalProps) -> Element {
                             if validation.is_valid {
                                 // Start local folder import
                                 let backend = backend.clone();
-                                let on_close = on_close.clone();
+                                let on_close = on_close;
                                 let path = path.clone();
                                 spawn(async move {
                                     toast::toast::info("Starting local folder import...");
-                                    match backend.import_from_local_folder(
-                                        std::path::Path::new(&path), 
-                                        None // Let it auto-generate title from folder name
-                                    ).await {
+                                    match backend
+                                        .import_from_local_folder(
+                                            std::path::Path::new(&path),
+                                            None, // Let it auto-generate title from folder name
+                                        )
+                                        .await
+                                    {
                                         Ok(course) => {
-                                            toast::toast::success(&format!("Course '{}' imported successfully!", course.name));
+                                            toast::toast::success(format!(
+                                                "Course '{}' imported successfully!",
+                                                course.name
+                                            ));
                                             on_close.call(());
-                                            
+
                                             // Trigger dashboard refresh if callback provided
-                                            if let Some(refresh_callback) = props.on_course_imported.as_ref() {
+                                            if let Some(refresh_callback) =
+                                                props.on_course_imported.as_ref()
+                                            {
                                                 refresh_callback.call(());
                                             }
-                                        },
+                                        }
                                         Err(e) => {
-                                            toast::toast::error(&format!("Import failed: {}", e));
+                                            toast::toast::error(format!("Import failed: {e}"));
                                         }
                                     }
                                 });
                             } else {
-                                toast::toast::error("Please select a valid folder with video files");
+                                toast::toast::error(
+                                    "Please select a valid folder with video files",
+                                );
                             }
                         } else {
                             toast::toast::error("Please validate the folder first");
@@ -158,7 +180,7 @@ pub fn ImportModal(props: ImportModalProps) -> Element {
                     } else {
                         toast::toast::error("Please select a folder");
                     }
-                },
+                }
                 ImportSource::YouTube => {
                     let input = youtube_url().trim().to_string();
                     if !input.is_empty() {
@@ -166,22 +188,22 @@ pub fn ImportModal(props: ImportModalProps) -> Element {
                     } else {
                         toast::toast::error("Please provide a valid YouTube URL");
                     }
-                },
+                }
                 ImportSource::OtherResources => {
                     toast::toast::info("Other resources import coming soon!");
                 }
             }
         }
     };
-    
+
     // Handle URL validation for YouTube
     let _handle_url_validation = {
-        let mut youtube_url = youtube_url.clone();
-        let mut is_validating = is_validating.clone();
-        
+        let mut youtube_url = youtube_url;
+        let mut is_validating = is_validating;
+
         move |url: String| {
             youtube_url.set(url.clone());
-            
+
             if !url.trim().is_empty() && url.contains("youtube.com") {
                 is_validating.set(true);
                 // In a real implementation, this would trigger preview loading
@@ -193,14 +215,14 @@ pub fn ImportModal(props: ImportModalProps) -> Element {
             }
         }
     };
-    
+
     // Validate folder when path changes
     use_effect({
         let backend = backend.clone();
-        let local_path = local_path.clone();
-        let mut folder_validation = folder_validation.clone();
-        let mut is_validating = is_validating.clone();
-        
+        let local_path = local_path;
+        let mut folder_validation = folder_validation;
+        let mut is_validating = is_validating;
+
         move || {
             let path = local_path();
             if !path.trim().is_empty() && current_source == ImportSource::LocalFolder {
@@ -211,16 +233,18 @@ pub fn ImportModal(props: ImportModalProps) -> Element {
                     match backend.validate_folder(std::path::Path::new(&path)).await {
                         Ok(validation) => {
                             folder_validation.set(Some(validation));
-                        },
+                        }
                         Err(e) => {
-                            folder_validation.set(Some(crate::ui::backend_adapter::FolderValidation {
-                                is_valid: false,
-                                video_count: 0,
-                                supported_files: Vec::new(),
-                                unsupported_files: Vec::new(),
-                                total_size: 0,
-                                error_message: Some(format!("Validation error: {}", e)),
-                            }));
+                            folder_validation.set(Some(
+                                crate::ui::backend_adapter::FolderValidation {
+                                    is_valid: false,
+                                    video_count: 0,
+                                    supported_files: Vec::new(),
+                                    unsupported_files: Vec::new(),
+                                    total_size: 0,
+                                    error_message: Some(format!("Validation error: {e}")),
+                                },
+                            ));
                         }
                     }
                     is_validating.set(false);
@@ -264,9 +288,9 @@ pub fn ImportModal(props: ImportModalProps) -> Element {
                 }
             }),
             open: props.open,
-            on_close: props.on_close.clone(),
+            on_close: props.on_close,
             title: "Import Course Content".to_string(),
-            
+
             div { class: "space-y-4",
                 // Source selection tabs
                 Tabs {
@@ -275,7 +299,7 @@ pub fn ImportModal(props: ImportModalProps) -> Element {
                     on_select: move |idx| selected_tab.set(idx),
                     class: Some("tabs-boxed".to_string()),
                 }
-                
+
                 // Tab content
                 div { class: "min-h-[200px]",
                     match current_source {
@@ -304,7 +328,7 @@ pub fn ImportModal(props: ImportModalProps) -> Element {
                         },
                     }
                 }
-                
+
                 // Import settings
                 ImportSettingsPanel {
                     settings: import_settings(),
@@ -317,9 +341,7 @@ pub fn ImportModal(props: ImportModalProps) -> Element {
 
 /// YouTube import form wrapper component
 #[component]
-fn YouTubeImportFormWrapper(
-    on_import_complete: EventHandler<crate::types::Course>,
-) -> Element {
+fn YouTubeImportFormWrapper(on_import_complete: EventHandler<crate::types::Course>) -> Element {
     rsx! {
         YouTubeImportForm {
             on_import_complete: on_import_complete,
@@ -357,10 +379,10 @@ fn LocalFolderImportForm(
                         class: "btn btn-outline",
                         onclick: {
                             let backend = backend.clone();
-                            let on_path_change = on_path_change.clone();
+                            let on_path_change = on_path_change;
                             move |_| {
                                 let backend = backend.clone();
-                                let on_path_change = on_path_change.clone();
+                                let on_path_change = on_path_change;
                                 spawn(async move {
                                     match backend.browse_folder().await {
                                         Ok(Some(folder_path)) => {
@@ -375,7 +397,7 @@ fn LocalFolderImportForm(
                                             // User cancelled the dialog - no action needed
                                         },
                                         Err(e) => {
-                                            toast::toast::error(&format!("Failed to open folder dialog: {}", e));
+                                            toast::toast::error(format!("Failed to open folder dialog: {e}"));
                                         }
                                     }
                                 });
@@ -390,7 +412,7 @@ fn LocalFolderImportForm(
                     }
                 }
             }
-            
+
             // Supported formats info
             div { class: "alert alert-info",
                 svg {
@@ -409,7 +431,7 @@ fn LocalFolderImportForm(
                     div { class: "text-sm opacity-80", "MP4, AVI, MKV, MOV, WMV, FLV, WebM, M4V, MPG, MPEG" }
                 }
             }
-            
+
             // Preview section
             if let Some(preview_data) = preview {
                 ImportPreviewPanel { preview: preview_data }
@@ -448,14 +470,14 @@ fn ImportSettingsPanel(
                             class: "checkbox checkbox-primary",
                             checked: settings.sort_by_title,
                             onchange: move |evt| {
-                                let mut new_settings = settings.clone();
+                                let mut new_settings = settings;
                                 new_settings.sort_by_title = evt.checked();
                                 on_settings_change.call(new_settings);
                             },
                         }
                     }
                 }
-                
+
                 div { class: "form-control",
                     label { class: "label cursor-pointer",
                         span { class: "label-text", "Filter duplicate videos" }
@@ -464,14 +486,14 @@ fn ImportSettingsPanel(
                             class: "checkbox checkbox-primary",
                             checked: settings.filter_duplicates,
                             onchange: move |evt| {
-                                let mut new_settings = settings.clone();
+                                let mut new_settings = settings;
                                 new_settings.filter_duplicates = evt.checked();
                                 on_settings_change.call(new_settings);
                             },
                         }
                     }
                 }
-                
+
                 div { class: "form-control",
                     label { class: "label cursor-pointer",
                         span { class: "label-text", "Include video metadata" }
@@ -480,14 +502,14 @@ fn ImportSettingsPanel(
                             class: "checkbox checkbox-primary",
                             checked: settings.include_metadata,
                             onchange: move |evt| {
-                                let mut new_settings = settings.clone();
+                                let mut new_settings = settings;
                                 new_settings.include_metadata = evt.checked();
                                 on_settings_change.call(new_settings);
                             },
                         }
                     }
                 }
-                
+
                 div { class: "form-control",
                     label { class: "label cursor-pointer",
                         span { class: "label-text", "Auto-structure course content" }
@@ -496,7 +518,7 @@ fn ImportSettingsPanel(
                             class: "checkbox checkbox-primary",
                             checked: settings.auto_structure,
                             onchange: move |evt| {
-                                let mut new_settings = settings.clone();
+                                let mut new_settings = settings;
                                 new_settings.auto_structure = evt.checked();
                                 on_settings_change.call(new_settings);
                             },
@@ -515,9 +537,9 @@ fn ImportPreviewPanel(preview: ImportPreview) -> Element {
         let hours = duration.as_secs() / 3600;
         let minutes = (duration.as_secs() % 3600) / 60;
         if hours > 0 {
-            format!("{}h {}m", hours, minutes)
+            format!("{hours}h {minutes}m")
         } else {
-            format!("{}m", minutes)
+            format!("{minutes}m")
         }
     } else {
         "Unknown".to_string()
@@ -527,7 +549,7 @@ fn ImportPreviewPanel(preview: ImportPreview) -> Element {
         div { class: "card bg-base-200 border border-base-300",
             div { class: "card-body",
                 h3 { class: "card-title text-lg", "Import Preview" }
-                
+
                 // Summary stats
                 div { class: "stats stats-horizontal shadow-sm bg-base-100 w-full",
                     div { class: "stat",
@@ -543,7 +565,7 @@ fn ImportPreviewPanel(preview: ImportPreview) -> Element {
                         div { class: "stat-value text-secondary", "{duration_text}" }
                     }
                 }
-                
+
                 // Video list preview (first 5 videos)
                 if !preview.videos.is_empty() {
                     div { class: "mt-4",
@@ -553,11 +575,11 @@ fn ImportPreviewPanel(preview: ImportPreview) -> Element {
                                 let duration_str = if let Some(duration) = video.duration {
                                     let minutes = duration.as_secs() / 60;
                                     let seconds = duration.as_secs() % 60;
-                                    format!("{}:{:02}", minutes, seconds)
+                                    format!("{minutes}:{seconds:02}")
                                 } else {
                                     "Unknown".to_string()
                                 };
-                                
+
                                 rsx! {
                                     div {
                                         key: "{idx}",
@@ -567,7 +589,7 @@ fn ImportPreviewPanel(preview: ImportPreview) -> Element {
                                     }
                                 }
                             })}
-                            
+
                             if preview.videos.len() > 5 {
                                 div { class: "text-center text-sm text-base-content/70 py-2",
                                     "... and {preview.videos.len() - 5} more videos"
@@ -588,34 +610,34 @@ fn FolderValidationPanel(validation: crate::ui::backend_adapter::FolderValidatio
     let size_text = if total_size_mb > 1024.0 {
         format!("{:.1} GB", total_size_mb / 1024.0)
     } else {
-        format!("{:.1} MB", total_size_mb)
+        format!("{total_size_mb:.1} MB")
     };
 
     rsx! {
         div { class: "card bg-base-200 border border-base-300",
             div { class: "card-body",
                 if validation.is_valid {
-                    h3 { class: "card-title text-lg text-success", 
+                    h3 { class: "card-title text-lg text-success",
                         svg {
                             class: "w-5 h-5",
                             fill: "currentColor",
                             view_box: "0 0 20 20",
                             path { d: "M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" }
                         }
-                        "Folder Validation - Success" 
+                        "Folder Validation - Success"
                     }
                 } else {
-                    h3 { class: "card-title text-lg text-error", 
+                    h3 { class: "card-title text-lg text-error",
                         svg {
                             class: "w-5 h-5",
                             fill: "currentColor",
                             view_box: "0 0 20 20",
                             path { d: "M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" }
                         }
-                        "Folder Validation - Error" 
+                        "Folder Validation - Error"
                     }
                 }
-                
+
                 if validation.is_valid {
                     // Success stats
                     div { class: "stats stats-horizontal shadow-sm bg-base-100 w-full mt-4",
@@ -634,7 +656,7 @@ fn FolderValidationPanel(validation: crate::ui::backend_adapter::FolderValidatio
                             }
                         }
                     }
-                    
+
                     // File list preview (first 5 files)
                     if !validation.supported_files.is_empty() {
                         div { class: "mt-4",
@@ -644,13 +666,13 @@ fn FolderValidationPanel(validation: crate::ui::backend_adapter::FolderValidatio
                                     let file_name = file_path.file_name()
                                         .and_then(|name| name.to_str())
                                         .unwrap_or("Unknown");
-                                    
+
                                     rsx! {
                                         div {
                                             key: "{idx}",
                                             class: "flex justify-between items-center text-sm p-2 bg-base-100 rounded",
                                             span { class: "truncate flex-1 mr-2", "{file_name}" }
-                                            span { class: "text-base-content/70 text-xs", 
+                                            span { class: "text-base-content/70 text-xs",
                                                 {file_path.extension()
                                                     .and_then(|ext| ext.to_str())
                                                     .unwrap_or("")
@@ -660,7 +682,7 @@ fn FolderValidationPanel(validation: crate::ui::backend_adapter::FolderValidatio
                                         }
                                     }
                                 })}
-                                
+
                                 if validation.supported_files.len() > 5 {
                                     div { class: "text-center text-sm text-base-content/70 py-2",
                                         "... and {validation.supported_files.len() - 5} more video files"
@@ -669,7 +691,7 @@ fn FolderValidationPanel(validation: crate::ui::backend_adapter::FolderValidatio
                             }
                         }
                     }
-                    
+
                     // Unsupported files warning
                     if !validation.unsupported_files.is_empty() {
                         div { class: "alert alert-warning mt-4",
@@ -706,7 +728,7 @@ fn FolderValidationPanel(validation: crate::ui::backend_adapter::FolderValidatio
                         }
                         div {
                             div { class: "font-medium", "Validation Failed" }
-                            div { class: "text-sm opacity-80", 
+                            div { class: "text-sm opacity-80",
                                 {validation.error_message.unwrap_or_else(|| "Unknown error occurred".to_string())}
                             }
                         }
@@ -740,12 +762,12 @@ fn OtherResourcesForm() -> Element {
                     div { class: "text-sm opacity-80", "Support for additional course sources will be added in future updates." }
                 }
             }
-            
+
             // Placeholder content
             div { class: "card bg-base-200",
                 div { class: "card-body text-center",
                     h3 { class: "card-title justify-center mb-4", "Additional Import Sources" }
-                    
+
                     div { class: "space-y-3 text-base-content/70",
                         div { class: "flex items-center gap-3 p-3 bg-base-100 rounded",
                             div { class: "w-8 h-8 bg-primary/20 rounded-full flex items-center justify-center",
@@ -761,7 +783,7 @@ fn OtherResourcesForm() -> Element {
                                 div { class: "text-sm", "Udemy, Coursera, edX, Khan Academy" }
                             }
                         }
-                        
+
                         div { class: "flex items-center gap-3 p-3 bg-base-100 rounded",
                             div { class: "w-8 h-8 bg-secondary/20 rounded-full flex items-center justify-center",
                                 svg {
@@ -776,7 +798,7 @@ fn OtherResourcesForm() -> Element {
                                 div { class: "text-sm", "Vimeo, Twitch, custom video URLs" }
                             }
                         }
-                        
+
                         div { class: "flex items-center gap-3 p-3 bg-base-100 rounded",
                             div { class: "w-8 h-8 bg-accent/20 rounded-full flex items-center justify-center",
                                 svg {
@@ -792,7 +814,7 @@ fn OtherResourcesForm() -> Element {
                             }
                         }
                     }
-                    
+
                     div { class: "mt-6 text-sm text-base-content/60",
                         "These import sources are planned for future releases. Stay tuned for updates!"
                     }

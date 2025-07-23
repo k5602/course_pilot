@@ -1,8 +1,10 @@
-use dioxus::prelude::*;
-use crate::ui::components::modal_confirmation::{CircularProgress, Badge, ActionMenu, DropdownItem};
-use crate::ui::components::toast::toast;
-use crate::ui::backend_adapter::Backend;
 use crate::export::ExportFormat;
+use crate::ui::backend_adapter::Backend;
+use crate::ui::components::modal_confirmation::{
+    ActionMenu, Badge, CircularProgress, DropdownItem,
+};
+use crate::ui::components::toast::toast;
+use dioxus::prelude::*;
 
 #[derive(Props, PartialEq, Clone)]
 pub struct PlanHeaderProps {
@@ -16,7 +18,7 @@ pub struct PlanHeaderProps {
 #[component]
 pub fn PlanHeader(props: PlanHeaderProps) -> Element {
     let backend = use_context::<std::sync::Arc<Backend>>();
-    
+
     let actions = vec![
         DropdownItem {
             label: "Export as JSON".to_string(),
@@ -32,15 +34,18 @@ pub fn PlanHeader(props: PlanHeaderProps) -> Element {
                             Ok(export_result) => {
                                 match backend.save_export_data(export_result).await {
                                     Ok(file_path) => {
-                                        toast::success(&format!("Plan exported successfully to {}", file_path.display()));
-                                    },
+                                        toast::success(format!(
+                                            "Plan exported successfully to {}",
+                                            file_path.display()
+                                        ));
+                                    }
                                     Err(e) => {
-                                        toast::error(&format!("Failed to save export: {}", e));
+                                        toast::error(format!("Failed to save export: {e}"));
                                     }
                                 }
-                            },
+                            }
                             Err(e) => {
-                                toast::error(&format!("Export failed: {}", e));
+                                toast::error(format!("Export failed: {e}"));
                             }
                         }
                     });
@@ -63,15 +68,18 @@ pub fn PlanHeader(props: PlanHeaderProps) -> Element {
                             Ok(export_result) => {
                                 match backend.save_export_data(export_result).await {
                                     Ok(file_path) => {
-                                        toast::success(&format!("Plan exported successfully to {}", file_path.display()));
-                                    },
+                                        toast::success(format!(
+                                            "Plan exported successfully to {}",
+                                            file_path.display()
+                                        ));
+                                    }
                                     Err(e) => {
-                                        toast::error(&format!("Failed to save export: {}", e));
+                                        toast::error(format!("Failed to save export: {e}"));
                                     }
                                 }
-                            },
+                            }
                             Err(e) => {
-                                toast::error(&format!("Export failed: {}", e));
+                                toast::error(format!("Export failed: {e}"));
                             }
                         }
                     });
@@ -94,15 +102,18 @@ pub fn PlanHeader(props: PlanHeaderProps) -> Element {
                             Ok(export_result) => {
                                 match backend.save_export_data(export_result).await {
                                     Ok(file_path) => {
-                                        toast::success(&format!("Plan exported successfully to {}", file_path.display()));
-                                    },
+                                        toast::success(format!(
+                                            "Plan exported successfully to {}",
+                                            file_path.display()
+                                        ));
+                                    }
                                     Err(e) => {
-                                        toast::error(&format!("Failed to save export: {}", e));
+                                        toast::error(format!("Failed to save export: {e}"));
                                     }
                                 }
-                            },
+                            }
                             Err(e) => {
-                                toast::error(&format!("Export failed: {}", e));
+                                toast::error(format!("Export failed: {e}"));
                             }
                         }
                     });
@@ -114,9 +125,9 @@ pub fn PlanHeader(props: PlanHeaderProps) -> Element {
     ];
 
     rsx! {
-        div { 
+        div {
             class: "flex items-center gap-4 mb-6",
-            
+
             CircularProgress {
                 value: props.progress,
                 size: Some(56),
@@ -124,21 +135,21 @@ pub fn PlanHeader(props: PlanHeaderProps) -> Element {
                 label: Some(format!("{}/{} Complete", props.completed_sections, props.total_sections)),
                 class: Some("mr-2".to_string()),
             }
-            
+
             Badge {
-                label: if props.progress == 100 { 
-                    "Completed".to_string() 
-                } else { 
-                    "In Progress".to_string() 
+                label: if props.progress == 100 {
+                    "Completed".to_string()
+                } else {
+                    "In Progress".to_string()
                 },
-                color: Some(if props.progress == 100 { 
-                    "success".to_string() 
-                } else { 
-                    "accent".to_string() 
+                color: Some(if props.progress == 100 {
+                    "success".to_string()
+                } else {
+                    "accent".to_string()
                 }),
                 class: Some("ml-2".to_string()),
             }
-            
+
             ActionMenu {
                 actions: actions,
                 class: Some("ml-auto".to_string()),

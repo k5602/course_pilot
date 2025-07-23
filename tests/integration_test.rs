@@ -243,30 +243,35 @@ fn test_course_creation() {
 #[tokio::test]
 async fn test_complete_plan_item_workflow() {
     use course_pilot::storage::database::Database;
-    use course_pilot::ui::backend_adapter::Backend;
     use course_pilot::types::PlanItem;
+    use course_pilot::ui::backend_adapter::Backend;
     use std::sync::Arc;
-    
+
     // Setup
     let temp_dir = TempDir::new().unwrap();
     let db_path = temp_dir.path().join("test.db");
     let db = Arc::new(Database::new(&db_path).unwrap());
     let backend = Backend::new(db);
-    
+
     // Step 1: Create a course
-    let course = Course::new("Integration Test Course".to_string(), 
-                            vec!["Video 1".to_string(), "Video 2".to_string()]);
+    let course = Course::new(
+        "Integration Test Course".to_string(),
+        vec!["Video 1".to_string(), "Video 2".to_string()],
+    );
     let course_id = course.id;
     backend.create_course(course).await.unwrap();
-    
+
     // Step 2: Create a plan with items
-    let mut plan = course_pilot::types::Plan::new(course_id, PlanSettings {
-        start_date: Utc::now(),
-        sessions_per_week: 3,
-        session_length_minutes: 60,
-        include_weekends: false,
-    });
-    
+    let mut plan = course_pilot::types::Plan::new(
+        course_id,
+        PlanSettings {
+            start_date: Utc::now(),
+            sessions_per_week: 3,
+            session_length_minutes: 60,
+            include_weekends: false,
+        },
+    );
+
     plan.items.push(PlanItem {
         date: Utc::now(),
         module_title: "Module 1".to_string(),
@@ -274,7 +279,7 @@ async fn test_complete_plan_item_workflow() {
         video_indices: vec![0],
         completed: false,
     });
-    
+
     plan.items.push(PlanItem {
         date: Utc::now(),
         module_title: "Module 1".to_string(),
@@ -282,36 +287,46 @@ async fn test_complete_plan_item_workflow() {
         video_indices: vec![1],
         completed: false,
     });
-    
+
     let plan_id = plan.id;
     backend.save_plan(plan).await.unwrap();
-    
+
     // Step 3: Verify initial progress
     let initial_progress = backend.get_plan_progress(plan_id).await.unwrap();
     assert_eq!(initial_progress.completed_count, 0);
     assert_eq!(initial_progress.total_count, 2);
     assert_eq!(initial_progress.percentage, 0.0);
-    
+
     // Step 4: Complete first item
-    backend.update_plan_item_completion(plan_id, 0, true).await.unwrap();
-    
+    backend
+        .update_plan_item_completion(plan_id, 0, true)
+        .await
+        .unwrap();
+
     // Step 5: Verify progress updated
     let mid_progress = backend.get_plan_progress(plan_id).await.unwrap();
     assert_eq!(mid_progress.completed_count, 1);
     assert_eq!(mid_progress.total_count, 2);
     assert_eq!(mid_progress.percentage, 50.0);
-    
+
     // Step 6: Complete second item
-    backend.update_plan_item_completion(plan_id, 1, true).await.unwrap();
-    
+    backend
+        .update_plan_item_completion(plan_id, 1, true)
+        .await
+        .unwrap();
+
     // Step 7: Verify full completion
     let final_progress = backend.get_plan_progress(plan_id).await.unwrap();
     assert_eq!(final_progress.completed_count, 2);
     assert_eq!(final_progress.total_count, 2);
     assert_eq!(final_progress.percentage, 100.0);
-    
+
     // Step 8: Verify course-level progress
-    let course_progress = backend.get_course_progress(course_id).await.unwrap().unwrap();
+    let course_progress = backend
+        .get_course_progress(course_id)
+        .await
+        .unwrap()
+        .unwrap();
     assert_eq!(course_progress.percentage, 100.0);
 }
 
@@ -319,49 +334,56 @@ async fn test_complete_plan_item_workflow() {
 async fn test_directory_scanning_workflow() {
     use course_pilot::ingest::local_folder::EnhancedLocalIngest;
     use std::fs::File;
-    
+
     // Setup test directory structure
     let temp_dir = TempDir::new().unwrap();
     let root_path = temp_dir.path();
-    
+
     // Create nested directory structure
     std::fs::create_dir_all(root_path.join("course1/module1")).unwrap();
     std::fs::create_dir_all(root_path.join("course1/module2")).unwrap();
     std::fs::create_dir_all(root_path.join("course2")).unwrap();
-    
+
     // Create test video files
     File::create(root_path.join("course1/module1/video1.mp4")).unwrap();
     File::create(root_path.join("course1/module2/video2.avi")).unwrap();
     File::create(root_path.join("course2/video3.mkv")).unwrap();
     File::create(root_path.join("course1/readme.txt")).unwrap(); // Non-video file
-    
+
     // Test enhanced ingest
     let ingest = EnhancedLocalIngest::new();
     let progress_updates = std::sync::Arc::new(std::sync::Mutex::new(Vec::new()));
     let progress_updates_clone = progress_updates.clone();
-    
+
     // Using a closure that captures a thread-safe reference
     let progress_callback = move |progress: f32, message: String| {
-        progress_updates_clone.lock().unwrap().push((progress, message));
+        progress_updates_clone
+            .lock()
+            .unwrap()
+            .push((progress, message));
     };
-    
-    let video_files = ingest.scan_directory_recursive(
-        root_path,
-        Some(&progress_callback)
-    ).unwrap();
-    
+
+    let video_files = ingest
+        .scan_directory_recursive(root_path, Some(&progress_callback))
+        .unwrap();
+
     // Verify results
     assert_eq!(video_files.len(), 3);
     assert!(video_files.iter().any(|f| f.name == "video1.mp4"));
     assert!(video_files.iter().any(|f| f.name == "video2.avi"));
     assert!(video_files.iter().any(|f| f.name == "video3.mkv"));
-    
+
     // Verify progress callbacks were called
     assert!(!progress_updates.lock().unwrap().is_empty());
-    
+
     // Verify relative paths are preserved
     let video1 = video_files.iter().find(|f| f.name == "video1.mp4").unwrap();
-    assert!(video1.relative_path.to_string_lossy().contains("course1/module1"));
+    assert!(
+        video1
+            .relative_path
+            .to_string_lossy()
+            .contains("course1/module1")
+    );
 }
 
 #[tokio::test]
@@ -369,41 +391,50 @@ async fn test_error_recovery_workflow() {
     use course_pilot::storage::database::Database;
     use course_pilot::ui::backend_adapter::Backend;
     use std::sync::Arc;
-    
+
     // Setup
     let temp_dir = TempDir::new().unwrap();
     let db_path = temp_dir.path().join("test.db");
     let db = Arc::new(Database::new(&db_path).unwrap());
     let backend = Backend::new(db);
-    
+
     // Test error handling for nonexistent course
     let fake_course_id = uuid::Uuid::new_v4();
     let result = backend.get_course(fake_course_id).await.unwrap();
     assert!(result.is_none());
-    
+
     // Test error handling for nonexistent plan
     let fake_plan_id = uuid::Uuid::new_v4();
     let result = backend.get_plan_progress(fake_plan_id).await;
     assert!(result.is_err());
-    
+
     // Test error handling for out-of-bounds plan item
     let course = Course::new("Test Course".to_string(), vec!["Video 1".to_string()]);
     backend.create_course(course.clone()).await.unwrap();
-    
-    let plan = course_pilot::types::Plan::new(course.id, PlanSettings {
-        start_date: Utc::now(),
-        sessions_per_week: 3,
-        session_length_minutes: 60,
-        include_weekends: false,
-    });
-    
+
+    let plan = course_pilot::types::Plan::new(
+        course.id,
+        PlanSettings {
+            start_date: Utc::now(),
+            sessions_per_week: 3,
+            session_length_minutes: 60,
+            include_weekends: false,
+        },
+    );
+
     backend.save_plan(plan.clone()).await.unwrap();
-    
+
     // Try to update non-existent plan item
-    let result = backend.update_plan_item_completion(plan.id, 999, true).await;
+    let result = backend
+        .update_plan_item_completion(plan.id, 999, true)
+        .await;
     assert!(result.is_err());
-    
+
     // Verify plan wasn't corrupted by the error
-    let loaded_plan = backend.get_plan_by_course(course.id).await.unwrap().unwrap();
+    let loaded_plan = backend
+        .get_plan_by_course(course.id)
+        .await
+        .unwrap()
+        .unwrap();
     assert_eq!(loaded_plan.items.len(), 0); // Empty plan should remain empty
 }

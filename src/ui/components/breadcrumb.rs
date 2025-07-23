@@ -1,7 +1,7 @@
-use dioxus::prelude::*;
-use dioxus_free_icons::icons::fa_solid_icons::FaChevronRight;
-use dioxus_free_icons::Icon;
 use crate::types::Route;
+use dioxus::prelude::*;
+use dioxus_free_icons::Icon;
+use dioxus_free_icons::icons::fa_solid_icons::FaChevronRight;
 
 #[derive(Clone, PartialEq)]
 pub struct BreadcrumbItem {
@@ -25,8 +25,8 @@ pub fn Breadcrumb(items: Vec<BreadcrumbItem>) -> Element {
                 class: "flex items-center space-x-2",
                 {items.iter().enumerate().map(|(idx, item)| {
                     let is_last = idx == items.len() - 1;
-                    let item_route = item.route.clone();
-                    
+                    let item_route = item.route;
+
                     rsx! {
                         li {
                             key: "{idx}",
@@ -67,22 +67,23 @@ pub fn Breadcrumb(items: Vec<BreadcrumbItem>) -> Element {
 }
 
 /// Helper function to generate breadcrumbs based on current route
-pub fn generate_breadcrumbs(current_route: Route, courses: &[crate::types::Course]) -> Vec<BreadcrumbItem> {
+pub fn generate_breadcrumbs(
+    current_route: Route,
+    courses: &[crate::types::Course],
+) -> Vec<BreadcrumbItem> {
     match current_route {
-        Route::Dashboard => vec![
-            BreadcrumbItem {
-                label: "Dashboard".to_string(),
-                route: None,
-                active: true,
-            }
-        ],
+        Route::Dashboard => vec![BreadcrumbItem {
+            label: "Dashboard".to_string(),
+            route: None,
+            active: true,
+        }],
         Route::PlanView(course_id) => {
             let course_name = courses
                 .iter()
                 .find(|c| c.id == course_id)
                 .map(|c| c.name.clone())
                 .unwrap_or_else(|| "Unknown Course".to_string());
-            
+
             vec![
                 BreadcrumbItem {
                     label: "Dashboard".to_string(),
@@ -93,9 +94,9 @@ pub fn generate_breadcrumbs(current_route: Route, courses: &[crate::types::Cours
                     label: course_name,
                     route: None,
                     active: true,
-                }
+                },
             ]
-        },
+        }
         Route::Settings => vec![
             BreadcrumbItem {
                 label: "Dashboard".to_string(),
@@ -106,7 +107,7 @@ pub fn generate_breadcrumbs(current_route: Route, courses: &[crate::types::Cours
                 label: "Settings".to_string(),
                 route: None,
                 active: true,
-            }
+            },
         ],
         Route::AddCourse => vec![
             BreadcrumbItem {
@@ -118,7 +119,7 @@ pub fn generate_breadcrumbs(current_route: Route, courses: &[crate::types::Cours
                 label: "Add Course".to_string(),
                 route: None,
                 active: true,
-            }
+            },
         ],
         #[cfg(debug_assertions)]
         Route::ToastTest => vec![
@@ -131,7 +132,7 @@ pub fn generate_breadcrumbs(current_route: Route, courses: &[crate::types::Cours
                 label: "Toast Test".to_string(),
                 route: None,
                 active: true,
-            }
+            },
         ],
     }
 }

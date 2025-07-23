@@ -1,6 +1,6 @@
 use dioxus::prelude::*;
-use dioxus_free_icons::icons::fa_solid_icons::{FaMoon, FaSun};
 use dioxus_free_icons::Icon;
+use dioxus_free_icons::icons::fa_solid_icons::{FaMoon, FaSun};
 use dioxus_signals::{Readable, Signal, Writable};
 use log;
 use serde::{Deserialize, Serialize};
@@ -48,9 +48,9 @@ impl AppTheme {
     pub fn save_to_storage(&self) {
         let config_path = PathBuf::from(THEME_CONFIG_FILE);
         if let Err(e) = fs::write(&config_path, self.as_str()) {
-            log::error!("Failed to save theme to config file: {}", e);
+            log::error!("Failed to save theme to config file: {e}");
         } else {
-            log::info!("Theme saved to storage: {:?}", self);
+            log::info!("Theme saved to storage: {self:?}");
         }
     }
 }

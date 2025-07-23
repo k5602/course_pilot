@@ -32,13 +32,13 @@ pub fn Button(
 ) -> Element {
     let mut classes = vec!["btn".to_string()];
     if let Some(color) = &color {
-        classes.push(format!("btn-{}", color));
+        classes.push(format!("btn-{color}"));
     }
     if let Some(size) = &size {
-        classes.push(format!("btn-{}", size));
+        classes.push(format!("btn-{size}"));
     }
     if let Some(variant) = &variant {
-        classes.push(format!("btn-{}", variant));
+        classes.push(format!("btn-{variant}"));
     }
     if let Some(extra) = &class {
         classes.push(extra.clone());

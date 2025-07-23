@@ -258,7 +258,10 @@ pub struct PlanItemIdentifier {
 
 impl PlanItemIdentifier {
     pub fn new(plan_id: Uuid, item_index: usize) -> Self {
-        Self { plan_id, item_index }
+        Self {
+            plan_id,
+            item_index,
+        }
     }
 }
 
@@ -273,16 +276,16 @@ impl PlanExt for Plan {
     fn get_item_identifier(&self, index: usize) -> PlanItemIdentifier {
         PlanItemIdentifier::new(self.id, index)
     }
-    
+
     fn update_item_completion(&mut self, index: usize, completed: bool) -> Result<(), String> {
         if let Some(item) = self.items.get_mut(index) {
             item.completed = completed;
             Ok(())
         } else {
-            Err(format!("Plan item index {} out of bounds", index))
+            Err(format!("Plan item index {index} out of bounds"))
         }
     }
-    
+
     fn calculate_progress(&self) -> (usize, usize, f32) {
         let total_count = self.items.len();
         let completed_count = self.items.iter().filter(|item| item.completed).count();
@@ -291,7 +294,7 @@ impl PlanExt for Plan {
         } else {
             0.0
         };
-        
+
         (completed_count, total_count, percentage)
     }
 }

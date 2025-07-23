@@ -1,7 +1,7 @@
+use course_pilot::ui::app_root::AppRoot;
 use dioxus::prelude::*;
 use dioxus_desktop::tao::dpi::LogicalSize;
 use dioxus_desktop::{Config, WindowBuilder};
-use course_pilot::ui::app_root::AppRoot;
 
 const _: Asset = asset!("/assets/tailwind.out.css");
 

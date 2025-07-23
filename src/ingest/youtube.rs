@@ -15,7 +15,7 @@ fn create_http_client() -> Result<reqwest::Client, ImportError> {
         .danger_accept_invalid_certs(false)
         .use_rustls_tls()
         .build()
-        .map_err(|e| ImportError::Network(format!("Failed to create HTTP client: {}", e)))
+        .map_err(|e| ImportError::Network(format!("Failed to create HTTP client: {e}")))
 }
 
 /// Struct representing a YouTube video section with title and duration
@@ -49,8 +49,7 @@ pub async fn import_from_youtube(
 ) -> Result<(Vec<YoutubeSection>, YoutubePlaylistMetadata), ImportError> {
     if !is_valid_youtube_playlist_url(url) {
         return Err(ImportError::InvalidUrl(format!(
-            "Invalid YouTube playlist URL: {}",
-            url
+            "Invalid YouTube playlist URL: {url}"
         )));
     }
 
@@ -69,19 +68,18 @@ pub async fn import_from_youtube(
     let mut next_page_token = None;
     loop {
         let api_url = format!(
-            "https://www.googleapis.com/youtube/v3/playlistItems?part=contentDetails&maxResults=50&playlistId={}&key={}",
-            playlist_id, api_key
+            "https://www.googleapis.com/youtube/v3/playlistItems?part=contentDetails&maxResults=50&playlistId={playlist_id}&key={api_key}"
         );
         let url_with_page = if let Some(token) = &next_page_token {
-            format!("{}&pageToken={}", api_url, token)
+            format!("{api_url}&pageToken={token}")
         } else {
             api_url.clone()
         };
 
-        let resp = client.get(&url_with_page)
-            .send()
-            .await
-            .map_err(|e| ImportError::Network(format!("Failed to fetch playlist items: {}", e)))?;
+        let resp =
+            client.get(&url_with_page).send().await.map_err(|e| {
+                ImportError::Network(format!("Failed to fetch playlist items: {e}"))
+            })?;
         #[derive(Deserialize)]
         struct PlaylistItemsResponse {
             items: Vec<PlaylistItem>,
@@ -99,7 +97,7 @@ pub async fn import_from_youtube(
             video_id: String,
         }
         let playlist_resp: PlaylistItemsResponse = resp.json().await.map_err(|e| {
-            ImportError::Network(format!("Failed to parse playlist items response: {}", e))
+            ImportError::Network(format!("Failed to parse playlist items response: {e}"))
         })?;
         for item in playlist_resp.items {
             video_ids.push(item.content_details.video_id);
@@ -114,7 +112,7 @@ pub async fn import_from_youtube(
     if video_ids.is_empty() {
         return Err(ImportError::NoContent);
     }
-    
+
     // Step 1.5: Fetch playlist metadata
     let playlist_metadata = fetch_playlist_metadata(playlist_id, api_key, &client).await?;
 
@@ -123,13 +121,13 @@ pub async fn import_from_youtube(
     for chunk in video_ids.chunks(50) {
         let ids = chunk.join(",");
         let api_url = format!(
-            "https://www.googleapis.com/youtube/v3/videos?part=contentDetails,snippet&id={}&key={}",
-            ids, api_key
+            "https://www.googleapis.com/youtube/v3/videos?part=contentDetails,snippet&id={ids}&key={api_key}"
         );
-        let resp = client.get(&api_url)
+        let resp = client
+            .get(&api_url)
             .send()
             .await
-            .map_err(|e| ImportError::Network(format!("Failed to fetch video details: {}", e)))?;
+            .map_err(|e| ImportError::Network(format!("Failed to fetch video details: {e}")))?;
         #[derive(Deserialize)]
         struct VideosResponse {
             items: Vec<VideoItem>,
@@ -149,7 +147,7 @@ pub async fn import_from_youtube(
             duration: String,
         }
         let videos_resp: VideosResponse = resp.json().await.map_err(|e| {
-            ImportError::Network(format!("Failed to parse video details response: {}", e))
+            ImportError::Network(format!("Failed to parse video details response: {e}"))
         })?;
         for item in videos_resp.items {
             let title = clean_video_title(&item.snippet.title);
@@ -166,9 +164,9 @@ pub async fn import_from_youtube(
 fn parse_iso8601_duration(s: &str) -> Option<Duration> {
     let mut secs = 0u64;
     let mut num = String::new();
-    let mut chars = s.chars().peekable();
-    while let Some(c) = chars.next() {
-        if c.is_digit(10) {
+    let chars = s.chars().peekable();
+    for c in chars {
+        if c.is_ascii_digit() {
             num.push(c);
         } else {
             match c {
@@ -207,29 +205,33 @@ fn is_valid_youtube_playlist_url(url: &str) -> bool {
 }
 
 /// Fetch playlist metadata (title, description, etc.)
-async fn fetch_playlist_metadata(playlist_id: String, api_key: &str, client: &reqwest::Client) -> Result<YoutubePlaylistMetadata, ImportError> {
+async fn fetch_playlist_metadata(
+    playlist_id: String,
+    api_key: &str,
+    client: &reqwest::Client,
+) -> Result<YoutubePlaylistMetadata, ImportError> {
     let api_url = format!(
-        "https://www.googleapis.com/youtube/v3/playlists?part=snippet,contentDetails&id={}&key={}",
-        playlist_id, api_key
+        "https://www.googleapis.com/youtube/v3/playlists?part=snippet,contentDetails&id={playlist_id}&key={api_key}"
     );
-    
-    let resp = client.get(&api_url)
+
+    let resp = client
+        .get(&api_url)
         .send()
         .await
-        .map_err(|e| ImportError::Network(format!("Failed to fetch playlist metadata: {}", e)))?;
-    
+        .map_err(|e| ImportError::Network(format!("Failed to fetch playlist metadata: {e}")))?;
+
     #[derive(Deserialize)]
     struct PlaylistResponse {
         items: Vec<PlaylistItem>,
     }
-    
+
     #[derive(Deserialize)]
     struct PlaylistItem {
         snippet: PlaylistSnippet,
         #[serde(rename = "contentDetails")]
         content_details: PlaylistContentDetails,
     }
-    
+
     #[derive(Deserialize)]
     struct PlaylistSnippet {
         title: String,
@@ -237,17 +239,18 @@ async fn fetch_playlist_metadata(playlist_id: String, api_key: &str, client: &re
         #[serde(rename = "channelTitle")]
         channel_title: String,
     }
-    
+
     #[derive(Deserialize)]
     struct PlaylistContentDetails {
         #[serde(rename = "itemCount")]
         item_count: usize,
     }
-    
-    let playlist_resp: PlaylistResponse = resp.json().await
-        .map_err(|e| ImportError::Network(format!("Failed to parse playlist metadata response: {}", e)))?;
-    
-    if let Some(item) = playlist_resp.items.get(0) {
+
+    let playlist_resp: PlaylistResponse = resp.json().await.map_err(|e| {
+        ImportError::Network(format!("Failed to parse playlist metadata response: {e}"))
+    })?;
+
+    if let Some(item) = playlist_resp.items.first() {
         Ok(YoutubePlaylistMetadata {
             title: item.snippet.title.clone(),
             description: Some(item.snippet.description.clone()),
@@ -256,7 +259,10 @@ async fn fetch_playlist_metadata(playlist_id: String, api_key: &str, client: &re
         })
     } else {
         Ok(YoutubePlaylistMetadata {
-            title: format!("YouTube Playlist {}", &playlist_id[..8.min(playlist_id.len())]),
+            title: format!(
+                "YouTube Playlist {}",
+                &playlist_id[..8.min(playlist_id.len())]
+            ),
             description: None,
             channel_title: None,
             video_count: 0,
@@ -270,13 +276,13 @@ async fn validate_playlist_real(url: &str, api_key: &str) -> Result<bool, Import
     let playlist_id = extract_playlist_id(url)
         .ok_or_else(|| ImportError::InvalidUrl("Could not extract playlist ID".to_string()))?;
     let api_url = format!(
-        "https://www.googleapis.com/youtube/v3/playlists?part=status&id={}&key={}",
-        playlist_id, api_key
+        "https://www.googleapis.com/youtube/v3/playlists?part=status&id={playlist_id}&key={api_key}"
     );
-    let resp = client.get(&api_url)
+    let resp = client
+        .get(&api_url)
         .send()
         .await
-        .map_err(|e| ImportError::Network(format!("Failed to fetch playlist: {}", e)))?;
+        .map_err(|e| ImportError::Network(format!("Failed to fetch playlist: {e}")))?;
     #[derive(serde::Deserialize)]
     struct PlaylistStatusResponse {
         items: Vec<PlaylistStatusItem>,
@@ -291,9 +297,9 @@ async fn validate_playlist_real(url: &str, api_key: &str) -> Result<bool, Import
         privacy_status: String,
     }
     let playlist_resp: PlaylistStatusResponse = resp.json().await.map_err(|e| {
-        ImportError::Network(format!("Failed to parse playlist status response: {}", e))
+        ImportError::Network(format!("Failed to parse playlist status response: {e}"))
     })?;
-    if let Some(item) = playlist_resp.items.get(0) {
+    if let Some(item) = playlist_resp.items.first() {
         Ok(item.status.privacy_status == "public" || item.status.privacy_status == "unlisted")
     } else {
         Ok(false)
@@ -371,7 +377,9 @@ mod tests {
     #[test]
     fn test_playlist_id_extraction() {
         assert_eq!(
-            extract_playlist_id("https://youtube.com/playlist?list=PLJEZDlUEtOf5rZjVFnijy6wSW-laKiY0l&si=aLcYFs9uDCcfvNGd"),
+            extract_playlist_id(
+                "https://youtube.com/playlist?list=PLJEZDlUEtOf5rZjVFnijy6wSW-laKiY0l&si=aLcYFs9uDCcfvNGd"
+            ),
             Some("PLJEZDlUEtOf5rZjVFnijy6wSW-laKiY0l".to_string())
         );
         assert_eq!(

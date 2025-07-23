@@ -21,7 +21,7 @@ pub fn Badge(props: BadgeProps) -> Element {
     let color_class = props
         .color
         .as_deref()
-        .map(|c| format!("badge-{}", c))
+        .map(|c| format!("badge-{c}"))
         .unwrap_or_else(|| "badge-neutral".to_string());
 
     let class = props.class.as_deref().unwrap_or("badge").to_string();

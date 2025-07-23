@@ -26,7 +26,7 @@ pub fn generate_plan(course: &Course, settings: &PlanSettings) -> Result<Plan, P
         settings.session_length_minutes,
         settings.start_date,
     )
-    .map_err(|e| PlanError::InvalidSettings(e))?;
+    .map_err(PlanError::InvalidSettings)?;
 
     // Check if course has structure
     let _structure = course
@@ -335,7 +335,7 @@ fn plan_module_sessions(
         let session_title = if sessions.is_empty() {
             "Complete Module".to_string()
         } else {
-            format!("Remaining Sections")
+            "Remaining Sections".to_string()
         };
 
         sessions.push(SessionPlan {
@@ -440,7 +440,7 @@ fn add_buffer_days(plan: &mut Plan) -> Result<(), PlanError> {
     for item in plan.items.iter_mut() {
         if item.video_indices.len() > buffer_threshold {
             // Add extra day by moving date forward
-            item.date = item.date + chrono::Duration::days(1);
+            item.date += chrono::Duration::days(1);
         }
     }
 

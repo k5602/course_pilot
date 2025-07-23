@@ -1,14 +1,14 @@
-use dioxus::prelude::*;
-use dioxus_free_icons::icons::fa_solid_icons::FaChevronRight;
-use dioxus_free_icons::Icon;
 use crate::types::Route;
-use crate::ui::hooks::{use_navigation_manager, BreadcrumbItem};
+use crate::ui::hooks::{BreadcrumbItem, use_navigation_manager};
+use dioxus::prelude::*;
+use dioxus_free_icons::Icon;
+use dioxus_free_icons::icons::fa_solid_icons::FaChevronRight;
 
 /// Clean breadcrumb navigation component
 #[component]
 pub fn Breadcrumbs(current_route: Route) -> Element {
     let nav_manager = use_navigation_manager();
-    
+
     if nav_manager.breadcrumbs.is_empty() {
         return rsx! { div {} };
     }
@@ -28,20 +28,20 @@ pub fn Breadcrumbs(current_route: Route) -> Element {
 
 /// Render individual breadcrumb item
 fn render_breadcrumb_item(
-    item: &BreadcrumbItem, 
-    idx: usize, 
-    total: usize, 
-    navigate_to: &EventHandler<Route>
+    item: &BreadcrumbItem,
+    idx: usize,
+    total: usize,
+    navigate_to: &EventHandler<Route>,
 ) -> Element {
     let is_last = idx == total - 1;
-    let item_route = item.route.clone();
-    let navigate_to = navigate_to.clone();
-    
+    let item_route = item.route;
+    let navigate_to = *navigate_to;
+
     rsx! {
         li {
             key: "{idx}",
             class: "flex items-center",
-            
+
             if let Some(route) = item_route {
                 if !is_last {
                     button {
@@ -61,7 +61,7 @@ fn render_breadcrumb_item(
                     "{item.label}"
                 }
             }
-            
+
             if !is_last {
                 Icon {
                     icon: FaChevronRight,

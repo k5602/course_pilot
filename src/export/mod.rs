@@ -81,16 +81,16 @@ pub struct ExportResult {
 pub trait Exportable {
     /// Export to JSON format with complete data structure
     fn export_json(&self) -> Result<String>;
-    
+
     /// Export to CSV format with tabular representation
     fn export_csv(&self) -> Result<String>;
-    
+
     /// Export to PDF format with formatted document
     fn export_pdf(&self) -> Result<Vec<u8>>;
-    
+
     /// Export with custom options and progress tracking
     fn export_with_options(&self, options: ExportOptions) -> Result<ExportResult>;
-    
+
     /// Get suggested filename for export
     fn get_export_filename(&self, format: ExportFormat) -> String;
 }
@@ -99,28 +99,28 @@ pub trait Exportable {
 pub mod utils {
     use super::*;
     use chrono::{DateTime, Utc};
-    
+
     /// Format duration for human-readable display
     pub fn format_duration(duration: std::time::Duration) -> String {
         let total_seconds = duration.as_secs();
         let hours = total_seconds / 3600;
         let minutes = (total_seconds % 3600) / 60;
         let seconds = total_seconds % 60;
-        
+
         if hours > 0 {
-            format!("{}h {}m {}s", hours, minutes, seconds)
+            format!("{hours}h {minutes}m {seconds}s")
         } else if minutes > 0 {
-            format!("{}m {}s", minutes, seconds)
+            format!("{minutes}m {seconds}s")
         } else {
-            format!("{}s", seconds)
+            format!("{seconds}s")
         }
     }
-    
+
     /// Format timestamp for export
     pub fn format_timestamp(timestamp: DateTime<Utc>) -> String {
         timestamp.format("%Y-%m-%d %H:%M:%S UTC").to_string()
     }
-    
+
     /// Sanitize string for CSV export (escape quotes and commas)
     pub fn sanitize_csv_field(field: &str) -> String {
         if field.contains(',') || field.contains('"') || field.contains('\n') {
@@ -129,7 +129,7 @@ pub mod utils {
             field.to_string()
         }
     }
-    
+
     /// Generate unique filename with timestamp
     pub fn generate_filename(base_name: &str, format: ExportFormat) -> String {
         let timestamp = Utc::now().format("%Y%m%d_%H%M%S");
@@ -138,9 +138,9 @@ pub mod utils {
             ExportFormat::Csv => "csv",
             ExportFormat::Pdf => "pdf",
         };
-        format!("{}_{}.{}", base_name, timestamp, extension)
+        format!("{base_name}_{timestamp}.{extension}")
     }
-    
+
     /// Validate export data for corruption
     pub fn validate_export_data(data: &[u8], format: ExportFormat) -> Result<()> {
         match format {
@@ -157,7 +157,9 @@ pub mod utils {
             ExportFormat::Pdf => {
                 // Basic PDF validation - check for PDF header
                 if !data.starts_with(b"%PDF-") {
-                    return Err(anyhow::anyhow!("Invalid PDF export data: missing PDF header"));
+                    return Err(anyhow::anyhow!(
+                        "Invalid PDF export data: missing PDF header"
+                    ));
                 }
             }
         }
@@ -170,23 +172,23 @@ pub mod utils {
 pub enum ExportError {
     #[error("Export format not supported: {format}")]
     UnsupportedFormat { format: String },
-    
+
     #[error("Export data validation failed: {reason}")]
     ValidationFailed { reason: String },
-    
+
     #[error("Export operation was cancelled")]
     Cancelled,
-    
+
     #[error("Export failed due to insufficient data: {details}")]
     InsufficientData { details: String },
-    
+
     #[error("PDF generation failed: {reason}")]
     PdfGenerationFailed { reason: String },
-    
+
     #[error("CSV generation failed: {reason}")]
     CsvGenerationFailed { reason: String },
 }
 
 pub mod course;
-pub mod plan;
 pub mod notes;
+pub mod plan;

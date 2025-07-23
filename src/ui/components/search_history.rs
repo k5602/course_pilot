@@ -1,11 +1,11 @@
 use dioxus::prelude::*;
-use dioxus_free_icons::icons::fa_solid_icons::{FaClock, FaStar, FaTrash};
-use dioxus_free_icons::icons::fa_solid_icons::FaMagnifyingGlass;
 use dioxus_free_icons::Icon;
+use dioxus_free_icons::icons::fa_solid_icons::FaMagnifyingGlass;
+use dioxus_free_icons::icons::fa_solid_icons::{FaClock, FaStar, FaTrash};
 use dioxus_motion::prelude::*;
 
 /// SearchHistory: A component for managing and displaying search history
-#[derive(Props,Clone ,PartialEq)]
+#[derive(Props, Clone, PartialEq)]
 pub struct SearchHistoryProps {
     /// Recent searches
     #[props(default = Vec::new())]
@@ -65,14 +65,13 @@ pub fn SearchHistory(props: SearchHistoryProps) -> Element {
 
     // Check if a search is saved
     let saved_searches_clone = props.saved_searches.clone();
-    let is_saved = move |search: &str| -> bool {
-        saved_searches_clone.contains(&search.to_string())
-    };
+    let is_saved =
+        move |search: &str| -> bool { saved_searches_clone.contains(&search.to_string()) };
 
     rsx! {
         div {
             class: "w-full {props.class.clone().unwrap_or_default()}",
-            
+
             // Header with clear button
             div {
                 class: "flex justify-between items-center mb-2",
@@ -85,7 +84,7 @@ pub fn SearchHistory(props: SearchHistoryProps) -> Element {
                     }
                 }
             }
-            
+
             // Saved searches
             if !props.saved_searches.is_empty() {
                 div {
@@ -97,12 +96,12 @@ pub fn SearchHistory(props: SearchHistoryProps) -> Element {
                             let mut item_opacity = use_motion(0.0f32);
                             let mut item_y = use_motion(5.0f32);
                             let animation = item_animation.clone();
-                            
+
                             use_effect(move || {
                                 item_opacity.animate_to(1.0, animation.clone());
                                 item_y.animate_to(0.0, animation.clone());
                             });
-                            
+
                             let item_style = use_memo(move || {
                                 format!(
                                     "opacity: {}; transform: translateY({}px);",
@@ -110,10 +109,10 @@ pub fn SearchHistory(props: SearchHistoryProps) -> Element {
                                     item_y.get_value()
                                 )
                             });
-                            
+
                             let search_clone = search.clone();
                             let search_clone2 = search.clone();
-                            
+
                             rsx! {
                                 div {
                                     key: "{search}-saved",
@@ -136,7 +135,7 @@ pub fn SearchHistory(props: SearchHistoryProps) -> Element {
                     }
                 }
             }
-            
+
             // Recent searches
             if !props.recent_searches.is_empty() {
                 div {
@@ -147,12 +146,12 @@ pub fn SearchHistory(props: SearchHistoryProps) -> Element {
                             let mut item_opacity = use_motion(0.0f32);
                             let mut item_y = use_motion(5.0f32);
                             let animation = item_animation.clone();
-                            
+
                             use_effect(move || {
                                 item_opacity.animate_to(1.0, animation.clone());
                                 item_y.animate_to(0.0, animation.clone());
                             });
-                            
+
                             let item_style = use_memo(move || {
                                 format!(
                                     "opacity: {}; transform: translateY({}px);",
@@ -160,12 +159,12 @@ pub fn SearchHistory(props: SearchHistoryProps) -> Element {
                                     item_y.get_value()
                                 )
                             });
-                            
+
                             let search_clone = search.clone();
                             let search_clone2 = search.clone();
                             let search_clone3 = search.clone();
                             let saved = is_saved(search);
-                            
+
                             rsx! {
                                 div {
                                     key: "{search}-recent",
@@ -200,7 +199,7 @@ pub fn SearchHistory(props: SearchHistoryProps) -> Element {
                     }
                 }
             }
-            
+
             // Empty state
             if props.recent_searches.is_empty() && props.saved_searches.is_empty() {
                 div {

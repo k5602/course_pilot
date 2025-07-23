@@ -1,6 +1,6 @@
-use dioxus::prelude::*;
 use crate::export::ExportFormat;
 use crate::ui::components::modal::Modal;
+use dioxus::prelude::*;
 
 #[derive(Props, PartialEq, Clone)]
 pub struct ExportFormatDialogProps {
@@ -15,28 +15,28 @@ pub struct ExportFormatDialogProps {
 #[component]
 pub fn ExportFormatDialog(props: ExportFormatDialogProps) -> Element {
     let mut selected_format = use_signal(|| ExportFormat::Json);
-    
+
     // Reset selected format when dialog opens
     use_effect({
-        let mut selected_format = selected_format.clone();
+        let mut selected_format = selected_format;
         move || {
             if props.open {
                 selected_format.set(ExportFormat::Json);
             }
         }
     });
-    
+
     let handle_export = {
-        let on_export = props.on_export.clone();
-        let on_close = props.on_close.clone();
-        let selected_format = selected_format.clone();
-        
+        let on_export = props.on_export;
+        let on_close = props.on_close;
+        let selected_format = selected_format;
+
         move |_| {
             on_export.call(selected_format());
             on_close.call(());
         }
     };
-    
+
     rsx! {
         Modal {
             variant: crate::ui::components::modal::form_modal(rsx! {
@@ -52,9 +52,9 @@ pub fn ExportFormatDialog(props: ExportFormatDialogProps) -> Element {
                 }
             }),
             open: props.open,
-            on_close: props.on_close.clone(),
+            on_close: props.on_close,
             title: props.title.clone().unwrap_or_else(|| "Select Export Format".to_string()),
-            
+
             div { class: "space-y-4",
                 div { class: "form-control",
                     label { class: "label cursor-pointer justify-start gap-4",
@@ -71,7 +71,7 @@ pub fn ExportFormatDialog(props: ExportFormatDialogProps) -> Element {
                         }
                     }
                 }
-                
+
                 div { class: "form-control",
                     label { class: "label cursor-pointer justify-start gap-4",
                         input {
@@ -87,7 +87,7 @@ pub fn ExportFormatDialog(props: ExportFormatDialogProps) -> Element {
                         }
                     }
                 }
-                
+
                 div { class: "form-control",
                     label { class: "label cursor-pointer justify-start gap-4",
                         input {
@@ -103,7 +103,7 @@ pub fn ExportFormatDialog(props: ExportFormatDialogProps) -> Element {
                         }
                     }
                 }
-                
+
                 div { class: "alert alert-info mt-4",
                     svg {
                         class: "stroke-current shrink-0 h-6 w-6",

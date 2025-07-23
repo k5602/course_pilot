@@ -7,10 +7,10 @@ use uuid::Uuid;
 /// Toast variant for different notification types using DaisyUI alert classes
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub enum ToastVariant {
-    Success,  // alert-success
-    Error,    // alert-error
-    Warning,  // alert-warning
-    Info,     // alert-info
+    Success, // alert-success
+    Error,   // alert-error
+    Warning, // alert-warning
+    Info,    // alert-info
 }
 
 impl ToastVariant {
@@ -49,10 +49,10 @@ pub struct Toast {
 impl Toast {
     pub fn new(message: String, variant: ToastVariant) -> Self {
         let duration = match variant {
-            ToastVariant::Error => Duration::from_secs(8),     // Errors stay longer
-            ToastVariant::Warning => Duration::from_secs(6),   // Warnings stay longer
-            ToastVariant::Success => Duration::from_secs(4),   // Success shorter
-            ToastVariant::Info => Duration::from_secs(3),      // Info shortest
+            ToastVariant::Error => Duration::from_secs(8), // Errors stay longer
+            ToastVariant::Warning => Duration::from_secs(6), // Warnings stay longer
+            ToastVariant::Success => Duration::from_secs(4), // Success shorter
+            ToastVariant::Info => Duration::from_secs(3),  // Info shortest
         };
 
         Self {
@@ -90,12 +90,12 @@ impl ToastManager {
     pub fn add_toast(&mut self, toast: Toast) {
         // Remove expired toasts
         self.toasts.retain(|t| !t.is_expired());
-        
+
         // Ensure we don't exceed max toasts
         while self.toasts.len() >= self.max_toasts {
             self.toasts.pop_front();
         }
-        
+
         self.toasts.push_back(toast);
     }
 
@@ -111,7 +111,7 @@ impl ToastManager {
 /// Initialize the toast manager (called in AppRoot)
 pub fn provide_toast_manager() -> Signal<ToastManager> {
     let signal = Signal::new(ToastManager::default());
-    use_context_provider(move || signal.clone());
+    use_context_provider(move || signal);
     signal
 }
 
@@ -124,7 +124,7 @@ pub fn use_toast_manager() -> Signal<ToastManager> {
 #[component]
 pub fn ToastContainer() -> Element {
     let mut manager = use_toast_manager();
-    
+
     // Auto-cleanup expired toasts using tokio interval (desktop-appropriate)
     use_effect(move || {
         spawn(async move {
@@ -150,7 +150,7 @@ pub fn ToastContainer() -> Element {
                 let variant = toast.variant;
                 let icon = variant.icon();
                 let alert_class = variant.alert_class();
-                
+
                 rsx! {
                     div {
                         key: "{toast_id}",
@@ -178,7 +178,7 @@ pub fn ToastContainer() -> Element {
 pub fn show_toast(message: impl Into<String>, variant: ToastVariant) {
     let msg = message.into();
     let toast = Toast::new(msg, variant);
-    
+
     // Use spawn to ensure this runs in the correct async context
     spawn(async move {
         // Try to get the toast manager from context
@@ -188,10 +188,11 @@ pub fn show_toast(message: impl Into<String>, variant: ToastVariant) {
             });
         } else {
             // Fallback: log the toast if context is not available
-            log::info!("Toast: {} - {}", 
+            log::info!(
+                "Toast: {} - {}",
                 match variant {
                     ToastVariant::Success => "SUCCESS",
-                    ToastVariant::Error => "ERROR", 
+                    ToastVariant::Error => "ERROR",
                     ToastVariant::Warning => "WARNING",
                     ToastVariant::Info => "INFO",
                 },

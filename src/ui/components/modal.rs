@@ -1,7 +1,7 @@
 use dioxus::prelude::*;
-use dioxus_motion::prelude::*;
-use dioxus_free_icons::icons::fa_solid_icons::{FaCheck, FaExclamation, FaXmark};
 use dioxus_free_icons::Icon;
+use dioxus_free_icons::icons::fa_solid_icons::{FaCheck, FaExclamation, FaXmark};
+use dioxus_motion::prelude::*;
 
 /// Modal variant types for different use cases
 #[derive(Debug, Clone, PartialEq)]
@@ -18,9 +18,7 @@ pub enum ModalVariant {
         on_cancel: Option<Callback<()>>,
     },
     /// Form dialog with custom actions
-    Form {
-        actions: Element,
-    },
+    Form { actions: Element },
     /// Fullscreen modal for complex content
     Fullscreen,
     /// Alert dialog with single action
@@ -91,7 +89,9 @@ pub fn Modal(
 
     // Determine modal classes based on variant and size
     let modal_box_class = match &variant {
-        ModalVariant::Fullscreen => "modal-box w-full h-full max-w-none max-h-none bg-base-100 shadow-xl",
+        ModalVariant::Fullscreen => {
+            "modal-box w-full h-full max-w-none max-h-none bg-base-100 shadow-xl"
+        }
         _ => {
             let size_class = match size.as_deref().unwrap_or("md") {
                 "sm" => "max-w-sm",
@@ -101,7 +101,7 @@ pub fn Modal(
                 "full" => "max-w-none w-full",
                 _ => "max-w-lg",
             };
-            &format!("modal-box bg-base-100 shadow-xl relative {} w-full mx-4", size_class)
+            &format!("modal-box bg-base-100 shadow-xl relative {size_class} w-full mx-4")
         }
     };
 
@@ -121,7 +121,7 @@ pub fn Modal(
                 class: "{modal_box_class} {extra_class}",
                 style: "{animation_style}",
                 onclick: move |evt| evt.stop_propagation(),
-                
+
                 // Render content based on variant
                 {render_modal_content(variant, title, icon, children)}
             }
@@ -152,14 +152,14 @@ fn render_modal_content(
                     {children}
                 }
             }
-        },
-        ModalVariant::Confirmation { 
-            message, 
-            confirm_label, 
-            cancel_label, 
+        }
+        ModalVariant::Confirmation {
+            message,
+            confirm_label,
+            cancel_label,
             confirm_color,
-            on_confirm, 
-            on_cancel 
+            on_confirm,
+            on_cancel,
         } => {
             rsx! {
                 h3 { class: "font-bold text-lg flex items-center gap-2 mb-4",
@@ -190,7 +190,7 @@ fn render_modal_content(
                     }
                 }
             }
-        },
+        }
         ModalVariant::Form { actions } => {
             rsx! {
                 {if let Some(title) = title {
@@ -210,7 +210,7 @@ fn render_modal_content(
                     {actions}
                 }
             }
-        },
+        }
         ModalVariant::Fullscreen => {
             rsx! {
                 {if let Some(title) = title {
@@ -234,12 +234,12 @@ fn render_modal_content(
                     {children}
                 }
             }
-        },
-        ModalVariant::Alert { 
-            message, 
-            action_label, 
-            action_color, 
-            on_action 
+        }
+        ModalVariant::Alert {
+            message,
+            action_label,
+            action_color,
+            on_action,
         } => {
             rsx! {
                 h3 { class: "font-bold text-lg flex items-center gap-2 mb-4",
@@ -259,7 +259,7 @@ fn render_modal_content(
                     }
                 }
             }
-        },
+        }
     }
 }
 
@@ -301,4 +301,3 @@ pub fn alert_modal(
         on_action,
     }
 }
-    

@@ -1,6 +1,6 @@
-use dioxus::prelude::*;
-use crate::types::Course;
 use super::CourseCard;
+use crate::types::Course;
+use dioxus::prelude::*;
 
 #[derive(Props, PartialEq, Clone)]
 pub struct CourseGridProps {

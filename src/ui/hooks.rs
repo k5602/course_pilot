@@ -3,16 +3,16 @@
 //! Uses Dioxus signals, and error handling for robust integration.
 
 pub mod use_courses;
-pub mod use_navigation;
 pub mod use_modals;
+pub mod use_navigation;
 
 // Re-export commonly used hooks
 pub use use_courses::{use_course_manager, use_course_progress};
-pub use use_navigation::{use_navigation_manager, BreadcrumbItem};
-pub use use_modals::{use_modal_manager, use_form_manager};
+pub use use_modals::{use_form_manager, use_modal_manager};
+pub use use_navigation::{BreadcrumbItem, use_navigation_manager};
 
-use anyhow::Result;
 use crate::types::{AppState, Course, Note, Plan};
+use anyhow::Result;
 use dioxus::prelude::*;
 use futures::Future;
 
@@ -67,16 +67,14 @@ pub fn use_courses_resource() -> Resource<Result<Vec<Course>>> {
     let backend = use_backend_adapter();
     use_resource(move || {
         let backend = backend.clone();
-        async move {
-            backend.list_courses().await
-        }
+        async move { backend.list_courses().await }
     })
 }
 
 /// Get a function to add courses asynchronously (for use in event handlers)
 pub fn use_add_course_action() -> impl Fn(Course) + Clone {
     let backend = use_backend_adapter();
-    
+
     move |course: Course| {
         let backend = backend.clone();
         spawn(async move {
@@ -85,7 +83,9 @@ pub fn use_add_course_action() -> impl Fn(Course) + Clone {
                     crate::ui::components::toast::toast::success("Course added successfully");
                 }
                 Err(e) => {
-                    crate::ui::components::toast::toast::error(&format!("Failed to add course: {}", e));
+                    crate::ui::components::toast::toast::error(format!(
+                        "Failed to add course: {e}"
+                    ));
                 }
             }
         });
@@ -97,7 +97,10 @@ pub fn use_add_course_action() -> impl Fn(Course) + Clone {
 /// Returns a memoized list of notes for a given course or video.
 /// If video_id is Some, returns video-level notes; if None, returns course-level notes.
 /// Always queries the DB for latest notes.
-pub fn use_notes(course_id: Uuid, video_id: Option<Uuid>) -> impl Future<Output = Result<Vec<Note>>> {
+pub fn use_notes(
+    course_id: Uuid,
+    video_id: Option<Uuid>,
+) -> impl Future<Output = Result<Vec<Note>>> {
     let backend_adapter = use_backend_adapter();
     async move {
         if let Some(video_id) = video_id {
@@ -126,7 +129,7 @@ pub fn use_notes_resource(course_id: Uuid, video_id: Option<Uuid>) -> Resource<R
 /// Get a function to save notes asynchronously (for use in event handlers)
 pub fn use_save_note_action() -> impl Fn(Note) + Clone {
     let backend = use_backend_adapter();
-    
+
     move |note: Note| {
         let backend = backend.clone();
         spawn(async move {
@@ -135,7 +138,7 @@ pub fn use_save_note_action() -> impl Fn(Note) + Clone {
                     crate::ui::components::toast::toast::success("Note saved successfully");
                 }
                 Err(e) => {
-                    crate::ui::components::toast::toast::error(&format!("Failed to save note: {}", e));
+                    crate::ui::components::toast::toast::error(format!("Failed to save note: {e}"));
                 }
             }
         });
@@ -145,7 +148,7 @@ pub fn use_save_note_action() -> impl Fn(Note) + Clone {
 /// Get a function to delete notes asynchronously (for use in event handlers)
 pub fn use_delete_note_action() -> impl Fn(Uuid) + Clone {
     let backend = use_backend_adapter();
-    
+
     move |note_id: Uuid| {
         let backend = backend.clone();
         spawn(async move {
@@ -154,7 +157,9 @@ pub fn use_delete_note_action() -> impl Fn(Uuid) + Clone {
                     crate::ui::components::toast::toast::success("Note deleted successfully");
                 }
                 Err(e) => {
-                    crate::ui::components::toast::toast::error(&format!("Failed to delete note: {}", e));
+                    crate::ui::components::toast::toast::error(format!(
+                        "Failed to delete note: {e}"
+                    ));
                 }
             }
         });
@@ -200,27 +205,25 @@ pub fn use_plan_resource(course_id: Uuid) -> Resource<Result<Option<Plan>>> {
     let backend = use_backend_adapter();
     use_resource(move || {
         let backend = backend.clone();
-        async move {
-            backend.get_plan_by_course(course_id).await
-        }
+        async move { backend.get_plan_by_course(course_id).await }
     })
 }
 
 /// Load plan progress using use_resource for reactive progress loading
-pub fn use_plan_progress_resource(plan_id: Uuid) -> Resource<Result<crate::ui::backend_adapter::ProgressInfo>> {
+pub fn use_plan_progress_resource(
+    plan_id: Uuid,
+) -> Resource<Result<crate::ui::backend_adapter::ProgressInfo>> {
     let backend = use_backend_adapter();
     use_resource(move || {
         let backend = backend.clone();
-        async move {
-            backend.get_plan_progress(plan_id).await
-        }
+        async move { backend.get_plan_progress(plan_id).await }
     })
 }
 
 /// Get a function to save plans asynchronously (for use in event handlers)
 pub fn use_save_plan_action() -> impl Fn(Plan) + Clone {
     let backend = use_backend_adapter();
-    
+
     move |plan: Plan| {
         let backend = backend.clone();
         spawn(async move {
@@ -229,7 +232,7 @@ pub fn use_save_plan_action() -> impl Fn(Plan) + Clone {
                     crate::ui::components::toast::toast::success("Plan saved successfully");
                 }
                 Err(e) => {
-                    crate::ui::components::toast::toast::error(&format!("Failed to save plan: {}", e));
+                    crate::ui::components::toast::toast::error(format!("Failed to save plan: {e}"));
                 }
             }
         });
@@ -239,17 +242,22 @@ pub fn use_save_plan_action() -> impl Fn(Plan) + Clone {
 /// Get a function to toggle plan item completion asynchronously with state refresh
 pub fn use_toggle_plan_item_action() -> impl Fn(Uuid, usize, bool) + Clone {
     let backend = use_backend_adapter();
-    
+
     move |plan_id: Uuid, item_index: usize, completed: bool| {
         let backend = backend.clone();
         spawn(async move {
-            match backend.update_plan_item_completion(plan_id, item_index, completed).await {
+            match backend
+                .update_plan_item_completion(plan_id, item_index, completed)
+                .await
+            {
                 Ok(_) => {
                     crate::ui::components::toast::toast::success("Progress updated");
                     // For desktop apps, the UI will automatically refresh through reactive state
                 }
                 Err(e) => {
-                    crate::ui::components::toast::toast::error(&format!("Failed to update progress: {}", e));
+                    crate::ui::components::toast::toast::error(format!(
+                        "Failed to update progress: {e}"
+                    ));
                 }
             }
         });

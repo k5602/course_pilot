@@ -1,23 +1,23 @@
+use crate::ui::components::badge::Badge;
+use crate::ui::components::modal_confirmation::{ActionMenu, DropdownItem};
+use crate::ui::components::progress_ring::ProgressRing;
 use dioxus::prelude::*;
 use dioxus_motion::prelude::*;
-use crate::ui::components::badge::Badge;
-use crate::ui::components::progress_ring::ProgressRing;
-use crate::ui::components::modal_confirmation::{ActionMenu, DropdownItem};
 
 /// Card variant types for different use cases
 #[derive(PartialEq, Clone)]
 pub enum CardVariant {
-    Course { 
-        video_count: usize, 
+    Course {
+        video_count: usize,
         duration: String,
         progress: f32, // 0.0 - 1.0
     },
-    Plan { 
+    Plan {
         completion: f32, // 0.0 - 1.0
         total_items: usize,
     },
-    Note { 
-        timestamp: Option<String>, 
+    Note {
+        timestamp: Option<String>,
         tags: Vec<String>,
     },
     Generic,
@@ -47,25 +47,25 @@ pub struct CardProps {
     pub title: String,
     #[props(optional)]
     pub subtitle: Option<String>,
-    
+
     // Content properties
     #[props(optional)]
     pub content: Option<Element>,
     #[props(optional)]
     pub metadata: Option<Vec<String>>,
-    
+
     // Interactive properties
     #[props(optional)]
     pub actions: Option<Vec<ActionItem>>,
     #[props(optional)]
     pub badges: Option<Vec<BadgeData>>,
-    
+
     // Styling properties
     #[props(optional)]
     pub class: Option<String>,
     #[props(optional)]
     pub hover_effect: Option<bool>,
-    
+
     // Event handlers
     #[props(optional)]
     pub on_click: Option<EventHandler<MouseEvent>>,
@@ -79,7 +79,7 @@ pub struct CardProps {
 pub fn Card(props: CardProps) -> Element {
     let class = props.class.as_deref().unwrap_or("");
     let hover_effect = props.hover_effect.unwrap_or(true);
-    
+
     // Animation setup
     let mut scale = use_motion(1.0f32);
     let mut y = use_motion(0.0f32);
@@ -104,13 +104,16 @@ pub fn Card(props: CardProps) -> Element {
 
     // Convert ActionItem to DropdownItem for ActionMenu
     let dropdown_actions = props.actions.as_ref().map(|actions| {
-        actions.iter().map(|action| DropdownItem {
-            label: action.label.clone(),
-            icon: action.icon.clone(),
-            on_select: action.on_select.clone(),
-            children: None,
-            disabled: action.disabled,
-        }).collect::<Vec<_>>()
+        actions
+            .iter()
+            .map(|action| DropdownItem {
+                label: action.label.clone(),
+                icon: action.icon.clone(),
+                on_select: action.on_select,
+                children: None,
+                disabled: action.disabled,
+            })
+            .collect::<Vec<_>>()
     });
 
     rsx! {
@@ -134,10 +137,10 @@ pub fn Card(props: CardProps) -> Element {
                     y.animate_to(0.0, AnimationConfig::new(AnimationMode::Spring(Spring::default())));
                 }
             },
-            
+
             div {
                 class: "card-body p-4",
-                
+
                 // Header with title, badges, and actions
                 div {
                     class: "flex justify-between items-start mb-2",
@@ -146,11 +149,11 @@ pub fn Card(props: CardProps) -> Element {
                         h2 {
                             class: "card-title text-lg flex items-center gap-2 flex-wrap",
                             "{props.title}"
-                            
+
                             // Render badges
                             if let Some(badges) = &props.badges {
                                 for badge in badges {
-                                    Badge { 
+                                    Badge {
                                         label: badge.label.clone(),
                                         color: badge.color.clone(),
                                         class: Some("ml-2".to_string())
@@ -158,29 +161,29 @@ pub fn Card(props: CardProps) -> Element {
                                 }
                             }
                         }
-                        
+
                         if let Some(subtitle) = &props.subtitle {
                             p { class: "text-base-content/70 text-sm mt-1", "{subtitle}" }
                         }
                     }
-                    
+
                     // Action menu
                     if let Some(actions) = dropdown_actions {
-                        ActionMenu { 
+                        ActionMenu {
                             actions: actions,
                             class: Some("".to_string())
                         }
                     }
                 }
-                
+
                 // Variant-specific content
                 {render_variant_content(&props.variant)}
-                
+
                 // Custom content
                 if let Some(content) = &props.content {
                     div { class: "mt-4", {content.clone()} }
                 }
-                
+
                 // Metadata
                 if let Some(metadata) = &props.metadata {
                     div {
@@ -199,7 +202,11 @@ pub fn Card(props: CardProps) -> Element {
 /// Render variant-specific content
 fn render_variant_content(variant: &CardVariant) -> Element {
     match variant {
-        CardVariant::Course { video_count, duration, progress } => {
+        CardVariant::Course {
+            video_count,
+            duration,
+            progress,
+        } => {
             let progress_percent = (*progress * 100.0).round() as u32;
             let status = if progress_percent >= 100 {
                 "Completed"
@@ -208,23 +215,23 @@ fn render_variant_content(variant: &CardVariant) -> Element {
             } else {
                 "Not Started"
             };
-            
+
             rsx! {
                 div {
                     class: "space-y-3",
-                    
+
                     // Course metadata
                     p {
                         class: "text-sm text-base-content/70",
                         "{video_count} videos • {duration}"
                     }
-                    
+
                     // Progress section
                     div {
                         class: "flex items-center justify-between",
                         div {
                             class: "flex items-center gap-3",
-                            ProgressRing { 
+                            ProgressRing {
                                 value: progress_percent,
                                 size: Some(36),
                                 color: Some("accent".to_string()),
@@ -238,25 +245,28 @@ fn render_variant_content(variant: &CardVariant) -> Element {
                     }
                 }
             }
-        },
-        CardVariant::Plan { completion, total_items } => {
+        }
+        CardVariant::Plan {
+            completion,
+            total_items,
+        } => {
             let completion_percent = (*completion * 100.0).round() as u32;
             let completed_items = (*completion * *total_items as f32).round() as usize;
-            
+
             rsx! {
                 div {
                     class: "space-y-3",
-                    
+
                     // Plan metadata
                     p {
                         class: "text-sm text-base-content/70",
                         "{completed_items} of {total_items} items completed"
                     }
-                    
+
                     // Progress section
                     div {
                         class: "flex items-center gap-3",
-                        ProgressRing { 
+                        ProgressRing {
                             value: completion_percent,
                             size: Some(40),
                             color: Some("success".to_string()),
@@ -269,12 +279,12 @@ fn render_variant_content(variant: &CardVariant) -> Element {
                     }
                 }
             }
-        },
+        }
         CardVariant::Note { timestamp, tags } => {
             rsx! {
                 div {
                     class: "space-y-3",
-                    
+
                     // Note metadata
                     div {
                         class: "flex items-center justify-between text-sm text-base-content/70",
@@ -282,13 +292,13 @@ fn render_variant_content(variant: &CardVariant) -> Element {
                             span { "{timestamp}" }
                         }
                     }
-                    
+
                     // Tags
                     if !tags.is_empty() {
                         div {
                             class: "flex flex-wrap gap-1",
                             for tag in tags {
-                                Badge { 
+                                Badge {
                                     label: tag.clone(),
                                     color: Some("outline".to_string()),
                                     class: Some("badge-sm".to_string())
@@ -298,7 +308,7 @@ fn render_variant_content(variant: &CardVariant) -> Element {
                     }
                 }
             }
-        },
+        }
         CardVariant::Generic => {
             rsx! {
                 div { class: "space-y-2" }

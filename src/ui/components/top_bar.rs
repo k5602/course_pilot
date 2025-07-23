@@ -1,9 +1,7 @@
 use crate::ui::hooks::use_app_state;
 use dioxus::prelude::*;
-use dioxus_free_icons::icons::fa_solid_icons::{FaBars, FaNoteSticky};
 use dioxus_free_icons::Icon;
-
-
+use dioxus_free_icons::icons::fa_solid_icons::{FaBars, FaNoteSticky};
 
 #[component]
 pub fn TopBar() -> Element {

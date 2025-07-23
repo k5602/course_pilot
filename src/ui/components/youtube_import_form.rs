@@ -1,10 +1,10 @@
-use dioxus::prelude::*;
-use crate::ui::components::toast;
-use crate::ingest::youtube::{import_from_youtube, validate_playlist_url, extract_playlist_id};
+use crate::ingest::youtube::{extract_playlist_id, import_from_youtube, validate_playlist_url};
+use crate::storage::AppSettings;
 use crate::types::{Course, ImportJob, ImportStatus};
 use crate::ui::backend_adapter::use_backend_adapter;
+use crate::ui::components::toast;
 use crate::{ImportError, nlp};
-use crate::storage::AppSettings;
+use dioxus::prelude::*;
 use std::time::Duration;
 
 /// YouTube playlist preview data
@@ -33,60 +33,68 @@ pub fn YouTubeImportForm(
     on_import_error: Option<EventHandler<String>>,
 ) -> Element {
     let backend = use_backend_adapter();
-    
+
     // Load settings and initialize API key from storage
     let settings = use_resource(|| async { AppSettings::load().unwrap_or_default() });
-    
+
     // Form state
-    let url = use_signal(|| String::new());
+    let url = use_signal(String::new);
     let api_key = use_signal(|| {
-        settings.read().as_ref().and_then(|s| s.get_youtube_api_key().map(|k| k.to_string())).unwrap_or_default()
+        settings
+            .read()
+            .as_ref()
+            .and_then(|s| s.get_youtube_api_key().map(|k| k.to_string()))
+            .unwrap_or_default()
     });
-    
+
     // Validation and preview state
     let validation_error = use_signal(|| Option::<String>::None);
     let is_validating = use_signal(|| false);
     let preview = use_signal(|| Option::<YouTubePlaylistPreview>::None);
     let is_loading_preview = use_signal(|| false);
-    
+
     // Import progress state
     let import_job = use_signal(|| Option::<ImportJob>::None);
-    
+
     // Handle URL input changes with validation
     let mut handle_url_change = {
-        let mut url = url.clone();
-        let mut validation_error = validation_error.clone();
-        let mut is_validating = is_validating.clone();
-        let mut preview = preview.clone();
-        let mut is_loading_preview = is_loading_preview.clone();
-        let api_key = api_key.clone();
-        
+        let mut url = url;
+        let mut validation_error = validation_error;
+        let mut is_validating = is_validating;
+        let mut preview = preview;
+        let mut is_loading_preview = is_loading_preview;
+        let api_key = api_key;
+
         move |new_url: String| {
             url.set(new_url.clone());
             validation_error.set(None);
             preview.set(None);
-            
+
             if new_url.trim().is_empty() {
                 return;
             }
-            
+
             // Basic URL format validation
-            if !new_url.contains("youtube.com") || (!new_url.contains("playlist") && !new_url.contains("list=")) {
-                validation_error.set(Some("Please enter a valid YouTube playlist URL".to_string()));
+            if !new_url.contains("youtube.com")
+                || (!new_url.contains("playlist") && !new_url.contains("list="))
+            {
+                validation_error.set(Some(
+                    "Please enter a valid YouTube playlist URL".to_string(),
+                ));
                 return;
             }
-            
+
             // If we have an API key, validate the playlist and load preview
             if !api_key().trim().is_empty() {
                 is_validating.set(true);
                 is_loading_preview.set(true);
-                
+
                 let api_key_val = api_key();
-                let mut validation_error = validation_error.clone();
-                let mut preview = preview.clone();
-                let mut is_validating = is_validating.clone();
-                let mut is_loading_preview = is_loading_preview.clone();
-                
+                let mut validation_error = validation_error;
+                let mut preview = preview;
+                let mut is_validating = is_validating;
+                let mut is_loading_preview = is_loading_preview;
+
                 spawn(async move {
                     // First validate the playlist exists
                     match validate_playlist_url(&new_url, &api_key_val).await {
@@ -94,38 +102,43 @@ pub fn YouTubeImportForm(
                             // Load preview data
                             match import_from_youtube(&new_url, &api_key_val).await {
                                 Ok((sections, metadata)) => {
-                                    let total_duration = sections.iter()
-                                        .map(|s| s.duration)
-                                        .sum::<Duration>();
-                                    
-                                    let videos = sections.into_iter().enumerate().map(|(idx, section)| {
-                                        YouTubeVideoPreview {
+                                    let total_duration =
+                                        sections.iter().map(|s| s.duration).sum::<Duration>();
+
+                                    let videos = sections
+                                        .into_iter()
+                                        .enumerate()
+                                        .map(|(idx, section)| YouTubeVideoPreview {
                                             title: section.title,
                                             duration: section.duration,
                                             index: idx,
-                                        }
-                                    }).collect::<Vec<_>>();
-                                    
+                                        })
+                                        .collect::<Vec<_>>();
+
                                     let preview_data = YouTubePlaylistPreview {
                                         title: metadata.title,
                                         video_count: metadata.video_count,
                                         total_duration,
                                         videos,
                                     };
-                                    
+
                                     preview.set(Some(preview_data));
                                 }
                                 Err(ImportError::Network(msg)) => {
-                                    validation_error.set(Some(format!("Network error: {}", msg)));
+                                    validation_error.set(Some(format!("Network error: {msg}")));
                                 }
                                 Err(ImportError::InvalidUrl(msg)) => {
                                     validation_error.set(Some(msg));
                                 }
                                 Err(ImportError::NoContent) => {
-                                    validation_error.set(Some("Playlist is empty or contains no accessible videos".to_string()));
+                                    validation_error.set(Some(
+                                        "Playlist is empty or contains no accessible videos"
+                                            .to_string(),
+                                    ));
                                 }
                                 Err(e) => {
-                                    validation_error.set(Some(format!("Failed to load playlist: {}", e)));
+                                    validation_error
+                                        .set(Some(format!("Failed to load playlist: {e}")));
                                 }
                             }
                         }
@@ -133,32 +146,32 @@ pub fn YouTubeImportForm(
                             validation_error.set(Some("Playlist not found or not accessible. Please check the URL and ensure the playlist is public or unlisted.".to_string()));
                         }
                         Err(ImportError::Network(msg)) => {
-                            validation_error.set(Some(format!("Network error: {}", msg)));
+                            validation_error.set(Some(format!("Network error: {msg}")));
                         }
                         Err(ImportError::InvalidUrl(msg)) => {
                             validation_error.set(Some(msg));
                         }
                         Err(e) => {
-                            validation_error.set(Some(format!("Validation error: {}", e)));
+                            validation_error.set(Some(format!("Validation error: {e}")));
                         }
                     }
-                    
+
                     is_validating.set(false);
                     is_loading_preview.set(false);
                 });
             }
         }
     };
-    
+
     // Handle API key changes
     let mut handle_api_key_change = {
-        let mut api_key = api_key.clone();
-        let url = url.clone();
-        let mut handle_url_change = handle_url_change.clone();
-        
+        let mut api_key = api_key;
+        let url = url;
+        let mut handle_url_change = handle_url_change;
+
         move |new_api_key: String| {
             api_key.set(new_api_key.clone());
-            
+
             // Save API key to settings asynchronously
             spawn(async move {
                 if let Ok(mut settings) = AppSettings::load() {
@@ -167,61 +180,61 @@ pub fn YouTubeImportForm(
                     } else {
                         Some(new_api_key.trim().to_string())
                     };
-                    
+
                     if let Err(e) = settings.set_youtube_api_key(api_key_to_save) {
-                        log::error!("Failed to save API key: {}", e);
+                        log::error!("Failed to save API key: {e}");
                         toast::toast::error("Failed to save API key settings");
                     } else {
                         log::info!("YouTube API key saved to settings");
                     }
                 }
             });
-            
+
             // Re-validate URL if we have one
             if !url().trim().is_empty() {
                 handle_url_change(url());
             }
         }
     };
-    
+
     // Handle import
     let handle_import = {
         let backend = backend.clone();
-        let import_job = import_job.clone();
-        let on_import_complete = on_import_complete.clone();
-        let on_import_error = on_import_error.clone();
-        let url = url.clone();
-        let api_key = api_key.clone();
-        let preview = preview.clone();
-        
+        let import_job = import_job;
+        let on_import_complete = on_import_complete;
+        let on_import_error = on_import_error;
+        let url = url;
+        let api_key = api_key;
+        let preview = preview;
+
         move |_| {
             let url_val = url().trim().to_string();
             let api_key_val = api_key().trim().to_string();
-            
+
             if url_val.is_empty() || api_key_val.is_empty() {
                 toast::toast::error("Please provide both URL and API key");
                 return;
             }
-            
+
             let _course_name = if let Some(preview_data) = preview() {
                 preview_data.title
             } else {
                 extract_course_name_from_url(&url_val)
             };
-            
+
             let backend = backend.clone();
-            let mut import_job = import_job.clone();
-            let on_import_complete = on_import_complete.clone();
-            let on_import_error = on_import_error.clone();
-            
+            let mut import_job = import_job;
+            let on_import_complete = on_import_complete;
+            let on_import_error = on_import_error;
+
             spawn(async move {
                 // Create initial import job
-                let job = ImportJob::new(format!("Starting import from YouTube playlist"));
+                let job = ImportJob::new("Starting import from YouTube playlist".to_string());
                 import_job.set(Some(job.clone()));
-                
+
                 // Progress callback
                 let mut progress_callback = {
-                    let mut import_job = import_job.clone();
+                    let mut import_job = import_job;
                     move |percentage: f32, message: String| {
                         if let Some(mut job) = import_job() {
                             job.update_progress(percentage, message);
@@ -229,78 +242,86 @@ pub fn YouTubeImportForm(
                         }
                     }
                 };
-                
+
                 // Perform the import
                 progress_callback(10.0, "Fetching playlist data...".to_string());
-                
+
                 match import_from_youtube(&url_val, &api_key_val).await {
                     Ok((sections, metadata)) => {
                         progress_callback(40.0, "Processing video data...".to_string());
-                        
+
                         // Convert to course
-                        let raw_titles: Vec<String> = sections.iter().map(|s| s.title.clone()).collect();
+                        let raw_titles: Vec<String> =
+                            sections.iter().map(|s| s.title.clone()).collect();
                         let course_name = metadata.title;
                         let mut course = Course::new(course_name, raw_titles);
-                        
+
                         // Structure the course using NLP
                         progress_callback(70.0, "Analyzing course structure...".to_string());
                         match nlp::structure_course(course.raw_titles.clone()) {
                             Ok(course_structure) => {
                                 course.structure = Some(course_structure);
                                 progress_callback(90.0, "Saving course...".to_string());
-                                
+
                                 // Save to database
                                 match backend.create_course(course.clone()).await {
                                     Ok(_) => {
-                                        progress_callback(100.0, "Import completed successfully!".to_string());
+                                        progress_callback(
+                                            100.0,
+                                            "Import completed successfully!".to_string(),
+                                        );
                                         toast::toast::success("Course imported successfully!");
                                         on_import_complete.call(course);
                                     }
                                     Err(e) => {
-                                        let error_msg = format!("Failed to save course: {}", e);
+                                        let error_msg = format!("Failed to save course: {e}");
                                         if let Some(mut job) = import_job() {
                                             job.mark_failed(error_msg.clone());
                                             import_job.set(Some(job));
                                         }
                                         toast::toast::error("Failed to save course");
-                                        if let Some(on_error) = on_import_error.clone() {
+                                        if let Some(on_error) = on_import_error {
                                             on_error.call(error_msg);
                                         }
                                     }
                                 }
                             }
                             Err(e) => {
-                                let error_msg = format!("Failed to structure course: {}", e);
+                                let error_msg = format!("Failed to structure course: {e}");
                                 if let Some(mut job) = import_job() {
                                     job.mark_failed(error_msg.clone());
                                     import_job.set(Some(job));
                                 }
                                 toast::toast::error("Failed to structure course");
-                                if let Some(on_error) = on_import_error.clone() {
+                                if let Some(on_error) = on_import_error {
                                     on_error.call(error_msg);
                                 }
                             }
                         }
                     }
                     Err(ImportError::Network(msg)) => {
-                        let error_msg = format!("Network error: {}", msg);
+                        let error_msg = format!("Network error: {msg}");
                         if let Some(mut job) = import_job() {
                             job.mark_failed(error_msg.clone());
                             import_job.set(Some(job));
                         }
-                        toast::toast::error("Network error occurred. Please check your connection and try again.");
-                        if let Some(on_error) = on_import_error.clone() {
+                        toast::toast::error(
+                            "Network error occurred. Please check your connection and try again.",
+                        );
+                        if let Some(on_error) = on_import_error {
                             on_error.call(error_msg);
                         }
                     }
                     Err(ImportError::InvalidUrl(msg)) => {
-                        let error_msg = format!("Invalid URL: {}", msg);
+                        let error_msg = format!("Invalid URL: {msg}");
                         if let Some(mut job) = import_job() {
                             job.mark_failed(error_msg.clone());
                             import_job.set(Some(job));
                         }
-                        toast::toast::error("Invalid playlist URL. Please check the URL and try again.");
-                        if let Some(on_error) = on_import_error.clone() {
+                        toast::toast::error(
+                            "Invalid playlist URL. Please check the URL and try again.",
+                        );
+                        if let Some(on_error) = on_import_error {
                             on_error.call(error_msg);
                         }
                     }
@@ -311,18 +332,18 @@ pub fn YouTubeImportForm(
                             import_job.set(Some(job));
                         }
                         toast::toast::error("Playlist is empty or contains no accessible videos.");
-                        if let Some(on_error) = on_import_error.clone() {
+                        if let Some(on_error) = on_import_error {
                             on_error.call(error_msg);
                         }
                     }
                     Err(e) => {
-                        let error_msg = format!("Import failed: {}", e);
+                        let error_msg = format!("Import failed: {e}");
                         if let Some(mut job) = import_job() {
                             job.mark_failed(error_msg.clone());
                             import_job.set(Some(job));
                         }
-                        toast::toast::error(&format!("Import failed: {}", e));
-                        if let Some(on_error) = on_import_error.clone() {
+                        toast::toast::error(format!("Import failed: {e}"));
+                        if let Some(on_error) = on_import_error {
                             on_error.call(error_msg);
                         }
                     }
@@ -330,14 +351,19 @@ pub fn YouTubeImportForm(
             });
         }
     };
-    
+
     // Check if form is valid for import
-    let is_valid_for_import = !url().trim().is_empty() 
+    let is_valid_for_import = !url().trim().is_empty()
         && !api_key().trim().is_empty()
         && validation_error().is_none()
         && preview().is_some();
-    
-    let is_importing = import_job().map_or(false, |job| matches!(job.status, ImportStatus::Starting | ImportStatus::InProgress));
+
+    let is_importing = import_job().is_some_and(|job| {
+        matches!(
+            job.status,
+            ImportStatus::Starting | ImportStatus::InProgress
+        )
+    });
 
     rsx! {
         div { class: "space-y-6",
@@ -368,7 +394,7 @@ pub fn YouTubeImportForm(
                     }
                 }
             }
-            
+
             // URL input
             div { class: "form-control",
                 label { class: "label",
@@ -378,7 +404,7 @@ pub fn YouTubeImportForm(
                     input {
                         r#type: "url",
                         placeholder: "https://www.youtube.com/playlist?list=...",
-                        class: format!("input input-bordered w-full pr-10 {}", 
+                        class: format!("input input-bordered w-full pr-10 {}",
                             if validation_error().is_some() { "input-error" } else { "" }
                         ),
                         value: url(),
@@ -397,7 +423,7 @@ pub fn YouTubeImportForm(
                     }
                 }
             }
-            
+
             // Validation feedback
             if let Some(error) = validation_error() {
                 div { class: "alert alert-error",
@@ -415,7 +441,7 @@ pub fn YouTubeImportForm(
                     span { "{error}" }
                 }
             }
-            
+
             // Preview section
             if let Some(preview_data) = preview() {
                 PlaylistPreviewPanel { preview: preview_data }
@@ -429,12 +455,12 @@ pub fn YouTubeImportForm(
                     }
                 }
             }
-            
+
             // Import progress
             if let Some(job) = import_job() {
                 ImportProgressPanel { job }
             }
-            
+
             // Import button
             div { class: "flex justify-end",
                 button {
@@ -460,9 +486,9 @@ fn PlaylistPreviewPanel(preview: YouTubePlaylistPreview) -> Element {
         let hours = preview.total_duration.as_secs() / 3600;
         let minutes = (preview.total_duration.as_secs() % 3600) / 60;
         if hours > 0 {
-            format!("{}h {}m", hours, minutes)
+            format!("{hours}h {minutes}m")
         } else {
-            format!("{}m", minutes)
+            format!("{minutes}m")
         }
     };
 
@@ -478,7 +504,7 @@ fn PlaylistPreviewPanel(preview: YouTubePlaylistPreview) -> Element {
                     }
                     "Playlist Preview"
                 }
-                
+
                 // Summary stats
                 div { class: "stats stats-horizontal shadow-sm bg-base-100 w-full",
                     div { class: "stat",
@@ -494,7 +520,7 @@ fn PlaylistPreviewPanel(preview: YouTubePlaylistPreview) -> Element {
                         div { class: "stat-value text-secondary", "{duration_text}" }
                     }
                 }
-                
+
                 // Video list preview (first 5 videos)
                 if !preview.videos.is_empty() {
                     div { class: "mt-4",
@@ -504,9 +530,9 @@ fn PlaylistPreviewPanel(preview: YouTubePlaylistPreview) -> Element {
                                 let duration_str = {
                                     let minutes = video.duration.as_secs() / 60;
                                     let seconds = video.duration.as_secs() % 60;
-                                    format!("{}:{:02}", minutes, seconds)
+                                    format!("{minutes}:{seconds:02}")
                                 };
-                                
+
                                 rsx! {
                                     div {
                                         key: "{idx}",
@@ -516,7 +542,7 @@ fn PlaylistPreviewPanel(preview: YouTubePlaylistPreview) -> Element {
                                     }
                                 }
                             })}
-                            
+
                             if preview.videos.len() > 5 {
                                 div { class: "text-center text-sm text-base-content/70 py-2",
                                     "... and {preview.videos.len() - 5} more videos"
@@ -539,7 +565,7 @@ fn ImportProgressPanel(job: ImportJob) -> Element {
         ImportStatus::Completed => "text-success",
         ImportStatus::Failed => "text-error",
     };
-    
+
     let status_text = match job.status {
         ImportStatus::Starting => "Starting...",
         ImportStatus::InProgress => "In Progress",
@@ -556,18 +582,18 @@ fn ImportProgressPanel(job: ImportJob) -> Element {
                     }
                     "Import Progress"
                 }
-                
+
                 div { class: "space-y-3",
                     // Status and message
                     div { class: "flex justify-between items-center",
                         span { class: "font-medium {status_color}", "{status_text}" }
                         span { class: "text-sm text-base-content/70", "{job.progress_percentage:.1}%" }
                     }
-                    
+
                     // Progress bar
                     div { class: "w-full bg-base-300 rounded-full h-2",
                         div {
-                            class: format!("h-2 rounded-full transition-all duration-300 {}", 
+                            class: format!("h-2 rounded-full transition-all duration-300 {}",
                                 match job.status {
                                     ImportStatus::Completed => "bg-success",
                                     ImportStatus::Failed => "bg-error",
@@ -577,12 +603,12 @@ fn ImportProgressPanel(job: ImportJob) -> Element {
                             style: "width: {job.progress_percentage}%",
                         }
                     }
-                    
+
                     // Current message
                     div { class: "text-sm text-base-content/80",
                         "{job.message}"
                     }
-                    
+
                     // Error details for failed imports
                     if matches!(job.status, ImportStatus::Failed) {
                         div { class: "alert alert-error",
@@ -612,7 +638,10 @@ fn ImportProgressPanel(job: ImportJob) -> Element {
 /// Extract a course name from a YouTube playlist URL
 fn extract_course_name_from_url(url: &str) -> String {
     if let Some(playlist_id) = extract_playlist_id(url) {
-        format!("YouTube Playlist {}", &playlist_id[..8.min(playlist_id.len())])
+        format!(
+            "YouTube Playlist {}",
+            &playlist_id[..8.min(playlist_id.len())]
+        )
     } else {
         "YouTube Course".to_string()
     }

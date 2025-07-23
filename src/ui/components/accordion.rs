@@ -27,9 +27,9 @@ pub fn Accordion(
 
     // Run use_effect for each item at the top level
     for idx in 0..items.len() {
-        let mut scale = scales[idx].clone();
-        let mut opacity = opacities[idx].clone();
-        let open_idx = open_idx.clone();
+        let mut scale = scales[idx];
+        let mut opacity = opacities[idx];
+        let open_idx = open_idx;
         use_effect(move || {
             if open_idx() == idx {
                 scale.animate_to(

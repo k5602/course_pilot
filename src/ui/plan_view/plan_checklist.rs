@@ -1,6 +1,6 @@
 use dioxus::prelude::*;
-use dioxus_free_icons::icons::fa_solid_icons::{FaCheckDouble, FaSquare};
 use dioxus_free_icons::Icon;
+use dioxus_free_icons::icons::fa_solid_icons::{FaCheckDouble, FaSquare};
 use dioxus_motion::prelude::*;
 use std::collections::HashMap;
 
@@ -25,21 +25,35 @@ pub struct PlanChecklistProps {
 /// Group plan items by module and calculate progress
 fn group_items_by_module(items: &[PlanItem]) -> Vec<ModuleGroup> {
     let mut modules: HashMap<String, Vec<(usize, PlanItem)>> = HashMap::new();
-    
+
     for (index, item) in items.iter().enumerate() {
-        modules.entry(item.module_title.clone())
-            .or_insert_with(Vec::new)
+        modules
+            .entry(item.module_title.clone())
+            .or_default()
             .push((index, item.clone()));
     }
-    
-    let mut module_groups: Vec<ModuleGroup> = modules.into_iter().map(|(title, items)| {
-        let total = items.len();
-        let completed = items.iter().filter(|(_, item)| item.completed).count();
-        let progress = if total > 0 { (completed as f32 / total as f32) * 100.0 } else { 0.0 };
-        
-        ModuleGroup { title, items, total, completed, progress }
-    }).collect();
-    
+
+    let mut module_groups: Vec<ModuleGroup> = modules
+        .into_iter()
+        .map(|(title, items)| {
+            let total = items.len();
+            let completed = items.iter().filter(|(_, item)| item.completed).count();
+            let progress = if total > 0 {
+                (completed as f32 / total as f32) * 100.0
+            } else {
+                0.0
+            };
+
+            ModuleGroup {
+                title,
+                items,
+                total,
+                completed,
+                progress,
+            }
+        })
+        .collect();
+
     // Sort modules by title for consistent ordering
     module_groups.sort_by(|a, b| a.title.cmp(&b.title));
     module_groups
@@ -49,7 +63,7 @@ fn group_items_by_module(items: &[PlanItem]) -> Vec<ModuleGroup> {
 #[component]
 pub fn PlanChecklist(props: PlanChecklistProps) -> Element {
     let module_groups = group_items_by_module(&props.plan.items);
-    
+
     // Animation for the entire accordion container
     let mut container_opacity = use_motion(0.0f32);
     let mut container_y = use_motion(20.0f32);
@@ -72,14 +86,14 @@ pub fn PlanChecklist(props: PlanChecklistProps) -> Element {
             container_y.get_value()
         )
     });
-    
+
     rsx! {
         div {
             class: "join join-vertical bg-base-100 w-full",
             style: "{container_style}",
             {module_groups.iter().enumerate().map(|(module_idx, module)| {
                 rsx! {
-                    ModuleAccordion { 
+                    ModuleAccordion {
                         key: "{module.title}",
                         plan_id: props.plan.id,
                         module: module.clone(),
@@ -100,7 +114,7 @@ pub struct ModuleAccordionProps {
 
 impl PartialEq for ModuleAccordionProps {
     fn eq(&self, other: &Self) -> bool {
-        self.plan_id == other.plan_id 
+        self.plan_id == other.plan_id
             && self.module.title == other.module.title
             && self.module.total == other.module.total
             && self.module.completed == other.module.completed
@@ -112,7 +126,7 @@ impl PartialEq for ModuleAccordionProps {
 #[component]
 pub fn ModuleAccordion(props: ModuleAccordionProps) -> Element {
     let module_id = format!("module-{}-{}", props.plan_id, props.module_index);
-    
+
     // Staggered animation for each module
     let mut module_opacity = use_motion(0.0f32);
     let mut module_x = use_motion(-20.0f32);
@@ -122,10 +136,11 @@ pub fn ModuleAccordion(props: ModuleAccordionProps) -> Element {
         move || {
             // Stagger animation based on module index
             let delay = module_index as f32 * 0.1;
-            
+
             spawn(async move {
-                tokio::time::sleep(tokio::time::Duration::from_millis((delay * 1000.0) as u64)).await;
-                
+                tokio::time::sleep(tokio::time::Duration::from_millis((delay * 1000.0) as u64))
+                    .await;
+
                 module_opacity.animate_to(
                     1.0,
                     AnimationConfig::new(AnimationMode::Tween(Tween::default())),
@@ -158,17 +173,17 @@ pub fn ModuleAccordion(props: ModuleAccordionProps) -> Element {
         div {
             class: "collapse collapse-arrow join-item border-base-300 border",
             style: "{module_style}",
-            
-            input { 
-                type: "checkbox", 
+
+            input {
+                type: "checkbox",
                 id: "{module_id}",
                 name: "{module_id}",
                 checked: true, // Start with modules expanded
             }
-            
-            div { 
+
+            div {
                 class: "collapse-title font-semibold flex items-center justify-between pr-4",
-                
+
                 div { class: "flex items-center gap-3",
                     h3 { class: "text-lg font-semibold", "{props.module.title}" }
                     Badge {
@@ -177,28 +192,28 @@ pub fn ModuleAccordion(props: ModuleAccordionProps) -> Element {
                         class: Some("text-xs".to_string()),
                     }
                 }
-                
+
                 div { class: "flex items-center gap-2",
-                    progress { 
-                        class: "progress {progress_color} w-24 h-2", 
-                        value: "{props.module.progress}", 
-                        max: "100" 
+                    progress {
+                        class: "progress {progress_color} w-24 h-2",
+                        value: "{props.module.progress}",
+                        max: "100"
                     }
                     span { class: "text-sm text-base-content/60", "{props.module.progress:.0}%" }
                 }
             }
-            
-            div { 
+
+            div {
                 class: "collapse-content",
                 ul {
                     class: "space-y-2 pt-2",
                     {props.module.items.iter().map(|(original_index, item)| {
                         rsx! {
-                            PlanChecklistItem { 
+                            PlanChecklistItem {
                                 key: "{original_index}",
                                 plan_id: props.plan_id,
-                                item: item.clone(), 
-                                item_index: *original_index 
+                                item: item.clone(),
+                                item_index: *original_index
                             }
                         }
                     })}
@@ -220,17 +235,17 @@ pub struct PlanChecklistItemProps {
 pub fn PlanChecklistItem(props: PlanChecklistItemProps) -> Element {
     let toggle_completion = use_toggle_plan_item_action();
     let mut local_completed = use_signal(|| props.item.completed);
-    
+
     // Sync local state with prop changes
     use_effect(move || {
         local_completed.set(props.item.completed);
     });
-    
+
     let toggle_handler = {
         let plan_id = props.plan_id;
         let item_index = props.item_index;
-        let mut local_completed = local_completed.clone();
-        
+        let mut local_completed = local_completed;
+
         move |_| {
             let new_state = !local_completed();
             local_completed.set(new_state);
@@ -282,20 +297,20 @@ pub fn PlanChecklistItem(props: PlanChecklistItemProps) -> Element {
             class: "flex items-center gap-3 px-3 py-3 rounded-lg hover:bg-base-200 transition-colors cursor-pointer border border-transparent hover:border-base-300",
             style: "{item_style}",
             onclick: toggle_handler,
-            
+
             {check_icon}
-            
+
             div { class: "flex-1 min-w-0",
-                div { 
-                    class: "text-sm font-medium {text_classes} truncate", 
-                    "{props.item.section_title}" 
+                div {
+                    class: "text-sm font-medium {text_classes} truncate",
+                    "{props.item.section_title}"
                 }
-                div { 
-                    class: "text-xs text-base-content/60 mt-1", 
-                    "{props.item.date.format(\"%Y-%m-%d\")}" 
+                div {
+                    class: "text-xs text-base-content/60 mt-1",
+                    "{props.item.date.format(\"%Y-%m-%d\")}"
                 }
             }
-            
+
             Badge {
                 label: if local_completed() { "Done".to_string() } else { "Pending".to_string() },
                 color: Some(if local_completed() { "success".to_string() } else { "accent".to_string() }),

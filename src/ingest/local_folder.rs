@@ -5,15 +5,15 @@
 //! Enhanced with recursive directory scanning and nested folder support.
 
 use crate::ImportError;
-use crate::types::Course;
 use crate::storage::{self, database::Database};
+use crate::types::Course;
+use chrono::Utc;
 use std::collections::HashSet;
 use std::fs;
 use std::path::{Path, PathBuf};
 use std::time::SystemTime;
-use walkdir::WalkDir;
 use uuid::Uuid;
-use chrono::Utc;
+use walkdir::WalkDir;
 
 /// Struct representing a local video section with title and duration
 #[derive(PartialEq, Debug, Clone)]
@@ -27,26 +27,35 @@ pub struct EnhancedLocalIngest {
     video_extensions: HashSet<String>,
 }
 
+impl Default for EnhancedLocalIngest {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl EnhancedLocalIngest {
     pub fn new() -> Self {
         let mut video_extensions = HashSet::new();
-        video_extensions.extend([
-            "mp4", "avi", "mkv", "mov", "wmv", "flv", "webm", 
-            "m4v", "3gp", "ogv", "ts", "mts", "m2ts", "mpg", 
-            "mpeg", "f4v", "asf", "rm", "rmvb", "vob", "drc"
-        ].iter().map(|s| s.to_string()));
-        
+        video_extensions.extend(
+            [
+                "mp4", "avi", "mkv", "mov", "wmv", "flv", "webm", "m4v", "3gp", "ogv", "ts", "mts",
+                "m2ts", "mpg", "mpeg", "f4v", "asf", "rm", "rmvb", "vob", "drc",
+            ]
+            .iter()
+            .map(|s| s.to_string()),
+        );
+
         Self { video_extensions }
     }
-    
+
     /// Scans a directory recursively for video files
     pub fn scan_directory_recursive(
-        &self, 
+        &self,
         root_path: &Path,
-        progress_callback: Option<&dyn Fn(f32, String)>
+        progress_callback: Option<&dyn Fn(f32, String)>,
     ) -> Result<Vec<VideoFile>, ImportError> {
         log::info!("Recursively scanning directory: {}", root_path.display());
-        
+
         if !root_path.exists() {
             return Err(ImportError::FileSystem(format!(
                 "Path does not exist: {}",
@@ -60,12 +69,12 @@ impl EnhancedLocalIngest {
                 root_path.display()
             )));
         }
-        
+
         // First pass: count total files for progress reporting
         let mut total_files = 0;
         if progress_callback.is_some() {
             progress_callback.unwrap()(0.0, "Counting video files...".to_string());
-            
+
             for entry in WalkDir::new(root_path)
                 .follow_links(false)
                 .into_iter()
@@ -76,21 +85,21 @@ impl EnhancedLocalIngest {
                     total_files += 1;
                 }
             }
-            
-            progress_callback.unwrap()(0.0, format!("Found {} video files", total_files));
+
+            progress_callback.unwrap()(0.0, format!("Found {total_files} video files"));
         }
-        
+
         // Second pass: process files
         let mut video_files = Vec::new();
         let mut processed_files = 0;
-        
+
         for entry in WalkDir::new(root_path)
             .follow_links(false)
             .into_iter()
             .filter_map(|e| match e {
                 Ok(entry) => Some(entry),
                 Err(err) => {
-                    log::warn!("Error accessing path: {}", err);
+                    log::warn!("Error accessing path: {err}");
                     None
                 }
             })
@@ -98,58 +107,63 @@ impl EnhancedLocalIngest {
         {
             if self.is_video_file(entry.path()) {
                 processed_files += 1;
-                
+
                 if let Some(cb) = progress_callback {
                     let progress = if total_files > 0 {
                         (processed_files as f32 / total_files as f32) * 100.0
                     } else {
                         0.0
                     };
-                    
+
                     cb(progress, format!("Processing: {}", entry.path().display()));
                 }
-                
+
                 let video_file = VideoFile {
                     path: entry.path().to_path_buf(),
                     name: entry.file_name().to_string_lossy().to_string(),
                     size: entry.metadata().map(|m| m.len()).unwrap_or(0),
-                    relative_path: entry.path()
+                    relative_path: entry
+                        .path()
                         .strip_prefix(root_path)
                         .unwrap_or(entry.path())
                         .to_path_buf(),
                 };
-                
+
                 video_files.push(video_file);
             }
         }
-        
+
         if video_files.is_empty() {
             return Err(ImportError::NoContent);
         }
-        
-        log::info!("Found {} video files in {} (recursive)", video_files.len(), root_path.display());
+
+        log::info!(
+            "Found {} video files in {} (recursive)",
+            video_files.len(),
+            root_path.display()
+        );
         Ok(video_files)
     }
-    
+
     /// Asynchronously scans a directory recursively for video files with cancellation support
     pub async fn scan_directory_recursive_async(
         &self,
         root_path: PathBuf,
         progress_callback: impl Fn(f32, String) + Send + 'static,
         batch_size: Option<usize>,
-        cancel_token: Option<tokio_util::sync::CancellationToken>
+        cancel_token: Option<tokio_util::sync::CancellationToken>,
     ) -> Result<Vec<VideoFile>, ImportError> {
         // Use tokio to avoid blocking the async runtime
         let video_extensions = self.video_extensions.clone();
-        
+
         tokio::task::spawn_blocking(move || {
             let mut total_files = 0;
             let mut processed_files = 0;
             let mut video_files = Vec::new();
-            
+
             // First pass: count total files
             progress_callback(0.0, "Counting video files...".to_string());
-            
+
             for entry in WalkDir::new(&root_path)
                 .follow_links(false)
                 .into_iter()
@@ -163,9 +177,9 @@ impl EnhancedLocalIngest {
                     }
                 }
             }
-            
-            progress_callback(0.0, format!("Found {} video files", total_files));
-            
+
+            progress_callback(0.0, format!("Found {total_files} video files"));
+
             // Second pass: process files in batches if requested
             let batch_size = batch_size.unwrap_or(usize::MAX); // Default to processing all at once
             let entries: Vec<_> = WalkDir::new(&root_path)
@@ -174,13 +188,13 @@ impl EnhancedLocalIngest {
                 .filter_map(|e| match e {
                     Ok(entry) => Some(entry),
                     Err(err) => {
-                        log::warn!("Error accessing path: {}", err);
+                        log::warn!("Error accessing path: {err}");
                         None
                     }
                 })
                 .filter(|e| e.file_type().is_file())
                 .collect();
-            
+
             // Process in batches
             for chunk in entries.chunks(batch_size) {
                 // Check for cancellation between batches
@@ -190,42 +204,46 @@ impl EnhancedLocalIngest {
                         return Ok(video_files);
                     }
                 }
-                
+
                 for entry in chunk {
                     if let Some(ext) = entry.path().extension() {
                         let ext_lower = ext.to_string_lossy().to_lowercase();
                         if video_extensions.contains(&ext_lower) {
                             processed_files += 1;
-                            
+
                             let progress = if total_files > 0 {
                                 (processed_files as f32 / total_files as f32) * 100.0
                             } else {
                                 0.0
                             };
-                            
-                            progress_callback(progress, format!("Processing: {}", entry.path().display()));
-                            
+
+                            progress_callback(
+                                progress,
+                                format!("Processing: {}", entry.path().display()),
+                            );
+
                             let video_file = VideoFile {
                                 path: entry.path().to_path_buf(),
                                 name: entry.file_name().to_string_lossy().to_string(),
                                 size: entry.metadata().map(|m| m.len()).unwrap_or(0),
-                                relative_path: entry.path()
+                                relative_path: entry
+                                    .path()
                                     .strip_prefix(&root_path)
                                     .unwrap_or(entry.path())
                                     .to_path_buf(),
                             };
-                            
+
                             video_files.push(video_file);
                         }
                     }
                 }
-                
+
                 // Small delay to allow cancellation
                 if batch_size < usize::MAX {
                     std::thread::sleep(std::time::Duration::from_millis(1));
                 }
             }
-            
+
             if video_files.is_empty() {
                 Err(ImportError::NoContent)
             } else {
@@ -233,9 +251,9 @@ impl EnhancedLocalIngest {
             }
         })
         .await
-        .unwrap_or_else(|e| Err(ImportError::FileSystem(format!("Join error: {}", e))))
+        .unwrap_or_else(|e| Err(ImportError::FileSystem(format!("Join error: {e}"))))
     }
-    
+
     /// Checks if a file is a video based on its extension
     fn is_video_file(&self, path: &Path) -> bool {
         if let Some(ext) = path.extension() {
@@ -307,7 +325,7 @@ pub fn import_from_local_folder(path: &Path) -> Result<Vec<LocalVideoSection>, I
         let entry = match entry {
             Ok(entry) => entry,
             Err(e) => {
-                eprintln!("Warning: Failed to read directory entry: {}", e);
+                eprintln!("Warning: Failed to read directory entry: {e}");
                 continue;
             }
         };
@@ -403,7 +421,7 @@ fn probe_video_duration(path: &std::path::Path) -> Option<std::time::Duration> {
     // Fallback to ffprobe CLI
     use std::process::Command;
     let output = Command::new("ffprobe")
-        .args(&[
+        .args([
             "-v",
             "error",
             "-show_entries",
@@ -461,7 +479,7 @@ fn is_hidden_or_system_file(path: &Path) -> bool {
 fn extract_title_from_path(path: &Path) -> Option<String> {
     path.file_stem()
         .and_then(|stem| stem.to_str())
-        .map(|title| clean_filename_title(title))
+        .map(clean_filename_title)
         .filter(|title| !title.is_empty())
 }
 
@@ -554,7 +572,7 @@ fn extract_number(chars: &mut std::iter::Peekable<std::str::Chars>) -> u64 {
 /// Get alternative sorting options for the folder
 pub fn get_sorting_options(path: &Path) -> Result<Vec<SortingOption>, ImportError> {
     let entries = fs::read_dir(path)
-        .map_err(|e| ImportError::FileSystem(format!("Failed to read directory: {}", e)))?;
+        .map_err(|e| ImportError::FileSystem(format!("Failed to read directory: {e}")))?;
 
     let mut video_files = Vec::new();
     for entry in entries.flatten() {
@@ -613,53 +631,55 @@ pub fn get_sorting_options(path: &Path) -> Result<Vec<SortingOption>, ImportErro
 
 /// Import course from local folder and save to database
 /// This function integrates with the existing scanning functionality and creates a proper Course
-pub fn import_from_folder(db: &Database, folder_path: &Path, course_title: &str) -> Result<Course, ImportError> {
+pub fn import_from_folder(
+    db: &Database,
+    folder_path: &Path,
+    course_title: &str,
+) -> Result<Course, ImportError> {
     // Use the existing enhanced local ingest functionality
     let ingest = EnhancedLocalIngest::new();
     let video_files = ingest.scan_directory_recursive(folder_path, None)?;
-    
+
     if video_files.is_empty() {
         return Err(ImportError::NoContent);
     }
-    
+
     // Extract raw titles from video files
-    let raw_titles: Vec<String> = video_files.iter()
+    let raw_titles: Vec<String> = video_files
+        .iter()
         .map(|video_file| {
-            extract_title_from_path(&video_file.path)
-                .unwrap_or_else(|| video_file.name.clone())
+            extract_title_from_path(&video_file.path).unwrap_or_else(|| video_file.name.clone())
         })
         .collect();
-    
+
     // Create sections from video files
     let mut sections = Vec::new();
     for (index, video_file) in video_files.iter().enumerate() {
-        let title = extract_title_from_path(&video_file.path)
-            .unwrap_or_else(|| video_file.name.clone());
-        
+        let title =
+            extract_title_from_path(&video_file.path).unwrap_or_else(|| video_file.name.clone());
+
         let duration = probe_video_duration(&video_file.path)
             .unwrap_or_else(|| std::time::Duration::from_secs(0));
-        
+
         let section = crate::types::Section {
             title,
             video_index: index,
             duration,
         };
-        
+
         sections.push(section);
     }
-    
+
     // Calculate total duration
-    let total_duration: std::time::Duration = sections.iter()
-        .map(|section| section.duration)
-        .sum();
-    
+    let total_duration: std::time::Duration = sections.iter().map(|section| section.duration).sum();
+
     // Create a single module containing all videos
     let module = crate::types::Module {
         title: "Course Content".to_string(),
         sections,
         total_duration,
     };
-    
+
     // Create course structure
     let structure = crate::types::CourseStructure {
         modules: vec![module],
@@ -670,7 +690,7 @@ pub fn import_from_folder(db: &Database, folder_path: &Path, course_title: &str)
             difficulty_level: Some("Beginner".to_string()),
         },
     };
-    
+
     // Create course
     let course = Course {
         id: Uuid::new_v4(),
@@ -679,14 +699,18 @@ pub fn import_from_folder(db: &Database, folder_path: &Path, course_title: &str)
         raw_titles,
         structure: Some(structure),
     };
-    
+
     // Save course to database
     storage::save_course(db, &course)
-        .map_err(|e| ImportError::Database(format!("Failed to save course: {}", e)))?;
-    
-    log::info!("Successfully imported course '{}' with {} videos from {}", 
-               course_title, video_files.len(), folder_path.display());
-    
+        .map_err(|e| ImportError::Database(format!("Failed to save course: {e}")))?;
+
+    log::info!(
+        "Successfully imported course '{}' with {} videos from {}",
+        course_title,
+        video_files.len(),
+        folder_path.display()
+    );
+
     Ok(course)
 }
 

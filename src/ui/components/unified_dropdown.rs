@@ -1,6 +1,6 @@
 use dioxus::prelude::*;
-use dioxus_free_icons::icons::fa_solid_icons::{FaEllipsisVertical, FaChevronDown};
 use dioxus_free_icons::Icon;
+use dioxus_free_icons::icons::fa_solid_icons::{FaChevronDown, FaEllipsisVertical};
 
 /// Dropdown item for unified dropdown component
 #[derive(Props, Clone, PartialEq)]
@@ -43,7 +43,7 @@ pub fn UnifiedDropdown(
     position: String,
 ) -> Element {
     let base_class = class.as_deref().unwrap_or("");
-    
+
     rsx! {
         div {
             class: "dropdown {position} {base_class}",
@@ -51,7 +51,7 @@ pub fn UnifiedDropdown(
             onclick: move |evt| {
                 evt.stop_propagation();
             },
-            
+
             // Trigger element using DaisyUI classes
             {match &trigger {
                 DropdownTrigger::DotsMenu => rsx! {
@@ -77,12 +77,12 @@ pub fn UnifiedDropdown(
                     }
                 },
             }}
-            
+
             // Dropdown menu using DaisyUI classes
             ul {
                 class: "dropdown-content menu bg-base-200 rounded-box z-[1] w-52 p-2 shadow-lg border border-base-300",
                 tabindex: "0",
-                
+
                 // Render all items
                 {items.into_iter().enumerate().map(|(index, item)| {
                     let divider = item.divider;
@@ -90,14 +90,14 @@ pub fn UnifiedDropdown(
                     let label = item.label;
                     let icon = item.icon;
                     let on_select = item.on_select;
-                    
+
                     rsx! {
                         {if divider && index > 0 {
                             rsx! { li { hr { class: "my-1" } } }
                         } else {
                             rsx! { Fragment {} }
                         }}
-                        
+
                         li {
                             class: if disabled { "disabled" } else { "" },
                             a {
@@ -112,13 +112,13 @@ pub fn UnifiedDropdown(
                                         }
                                     }
                                 },
-                                
+
                                 {if let Some(icon_class) = &icon {
                                     rsx! { span { class: "text-base-content/70 {icon_class}" } }
                                 } else {
                                     rsx! { Fragment {} }
                                 }}
-                                
+
                                 span { "{label}" }
                             }
                         }

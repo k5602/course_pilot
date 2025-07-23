@@ -9,7 +9,7 @@ use crate::types::{Course, Plan};
 use chrono::{DateTime, Utc};
 use r2d2::Pool;
 use r2d2_sqlite::SqliteConnectionManager;
-use rusqlite::{params, Connection, OptionalExtension};
+use rusqlite::{Connection, OptionalExtension, params};
 use serde_json;
 use std::path::Path;
 use std::sync::Arc;
@@ -38,28 +38,26 @@ impl Database {
         Self::cleanup_wal_files(db_path)?;
 
         // Create SQLite connection manager
-        let manager = SqliteConnectionManager::file(db_path)
-            .with_init(|conn| {
-                // Enable foreign key support
-                conn.pragma_update(None, "foreign_keys", &"ON")?;
-                
-                // Checkpoint any existing WAL data before changing journal mode
-                let _ = conn.pragma_update(None, "wal_checkpoint", &"TRUNCATE");
-                
-                // Use DELETE journal mode for desktop apps - no WAL files
-                conn.pragma_update(None, "journal_mode", &"DELETE")?;
-                
-                // Set busy timeout to 5 seconds
-                conn.busy_timeout(std::time::Duration::from_secs(5))?;
-                
-                // Verify journal mode was set correctly
-                let journal_mode: String = conn.pragma_query_value(None, "journal_mode", |row| {
-                    row.get(0)
-                })?;
-                log::info!("Database journal mode set to: {}", journal_mode);
-                
-                Ok(())
-            });
+        let manager = SqliteConnectionManager::file(db_path).with_init(|conn| {
+            // Enable foreign key support
+            conn.pragma_update(None, "foreign_keys", "ON")?;
+
+            // Checkpoint any existing WAL data before changing journal mode
+            let _ = conn.pragma_update(None, "wal_checkpoint", "TRUNCATE");
+
+            // Use DELETE journal mode for desktop apps - no WAL files
+            conn.pragma_update(None, "journal_mode", "DELETE")?;
+
+            // Set busy timeout to 5 seconds
+            conn.busy_timeout(std::time::Duration::from_secs(5))?;
+
+            // Verify journal mode was set correctly
+            let journal_mode: String =
+                conn.pragma_query_value(None, "journal_mode", |row| row.get(0))?;
+            log::info!("Database journal mode set to: {journal_mode}");
+
+            Ok(())
+        });
 
         // Create connection pool
         let pool = Pool::builder()
@@ -90,7 +88,7 @@ impl Database {
     fn cleanup_wal_files(db_path: &Path) -> Result<(), DatabaseError> {
         let wal_path = db_path.with_extension("db-wal");
         let shm_path = db_path.with_extension("db-shm");
-        
+
         // Remove WAL file if it exists
         if wal_path.exists() {
             std::fs::remove_file(&wal_path).map_err(|e| {
@@ -99,7 +97,7 @@ impl Database {
             })?;
             log::info!("Removed existing WAL file: {}", wal_path.display());
         }
-        
+
         // Remove SHM file if it exists
         if shm_path.exists() {
             std::fs::remove_file(&shm_path).map_err(|e| {
@@ -108,15 +106,13 @@ impl Database {
             })?;
             log::info!("Removed existing SHM file: {}", shm_path.display());
         }
-        
+
         Ok(())
     }
 }
 
 /// Type alias for a pooled connection
 type PooledConnection = r2d2::PooledConnection<SqliteConnectionManager>;
-
-
 
 /// Initialize database tables
 fn init_tables(conn: &mut Connection) -> Result<(), DatabaseError> {
@@ -201,7 +197,7 @@ pub fn save_course(db: &Database, course: &Course) -> Result<(), DatabaseError> 
     let structure_json = course
         .structure
         .as_ref()
-        .map(|s| serde_json::to_string(s))
+        .map(serde_json::to_string)
         .transpose()?;
 
     let conn = db.get_conn()?;
@@ -250,14 +246,13 @@ pub fn load_courses(db: &Database) -> Result<Vec<Course>, DatabaseError> {
             let raw_titles_json: String = row.get(3)?;
             let structure_json: Option<String> = row.get(4)?;
 
-            let raw_titles: Vec<String> =
-                serde_json::from_str(&raw_titles_json).map_err(|e| {
-                    rusqlite::Error::FromSqlConversionFailure(
-                        3,
-                        rusqlite::types::Type::Text,
-                        Box::new(e),
-                    )
-                })?;
+            let raw_titles: Vec<String> = serde_json::from_str(&raw_titles_json).map_err(|e| {
+                rusqlite::Error::FromSqlConversionFailure(
+                    3,
+                    rusqlite::types::Type::Text,
+                    Box::new(e),
+                )
+            })?;
 
             let structure = structure_json
                 .map(|json| {
@@ -285,10 +280,7 @@ pub fn load_courses(db: &Database) -> Result<Vec<Course>, DatabaseError> {
 }
 
 /// Get a specific course by ID
-pub fn get_course_by_id(
-    db: &Database,
-    course_id: &Uuid,
-) -> Result<Option<Course>, DatabaseError> {
+pub fn get_course_by_id(db: &Database, course_id: &Uuid) -> Result<Option<Course>, DatabaseError> {
     let conn = db.get_conn()?;
     let mut stmt = conn.prepare(
         r#"
@@ -450,72 +442,50 @@ pub fn load_plan(db: &Database, plan_id: &Uuid) -> Result<Option<Plan>, Database
         "#,
     )?;
 
-    let _plan = stmt
-        .query_row(params![plan_id.to_string()], |row| {
-            let id_str: String = row.get(0)?;
-            let id = Uuid::parse_str(&id_str).map_err(|e| {
-                rusqlite::Error::FromSqlConversionFailure(
-                    0,
-                    rusqlite::types::Type::Text,
-                    Box::new(e),
-                )
-            })?;
+    let _plan = stmt.query_row(params![plan_id.to_string()], |row| {
+        let id_str: String = row.get(0)?;
+        let id = Uuid::parse_str(&id_str).map_err(|e| {
+            rusqlite::Error::FromSqlConversionFailure(0, rusqlite::types::Type::Text, Box::new(e))
+        })?;
 
-            let course_id_str: String = row.get(1)?;
-            let course_id = Uuid::parse_str(&course_id_str).map_err(|e| {
-                rusqlite::Error::FromSqlConversionFailure(
-                    1,
-                    rusqlite::types::Type::Text,
-                    Box::new(e),
-                )
-            })?;
+        let course_id_str: String = row.get(1)?;
+        let course_id = Uuid::parse_str(&course_id_str).map_err(|e| {
+            rusqlite::Error::FromSqlConversionFailure(1, rusqlite::types::Type::Text, Box::new(e))
+        })?;
 
-            let settings_json: String = row.get(2)?;
-            let settings = serde_json::from_str(&settings_json).map_err(|e| {
-                rusqlite::Error::FromSqlConversionFailure(
-                    2,
-                    rusqlite::types::Type::Text,
-                    Box::new(e),
-                )
-            })?;
+        let settings_json: String = row.get(2)?;
+        let settings = serde_json::from_str(&settings_json).map_err(|e| {
+            rusqlite::Error::FromSqlConversionFailure(2, rusqlite::types::Type::Text, Box::new(e))
+        })?;
 
-            let items_json: String = row.get(3)?;
-            let items = serde_json::from_str(&items_json).map_err(|e| {
-                rusqlite::Error::FromSqlConversionFailure(
-                    3,
-                    rusqlite::types::Type::Text,
-                    Box::new(e),
-                )
-            })?;
+        let items_json: String = row.get(3)?;
+        let items = serde_json::from_str(&items_json).map_err(|e| {
+            rusqlite::Error::FromSqlConversionFailure(3, rusqlite::types::Type::Text, Box::new(e))
+        })?;
 
-            let created_at: i64 = row.get(4)?;
+        let created_at: i64 = row.get(4)?;
 
-            Ok(Plan {
-                id,
-                course_id,
-                settings,
-                items,
-                created_at: DateTime::from_timestamp(created_at, 0).unwrap_or_else(Utc::now),
+        Ok(Plan {
+            id,
+            course_id,
+            settings,
+            items,
+            created_at: DateTime::from_timestamp(created_at, 0).unwrap_or_else(Utc::now),
         })
     })?;
 
     // Helper function to parse UUID from string, returning rusqlite::Error
     fn parse_uuid_sqlite(s: &str, idx: usize) -> Result<Uuid, rusqlite::Error> {
-        Uuid::parse_str(s).map_err(|_| rusqlite::Error::InvalidColumnType(
-            idx,
-            "uuid".to_string(),
-            rusqlite::types::Type::Text,
-        ))
+        Uuid::parse_str(s).map_err(|_| {
+            rusqlite::Error::InvalidColumnType(idx, "uuid".to_string(), rusqlite::types::Type::Text)
+        })
     }
 
     // Helper function to parse JSON from string, returning rusqlite::Error
     fn parse_json_sqlite<T: serde::de::DeserializeOwned>(s: &str) -> Result<T, rusqlite::Error> {
-        serde_json::from_str(s)
-            .map_err(|e| rusqlite::Error::FromSqlConversionFailure(
-                0,
-                rusqlite::types::Type::Text,
-                Box::new(e),
-            ))
+        serde_json::from_str(s).map_err(|e| {
+            rusqlite::Error::FromSqlConversionFailure(0, rusqlite::types::Type::Text, Box::new(e))
+        })
     }
 
     // Execute the query and get the first row if it exists
@@ -588,7 +558,7 @@ pub fn delete_plan(db: &Database, plan_id: &Uuid) -> Result<(), DatabaseError> {
     let conn = db.get_conn()?;
     conn.execute(
         "DELETE FROM plans WHERE id = ?1",
-        params![plan_id.to_string()]
+        params![plan_id.to_string()],
     )?;
     Ok(())
 }

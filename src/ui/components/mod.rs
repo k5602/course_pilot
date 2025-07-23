@@ -13,7 +13,6 @@ pub mod modal_confirmation;
 pub mod progress;
 pub mod progress_ring;
 pub mod search_history;
-pub mod sidebar_nav;
 pub mod tabs;
 pub mod tag_input;
 pub mod toast;
@@ -21,9 +20,8 @@ pub mod top_bar;
 pub mod unified_dropdown;
 pub mod youtube_import_form;
 
-
 // Re-exports for convenience
-pub use toast::ToastContainer;
-pub use tag_input::TagInput;
 pub use search_history::SearchHistory;
-pub use unified_dropdown::{UnifiedDropdown, DropdownItem, DropdownTrigger};
+pub use tag_input::TagInput;
+pub use toast::ToastContainer;
+pub use unified_dropdown::{DropdownItem, DropdownTrigger, UnifiedDropdown};
