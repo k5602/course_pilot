@@ -2,7 +2,7 @@ name: Release Pipeline
 on:
   push:
     tags:
-      - "v*.*.1" # Trigger on tags like v1.0.0, v1.2.3, etc.
+      - "v*.1.0"
 
 permissions:
   contents: write
