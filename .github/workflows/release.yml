@@ -2,7 +2,7 @@ name: Release Pipeline
 on:
   push:
     tags:
-      - 'v*.*.*' # Trigger on tags like v1.0.0, v1.2.3, etc.
+      - "v*.*.*" # Trigger on tags like v1.0.0, v1.2.3, etc.
 
 permissions:
   contents: write
@@ -52,8 +52,9 @@ jobs:
             libcairo2-dev \
             libpango1.0-dev \
             libatk1.0-dev \
-            libsoup2.4-dev \
-            libjavascriptcoregtk-4.1-dev
+            libsoup-3.0-dev \
+            libjavascriptcoregtk-4.1-dev \
+            libgdk3.0-cil
 
       - name: Install Dioxus CLI
         run: cargo install dioxus-cli --locked
