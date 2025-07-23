@@ -159,10 +159,20 @@ pub enum ContextualPanelTab {
     Player,
 }
 
-#[derive(Debug, Clone, Copy)]
+/// Video context for notes integration
+#[derive(Debug, Clone, PartialEq)]
+pub struct VideoContext {
+    pub course_id: Uuid,
+    pub video_index: usize,
+    pub video_title: String,
+    pub module_title: String,
+}
+
+#[derive(Debug, Clone)]
 pub struct ContextualPanelState {
     pub is_open: bool,
     pub active_tab: ContextualPanelTab,
+    pub video_context: Option<VideoContext>,
 }
 
 impl Default for ContextualPanelState {
@@ -170,6 +180,7 @@ impl Default for ContextualPanelState {
         Self {
             is_open: false, // Closed by default, user can open via button
             active_tab: ContextualPanelTab::Notes,
+            video_context: None,
         }
     }
 }

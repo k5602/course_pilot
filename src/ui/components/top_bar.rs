@@ -36,15 +36,25 @@ pub fn TopBar() -> Element {
                 "data-tip": if app_state.read().contextual_panel.is_open { "Hide Notes Panel" } else { "Show Notes Panel" },
                 button {
                     class: format!("btn btn-square {}", 
-                        if app_state.read().contextual_panel.is_open { 
+                        if app_state.read().contextual_panel.is_open && 
+                           app_state.read().contextual_panel.active_tab == crate::types::ContextualPanelTab::Notes { 
                             "btn-primary" 
                         } else { 
                             "btn-ghost" 
                         }
                     ),
                     onclick: move |_| {
-                        let is_open = app_state.read().contextual_panel.is_open;
-                        app_state.write().contextual_panel.is_open = !is_open;
+                        let mut state = app_state.write();
+                        let is_open = state.contextual_panel.is_open;
+                        
+                        if is_open && state.contextual_panel.active_tab == crate::types::ContextualPanelTab::Notes {
+                            // If notes panel is open and notes tab is active, close the panel
+                            state.contextual_panel.is_open = false;
+                        } else {
+                            // Otherwise, open the panel and switch to notes tab
+                            state.contextual_panel.is_open = true;
+                            state.contextual_panel.active_tab = crate::types::ContextualPanelTab::Notes;
+                        }
                     },
                     Icon { icon: FaNoteSticky, class: "w-6 h-6" }
                 }

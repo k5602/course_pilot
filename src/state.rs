@@ -383,6 +383,26 @@ pub fn use_tag_statistics() -> Memo<std::collections::HashMap<String, usize>> {
     })
 }
 
+/// Set video context for the contextual panel and open notes tab
+pub fn set_video_context_and_open_notes(
+    mut app_state: Signal<AppState>, 
+    video_context: crate::types::VideoContext
+) -> StateResult<()> {
+    let mut state = app_state.write();
+    state.contextual_panel.video_context = Some(video_context);
+    state.contextual_panel.active_tab = crate::types::ContextualPanelTab::Notes;
+    state.contextual_panel.is_open = true;
+    log::info!("Video context set and notes panel opened");
+    Ok(())
+}
+
+/// Clear video context from the contextual panel
+pub fn clear_video_context(mut app_state: Signal<AppState>) -> StateResult<()> {
+    app_state.write().contextual_panel.video_context = None;
+    log::info!("Video context cleared");
+    Ok(())
+}
+
 /// Async-safe course structuring
 pub async fn async_structure_course(
     app_state: Signal<AppState>,

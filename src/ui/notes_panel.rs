@@ -8,7 +8,7 @@ use crate::ui::components::toast::toast;
 use dioxus::prelude::*;
 use dioxus_free_icons::Icon;
 use dioxus_free_icons::icons::fa_solid_icons::{
-    FaDownload, FaFloppyDisk, FaMagnifyingGlass, FaPen, FaTag, FaTrash,
+    FaDownload, FaFloppyDisk, FaMagnifyingGlass, FaNoteSticky, FaPen, FaTag, FaTrash,
 };
 use dioxus_motion::prelude::*;
 use std::collections::HashSet;
@@ -23,6 +23,8 @@ pub enum NotesPanelMode {
     AllNotes,
     /// Show notes for a specific course
     CourseNotes(Uuid),
+    /// Show notes for a specific video within a course
+    VideoNotes(Uuid, usize, String, String), // course_id, video_index, video_title, module_title
 }
 
 /// NotesPanel: Contextual panel that directly shows notes content
@@ -36,7 +38,17 @@ pub fn NotesPanel(mode: NotesPanelMode) -> Element {
             let video_id = None;
             rsx!(NotesTab {
                 course_id: course_id,
-                video_id: video_id
+                video_id: video_id,
+                video_context: None
+            })
+        }
+        NotesPanelMode::VideoNotes(course_id, video_index, video_title, module_title) => {
+            let video_id = None; // We'll use video_index for now since we don't have video UUIDs
+            let video_context = Some((video_index, video_title, module_title));
+            rsx!(NotesTab {
+                course_id: course_id,
+                video_id: video_id,
+                video_context: video_context
             })
         }
     }
@@ -44,7 +56,11 @@ pub fn NotesPanel(mode: NotesPanelMode) -> Element {
 
 /// NotesTab: List of notes and markdown editor (wired to backend)
 #[component]
-fn NotesTab(course_id: uuid::Uuid, video_id: Option<uuid::Uuid>) -> Element {
+fn NotesTab(
+    course_id: uuid::Uuid, 
+    video_id: Option<uuid::Uuid>,
+    video_context: Option<(usize, String, String)> // (video_index, video_title, module_title)
+) -> Element {
     let mut notes_resource = crate::ui::hooks::use_notes_resource(course_id, video_id);
     let mut search_query = use_signal(String::new);
     let mut selected_tags = use_signal(Vec::new);
@@ -284,6 +300,22 @@ fn NotesTab(course_id: uuid::Uuid, video_id: Option<uuid::Uuid>) -> Element {
             rsx! {
                 div {
                     class: "space-y-6",
+                    
+                    // Video context header
+                    if let Some((video_index, video_title, module_title)) = video_context {
+                        div {
+                            class: "bg-primary/10 border border-primary/20 rounded-lg p-3 mb-4",
+                            div {
+                                class: "flex items-center gap-2 mb-1",
+                                Icon { icon: FaNoteSticky, class: "w-4 h-4 text-primary" }
+                                h3 { class: "font-medium text-sm text-primary", "Video Notes" }
+                            }
+                            p { class: "text-xs text-base-content/70", "Module: {module_title}" }
+                            p { class: "text-xs text-base-content/70", "Video: {video_title}" }
+                            p { class: "text-xs text-base-content/70", "Video #{video_index + 1}" }
+                        }
+                    }
+                    
                     // Search and filter controls
                     div {
                         class: "flex flex-wrap gap-2 mb-4",
