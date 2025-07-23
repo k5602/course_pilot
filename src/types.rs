@@ -96,6 +96,47 @@ pub struct PlanSettings {
     pub sessions_per_week: u8,
     pub session_length_minutes: u32,
     pub include_weekends: bool,
+    pub advanced_settings: Option<AdvancedSchedulerSettings>,
+}
+
+/// Advanced scheduler settings for sophisticated planning algorithms
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+pub struct AdvancedSchedulerSettings {
+    pub strategy: DistributionStrategy,
+    pub difficulty_adaptation: bool,
+    pub spaced_repetition_enabled: bool,
+    pub cognitive_load_balancing: bool,
+    pub user_experience_level: DifficultyLevel,
+    pub custom_intervals: Option<Vec<i64>>,
+}
+
+/// Distribution strategies for course content scheduling
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+pub enum DistributionStrategy {
+    ModuleBased,
+    TimeBased,
+    Hybrid,
+    DifficultyBased,
+    SpacedRepetition,
+    Adaptive,
+}
+
+/// Content difficulty levels for adaptive scheduling
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq)]
+pub enum DifficultyLevel {
+    Beginner,
+    Intermediate,
+    Advanced,
+    Expert,
+}
+
+/// Plan regeneration status for progress tracking
+#[derive(Debug, Clone, PartialEq)]
+pub enum RegenerationStatus {
+    Idle,
+    InProgress { progress: f32, message: String },
+    Completed,
+    Failed { error: String },
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
@@ -307,6 +348,91 @@ impl PlanExt for Plan {
         };
 
         (completed_count, total_count, percentage)
+    }
+}
+
+impl Default for AdvancedSchedulerSettings {
+    fn default() -> Self {
+        Self {
+            strategy: DistributionStrategy::Hybrid,
+            difficulty_adaptation: true,
+            spaced_repetition_enabled: false,
+            cognitive_load_balancing: true,
+            user_experience_level: DifficultyLevel::Intermediate,
+            custom_intervals: None,
+        }
+    }
+}
+
+impl Default for DistributionStrategy {
+    fn default() -> Self {
+        DistributionStrategy::Hybrid
+    }
+}
+
+impl Default for DifficultyLevel {
+    fn default() -> Self {
+        DifficultyLevel::Intermediate
+    }
+}
+
+impl DistributionStrategy {
+    /// Get all available distribution strategies
+    pub fn all() -> Vec<Self> {
+        vec![
+            Self::ModuleBased,
+            Self::TimeBased,
+            Self::Hybrid,
+            Self::DifficultyBased,
+            Self::SpacedRepetition,
+            Self::Adaptive,
+        ]
+    }
+
+    /// Get human-readable name for the strategy
+    pub fn display_name(&self) -> &'static str {
+        match self {
+            Self::ModuleBased => "Module-based",
+            Self::TimeBased => "Time-based",
+            Self::Hybrid => "Hybrid",
+            Self::DifficultyBased => "Difficulty-based",
+            Self::SpacedRepetition => "Spaced Repetition",
+            Self::Adaptive => "Adaptive",
+        }
+    }
+
+    /// Get description for the strategy
+    pub fn description(&self) -> &'static str {
+        match self {
+            Self::ModuleBased => "Respects module boundaries and logical content grouping",
+            Self::TimeBased => "Focuses on even time distribution across sessions",
+            Self::Hybrid => "Balances both module structure and time constraints",
+            Self::DifficultyBased => "Adapts pacing based on content difficulty",
+            Self::SpacedRepetition => "Optimizes for memory retention with review sessions",
+            Self::Adaptive => "AI-driven scheduling based on learning patterns",
+        }
+    }
+}
+
+impl DifficultyLevel {
+    /// Get all available difficulty levels
+    pub fn all() -> Vec<Self> {
+        vec![
+            Self::Beginner,
+            Self::Intermediate,
+            Self::Advanced,
+            Self::Expert,
+        ]
+    }
+
+    /// Get human-readable name for the difficulty level
+    pub fn display_name(&self) -> &'static str {
+        match self {
+            Self::Beginner => "Beginner",
+            Self::Intermediate => "Intermediate",
+            Self::Advanced => "Advanced",
+            Self::Expert => "Expert",
+        }
     }
 }
 

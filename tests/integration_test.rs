@@ -154,6 +154,7 @@ fn test_plan_generation() {
         session_length_minutes: 60,
         start_date: Utc::now(),
         include_weekends: false,
+        advanced_settings: None,
     };
 
     // Generate study plan
@@ -269,6 +270,7 @@ async fn test_complete_plan_item_workflow() {
             sessions_per_week: 3,
             session_length_minutes: 60,
             include_weekends: false,
+            advanced_settings: None,
         },
     );
 
@@ -419,6 +421,7 @@ async fn test_error_recovery_workflow() {
             sessions_per_week: 3,
             session_length_minutes: 60,
             include_weekends: false,
+            advanced_settings: None,
         },
     );
 

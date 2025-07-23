@@ -183,6 +183,7 @@ fn render_no_plan_state(course_id: Uuid) -> Element {
                     sessions_per_week: 3,
                     session_length_minutes: 60,
                     include_weekends: false,
+                    advanced_settings: None,
                 };
 
                 match backend.generate_plan(course_id, settings).await {

@@ -227,7 +227,7 @@ impl Backend {
         .await
         .unwrap_or_else(|e| Err(anyhow::anyhow!("Join error: {e}")))
     }
-    
+
     pub async fn list_notes_by_course(&self, course_id: Uuid) -> Result<Vec<Note>> {
         let db = self.db.clone();
         tokio::task::spawn_blocking(move || {
@@ -502,6 +502,204 @@ impl Backend {
             storage::save_plan(&db, &new_plan)?;
 
             Ok(new_plan)
+        })
+        .await
+        .unwrap_or_else(|e| Err(anyhow::anyhow!("Join error: {}", e)))
+    }
+
+    /// Regenerate plan with progress callback support
+    pub async fn regenerate_plan_with_progress<F>(
+        &self,
+        plan_id: Uuid,
+        new_settings: crate::types::PlanSettings,
+        progress_callback: F,
+    ) -> Result<crate::types::Plan>
+    where
+        F: Fn(f32, String) + Send + Sync + 'static,
+    {
+        let db = self.db.clone();
+        tokio::task::spawn_blocking(move || {
+            progress_callback(0.0, "Loading existing plan...".to_string());
+
+            // Load existing plan
+            let existing_plan = storage::load_plan(&db, &plan_id)?
+                .ok_or_else(|| anyhow::anyhow!("Plan not found: {}", plan_id))?;
+
+            progress_callback(25.0, "Loading course data...".to_string());
+
+            // Load course data
+            let course = storage::get_course_by_id(&db, &existing_plan.course_id)?
+                .ok_or_else(|| anyhow::anyhow!("Course not found: {}", existing_plan.course_id))?;
+
+            progress_callback(50.0, "Generating new plan...".to_string());
+
+            // Generate new plan with new settings
+            let mut new_plan = crate::planner::generate_plan(&course, &new_settings)
+                .map_err(|e| anyhow::anyhow!("Plan regeneration failed: {}", e))?;
+
+            progress_callback(75.0, "Preserving progress...".to_string());
+
+            // Preserve progress from existing plan
+            preserve_plan_progress(&existing_plan, &mut new_plan);
+
+            // Update the plan ID to maintain continuity
+            new_plan.id = plan_id;
+
+            progress_callback(90.0, "Saving updated plan...".to_string());
+
+            // Save updated plan to database
+            storage::save_plan(&db, &new_plan)?;
+
+            progress_callback(100.0, "Plan regeneration completed!".to_string());
+
+            Ok(new_plan)
+        })
+        .await
+        .unwrap_or_else(|e| Err(anyhow::anyhow!("Join error: {}", e)))
+    }
+
+    /// Get all available scheduling strategies
+    pub async fn get_available_scheduling_strategies(
+        &self,
+    ) -> Result<Vec<crate::types::DistributionStrategy>> {
+        tokio::task::spawn_blocking(move || Ok(crate::types::DistributionStrategy::all()))
+            .await
+            .unwrap_or_else(|e| Err(anyhow::anyhow!("Join error: {}", e)))
+    }
+
+    /// Get all available difficulty levels
+    pub async fn get_available_difficulty_levels(
+        &self,
+    ) -> Result<Vec<crate::types::DifficultyLevel>> {
+        tokio::task::spawn_blocking(move || Ok(crate::types::DifficultyLevel::all()))
+            .await
+            .unwrap_or_else(|e| Err(anyhow::anyhow!("Join error: {}", e)))
+    }
+
+    /// Validate advanced scheduler settings
+    pub async fn validate_advanced_scheduler_settings(
+        &self,
+        settings: &crate::types::AdvancedSchedulerSettings,
+    ) -> Result<Vec<String>> {
+        let settings = settings.clone();
+        tokio::task::spawn_blocking(move || {
+            let mut errors = Vec::new();
+
+            // Validate custom intervals if provided
+            if let Some(ref intervals) = settings.custom_intervals {
+                if intervals.is_empty() {
+                    errors.push("Custom intervals cannot be empty".to_string());
+                }
+
+                // Check for negative intervals
+                for &interval in intervals {
+                    if interval <= 0 {
+                        errors.push("Custom intervals must be positive".to_string());
+                        break;
+                    }
+                }
+
+                // Check for reasonable maximum interval (1 year = 365 days)
+                for &interval in intervals {
+                    if interval > 365 {
+                        errors.push("Custom intervals should not exceed 365 days".to_string());
+                        break;
+                    }
+                }
+
+                // Check for ascending order
+                let mut sorted_intervals = intervals.clone();
+                sorted_intervals.sort();
+                if *intervals != sorted_intervals {
+                    errors.push("Custom intervals should be in ascending order".to_string());
+                }
+            }
+
+            // Validate strategy-specific settings
+            match settings.strategy {
+                crate::types::DistributionStrategy::SpacedRepetition => {
+                    if !settings.spaced_repetition_enabled {
+                        errors.push(
+                            "Spaced repetition must be enabled for SpacedRepetition strategy"
+                                .to_string(),
+                        );
+                    }
+                }
+                crate::types::DistributionStrategy::DifficultyBased => {
+                    if !settings.difficulty_adaptation {
+                        errors.push(
+                            "Difficulty adaptation should be enabled for DifficultyBased strategy"
+                                .to_string(),
+                        );
+                    }
+                }
+                crate::types::DistributionStrategy::Adaptive => {
+                    if !settings.cognitive_load_balancing {
+                        errors.push(
+                            "Cognitive load balancing should be enabled for Adaptive strategy"
+                                .to_string(),
+                        );
+                    }
+                }
+                _ => {} // Other strategies don't have specific requirements
+            }
+
+            Ok(errors)
+        })
+        .await
+        .unwrap_or_else(|e| Err(anyhow::anyhow!("Join error: {}", e)))
+    }
+
+    /// Get recommended settings for a course based on analysis
+    pub async fn get_recommended_advanced_settings(
+        &self,
+        course_id: Uuid,
+        user_experience: crate::types::DifficultyLevel,
+    ) -> Result<crate::types::AdvancedSchedulerSettings> {
+        let db = self.db.clone();
+        tokio::task::spawn_blocking(move || {
+            // Load course data
+            let course = storage::get_course_by_id(&db, &course_id)?
+                .ok_or_else(|| anyhow::anyhow!("Course not found: {}", course_id))?;
+
+            // Analyze course characteristics
+            let total_videos = course.video_count();
+            let has_structure = course.structure.is_some();
+
+            // Determine recommended strategy based on course and user characteristics
+            let recommended_strategy = match (user_experience, total_videos, has_structure) {
+                // Beginners benefit from spaced repetition
+                (crate::types::DifficultyLevel::Beginner, _, _) => {
+                    crate::types::DistributionStrategy::SpacedRepetition
+                }
+                // Large courses need adaptive scheduling
+                (_, videos, _) if videos > 50 => crate::types::DistributionStrategy::Adaptive,
+                // Well-structured courses can use module-based approach
+                (_, _, true) => crate::types::DistributionStrategy::ModuleBased,
+                // Default to hybrid for balanced approach
+                _ => crate::types::DistributionStrategy::Hybrid,
+            };
+
+            // Create recommended settings
+            let spaced_repetition_enabled = matches!(
+                recommended_strategy,
+                crate::types::DistributionStrategy::SpacedRepetition
+            );
+
+            let recommended_settings = crate::types::AdvancedSchedulerSettings {
+                strategy: recommended_strategy,
+                difficulty_adaptation: matches!(
+                    user_experience,
+                    crate::types::DifficultyLevel::Beginner
+                        | crate::types::DifficultyLevel::Intermediate
+                ),
+                spaced_repetition_enabled,
+                cognitive_load_balancing: total_videos > 20,
+                user_experience_level: user_experience,
+                custom_intervals: None, // Use default intervals
+            };
+
+            Ok(recommended_settings)
         })
         .await
         .unwrap_or_else(|e| Err(anyhow::anyhow!("Join error: {}", e)))

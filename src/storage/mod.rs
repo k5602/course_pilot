@@ -7,8 +7,6 @@ pub mod database;
 pub mod notes;
 pub mod settings;
 
-
-
 // Re-export main database functions
 pub use database::{
     delete_course, delete_plan, get_course_by_id, get_plan_by_course_id, init_db, load_courses,

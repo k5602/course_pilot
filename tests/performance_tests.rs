@@ -111,6 +111,7 @@ async fn test_database_operations_performance() {
                 sessions_per_week: 3,
                 session_length_minutes: 60,
                 include_weekends: false,
+                advanced_settings: None,
             },
         );
 
@@ -221,6 +222,7 @@ async fn test_concurrent_operations_performance() {
             sessions_per_week: 3,
             session_length_minutes: 60,
             include_weekends: false,
+            advanced_settings: None,
         },
     );
 
@@ -302,6 +304,7 @@ async fn test_memory_usage_with_large_datasets() {
             sessions_per_week: 7,
             session_length_minutes: 30,
             include_weekends: true,
+            advanced_settings: None,
         },
     );
 

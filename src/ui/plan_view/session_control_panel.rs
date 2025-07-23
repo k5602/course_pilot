@@ -64,6 +64,7 @@ pub fn SessionControlPanel(props: SessionControlPanelProps) -> Element {
             sessions_per_week: sessions_per_week(),
             session_length_minutes: session_length(),
             include_weekends: include_weekends(),
+            advanced_settings: props.plan.settings.advanced_settings.clone(),
         };
 
         props.on_settings_change.call(new_settings);

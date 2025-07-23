@@ -13,6 +13,7 @@ fn create_test_plan() -> Plan {
             sessions_per_week: 3,
             session_length_minutes: 60,
             include_weekends: false,
+            advanced_settings: None,
         },
     );
 
@@ -103,6 +104,7 @@ fn test_calculate_progress_empty_plan() {
             sessions_per_week: 3,
             session_length_minutes: 60,
             include_weekends: false,
+            advanced_settings: None,
         },
     );
 

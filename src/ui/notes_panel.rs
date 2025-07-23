@@ -1,8 +1,6 @@
-use crate::ui::components::TagInput;
 use crate::ui::components::SearchHistory;
-use crate::ui::components::modal_confirmation::{
-    ActionMenu, Badge, ModalConfirmation,
-};
+use crate::ui::components::TagInput;
+use crate::ui::components::modal_confirmation::{ActionMenu, Badge, ModalConfirmation};
 
 use crate::ui::components::toast::toast;
 use dioxus::prelude::*;
@@ -57,9 +55,9 @@ pub fn NotesPanel(mode: NotesPanelMode) -> Element {
 /// NotesTab: List of notes and markdown editor (wired to backend)
 #[component]
 fn NotesTab(
-    course_id: uuid::Uuid, 
+    course_id: uuid::Uuid,
     video_id: Option<uuid::Uuid>,
-    video_context: Option<(usize, String, String)> // (video_index, video_title, module_title)
+    video_context: Option<(usize, String, String)>, // (video_index, video_title, module_title)
 ) -> Element {
     let mut notes_resource = crate::ui::hooks::use_notes_resource(course_id, video_id);
     let mut search_query = use_signal(String::new);
@@ -300,7 +298,7 @@ fn NotesTab(
             rsx! {
                 div {
                     class: "space-y-6",
-                    
+
                     // Video context header
                     if let Some((video_index, video_title, module_title)) = video_context {
                         div {
@@ -315,7 +313,7 @@ fn NotesTab(
                             p { class: "text-xs text-base-content/70", "Video #{video_index + 1}" }
                         }
                     }
-                    
+
                     // Search and filter controls
                     div {
                         class: "flex flex-wrap gap-2 mb-4",
@@ -719,24 +717,28 @@ fn AllNotesTab() -> Element {
 
     // Extract notes early to avoid borrowing issues
     let notes_result = match &*notes_resource.read_unchecked() {
-        None => return rsx! {
-            div {
-                class: "p-4",
-                div { class: "text-center", "Loading all notes..." }
-                div { class: "text-xs text-base-content/60 mt-2", "Debug: Resource is None (still loading)" }
-            }
-        },
-        Some(Err(err)) => return rsx! {
-            div {
-                class: "p-4",
-                div { class: "text-error text-center", "Error loading notes: {err}" }
-                div { class: "text-xs text-base-content/60 mt-2", "Debug: Resource returned error" }
-            }
-        },
+        None => {
+            return rsx! {
+                div {
+                    class: "p-4",
+                    div { class: "text-center", "Loading all notes..." }
+                    div { class: "text-xs text-base-content/60 mt-2", "Debug: Resource is None (still loading)" }
+                }
+            };
+        }
+        Some(Err(err)) => {
+            return rsx! {
+                div {
+                    class: "p-4",
+                    div { class: "text-error text-center", "Error loading notes: {err}" }
+                    div { class: "text-xs text-base-content/60 mt-2", "Debug: Resource returned error" }
+                }
+            };
+        }
         Some(Ok(notes)) => {
             log::info!("Debug: Loaded {} notes from database", notes.len());
             notes.clone()
-        },
+        }
     };
 
     // Filter notes based on search query
@@ -749,7 +751,10 @@ fn AllNotesTab() -> Element {
                 .iter()
                 .filter(|note| {
                     note.content.to_lowercase().contains(&query)
-                        || note.tags.iter().any(|tag| tag.to_lowercase().contains(&query))
+                        || note
+                            .tags
+                            .iter()
+                            .any(|tag| tag.to_lowercase().contains(&query))
                 })
                 .cloned()
                 .collect()
@@ -759,12 +764,14 @@ fn AllNotesTab() -> Element {
     // Simple edit handler for AllNotesTab - just show a toast for now
     // In a future implementation, this could navigate to the specific course or open an edit modal
     let handle_edit_note = move |note: crate::types::Note| {
-        crate::ui::components::toast::toast::info(&format!("Note editing from All Notes view will be implemented in a future update. Note: '{}'", 
-            if note.content.len() > 50 { 
-                format!("{}...", &note.content[..50]) 
-            } else { 
-                note.content 
-            }));
+        crate::ui::components::toast::toast::info(&format!(
+            "Note editing from All Notes view will be implemented in a future update. Note: '{}'",
+            if note.content.len() > 50 {
+                format!("{}...", &note.content[..50])
+            } else {
+                note.content
+            }
+        ));
     };
 
     rsx! {
@@ -816,7 +823,7 @@ fn AllNotesTab() -> Element {
                         let updated_at = note.updated_at.format("%Y-%m-%d %H:%M").to_string();
                         let handle_edit_note = handle_edit_note.clone();
                         let note_for_edit = note.clone();
-                        
+
                         rsx! {
                             NoteCard {
                                 key: "{note.id}",

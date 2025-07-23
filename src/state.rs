@@ -385,8 +385,8 @@ pub fn use_tag_statistics() -> Memo<std::collections::HashMap<String, usize>> {
 
 /// Set video context for the contextual panel and open notes tab
 pub fn set_video_context_and_open_notes(
-    mut app_state: Signal<AppState>, 
-    video_context: crate::types::VideoContext
+    mut app_state: Signal<AppState>,
+    video_context: crate::types::VideoContext,
 ) -> StateResult<()> {
     let mut state = app_state.write();
     state.contextual_panel.video_context = Some(video_context);

@@ -63,6 +63,7 @@ pub fn CourseCard(props: CourseCardProps) -> Element {
                         sessions_per_week: 3,
                         session_length_minutes: 60,
                         include_weekends: false,
+                        advanced_settings: None,
                     };
 
                     match backend.generate_plan(props.course.id, settings).await {

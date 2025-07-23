@@ -2,10 +2,10 @@ use dioxus::prelude::*;
 use dioxus_motion::prelude::*;
 
 use super::{ContextualPanel, Sidebar};
-use crate::ui::hooks::use_app_state;
 use crate::types::Route;
 use crate::ui::components::top_bar::TopBar;
 use crate::ui::dashboard::Dashboard;
+use crate::ui::hooks::use_app_state;
 use crate::ui::navigation::Breadcrumbs;
 use crate::ui::plan_view::PlanView;
 
@@ -75,9 +75,13 @@ pub fn AppShell() -> Element {
     });
 
     // Calculate margins for main content area
-    let sidebar_margin = if is_sidebar_hovered() { "ml-45" } else { "ml-20" };
+    let sidebar_margin = if is_sidebar_hovered() {
+        "ml-45"
+    } else {
+        "ml-20"
+    };
     let panel_margin = if panel_is_open { "md:mr-96" } else { "md:mr-0" };
-    
+
     let main_class = format!(
         "flex-1 flex flex-col overflow-hidden {} {} transition-all duration-300",
         sidebar_margin, panel_margin

@@ -81,6 +81,7 @@ async fn test_plan_item_completion_toggle() {
             sessions_per_week: 3,
             session_length_minutes: 60,
             include_weekends: false,
+            advanced_settings: None,
         },
     );
 
@@ -140,6 +141,7 @@ async fn test_plan_progress_calculation() {
             sessions_per_week: 3,
             session_length_minutes: 60,
             include_weekends: false,
+            advanced_settings: None,
         },
     );
 
@@ -192,6 +194,7 @@ async fn test_plan_item_out_of_bounds() {
             sessions_per_week: 3,
             session_length_minutes: 60,
             include_weekends: false,
+            advanced_settings: None,
         },
     );
 

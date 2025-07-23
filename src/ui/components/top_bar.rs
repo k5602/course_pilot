@@ -35,18 +35,18 @@ pub fn TopBar() -> Element {
                 class: "tooltip tooltip-left",
                 "data-tip": if app_state.read().contextual_panel.is_open { "Hide Notes Panel" } else { "Show Notes Panel" },
                 button {
-                    class: format!("btn btn-square {}", 
-                        if app_state.read().contextual_panel.is_open && 
-                           app_state.read().contextual_panel.active_tab == crate::types::ContextualPanelTab::Notes { 
-                            "btn-primary" 
-                        } else { 
-                            "btn-ghost" 
+                    class: format!("btn btn-square {}",
+                        if app_state.read().contextual_panel.is_open &&
+                           app_state.read().contextual_panel.active_tab == crate::types::ContextualPanelTab::Notes {
+                            "btn-primary"
+                        } else {
+                            "btn-ghost"
                         }
                     ),
                     onclick: move |_| {
                         let mut state = app_state.write();
                         let is_open = state.contextual_panel.is_open;
-                        
+
                         if is_open && state.contextual_panel.active_tab == crate::types::ContextualPanelTab::Notes {
                             // If notes panel is open and notes tab is active, close the panel
                             state.contextual_panel.is_open = false;

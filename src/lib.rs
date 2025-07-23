@@ -20,8 +20,9 @@ pub mod ui;
 
 // Re-export commonly used types for convenience
 pub use types::{
-    AppState, Course, CourseStructure, ImportJob, ImportStatus, Module, Plan, PlanItem,
-    PlanSettings, Route, Section, StructureMetadata,
+    AdvancedSchedulerSettings, AppState, Course, CourseStructure, DifficultyLevel,
+    DistributionStrategy, ImportJob, ImportStatus, Module, Plan, PlanItem, PlanSettings,
+    RegenerationStatus, Route, Section, StructureMetadata,
 };
 
 // Re-export core functionality

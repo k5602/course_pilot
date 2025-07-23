@@ -4,8 +4,7 @@ use crate::ui::notes_panel::{NotesPanel, NotesPanelMode};
 use dioxus::prelude::*;
 use dioxus_motion::prelude::*;
 
-const CONTEXT_PANEL_BG: &str =
-    "bg-base-100 border-l border-base-300 shadow-lg";
+const CONTEXT_PANEL_BG: &str = "bg-base-100 border-l border-base-300 shadow-lg";
 
 /// Clean contextual panel component
 #[component]
@@ -17,7 +16,11 @@ pub fn ContextualPanel() -> Element {
     let current_route = app_state.read().current_route;
 
     // Debug logging
-    log::info!("ContextualPanel render: is_open={}, active_tab={:?}", is_open, active_tab);
+    log::info!(
+        "ContextualPanel render: is_open={}, active_tab={:?}",
+        is_open,
+        active_tab
+    );
 
     // Determine current course_id from route
     let current_course_id = match current_route {
@@ -64,10 +67,10 @@ pub fn ContextualPanel() -> Element {
 
                 a {
                     role: "tab",
-                    class: if active_tab == ContextualPanelTab::Notes { 
-                        "tab tab-active tab-bordered" 
-                    } else { 
-                        "tab hover:tab-active" 
+                    class: if active_tab == ContextualPanelTab::Notes {
+                        "tab tab-active tab-bordered"
+                    } else {
+                        "tab hover:tab-active"
                     },
                     onclick: move |_| app_state.write().contextual_panel.active_tab = ContextualPanelTab::Notes,
                     "Notes"
@@ -75,10 +78,10 @@ pub fn ContextualPanel() -> Element {
 
                 a {
                     role: "tab",
-                    class: if active_tab == ContextualPanelTab::Player { 
-                        "tab tab-active tab-bordered" 
-                    } else { 
-                        "tab hover:tab-active" 
+                    class: if active_tab == ContextualPanelTab::Player {
+                        "tab tab-active tab-bordered"
+                    } else {
+                        "tab hover:tab-active"
                     },
                     onclick: move |_| app_state.write().contextual_panel.active_tab = ContextualPanelTab::Player,
                     "Player"
@@ -95,15 +98,24 @@ pub fn ContextualPanel() -> Element {
 }
 
 /// Render tab content based on active tab
-fn render_tab_content(active_tab: ContextualPanelTab, course_id: Option<uuid::Uuid>, video_context: Option<VideoContext>) -> Element {
+fn render_tab_content(
+    active_tab: ContextualPanelTab,
+    course_id: Option<uuid::Uuid>,
+    video_context: Option<VideoContext>,
+) -> Element {
     match active_tab {
         ContextualPanelTab::Notes => {
             let mode = match video_context {
-                Some(ctx) => NotesPanelMode::VideoNotes(ctx.course_id, ctx.video_index, ctx.video_title, ctx.module_title),
+                Some(ctx) => NotesPanelMode::VideoNotes(
+                    ctx.course_id,
+                    ctx.video_index,
+                    ctx.video_title,
+                    ctx.module_title,
+                ),
                 None => match course_id {
                     Some(id) => NotesPanelMode::CourseNotes(id),
                     None => NotesPanelMode::AllNotes,
-                }
+                },
             };
             rsx!(NotesPanel { mode: mode })
         }
