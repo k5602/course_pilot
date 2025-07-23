@@ -1,6 +1,6 @@
 use crate::ui::components::badge::Badge;
-use crate::ui::components::modal_confirmation::{ActionMenu, DropdownItem};
-use crate::ui::components::progress_ring::ProgressRing;
+use crate::ui::components::progress::ProgressRing;
+use crate::ui::components::{DropdownItem, DropdownTrigger, UnifiedDropdown};
 use dioxus::prelude::*;
 use dioxus_motion::prelude::*;
 
@@ -102,16 +102,16 @@ pub fn Card(props: CardProps) -> Element {
         )
     });
 
-    // Convert ActionItem to DropdownItem for ActionMenu
+    // Convert ActionItem to DropdownItem for UnifiedDropdown
     let dropdown_actions = props.actions.as_ref().map(|actions| {
         actions
             .iter()
             .map(|action| DropdownItem {
                 label: action.label.clone(),
-                icon: action.icon.clone(),
+                icon: action.icon.clone().map(|_| "⚙️".to_string()), // Convert Element to string icon
                 on_select: action.on_select,
-                children: None,
                 disabled: action.disabled,
+                divider: false,
             })
             .collect::<Vec<_>>()
     });
@@ -169,9 +169,10 @@ pub fn Card(props: CardProps) -> Element {
 
                     // Action menu
                     if let Some(actions) = dropdown_actions {
-                        ActionMenu {
-                            actions: actions,
-                            class: Some("".to_string())
+                        UnifiedDropdown {
+                            items: actions,
+                            trigger: DropdownTrigger::DotsMenu,
+                            position: "dropdown-end".to_string(),
                         }
                     }
                 }

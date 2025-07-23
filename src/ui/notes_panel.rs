@@ -1,12 +1,13 @@
 use crate::ui::components::SearchHistory;
 use crate::ui::components::TagInput;
-use crate::ui::components::modal_confirmation::{ActionMenu, Badge, ModalConfirmation};
+use crate::ui::components::modal::{Modal, confirmation_modal};
+use crate::ui::components::{Badge, DropdownItem, DropdownTrigger, UnifiedDropdown};
 
 use crate::ui::components::toast::toast;
 use dioxus::prelude::*;
 use dioxus_free_icons::Icon;
 use dioxus_free_icons::icons::fa_solid_icons::{
-    FaDownload, FaFloppyDisk, FaMagnifyingGlass, FaNoteSticky, FaPen, FaTag, FaTrash,
+    FaFloppyDisk, FaMagnifyingGlass, FaNoteSticky, FaTag,
 };
 use dioxus_motion::prelude::*;
 use std::collections::HashSet;
@@ -596,43 +597,34 @@ fn NoteCard(props: NoteCardProps) -> Element {
     // Delete note action
     let _delete_note_action = crate::ui::hooks::use_delete_note_action();
 
-    // ActionMenu for note actions
-    let actions = vec![
-        crate::ui::components::modal_confirmation::DropdownItem {
+    // Dropdown items for note actions
+    let note_actions = vec![
+        DropdownItem {
             label: "Export".to_string(),
-            icon: Some(rsx!(Icon {
-                icon: FaDownload,
-                class: "w-4 h-4"
-            })),
+            icon: Some("📤".to_string()),
             on_select: Some(EventHandler::new(|_| toast::info("Exported note (stub)"))),
-            children: None,
             disabled: false,
+            divider: false,
         },
-        crate::ui::components::modal_confirmation::DropdownItem {
+        DropdownItem {
             label: "Edit".to_string(),
-            icon: Some(rsx!(Icon {
-                icon: FaPen,
-                class: "w-4 h-4"
-            })),
+            icon: Some("✏️".to_string()),
             on_select: Some(EventHandler::new({
                 let on_edit = props.on_edit;
                 move |_| on_edit.call(())
             })),
-            children: None,
             disabled: false,
+            divider: false,
         },
-        crate::ui::components::modal_confirmation::DropdownItem {
+        DropdownItem {
             label: "Delete".to_string(),
-            icon: Some(rsx!(Icon {
-                icon: FaTrash,
-                class: "w-4 h-4"
-            })),
+            icon: Some("🗑️".to_string()),
             on_select: Some(EventHandler::new({
                 let mut show_delete_modal = show_delete_modal;
                 move |_| show_delete_modal.set(true)
             })),
-            children: None,
             disabled: false,
+            divider: true,
         },
     ];
 
@@ -640,10 +632,14 @@ fn NoteCard(props: NoteCardProps) -> Element {
         div {
             class: "card bg-base-200 shadow-sm p-4 relative",
             style: "{card_style}",
-            // ActionMenu for note actions
+            // Note actions dropdown
             div {
                 class: "absolute top-2 right-2 z-10",
-                ActionMenu { actions: actions.clone() }
+                UnifiedDropdown {
+                    items: note_actions,
+                    trigger: DropdownTrigger::DotsMenu,
+                    position: "dropdown-end".to_string(),
+                }
             }
             div {
                 class: "flex items-center gap-2 mb-1",
@@ -666,21 +662,24 @@ fn NoteCard(props: NoteCardProps) -> Element {
                 class: "text-xs text-base-content/40 mt-1",
                 "Updated: {props.updated_at}"
             }
-            // ModalConfirmation for delete
-            ModalConfirmation {
+            // Delete confirmation modal using unified Modal
+            Modal {
+                variant: confirmation_modal(
+                    "Are you sure you want to delete this note? This action cannot be undone.",
+                    "Delete",
+                    "Cancel", 
+                    "error",
+                    Some(Callback::new(move |_| {
+                        show_delete_modal.set(false);
+                        // We would need the actual note ID here to delete it
+                        // For now, just show a success message
+                        toast::success("Note deleted");
+                    })),
+                    Some(Callback::new(move |_| show_delete_modal.set(false)))
+                ),
                 open: show_delete_modal(),
-                title: "Delete Note",
-                message: "Are you sure you want to delete this note? This action cannot be undone.",
-                confirm_label: Some("Delete".to_string()),
-                cancel_label: Some("Cancel".to_string()),
-                confirm_color: Some("error".to_string()),
-                on_confirm: move |_| {
-                    show_delete_modal.set(false);
-                    // We would need the actual note ID here to delete it
-                    // For now, just show a success message
-                    toast::success("Note deleted");
-                },
-                on_cancel: move |_| show_delete_modal.set(false),
+                title: Some("Delete Note".to_string()),
+                on_close: Some(Callback::new(move |_| show_delete_modal.set(false))),
             }
         }
     }

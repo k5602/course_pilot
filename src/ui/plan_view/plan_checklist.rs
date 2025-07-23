@@ -5,8 +5,8 @@ use dioxus_motion::prelude::*;
 use std::collections::HashMap;
 
 use crate::types::{Plan, PlanItem};
-use crate::ui::components::modal_confirmation::Badge;
 use crate::ui::hooks::use_toggle_plan_item_action;
+use crate::ui::components::Badge;
 
 #[derive(Debug, Clone)]
 pub struct ModuleGroup {

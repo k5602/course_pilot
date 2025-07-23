@@ -7,8 +7,8 @@ use uuid::Uuid;
 
 use crate::state::{set_video_context_and_open_notes, use_app_state};
 use crate::types::{Plan, PlanItem, VideoContext};
-use crate::ui::components::modal_confirmation::Badge;
 use crate::ui::components::toast::toast;
+use crate::ui::components::Badge;
 use crate::ui::hooks::use_toggle_plan_item_action;
 
 /// Session group data structure for organizing plan items by date

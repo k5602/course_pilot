@@ -1,6 +1,5 @@
 use crate::types::Course;
-use crate::ui::components::modal::Modal;
-use crate::ui::components::modal_confirmation::ModalConfirmation;
+use crate::ui::components::modal::{Modal, confirmation_modal};
 use crate::ui::hooks::{use_course_manager, use_form_manager};
 use dioxus::prelude::*;
 
@@ -48,10 +47,10 @@ pub fn CourseActions(props: CourseActionsProps) -> Element {
         let on_delete_close = props.on_delete_close;
         let course_id = props.course.id;
 
-        move |_| {
+        Callback::new(move |_| {
             course_manager.delete_course.call(course_id);
             on_delete_close.call(());
-        }
+        })
     };
 
     rsx! {
@@ -103,15 +102,22 @@ pub fn CourseActions(props: CourseActionsProps) -> Element {
             }
         }
 
-        // Delete confirmation modal
-        ModalConfirmation {
+        // Delete confirmation modal using unified Modal
+        Modal {
+            variant: confirmation_modal(
+                format!("Are you sure you want to delete the course '{}'? This action cannot be undone.", props.course.name),
+                "Delete Course",
+                "Cancel",
+                "error",
+                Some(handle_delete_course),
+                Some(Callback::new({
+                    let on_delete_close = props.on_delete_close;
+                    move |_| on_delete_close.call(())
+                }))
+            ),
             open: props.delete_modal_open,
-            on_cancel: props.on_delete_close,
-            on_confirm: handle_delete_course,
-            title: "Delete Course".to_string(),
-            message: format!("Are you sure you want to delete the course '{}'? This action cannot be undone.", props.course.name),
-            confirm_label: Some("Delete Course".to_string()),
-            confirm_color: Some("error".to_string()),
+            title: Some("Delete Course".to_string()),
+            on_close: Some(props.on_delete_close),
         }
     }
 }

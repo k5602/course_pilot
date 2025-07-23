@@ -414,7 +414,7 @@ mod tests {
             id: Uuid::new_v4(),
             course_id,
             video_id,
-            video_index,
+            video_index: Some(0), // Default video index for tests
             content: "This is a **test** note.".to_string(),
             timestamp: Some(42),
             created_at: now,

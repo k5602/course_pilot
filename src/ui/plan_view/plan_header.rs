@@ -1,13 +1,11 @@
 use crate::export::ExportFormat;
 use crate::ui::backend_adapter::Backend;
-use crate::ui::components::modal_confirmation::{ActionMenu, DropdownItem};
-use crate::ui::components::progress_ring::ProgressRing;
+use crate::ui::components::progress::ProgressRing;
 use crate::ui::components::toast::toast;
+use crate::ui::components::{DropdownItem, DropdownTrigger, UnifiedDropdown};
 use dioxus::prelude::*;
 use dioxus_free_icons::Icon;
-use dioxus_free_icons::icons::fa_solid_icons::{
-    FaCheck, FaClock, FaFileCode, FaFileExport, FaFilePdf,
-};
+use dioxus_free_icons::icons::fa_solid_icons::{FaCheck, FaClock};
 
 #[derive(Props, PartialEq, Clone)]
 pub struct PlanHeaderProps {
@@ -49,36 +47,36 @@ pub fn PlanHeader(props: PlanHeaderProps) -> Element {
         });
     };
 
-    let actions = vec![
+    // Create dropdown items for export options
+    let export_items = vec![
         DropdownItem {
             label: "Export as JSON".to_string(),
-            icon: Some(rsx! { Icon { icon: FaFileCode, class: "w-4 h-4" } }),
+            icon: Some("📄".to_string()),
             on_select: Some(EventHandler::new({
                 let handle_export = handle_export.clone();
                 move |_| handle_export(ExportFormat::Json, "JSON")
             })),
-            children: None,
             disabled: false,
+            divider: false,
         },
         DropdownItem {
             label: "Export as CSV".to_string(),
-            icon: Some(rsx! { Icon { icon: FaFileExport, class: "w-4 h-4" } }),
+            icon: Some("📊".to_string()),
             on_select: Some(EventHandler::new({
                 let handle_export = handle_export.clone();
                 move |_| handle_export(ExportFormat::Csv, "CSV")
             })),
-            children: None,
             disabled: false,
+            divider: false,
         },
         DropdownItem {
             label: "Export as PDF".to_string(),
-            icon: Some(rsx! { Icon { icon: FaFilePdf, class: "w-4 h-4" } }),
-            on_select: Some(EventHandler::new({
-                let handle_export = handle_export.clone();
-                move |_| handle_export(ExportFormat::Pdf, "PDF")
+            icon: Some("📋".to_string()),
+            on_select: Some(EventHandler::new(move |_| {
+                toast::info("PDF export will be implemented in a future update");
             })),
-            children: None,
             disabled: false,
+            divider: true,
         },
     ];
 
@@ -148,13 +146,17 @@ pub fn PlanHeader(props: PlanHeaderProps) -> Element {
                         }
                     }
 
-                    // Actions section with enhanced styling
+                    // Actions section with DaisyUI dropdown
                     div {
                         class: "flex items-center gap-2 flex-shrink-0",
 
-                        // Use ActionMenu for export functionality
-                        ActionMenu {
-                            actions: actions,
+                        // Use UnifiedDropdown for consistent DaisyUI styling
+                        UnifiedDropdown {
+                            items: export_items,
+                            trigger: DropdownTrigger::Button {
+                                label: "Export".to_string()
+                            },
+                            position: "dropdown-end".to_string(),
                             class: Some("btn-outline hover:btn-primary focus:btn-primary transition-colors duration-200".to_string()),
                         }
                     }

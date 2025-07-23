@@ -55,23 +55,18 @@ pub fn UnifiedDropdown(
             // Trigger element using DaisyUI classes
             {match &trigger {
                 DropdownTrigger::DotsMenu => rsx! {
-                    label {
+                    div {
                         tabindex: "0",
-                        class: "btn btn-ghost btn-sm btn-circle",
                         role: "button",
-                        onclick: move |evt| {
-                            evt.stop_propagation();
-                        },
+                        class: "btn btn-ghost btn-sm btn-circle",
                         Icon { icon: FaEllipsisVertical, class: "w-4 h-4" }
                     }
                 },
                 DropdownTrigger::Button { label } => rsx! {
-                    label {
-                        class: "btn btn-outline btn-sm",
+                    div {
+                        tabindex: "0",
                         role: "button",
-                        onclick: move |evt| {
-                            evt.stop_propagation();
-                        },
+                        class: "btn btn-outline btn-sm {base_class}",
                         "{label}"
                         Icon { icon: FaChevronDown, class: "w-3 h-3 ml-1" }
                     }

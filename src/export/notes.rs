@@ -85,14 +85,9 @@ impl Exportable for Vec<Note> {
     }
 
     fn export_pdf(&self) -> Result<Vec<u8>> {
-        let content = self.generate_pdf_content()?;
-
-        // Simple PDF structure (placeholder implementation)
-        let mut pdf_content = Vec::new();
-        pdf_content.extend_from_slice(b"%PDF-1.4\n");
-        pdf_content.extend_from_slice(content.as_bytes());
-
-        Ok(pdf_content)
+        Err(anyhow::anyhow!(
+            "PDF export will be implemented in a future update"
+        ))
     }
 
     fn export_with_options(&self, options: ExportOptions) -> Result<ExportResult> {
@@ -114,10 +109,9 @@ impl Exportable for Vec<Note> {
                 self.export_csv()?.into_bytes()
             }
             ExportFormat::Pdf => {
-                if let Some(ref callback) = options.progress_callback {
-                    callback(25.0, "Generating PDF document...".to_string());
-                }
-                self.export_pdf()?
+                return Err(anyhow::anyhow!(
+                    "PDF export will be implemented in a future update"
+                ));
             }
         };
 

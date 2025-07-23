@@ -2,7 +2,6 @@ use super::{ExportFormat, ExportOptions, ExportResult, Exportable, utils};
 use crate::types::Course;
 use anyhow::Result;
 use csv::Writer;
-use printpdf::{Mm, PdfDocument};
 use serde::{Deserialize, Serialize};
 use serde_json;
 
@@ -131,38 +130,9 @@ impl Exportable for Course {
     }
 
     fn export_pdf(&self) -> Result<Vec<u8>> {
-        // Create a simple PDF document using the new API
-        let mut doc = PdfDocument::new(&self.name);
-
-        // Create content for the page
-        let mut page_contents = Vec::new();
-
-        // Add title text
-        page_contents.push(printpdf::Op::SetTextCursor {
-            pos: printpdf::Point {
-                x: Mm(20.0).into(),
-                y: Mm(270.0).into(),
-            },
-        });
-
-        // For now, create a simple text-based PDF content
-        let _content = self.generate_pdf_content()?;
-
-        // Create a simple page with the content as a marker (placeholder)
-        page_contents.push(printpdf::Op::Marker {
-            id: format!("course-export-{}", self.id),
-        });
-
-        // Create the page
-        let page = printpdf::PdfPage::new(Mm(210.0), Mm(297.0), page_contents);
-
-        // Save the document
-        let mut warnings = Vec::new();
-        let pdf_bytes = doc
-            .with_pages(vec![page])
-            .save(&printpdf::PdfSaveOptions::default(), &mut warnings);
-
-        Ok(pdf_bytes)
+        Err(anyhow::anyhow!(
+            "PDF export will be implemented in a future update"
+        ))
     }
 
     fn export_with_options(&self, options: ExportOptions) -> Result<ExportResult> {
@@ -184,10 +154,9 @@ impl Exportable for Course {
                 self.export_csv()?.into_bytes()
             }
             ExportFormat::Pdf => {
-                if let Some(ref callback) = options.progress_callback {
-                    callback(25.0, "Generating PDF document...".to_string());
-                }
-                self.export_pdf()?
+                return Err(anyhow::anyhow!(
+                    "PDF export will be implemented in a future update"
+                ));
             }
         };
 
@@ -227,61 +196,7 @@ impl Exportable for Course {
     }
 }
 
-impl Course {
-    /// Generate formatted content for PDF export
-    fn generate_pdf_content(&self) -> Result<String> {
-        let mut content = String::new();
-
-        // Title
-        content.push_str(&format!("COURSE EXPORT: {}\n", self.name.to_uppercase()));
-        content.push_str(&format!(
-            "Created: {}\n",
-            utils::format_timestamp(self.created_at)
-        ));
-        content.push_str(&format!("Total Videos: {}\n\n", self.video_count()));
-
-        if let Some(ref structure) = self.structure {
-            content.push_str("COURSE STRUCTURE\n");
-            content.push_str("================\n\n");
-
-            let total_duration = structure.aggregate_total_duration();
-            content.push_str(&format!(
-                "Total Duration: {}\n",
-                utils::format_duration(total_duration)
-            ));
-            content.push_str(&format!("Total Modules: {}\n\n", structure.modules.len()));
-
-            for (module_idx, module) in structure.modules.iter().enumerate() {
-                content.push_str(&format!("{}. {}\n", module_idx + 1, module.title));
-                content.push_str(&format!(
-                    "   Duration: {}\n",
-                    utils::format_duration(module.total_duration)
-                ));
-                content.push_str(&format!("   Sections: {}\n\n", module.sections.len()));
-
-                for (section_idx, section) in module.sections.iter().enumerate() {
-                    content.push_str(&format!(
-                        "   {}.{} {} ({})\n",
-                        module_idx + 1,
-                        section_idx + 1,
-                        section.title,
-                        utils::format_duration(section.duration)
-                    ));
-                }
-                content.push('\n');
-            }
-        } else {
-            content.push_str("RAW VIDEO TITLES\n");
-            content.push_str("================\n\n");
-
-            for (idx, title) in self.raw_titles.iter().enumerate() {
-                content.push_str(&format!("{}. {}\n", idx + 1, title));
-            }
-        }
-
-        Ok(content)
-    }
-}
+impl Course {}
 
 /// Course-specific export utilities
 pub mod course_utils {
@@ -338,24 +253,9 @@ pub mod course_utils {
                 csv_data.into_bytes()
             }
             ExportFormat::Pdf => {
-                let mut content = String::new();
-                content.push_str("COURSE COLLECTION EXPORT\n");
-                content.push_str("========================\n\n");
-                content.push_str(&format!("Total Courses: {}\n", courses.len()));
-                content.push_str(&format!(
-                    "Exported: {}\n\n",
-                    utils::format_timestamp(chrono::Utc::now())
+                return Err(anyhow::anyhow!(
+                    "PDF export will be implemented in a future update"
                 ));
-
-                for course in courses {
-                    content.push_str(&course.generate_pdf_content()?);
-                    content.push_str("\n---\n\n");
-                }
-
-                let mut pdf_content = Vec::new();
-                pdf_content.extend_from_slice(b"%PDF-1.4\n");
-                pdf_content.extend_from_slice(content.as_bytes());
-                pdf_content
             }
         };
 
