@@ -64,12 +64,11 @@ jobs:
         working-directory: ./course_pilot
 
       - name: Build Dioxus app for Linux
-        run: dx build --release --platform desktop
+        run: |
+          export PKG_CONFIG_PATH=/usr/lib/pkgconfig:/usr/lib/x86_64-linux-gnu/pkgconfig:/usr/share/pkgconfig
+          echo "PKG_CONFIG_PATH=$PKG_CONFIG_PATH"
+          dx build --release --platform desktop
         working-directory: ./course_pilot
-        # This explicitly sets the search path for the pkg-config tool,
-        # ensuring it can find the GTK libraries installed in the previous step.
-        env:
-          PKG_CONFIG_PATH: /usr/lib/x86_64-linux-gnu/pkgconfig:/usr/share/pkgconfig
 
       - name: Strip binary (reduce size)
         run: strip ./course_pilot/target/release/course_pilot
