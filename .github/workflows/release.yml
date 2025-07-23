@@ -65,6 +65,18 @@ jobs:
             libjavascriptcoregtk-4.1-dev \
             libgdk3.0-cil
 
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '18'
+          cache: 'npm'
+
+      - name: Install Node dependencies
+        run: npm ci
+
+      - name: Build CSS
+        run: npm run build:css
+
       - name: Install Dioxus CLI
         run: cargo install dioxus-cli --locked
 
@@ -84,8 +96,9 @@ jobs:
         run: |
           mkdir -p release-artifacts
           cp ./target/release/course_pilot ./release-artifacts/
+          cp -r ./assets ./release-artifacts/
           chmod +x ./release-artifacts/course_pilot
-          tar -czf course-pilot-linux-x64.tar.gz -C release-artifacts course_pilot
+          tar -czf course-pilot-linux-x64.tar.gz -C release-artifacts .
 
       - name: Upload Linux artifact
         uses: actions/upload-artifact@v4
@@ -118,6 +131,18 @@ jobs:
           restore-keys: |
             ${{ runner.os }}-cargo-
 
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '18'
+          cache: 'npm'
+
+      - name: Install Node dependencies
+        run: npm ci
+
+      - name: Build CSS
+        run: npm run build:css
+
       - name: Build Dioxus app for Windows
         run: |
           Write-Host "Building Dioxus app for Windows..."
@@ -138,7 +163,8 @@ jobs:
           $binaryPath = "./target/x86_64-pc-windows-msvc/release/course_pilot.exe"
           if (Test-Path $binaryPath) {
             Copy-Item $binaryPath ./release-artifacts/
-            Write-Host "Successfully found and copied course_pilot.exe"
+            Copy-Item -Recurse ./assets ./release-artifacts/
+            Write-Host "Successfully found and copied course_pilot.exe and assets"
             Write-Host "Binary size: $((Get-Item ./release-artifacts/course_pilot.exe).Length) bytes"
           } else {
             Write-Host "course_pilot.exe not found at expected location: $binaryPath"
@@ -221,8 +247,10 @@ jobs:
 
             **Windows:**
             1. Download the ZIP file
-            2. Extract to your desired location
+            2. Extract to your desired location (keep the `assets` folder alongside the executable)
             3. Run `course_pilot.exe`
+
+            **⚠️ Important:** Keep the `assets` folder in the same directory as the executable for proper styling.
 
             ### ⚙️ System Requirements
             - **Linux**: Ubuntu 20.04+ / Debian 11+ / Fedora 35+ (with GTK3)
