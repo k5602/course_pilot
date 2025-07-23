@@ -237,11 +237,45 @@ impl Backend {
         .await
         .unwrap_or_else(|e| Err(anyhow::anyhow!("Join error: {e}")))
     }
+
+    /// List notes by course with optional video index filtering
+    pub async fn list_notes_by_course_and_video_index(
+        &self,
+        course_id: Uuid,
+        video_index: Option<usize>,
+    ) -> Result<Vec<Note>> {
+        let db = self.db.clone();
+        tokio::task::spawn_blocking(move || {
+            let conn = db.get_conn()?;
+            if let Some(video_index) = video_index {
+                notes::get_notes_by_video_index(&conn, course_id, video_index)
+            } else {
+                notes::get_notes_by_course(&conn, course_id)
+            }
+        })
+        .await
+        .unwrap_or_else(|e| Err(anyhow::anyhow!("Join error: {e}")))
+    }
     pub async fn list_notes_by_video(&self, video_id: Uuid) -> Result<Vec<Note>> {
         let db = self.db.clone();
         tokio::task::spawn_blocking(move || {
             let conn = db.get_conn()?;
             notes::get_notes_by_video(&conn, video_id)
+        })
+        .await
+        .unwrap_or_else(|e| Err(anyhow::anyhow!("Join error: {e}")))
+    }
+
+    /// List notes for a specific video by course ID and video index
+    pub async fn list_notes_by_video_index(
+        &self,
+        course_id: Uuid,
+        video_index: usize,
+    ) -> Result<Vec<Note>> {
+        let db = self.db.clone();
+        tokio::task::spawn_blocking(move || {
+            let conn = db.get_conn()?;
+            notes::get_notes_by_video_index(&conn, course_id, video_index)
         })
         .await
         .unwrap_or_else(|e| Err(anyhow::anyhow!("Join error: {e}")))
@@ -697,6 +731,13 @@ impl Backend {
                 cognitive_load_balancing: total_videos > 20,
                 user_experience_level: user_experience,
                 custom_intervals: None, // Use default intervals
+                max_session_duration_minutes: None,
+                min_break_between_sessions_hours: None,
+                prioritize_difficult_content: matches!(
+                    user_experience,
+                    crate::types::DifficultyLevel::Advanced | crate::types::DifficultyLevel::Expert
+                ),
+                adaptive_pacing: true,
             };
 
             Ok(recommended_settings)

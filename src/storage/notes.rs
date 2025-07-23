@@ -13,6 +13,7 @@ pub fn init_notes_table(conn: &Connection) -> Result<()> {
             id          TEXT PRIMARY KEY,
             course_id   TEXT NOT NULL,
             video_id    TEXT,
+            video_index INTEGER,
             content     TEXT NOT NULL,
             timestamp   INTEGER,
             created_at  TEXT NOT NULL,
@@ -21,6 +22,7 @@ pub fn init_notes_table(conn: &Connection) -> Result<()> {
         );
         CREATE INDEX IF NOT EXISTS idx_notes_course_id ON notes(course_id);
         CREATE INDEX IF NOT EXISTS idx_notes_video_id ON notes(video_id);
+        CREATE INDEX IF NOT EXISTS idx_notes_course_video_index ON notes(course_id, video_index);
         "#,
     )
     .context("Failed to create notes table")?;
@@ -31,17 +33,54 @@ pub fn init_notes_table(conn: &Connection) -> Result<()> {
         .query_map([], |row| row.get(1))?
         .collect::<std::result::Result<Vec<String>, _>>()?;
 
+    log::info!("Existing columns in notes table: {:?}", columns);
+
     if !columns.iter().any(|c| c == "tags") {
+        log::info!("Adding tags column to notes table");
         conn.execute("ALTER TABLE notes ADD COLUMN tags TEXT DEFAULT '[]';", [])?;
     }
     if !columns.iter().any(|c| c == "course_id") {
+        log::info!("Adding course_id column to notes table");
         // If course_id is missing, add it as nullable, then update to NOT NULL if possible.
         conn.execute("ALTER TABLE notes ADD COLUMN course_id TEXT;", [])?;
         // You may want to run a migration script to populate course_id for existing notes.
     }
     if !columns.iter().any(|c| c == "video_id") {
+        log::info!("Adding video_id column to notes table");
         conn.execute("ALTER TABLE notes ADD COLUMN video_id TEXT;", [])?;
     }
+    if !columns.iter().any(|c| c == "video_index") {
+        log::info!("Adding video_index column to notes table");
+        match conn.execute("ALTER TABLE notes ADD COLUMN video_index INTEGER;", []) {
+            Ok(_) => {
+                log::info!("Successfully added video_index column");
+                // Create the index after adding the column
+                if let Err(e) = conn.execute("CREATE INDEX IF NOT EXISTS idx_notes_course_video_index ON notes(course_id, video_index);", []) {
+                    log::warn!("Failed to create index for video_index: {}", e);
+                }
+            }
+            Err(e) => {
+                log::error!("Failed to add video_index column: {}", e);
+                return Err(anyhow::anyhow!("Failed to add video_index column: {}", e));
+            }
+        }
+    }
+
+    // Verify the migration worked by checking columns again
+    let mut stmt = conn.prepare("PRAGMA table_info(notes);")?;
+    let final_columns: Vec<String> = stmt
+        .query_map([], |row| row.get(1))?
+        .collect::<std::result::Result<Vec<String>, _>>()?;
+
+    log::info!("Final columns in notes table: {:?}", final_columns);
+
+    if !final_columns.iter().any(|c| c == "video_index") {
+        log::error!("video_index column still missing after migration attempt");
+        return Err(anyhow::anyhow!(
+            "Failed to add video_index column to notes table"
+        ));
+    }
+
     Ok(())
 }
 
@@ -49,13 +88,14 @@ pub fn init_notes_table(conn: &Connection) -> Result<()> {
 pub fn create_note(conn: &Connection, note: &Note) -> Result<()> {
     conn.execute(
         r#"
-        INSERT INTO notes (id, course_id, video_id, content, timestamp, created_at, updated_at, tags)
-        VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8)
+        INSERT INTO notes (id, course_id, video_id, video_index, content, timestamp, created_at, updated_at, tags)
+        VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9)
         "#,
         params![
             note.id.to_string(),
             note.course_id.to_string(),
             note.video_id.as_ref().map(|v| v.to_string()),
+            note.video_index.map(|i| i as i64),
             note.content,
             note.timestamp.map(|t| t as i64),
             note.created_at.to_rfc3339(),
@@ -72,12 +112,13 @@ pub fn update_note(conn: &Connection, note: &Note) -> Result<()> {
     conn.execute(
         r#"
         UPDATE notes
-        SET course_id = ?1, video_id = ?2, content = ?3, timestamp = ?4, updated_at = ?5, tags = ?6
-        WHERE id = ?7
+        SET course_id = ?1, video_id = ?2, video_index = ?3, content = ?4, timestamp = ?5, updated_at = ?6, tags = ?7
+        WHERE id = ?8
         "#,
         params![
             note.course_id.to_string(),
             note.video_id.as_ref().map(|v| v.to_string()),
+            note.video_index.map(|i| i as i64),
             note.content,
             note.timestamp.map(|t| t as i64),
             note.updated_at.to_rfc3339(),
@@ -102,7 +143,7 @@ pub fn delete_note(conn: &Connection, note_id: Uuid) -> Result<()> {
 /// Get all notes across all courses.
 pub fn get_all_notes(conn: &Connection) -> Result<Vec<Note>> {
     let mut stmt = conn.prepare(
-        "SELECT id, course_id, video_id, content, timestamp, created_at, updated_at, tags FROM notes ORDER BY updated_at DESC",
+        "SELECT id, course_id, video_id, video_index, content, timestamp, created_at, updated_at, tags FROM notes ORDER BY updated_at DESC",
     )?;
     let notes = stmt
         .query_map([], note_from_row)?
@@ -113,7 +154,7 @@ pub fn get_all_notes(conn: &Connection) -> Result<Vec<Note>> {
 /// Get all notes for a given course (both course-level and video-level).
 pub fn get_notes_by_course(conn: &Connection, course_id: Uuid) -> Result<Vec<Note>> {
     let mut stmt = conn.prepare(
-        "SELECT id, course_id, video_id, content, timestamp, created_at, updated_at, tags FROM notes WHERE course_id = ?1 ORDER BY created_at ASC",
+        "SELECT id, course_id, video_id, video_index, content, timestamp, created_at, updated_at, tags FROM notes WHERE course_id = ?1 ORDER BY created_at ASC",
     )?;
     let notes = stmt
         .query_map(params![course_id.to_string()], note_from_row)?
@@ -124,7 +165,7 @@ pub fn get_notes_by_course(conn: &Connection, course_id: Uuid) -> Result<Vec<Not
 /// Get all notes for a given video (video-level notes only).
 pub fn get_notes_by_video(conn: &Connection, video_id: Uuid) -> Result<Vec<Note>> {
     let mut stmt = conn.prepare(
-        "SELECT id, course_id, video_id, content, timestamp, created_at, updated_at, tags FROM notes WHERE video_id = ?1 ORDER BY created_at ASC",
+        "SELECT id, course_id, video_id, video_index, content, timestamp, created_at, updated_at, tags FROM notes WHERE video_id = ?1 ORDER BY created_at ASC",
     )?;
     let notes = stmt
         .query_map(params![video_id.to_string()], note_from_row)?
@@ -135,7 +176,7 @@ pub fn get_notes_by_video(conn: &Connection, video_id: Uuid) -> Result<Vec<Note>
 /// Get all course-level notes (notes not tied to a specific video) for a course.
 pub fn get_course_level_notes(conn: &Connection, course_id: Uuid) -> Result<Vec<Note>> {
     let mut stmt = conn.prepare(
-        "SELECT id, course_id, video_id, content, timestamp, created_at, updated_at, tags FROM notes WHERE course_id = ?1 AND video_id IS NULL ORDER BY created_at ASC",
+        "SELECT id, course_id, video_id, video_index, content, timestamp, created_at, updated_at, tags FROM notes WHERE course_id = ?1 AND video_id IS NULL AND video_index IS NULL ORDER BY created_at ASC",
     )?;
     let notes = stmt
         .query_map(params![course_id.to_string()], note_from_row)?
@@ -143,10 +184,28 @@ pub fn get_course_level_notes(conn: &Connection, course_id: Uuid) -> Result<Vec<
     Ok(notes)
 }
 
+/// Get all notes for a specific video by course ID and video index.
+pub fn get_notes_by_video_index(
+    conn: &Connection,
+    course_id: Uuid,
+    video_index: usize,
+) -> Result<Vec<Note>> {
+    let mut stmt = conn.prepare(
+        "SELECT id, course_id, video_id, video_index, content, timestamp, created_at, updated_at, tags FROM notes WHERE course_id = ?1 AND video_index = ?2 ORDER BY created_at ASC",
+    )?;
+    let notes = stmt
+        .query_map(
+            params![course_id.to_string(), video_index as i64],
+            note_from_row,
+        )?
+        .collect::<Result<Vec<_>, _>>()?;
+    Ok(notes)
+}
+
 /// Get a single note by id.
 pub fn get_note_by_id(conn: &Connection, note_id: Uuid) -> Result<Option<Note>> {
     conn.query_row(
-        "SELECT id, course_id, video_id, content, timestamp, created_at, updated_at, tags FROM notes WHERE id = ?1",
+        "SELECT id, course_id, video_id, video_index, content, timestamp, created_at, updated_at, tags FROM notes WHERE id = ?1",
         params![note_id.to_string()],
         note_from_row,
     )
@@ -158,7 +217,7 @@ pub fn get_note_by_id(conn: &Connection, note_id: Uuid) -> Result<Option<Note>> 
 pub fn search_notes(conn: &Connection, query: &str) -> Result<Vec<Note>> {
     let pattern = format!("%{query}%");
     let mut stmt = conn.prepare(
-        "SELECT id, course_id, video_id, content, timestamp, created_at, updated_at, tags FROM notes WHERE content LIKE ?1 COLLATE NOCASE ORDER BY updated_at DESC",
+        "SELECT id, course_id, video_id, video_index, content, timestamp, created_at, updated_at, tags FROM notes WHERE content LIKE ?1 COLLATE NOCASE ORDER BY updated_at DESC",
     )?;
     let notes = stmt
         .query_map(params![pattern], note_from_row)?
@@ -184,7 +243,7 @@ pub struct NoteSearchFilters<'a> {
 /// All filters are optional and can be combined.
 pub fn search_notes_advanced(conn: &Connection, filters: NoteSearchFilters) -> Result<Vec<Note>> {
     let mut sql = String::from(
-        "SELECT id, course_id, video_id, content, timestamp, created_at, updated_at, tags FROM notes WHERE 1=1",
+        "SELECT id, course_id, video_id, video_index, content, timestamp, created_at, updated_at, tags FROM notes WHERE 1=1",
     );
     let mut params: Vec<Box<dyn ToSql>> = Vec::new();
 
@@ -311,15 +370,16 @@ fn note_from_row(row: &Row) -> std::result::Result<Note, rusqlite::Error> {
         }
         None => None,
     };
-    let content = row.get(3)?;
-    let timestamp = row.get::<_, Option<i64>>(4)?.map(|t| t as u32);
-    let created_at = DateTime::parse_from_rfc3339(&row.get::<_, String>(5)?)
+    let video_index = row.get::<_, Option<i64>>(3)?.map(|i| i as usize);
+    let content = row.get(4)?;
+    let timestamp = row.get::<_, Option<i64>>(5)?.map(|t| t as u32);
+    let created_at = DateTime::parse_from_rfc3339(&row.get::<_, String>(6)?)
         .map_err(|e| SqlError::ToSqlConversionFailure(Box::new(e)))?
         .with_timezone(&Utc);
-    let updated_at = DateTime::parse_from_rfc3339(&row.get::<_, String>(6)?)
+    let updated_at = DateTime::parse_from_rfc3339(&row.get::<_, String>(7)?)
         .map_err(|e| SqlError::ToSqlConversionFailure(Box::new(e)))?
         .with_timezone(&Utc);
-    let tags = match row.get::<_, Option<String>>(7)? {
+    let tags = match row.get::<_, Option<String>>(8)? {
         Some(json) => serde_json::from_str(&json).unwrap_or_default(),
         None => Vec::new(),
     };
@@ -328,6 +388,7 @@ fn note_from_row(row: &Row) -> std::result::Result<Note, rusqlite::Error> {
         id,
         course_id,
         video_id,
+        video_index,
         content,
         timestamp,
         created_at,
@@ -353,6 +414,7 @@ mod tests {
             id: Uuid::new_v4(),
             course_id,
             video_id,
+            video_index,
             content: "This is a **test** note.".to_string(),
             timestamp: Some(42),
             created_at: now,

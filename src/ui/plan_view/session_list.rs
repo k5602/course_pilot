@@ -336,7 +336,7 @@ pub struct VideoItemProps {
 fn VideoItem(props: VideoItemProps) -> Element {
     let toggle_completion = use_toggle_plan_item_action();
     let mut local_completed = use_signal(|| props.item.completed);
-    let mut is_updating = use_signal(|| false);
+    let is_updating = use_signal(|| false);
     let app_state = use_app_state();
 
     // Sync local state with prop changes

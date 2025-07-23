@@ -1,4 +1,4 @@
-use course_pilot::{AdvancedSchedulerSettings, DistributionStrategy, DifficultyLevel};
+use course_pilot::{AdvancedSchedulerSettings, DifficultyLevel, DistributionStrategy};
 
 fn main() {
     // Test the new types and their methods
@@ -7,7 +7,7 @@ fn main() {
     // Test DistributionStrategy
     let strategies = DistributionStrategy::all();
     println!("Available strategies: {:?}", strategies);
-    
+
     for strategy in &strategies {
         println!("- {}: {}", strategy.display_name(), strategy.description());
     }
@@ -15,7 +15,7 @@ fn main() {
     // Test DifficultyLevel
     let levels = DifficultyLevel::all();
     println!("\nAvailable difficulty levels: {:?}", levels);
-    
+
     for level in &levels {
         println!("- {}", level.display_name());
     }

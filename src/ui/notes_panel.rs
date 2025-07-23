@@ -59,7 +59,10 @@ fn NotesTab(
     video_id: Option<uuid::Uuid>,
     video_context: Option<(usize, String, String)>, // (video_index, video_title, module_title)
 ) -> Element {
-    let mut notes_resource = crate::ui::hooks::use_notes_resource(course_id, video_id);
+    // Use a unified resource that handles video_index filtering
+    let video_index = video_context.as_ref().map(|(index, _, _)| *index);
+    let mut notes_resource =
+        crate::ui::hooks::use_notes_with_video_index_resource(course_id, video_index);
     let mut search_query = use_signal(String::new);
     let mut selected_tags = use_signal(Vec::new);
     let mut show_tag_filter = use_signal(|| false);
@@ -133,56 +136,65 @@ fn NotesTab(
     // Handle save note
     let save_note_action = crate::ui::hooks::use_save_note_action();
 
-    let handle_save_note = move |_| {
-        let content = note_content();
-        if content.trim().is_empty() {
-            toast::warning("Note content cannot be empty");
-            return;
-        }
+    let handle_save_note = {
+        let save_note_action = save_note_action.clone();
+        let video_context = video_context.clone();
+        move |_| {
+            let content = note_content();
+            if content.trim().is_empty() {
+                toast::warning("Note content cannot be empty");
+                return;
+            }
 
-        let note = match editing_note_id() {
-            Some(id) => {
-                // Update existing note
-                if let Some(Ok(notes)) = &*notes_resource.read_unchecked() {
-                    if let Some(existing_note) = notes.iter().find(|n| n.id == id) {
-                        let mut updated_note = existing_note.clone();
-                        updated_note.content = content;
-                        updated_note.tags = editing_note_tags();
-                        updated_note.updated_at = chrono::Utc::now();
-                        updated_note
+            let note = match editing_note_id() {
+                Some(id) => {
+                    // Update existing note
+                    if let Some(Ok(notes)) = &*notes_resource.read_unchecked() {
+                        if let Some(existing_note) = notes.iter().find(|n| n.id == id) {
+                            let mut updated_note = existing_note.clone();
+                            updated_note.content = content;
+                            updated_note.tags = editing_note_tags();
+                            updated_note.updated_at = chrono::Utc::now();
+                            // Preserve or update video_index if we have video context
+                            if let Some((video_index, _, _)) = &video_context {
+                                updated_note.video_index = Some(*video_index);
+                            }
+                            updated_note
+                        } else {
+                            toast::error("Failed to find note to update");
+                            return;
+                        }
                     } else {
-                        toast::error("Failed to find note to update");
+                        toast::error("Failed to load notes");
                         return;
                     }
-                } else {
-                    toast::error("Failed to load notes");
-                    return;
                 }
-            }
-            None => {
-                // Create new note
-                crate::types::Note {
-                    id: uuid::Uuid::new_v4(),
-                    course_id,
-                    video_id,
-                    content,
-                    timestamp: None, // Could add timestamp input for video notes
-                    tags: editing_note_tags(),
-                    created_at: chrono::Utc::now(),
-                    updated_at: chrono::Utc::now(),
+                None => {
+                    // Create new note
+                    crate::types::Note {
+                        id: uuid::Uuid::new_v4(),
+                        course_id,
+                        video_id,
+                        video_index: video_context.as_ref().map(|(index, _, _)| *index),
+                        content,
+                        timestamp: None, // Could add timestamp input for video notes
+                        tags: editing_note_tags(),
+                        created_at: chrono::Utc::now(),
+                        updated_at: chrono::Utc::now(),
+                    }
                 }
-            }
-        };
+            };
 
-        save_note_action(note);
+            save_note_action(note);
 
-        // Reset form
-        note_content.set(String::new());
-        editing_note_id.set(None);
-        editing_note_tags.set(Vec::new());
+            // Reset form
+            note_content.set(String::new());
+            editing_note_id.set(None);
+            editing_note_tags.set(Vec::new());
 
-        // Refresh notes
-        notes_resource.restart();
+            // Refresh notes
+            notes_resource.restart();
+        }
     };
 
     // Handle edit note
@@ -540,6 +552,7 @@ fn NoteCard(props: NoteCardProps) -> Element {
         id: uuid::Uuid::nil(),
         course_id: uuid::Uuid::nil(),
         video_id: None,
+        video_index: None,
         timestamp: None,
         tags: vec![],
         created_at: chrono::Utc::now(),

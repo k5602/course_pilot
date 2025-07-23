@@ -126,6 +126,38 @@ pub fn use_notes_resource(course_id: Uuid, video_id: Option<Uuid>) -> Resource<R
     })
 }
 
+/// Load notes for a specific video by course ID and video index
+pub fn use_notes_by_video_index_resource(
+    course_id: Uuid,
+    video_index: usize,
+) -> Resource<Result<Vec<Note>>> {
+    let backend = use_backend_adapter();
+    use_resource(move || {
+        let backend = backend.clone();
+        async move {
+            backend
+                .list_notes_by_video_index(course_id, video_index)
+                .await
+        }
+    })
+}
+
+/// Load notes with optional video index filtering
+pub fn use_notes_with_video_index_resource(
+    course_id: Uuid,
+    video_index: Option<usize>,
+) -> Resource<Result<Vec<Note>>> {
+    let backend = use_backend_adapter();
+    use_resource(move || {
+        let backend = backend.clone();
+        async move {
+            backend
+                .list_notes_by_course_and_video_index(course_id, video_index)
+                .await
+        }
+    })
+}
+
 /// Load all notes across all courses using use_resource
 pub fn use_all_notes_resource() -> Resource<Result<Vec<Note>>> {
     let backend = use_backend_adapter();

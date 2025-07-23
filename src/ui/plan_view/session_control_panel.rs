@@ -144,6 +144,10 @@ pub fn SessionControlPanel(props: SessionControlPanelProps) -> Element {
             cognitive_load_balancing: cognitive_load_balancing(),
             user_experience_level: user_experience_level(),
             custom_intervals: None, // Could be enhanced later
+            max_session_duration_minutes: None,
+            min_break_between_sessions_hours: None,
+            prioritize_difficult_content: false,
+            adaptive_pacing: true,
         };
 
         let new_settings = PlanSettings {
