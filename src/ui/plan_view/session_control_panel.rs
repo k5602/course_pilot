@@ -1,15 +1,18 @@
 use dioxus::prelude::*;
 use dioxus_free_icons::Icon;
 use dioxus_free_icons::icons::fa_solid_icons::{
-    FaCalendarDays, FaClock, FaGear, FaRotateRight, FaSpinner, FaCheck, FaTriangleExclamation
+    FaCalendarDays, FaCheck, FaClock, FaGear, FaRotateRight, FaSpinner, FaTriangleExclamation,
 };
 use dioxus_motion::prelude::*;
 
 use std::sync::Arc;
 
-use crate::types::{Plan, PlanSettings, AdvancedSchedulerSettings, DistributionStrategy, DifficultyLevel, RegenerationStatus};
-use crate::ui::components::toast::toast;
+use crate::types::{
+    AdvancedSchedulerSettings, DifficultyLevel, DistributionStrategy, Plan, PlanSettings,
+    RegenerationStatus,
+};
 use crate::ui::backend_adapter::Backend;
+use crate::ui::components::toast::toast;
 
 #[derive(Props, PartialEq, Clone)]
 pub struct SessionControlPanelProps {
@@ -25,33 +28,28 @@ pub fn SessionControlPanel(props: SessionControlPanelProps) -> Element {
     let mut sessions_per_week = use_signal(|| props.plan.settings.sessions_per_week);
     let mut session_length = use_signal(|| props.plan.settings.session_length_minutes);
     let mut include_weekends = use_signal(|| props.plan.settings.include_weekends);
-    
+
     // Advanced scheduler settings
     let mut advanced_settings = use_signal(|| {
-        props.plan.settings.advanced_settings.clone()
+        props
+            .plan
+            .settings
+            .advanced_settings
+            .clone()
             .unwrap_or_default()
     });
-    let mut selected_strategy = use_signal(|| {
-        advanced_settings().strategy
-    });
-    let mut user_experience_level = use_signal(|| {
-        advanced_settings().user_experience_level
-    });
-    let mut difficulty_adaptation = use_signal(|| {
-        advanced_settings().difficulty_adaptation
-    });
-    let mut spaced_repetition_enabled = use_signal(|| {
-        advanced_settings().spaced_repetition_enabled
-    });
-    let mut cognitive_load_balancing = use_signal(|| {
-        advanced_settings().cognitive_load_balancing
-    });
-    
+    let mut selected_strategy = use_signal(|| advanced_settings().strategy);
+    let mut user_experience_level = use_signal(|| advanced_settings().user_experience_level);
+    let mut difficulty_adaptation = use_signal(|| advanced_settings().difficulty_adaptation);
+    let mut spaced_repetition_enabled =
+        use_signal(|| advanced_settings().spaced_repetition_enabled);
+    let mut cognitive_load_balancing = use_signal(|| advanced_settings().cognitive_load_balancing);
+
     // Form validation and regeneration state
     let mut form_errors = use_signal(|| Vec::<String>::new());
     let mut regeneration_status = use_signal(|| RegenerationStatus::Idle);
     let mut show_advanced = use_signal(|| false);
-    
+
     // Backend context
     let backend = use_context::<Arc<Backend>>();
 
@@ -100,7 +98,7 @@ pub fn SessionControlPanel(props: SessionControlPanelProps) -> Element {
     // Validate form inputs
     let validate_form = move || -> Vec<String> {
         let mut errors = Vec::new();
-        
+
         if sessions_per_week() == 0 {
             errors.push("Sessions per week must be greater than 0".to_string());
         }
@@ -113,12 +111,16 @@ pub fn SessionControlPanel(props: SessionControlPanelProps) -> Element {
         if session_length() > 180 {
             errors.push("Session length cannot exceed 180 minutes".to_string());
         }
-        
+
         // Advanced settings validation
-        if selected_strategy() == DistributionStrategy::SpacedRepetition && !spaced_repetition_enabled() {
-            errors.push("Spaced repetition must be enabled for SpacedRepetition strategy".to_string());
+        if selected_strategy() == DistributionStrategy::SpacedRepetition
+            && !spaced_repetition_enabled()
+        {
+            errors.push(
+                "Spaced repetition must be enabled for SpacedRepetition strategy".to_string(),
+            );
         }
-        
+
         errors
     };
 
@@ -126,7 +128,7 @@ pub fn SessionControlPanel(props: SessionControlPanelProps) -> Element {
         // Validate form
         let errors = validate_form();
         form_errors.set(errors.clone());
-        
+
         if !errors.is_empty() {
             spawn(async move {
                 toast::error("Please fix validation errors before applying settings");
@@ -161,7 +163,7 @@ pub fn SessionControlPanel(props: SessionControlPanelProps) -> Element {
         let plan_id = props.plan.id;
         let backend_clone = backend.clone();
         let on_plan_regenerated = props.on_plan_regenerated.clone();
-        
+
         spawn(async move {
             // Use the simpler regenerate_plan method without progress callback
             // since Dioxus signals can't be moved into Send + Sync closures
@@ -170,7 +172,7 @@ pub fn SessionControlPanel(props: SessionControlPanelProps) -> Element {
                     regeneration_status.set(RegenerationStatus::Completed);
                     on_plan_regenerated.call(new_plan);
                     toast::success("Plan regenerated successfully!");
-                    
+
                     // Reset status after a delay
                     tokio::time::sleep(tokio::time::Duration::from_secs(2)).await;
                     regeneration_status.set(RegenerationStatus::Idle);
@@ -189,9 +191,13 @@ pub fn SessionControlPanel(props: SessionControlPanelProps) -> Element {
         sessions_per_week.set(props.plan.settings.sessions_per_week);
         session_length.set(props.plan.settings.session_length_minutes);
         include_weekends.set(props.plan.settings.include_weekends);
-        
+
         // Reset advanced settings
-        let current_advanced = props.plan.settings.advanced_settings.clone()
+        let current_advanced = props
+            .plan
+            .settings
+            .advanced_settings
+            .clone()
             .unwrap_or_default();
         advanced_settings.set(current_advanced.clone());
         selected_strategy.set(current_advanced.strategy);
@@ -199,7 +205,7 @@ pub fn SessionControlPanel(props: SessionControlPanelProps) -> Element {
         difficulty_adaptation.set(current_advanced.difficulty_adaptation);
         spaced_repetition_enabled.set(current_advanced.spaced_repetition_enabled);
         cognitive_load_balancing.set(current_advanced.cognitive_load_balancing);
-        
+
         form_errors.set(Vec::new());
 
         spawn(async move {
@@ -437,7 +443,7 @@ pub fn SessionControlPanel(props: SessionControlPanelProps) -> Element {
                                         for (_index, level) in DifficultyLevel::all().iter().enumerate() {
                                             button {
                                                 type: "button",
-                                                class: format!("join-item btn btn-outline btn-sm flex-1 {}", 
+                                                class: format!("join-item btn btn-outline btn-sm flex-1 {}",
                                                     if user_experience_level() == *level { "btn-active" } else { "" }
                                                 ),
                                                 onclick: {
