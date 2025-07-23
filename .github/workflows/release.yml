@@ -34,21 +34,38 @@ jobs:
         run: |
           sudo apt-get update
           sudo apt-get install -y \
-            libwebkit2gtk-4.1-dev \
+            build-essential \
+            curl \
+            wget \
+            file \
+            libssl-dev \
             libgtk-3-dev \
+            libwebkit2gtk-4.1-dev \
             libayatana-appindicator3-dev \
             librsvg2-dev \
             libxdo3 \
             libxdo-dev \
             patchelf \
-            pkg-config
+            pkg-config \
+            libglib2.0-dev \
+            libgdk-pixbuf2.0-dev \
+            libcairo2-dev \
+            libpango1.0-dev \
+            libatk1.0-dev \
+            libsoup2.4-dev \
+            libjavascriptcoregtk-4.1-dev
       
       - name: Install Dioxus CLI
-        run: cargo install dioxus-cli
+        run: cargo install dioxus-cli --locked
       
       - name: Build Dioxus app for Linux
         run: dx build --release --platform desktop
         working-directory: ./course_pilot
+        env:
+          PKG_CONFIG_PATH: /usr/lib/x86_64-linux-gnu/pkgconfig:/usr/lib/pkgconfig:/usr/share/pkgconfig
+      
+      - name: Strip binary (reduce size)
+        run: strip ./course_pilot/target/release/course_pilot
       
       - name: Package Linux build
         run: |
@@ -86,13 +103,13 @@ jobs:
           restore-keys: ${{ runner.os }}-cargo-
       
       - name: Install Dioxus CLI
-        run: cargo install dioxus-cli
+        run: cargo install dioxus-cli --locked
       
       - name: Build Dioxus app for Windows
         run: dx build --release --platform desktop
         working-directory: ./course_pilot
         env:
-          RUSTFLAGS: "-C target-feature=+crt-static"
+          RUSTFLAGS: "-C target-feature=+crt-static -C link-arg=/SUBSYSTEM:WINDOWS"
       
       - name: Package Windows build
         run: |
@@ -109,6 +126,7 @@ jobs:
   create-release:
     runs-on: ubuntu-latest
     needs: [build-linux, build-windows]
+    if: success()
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -123,6 +141,14 @@ jobs:
         with:
           name: course-pilot-windows
       
+      - name: Get file sizes
+        id: sizes
+        run: |
+          linux_size=$(du -h course-pilot-linux-x64.tar.gz | cut -f1)
+          windows_size=$(du -h course-pilot-windows-x64.zip | cut -f1)
+          echo "linux_size=$linux_size" >> $GITHUB_OUTPUT
+          echo "windows_size=$windows_size" >> $GITHUB_OUTPUT
+      
       - name: Generate changelog
         id: changelog
         run: |
@@ -131,7 +157,7 @@ jobs:
             sed -n '/^## \[/,/^## \[/p' CHANGELOG.md | head -n -1 >> $GITHUB_OUTPUT
             echo "EOF" >> $GITHUB_OUTPUT
           else
-            echo "changelog=Auto-generated release for ${{ github.ref_name }}" >> $GITHUB_OUTPUT
+            echo "changelog=Automated release build" >> $GITHUB_OUTPUT
           fi
       
       - name: Create GitHub Release
@@ -143,28 +169,38 @@ jobs:
           tag_name: ${{ github.ref_name }}
           name: Course Pilot ${{ github.ref_name }}
           body: |
-            ## Course Pilot ${{ github.ref_name }}
+            ## 🚀 Course Pilot ${{ github.ref_name }}
             
-            ### Download Instructions:
+            ### 📦 Downloads
+            | Platform | File | Size |
+            |----------|------|------|
+            | 🐧 Linux x64 | [`course-pilot-linux-x64.tar.gz`](https://github.com/${{ github.repository }}/releases/download/${{ github.ref_name }}/course-pilot-linux-x64.tar.gz) | ${{ steps.sizes.outputs.linux_size }} |
+            | 🪟 Windows x64 | [`course-pilot-windows-x64.zip`](https://github.com/${{ github.repository }}/releases/download/${{ github.ref_name }}/course-pilot-windows-x64.zip) | ${{ steps.sizes.outputs.windows_size }} |
             
-            **🐧 Linux (x64):**
+            ### 🚀 Quick Install
+            
+            **Linux:**
             ```bash
-            # Download and extract
             wget https://github.com/${{ github.repository }}/releases/download/${{ github.ref_name }}/course-pilot-linux-x64.tar.gz
             tar -xzf course-pilot-linux-x64.tar.gz
             ./course_pilot
             ```
             
-            **🪟 Windows (x64):**
-            1. Download `course-pilot-windows-x64.zip`
-            2. Extract the contents
-            3. Double-click `course_pilot.exe` to run
+            **Windows:**
+            1. Download the ZIP file
+            2. Extract to your desired location
+            3. Run `course_pilot.exe`
             
-            ### System Requirements:
-            - **Linux**: Ubuntu 20.04+ or equivalent (with GTK3 and WebKit2GTK)
-            - **Windows**: Windows 10 version 1903+ or Windows 11
+            ### ⚙️ System Requirements
+            - **Linux**: Ubuntu 20.04+ / Debian 11+ / Fedora 35+ (with GTK3)
+            - **Windows**: Windows 10 (1903+) / Windows 11
             
             ---
+            
+            ### 📝 Changes
             ${{ steps.changelog.outputs.changelog }}
+            
+            *Built with ❤️ using Dioxus*
           draft: false
           prerelease: ${{ contains(github.ref_name, 'alpha') || contains(github.ref_name, 'beta') || contains(github.ref_name, 'rc') }}
+          generate_release_notes: true
