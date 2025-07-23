@@ -34,15 +34,30 @@ impl Database {
             }
         }
 
+        // Clean up any existing WAL/SHM files from previous runs
+        Self::cleanup_wal_files(db_path)?;
+
         // Create SQLite connection manager
         let manager = SqliteConnectionManager::file(db_path)
             .with_init(|conn| {
                 // Enable foreign key support
                 conn.pragma_update(None, "foreign_keys", &"ON")?;
-                // Enable WAL mode for better concurrency
-                conn.pragma_update(None, "journal_mode", &"WAL")?;
+                
+                // Checkpoint any existing WAL data before changing journal mode
+                let _ = conn.pragma_update(None, "wal_checkpoint", &"TRUNCATE");
+                
+                // Use DELETE journal mode for desktop apps - no WAL files
+                conn.pragma_update(None, "journal_mode", &"DELETE")?;
+                
                 // Set busy timeout to 5 seconds
                 conn.busy_timeout(std::time::Duration::from_secs(5))?;
+                
+                // Verify journal mode was set correctly
+                let journal_mode: String = conn.pragma_query_value(None, "journal_mode", |row| {
+                    row.get(0)
+                })?;
+                log::info!("Database journal mode set to: {}", journal_mode);
+                
                 Ok(())
             });
 
@@ -69,6 +84,32 @@ impl Database {
     /// Get a reference to the underlying pool
     pub fn pool(&self) -> &DbPool {
         &self.pool
+    }
+
+    /// Clean up WAL and SHM files from previous runs
+    fn cleanup_wal_files(db_path: &Path) -> Result<(), DatabaseError> {
+        let wal_path = db_path.with_extension("db-wal");
+        let shm_path = db_path.with_extension("db-shm");
+        
+        // Remove WAL file if it exists
+        if wal_path.exists() {
+            std::fs::remove_file(&wal_path).map_err(|e| {
+                log::warn!("Failed to remove WAL file {}: {}", wal_path.display(), e);
+                DatabaseError::Io(e)
+            })?;
+            log::info!("Removed existing WAL file: {}", wal_path.display());
+        }
+        
+        // Remove SHM file if it exists
+        if shm_path.exists() {
+            std::fs::remove_file(&shm_path).map_err(|e| {
+                log::warn!("Failed to remove SHM file {}: {}", shm_path.display(), e);
+                DatabaseError::Io(e)
+            })?;
+            log::info!("Removed existing SHM file: {}", shm_path.display());
+        }
+        
+        Ok(())
     }
 }
 
@@ -133,6 +174,9 @@ pub fn init_db(db_path: &Path) -> Result<Database, DatabaseError> {
             std::fs::create_dir_all(parent)?;
         }
     }
+
+    // Clean up any existing WAL/SHM files before creating the database
+    Database::cleanup_wal_files(db_path)?;
 
     // Create the database file if it doesn't exist
     if !db_path.exists() {
