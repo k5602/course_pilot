@@ -31,13 +31,23 @@ pub fn TopBar() -> Element {
             },
 
             // Right side: contextual panel toggle
-            button {
-                class: "btn btn-ghost btn-square",
-                onclick: move |_| {
-                    let is_open = app_state.read().contextual_panel.is_open;
-                    app_state.write().contextual_panel.is_open = !is_open;
-                },
-                Icon { icon: FaNoteSticky, class: "w-6 h-6" }
+            div {
+                class: "tooltip tooltip-left",
+                "data-tip": if app_state.read().contextual_panel.is_open { "Hide Notes Panel" } else { "Show Notes Panel" },
+                button {
+                    class: format!("btn btn-square {}", 
+                        if app_state.read().contextual_panel.is_open { 
+                            "btn-primary" 
+                        } else { 
+                            "btn-ghost" 
+                        }
+                    ),
+                    onclick: move |_| {
+                        let is_open = app_state.read().contextual_panel.is_open;
+                        app_state.write().contextual_panel.is_open = !is_open;
+                    },
+                    Icon { icon: FaNoteSticky, class: "w-6 h-6" }
+                }
             }
         }
     }

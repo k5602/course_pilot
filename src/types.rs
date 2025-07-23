@@ -168,7 +168,7 @@ pub struct ContextualPanelState {
 impl Default for ContextualPanelState {
     fn default() -> Self {
         Self {
-            is_open: false,
+            is_open: false, // Closed by default, user can open via button
             active_tab: ContextualPanelTab::Notes,
         }
     }

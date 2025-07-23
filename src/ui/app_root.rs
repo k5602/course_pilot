@@ -59,6 +59,8 @@ fn load_initial_state(db: &Arc<Database>) -> AppState {
     let mut plans = Vec::new();
     let mut notes = Vec::new();
 
+    // Seed data functionality removed - no automatic sample notes
+
     // Load related data for each course
     for course in &courses {
         if let Ok(Some(plan)) = crate::storage::get_plan_by_course_id(db, &course.id) {

@@ -1,10 +1,47 @@
 use dioxus::prelude::*;
 use dioxus_motion::prelude::*;
 
-use super::{ContextualPanel, MainContent, Sidebar};
+use super::{ContextualPanel, Sidebar};
 use crate::ui::hooks::use_app_state;
+use crate::types::Route;
+use crate::ui::components::top_bar::TopBar;
+use crate::ui::dashboard::Dashboard;
+use crate::ui::navigation::Breadcrumbs;
+use crate::ui::plan_view::PlanView;
 
-/// Clean app shell with proper component separation
+/// Render content based on current route
+fn render_route_content(route: Route) -> Element {
+    match route {
+        Route::Dashboard => rsx!(Dashboard {}),
+        Route::PlanView(course_id) => rsx!(PlanView {
+            course_id: course_id
+        }),
+        Route::Settings => rsx! {
+            div {
+                class: "p-8",
+                h1 { class: "text-3xl font-bold mb-4", "Settings" }
+                p { class: "text-base-content/70", "Configure your Course Pilot preferences here." }
+            }
+        },
+        Route::AddCourse => rsx! {
+            div {
+                class: "p-8",
+                h1 { class: "text-3xl font-bold mb-4", "Add Course" }
+                p { class: "text-base-content/70", "Add a new course to your collection." }
+            }
+        },
+        #[cfg(debug_assertions)]
+        Route::ToastTest => rsx! {
+            div {
+                class: "p-8",
+                h1 { class: "text-3xl font-bold mb-4", "Toast Test" }
+                p { class: "text-base-content/70", "Test toast notifications." }
+            }
+        },
+    }
+}
+
+/// Clean app shell with integrated layout management
 #[component]
 pub fn AppShell() -> Element {
     let app_state = use_app_state();
@@ -37,13 +74,13 @@ pub fn AppShell() -> Element {
         )
     });
 
+    // Calculate margins for main content area
+    let sidebar_margin = if is_sidebar_hovered() { "ml-45" } else { "ml-20" };
+    let panel_margin = if panel_is_open { "md:mr-96" } else { "md:mr-0" };
+    
     let main_class = format!(
-        "flex-1 flex flex-col overflow-hidden {}",
-        if is_sidebar_hovered() {
-            "ml-45"
-        } else {
-            "ml-20"
-        }
+        "flex-1 flex flex-col overflow-hidden {} {} transition-all duration-300",
+        sidebar_margin, panel_margin
     );
 
     rsx! {
@@ -62,12 +99,17 @@ pub fn AppShell() -> Element {
                     },
                 }
 
-                div {
-                    class: "{main_class}",
+                // Main content area (previously MainContent component)
+                main {
+                    class: "{main_class} bg-base-100",
                     style: "{main_content_style}",
-                    MainContent {
-                        current_route: current_route,
-                        panel_is_open: panel_is_open,
+
+                    TopBar {}
+                    Breadcrumbs { current_route: current_route }
+
+                    div {
+                        class: "flex-1 overflow-y-auto",
+                        {render_route_content(current_route)}
                     }
                 }
 

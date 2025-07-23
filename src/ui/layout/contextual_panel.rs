@@ -4,9 +4,8 @@ use crate::ui::notes_panel::{NotesPanel, NotesPanelMode};
 use dioxus::prelude::*;
 use dioxus_motion::prelude::*;
 
-const CONTEXT_PANEL_WIDTH: &str = "w-0 md:w-96";
 const CONTEXT_PANEL_BG: &str =
-    "bg-base-200 bg-opacity-90 backdrop-blur-md border-l border-base-300";
+    "bg-base-100 border-l border-base-300 shadow-lg";
 
 /// Clean contextual panel component
 #[component]
@@ -15,6 +14,9 @@ pub fn ContextualPanel() -> Element {
     let is_open = app_state.read().contextual_panel.is_open;
     let active_tab = app_state.read().contextual_panel.active_tab;
     let current_route = app_state.read().current_route;
+
+    // Debug logging
+    log::info!("ContextualPanel render: is_open={}, active_tab={:?}", is_open, active_tab);
 
     // Determine current course_id from route
     let current_course_id = match current_route {
@@ -37,8 +39,7 @@ pub fn ContextualPanel() -> Element {
     let panel_style = use_memo(move || format!("transform: translateX({}%);", panel_x.get_value()));
 
     let container_class = format!(
-        "{CONTEXT_PANEL_WIDTH} {CONTEXT_PANEL_BG} fixed right-0 top-0 bottom-0 z-30 transition-transform duration-300 hidden md:flex flex-col {}",
-        if !is_open { "pointer-events-none" } else { "" }
+        "w-96 {CONTEXT_PANEL_BG} fixed right-0 top-0 bottom-0 z-30 flex flex-col overflow-hidden"
     );
 
     rsx! {
@@ -46,7 +47,7 @@ pub fn ContextualPanel() -> Element {
             class: "{container_class}",
             style: "{panel_style}",
 
-            // Tab navigation
+            // Tab navigation - always render to keep hooks active
             div {
                 role: "tablist",
                 class: "tabs tabs-boxed p-2 bg-transparent",
@@ -66,7 +67,7 @@ pub fn ContextualPanel() -> Element {
                 }
             }
 
-            // Tab content
+            // Tab content - always render to keep hooks active
             div {
                 class: "flex-1 overflow-y-auto",
                 {render_tab_content(active_tab, current_course_id)}

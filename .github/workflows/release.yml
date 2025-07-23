@@ -2,7 +2,7 @@ name: Release Pipeline
 on:
   push:
     tags:
-      - "v*.*.*" # Trigger on tags like v1.0.0, v1.2.3, etc.
+      - "v*.*.1" # Trigger on tags like v1.0.0, v1.2.3, etc.
 
 permissions:
   contents: write
@@ -27,8 +27,17 @@ jobs:
             ~/.cargo/registry/index/
             ~/.cargo/registry/cache/
             ~/.cargo/git/db/
-          key: ${{ runner.os }}-cargo-deps-${{ hashFiles('course_pilot/Cargo.lock') }}
+            target/
+          key: ${{ runner.os }}-cargo-deps-${{ hashFiles('Cargo.lock') }}
           restore-keys: ${{ runner.os }}-cargo-deps-
+
+      - name: Cache apt packages
+        uses: actions/cache@v4
+        with:
+          path: /var/cache/apt/archives
+          key: ${{ runner.os }}-apt-cache-${{ hashFiles('.github/workflows/release.yml') }}
+          restore-keys: |
+            ${{ runner.os }}-apt-cache-
 
       - name: Install Linux dependencies
         run: |
@@ -61,22 +70,20 @@ jobs:
 
       - name: Clean previous build artifacts
         run: cargo clean
-        working-directory: course_pilot
 
       - name: Build Dioxus app for Linux
         run: |
           export PKG_CONFIG_PATH=/usr/lib/pkgconfig:/usr/lib/x86_64-linux-gnu/pkgconfig:/usr/share/pkgconfig
           echo "PKG_CONFIG_PATH=$PKG_CONFIG_PATH"
           dx build --release --platform desktop
-        working-directory: ./course_pilot
 
       - name: Strip binary (reduce size)
-        run: strip ./course_pilot/target/release/course_pilot
+        run: strip ./target/release/course_pilot
 
       - name: Package Linux build
         run: |
           mkdir -p release-artifacts
-          cp ./course_pilot/target/release/course_pilot ./release-artifacts/
+          cp ./target/release/course_pilot ./release-artifacts/
           chmod +x ./release-artifacts/course_pilot
           tar -czf course-pilot-linux-x64.tar.gz -C release-artifacts course_pilot
 
@@ -105,22 +112,24 @@ jobs:
             ~/.cargo/registry/index/
             ~/.cargo/registry/cache/
             ~/.cargo/git/db/
-          key: ${{ runner.os }}-cargo-deps-${{ hashFiles('course_pilot/Cargo.lock') }}
+            target/
+          key: ${{ runner.os }}-cargo-deps-${{ hashFiles('Cargo.lock') }}
           restore-keys: ${{ runner.os }}-cargo-deps-
 
       - name: Install Dioxus CLI
         run: cargo install dioxus-cli --locked
+        env:
+          RUSTFLAGS: "-C target-feature=+crt-static -C link-arg=/SUBSYSTEM:WINDOWS -C link-args=/LIBPATH:C:\\Windows\\System32 advapi32.lib secur32.lib crypt32.lib ole32.lib userenv.lib"
 
       - name: Build Dioxus app for Windows
         run: dx build --release --platform desktop
-        working-directory: ./course_pilot
         env:
           RUSTFLAGS: "-C target-feature=+crt-static -C link-arg=/SUBSYSTEM:WINDOWS -C link-args=/LIBPATH:C:\\Windows\\System32 advapi32.lib secur32.lib crypt32.lib ole32.lib userenv.lib"
 
       - name: Package Windows build
         run: |
           mkdir release-artifacts
-          Copy-Item ./course_pilot/target/release/course_pilot.exe ./release-artifacts/
+          Copy-Item ./target/release/course_pilot.exe ./release-artifacts/
           Compress-Archive -Path ./release-artifacts/* -DestinationPath course-pilot-windows-x64.zip
 
       - name: Upload Windows artifact
@@ -187,7 +196,7 @@ jobs:
 
             **Linux:**
             ```bash
-            wget [https://github.com/$](https://github.com/$){{ github.repository }}/releases/download/${{ github.ref_name }}/course-pilot-linux-x64.tar.gz
+            wget https://github.com/${{ github.repository }}/releases/download/${{ github.ref_name }}/course-pilot-linux-x64.tar.gz
             tar -xzf course-pilot-linux-x64.tar.gz
             ./course_pilot
             ```
@@ -209,4 +218,3 @@ jobs:
             *Built with ❤️ using Dioxus*
           draft: false
           prerelease: ${{ contains(github.ref_name, 'alpha') || contains(github.ref_name, 'beta') || contains(github.ref_name, 'rc') }}
-          generate_release_notes: true

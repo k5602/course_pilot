@@ -7,6 +7,8 @@ pub mod database;
 pub mod notes;
 pub mod settings;
 
+
+
 // Re-export main database functions
 pub use database::{
     delete_course, delete_plan, get_course_by_id, get_plan_by_course_id, init_db, load_courses,
@@ -21,6 +23,8 @@ pub use notes::{get_notes_by_course, init_notes_table};
 
 // Re-export settings functions for convenience
 pub use settings::{AppSettings, save_app_settings, use_app_settings};
+
+// Seed data functionality removed
 
 // Re-export Connection type for convenience
 pub use rusqlite::Connection;

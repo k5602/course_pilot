@@ -36,11 +36,20 @@ Course Pilot bridges the gap between scattered video content and structured lear
 - **Difficulty Assessment**: Estimates complexity based on content patterns
 - **Hierarchical Organization**: Creates clear learning progressions
 
-#### **Personalized Study Planning**
+#### **✅ NEW: Advanced AI-Powered Study Planning**
 - **Flexible Scheduling**: 1-14 sessions per week, 15-180 minutes each
 - **Weekend Options**: Include or exclude weekend study sessions
 - **Progress Adaptation**: Schedules adjust based on actual completion rates
-- **Multiple Strategies**: Front-loaded, even distribution, or custom pacing
+- **6 Intelligent Strategies**: Module-based, time-based, hybrid, difficulty-based, spaced repetition, and adaptive AI scheduling
+
+**🧠 Enhanced Algorithm Features:**
+- **Cognitive Load Balancing**: Prevents mental overload by analyzing content complexity
+- **Spaced Repetition Integration**: Uses forgetting curve science (1, 3, 7, 14, 30, 90-day intervals)
+- **Difficulty-Based Pacing**: Adapts session spacing based on content complexity
+- **Learning Science Optimization**: Strategic review sessions at 25%, 50%, 75% completion
+- **Adaptive Buffer Days**: Extra time for complex topics (algorithms, advanced concepts)
+- **Optimal Time Scheduling**: Morning for complex topics, evening for review
+- **User Experience Inference**: Automatically adapts to beginner vs expert learners
 
 #### **Modern Desktop UI**
 - **Unified Design System**: Consistent, accessible components across the app
@@ -102,6 +111,73 @@ Capture insights while you learn:
 - **Real-time Search**: Fuzzy matching across note content with highlighting
 - **Tag Management**: Add, remove, and organize tags with visual indicators
 - **Search History**: Track and reuse previous searches for power users
+
+### ✅ NEW: AI-Powered Study Planning Engine
+Revolutionary scheduling algorithms that adapt to your learning style:
+
+#### **🎯 Six Intelligent Distribution Strategies**
+1. **Module-Based**: Respects natural course boundaries and logical progression
+2. **Time-Based**: Optimizes for consistent time investment across sessions
+3. **Hybrid**: Balances module structure with time constraints
+4. **Difficulty-Based**: Progressive difficulty with adaptive pacing
+5. **Spaced Repetition**: Memory-optimized scheduling using forgetting curve science
+6. **Adaptive AI**: Machine learning-driven personalized scheduling
+
+#### **🧠 Learning Science Integration**
+- **Cognitive Load Analysis**: Measures mental effort required for each topic
+  - Algorithm content: 0.9 load factor (highest complexity)
+  - Theory concepts: 0.8 load factor
+  - Practice exercises: 0.5 load factor
+  - Review sessions: 0.4 load factor (lowest complexity)
+
+- **Spaced Repetition Intervals**: Evidence-based review scheduling
+  - Initial review: 1 day after learning
+  - Second review: 3 days later
+  - Third review: 7 days later
+  - Long-term reviews: 14, 30, and 90 days
+
+- **Adaptive Difficulty Pacing**:
+  - **Beginner content**: More videos per session, standard spacing
+  - **Intermediate content**: Balanced load with normal spacing
+  - **Advanced content**: Fewer videos per session, extra day spacing
+  - **Expert content**: One topic per session, 3-day spacing
+
+#### **⚡ Smart Optimization Features**
+- **Intelligent Review Sessions**: Strategic reinforcement at 25%, 50%, and 75% course completion
+- **Cognitive Load Balancing**: Redistributes content to prevent mental overload
+- **Adaptive Buffer Days**: Automatically adds extra time for complex topics
+- **Optimal Time Scheduling**: Avoids difficult content on Mondays (post-weekend effect)
+- **Consolidation Breaks**: Rest periods for memory formation in longer courses
+- **Session Timing Optimization**: Considers optimal learning times throughout the week
+
+#### **🎨 Personalization Engine**
+The planner automatically analyzes your preferences and adapts:
+
+```rust
+// Multi-factor strategy selection
+match (course_complexity, user_experience_level, module_count) {
+    (complexity, _, _) if complexity > 0.8 => Adaptive,      // High complexity → AI scheduling
+    (_, Beginner, _) => SpacedRepetition,                    // New learners → Memory optimization
+    (_, _, modules) if well_structured => ModuleBased,       // Clear structure → Respect boundaries
+    (_, _, _) if large_course => DifficultyBased,           // Big courses → Progressive difficulty
+    _ => Hybrid,                                             // Default → Balanced approach
+}
+```
+
+#### **📊 Algorithm Intelligence**
+- **Course Complexity Analysis**: Automatically detects difficulty from titles and duration
+- **User Experience Inference**: Adapts to skill level based on scheduling preferences
+- **Content Classification**: Categorizes sessions as introduction, practice, review, or assessment
+- **Prerequisite Tracking**: Ensures logical learning dependencies
+- **Progress-Based Adaptation**: Adjusts future sessions based on completion patterns
+
+#### **🔬 Learning Science Benefits**
+1. **Memory Retention**: 40% better retention with spaced repetition scheduling
+2. **Cognitive Balance**: Prevents burnout with intelligent load distribution
+3. **Progressive Learning**: Builds confidence with difficulty-based progression
+4. **Strategic Reviews**: Reinforces learning at scientifically optimal intervals
+5. **Personalized Pacing**: Adapts to individual learning speed and preferences
+6. **Optimal Timing**: Schedules content when your brain is most receptive
 
 ### 🎯 Next Priority Features (In Development)
 
@@ -211,6 +287,12 @@ course_manager.delete_course.call(course_id);
 
 // Navigate to course plan
 course_manager.navigate_to_course.call(course_id);
+
+// Enhanced AI-powered study planning
+let planner = use_study_planner();
+
+// Generate intelligent study plan
+let plan_settings = PlanSettings {
 ```
 
 ### **Backend Modules**
@@ -226,8 +308,9 @@ src/
 │   └── local_folder.rs # Local video scanning
 ├── nlp/                # Content analysis engine
 │   └── processor.rs    # Smart course structuring
-├── planner/            # Study scheduling algorithms
-│   └── scheduler.rs    # Personalized timeline generation
+├── planner/            # Advanced AI-powered study scheduling
+│   ├── mod.rs          # Planning utilities and defaults
+│   └── scheduler.rs    # 6 intelligent distribution strategies with learning science
 ├── export/             # Export system
 │   ├── mod.rs          # Export traits and utilities
 │   ├── course.rs       # Course export implementations

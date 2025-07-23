@@ -1,6 +1,7 @@
 use crate::ui::components::TagInput;
+use crate::ui::components::SearchHistory;
 use crate::ui::components::modal_confirmation::{
-    ActionMenu, AdvancedTabs, Badge, ModalConfirmation,
+    ActionMenu, Badge, ModalConfirmation,
 };
 
 use crate::ui::components::toast::toast;
@@ -24,127 +25,19 @@ pub enum NotesPanelMode {
     CourseNotes(Uuid),
 }
 
-/// NotesPanel: Contextual panel with tabs for Notes and Player
+/// NotesPanel: Contextual panel that directly shows notes content
 #[component]
 pub fn NotesPanel(mode: NotesPanelMode) -> Element {
     match mode {
         NotesPanelMode::AllNotes => {
-            // Use all notes resource
-            let notes_resource = crate::ui::hooks::use_all_notes_resource();
-
-            match &*notes_resource.read_unchecked() {
-                None => {
-                    return rsx! {
-                        div {
-                            class: "flex flex-col h-full w-full p-4",
-                            div { class: "tabs tabs-boxed flex gap-2 p-2 bg-base-100/80 mb-4 animate-pulse" }
-                            {(0..3).map(|_| rsx! {
-                                div { class: "card bg-base-200 shadow-sm p-4 mb-4 animate-pulse",
-                                    div { class: "h-4 w-1/2 bg-base-300 rounded mb-2" }
-                                    div { class: "h-3 w-full bg-base-300 rounded mb-2" }
-                                    div { class: "h-2 w-1/3 bg-base-300 rounded" }
-                                }
-                            })}
-                        }
-                    };
-                }
-                Some(Err(_err)) => {
-                    return rsx! {
-                        div {
-                            class: "flex flex-col h-full w-full items-center justify-center",
-                            div { class: "text-error", "Failed to load notes" }
-                        }
-                    };
-                }
-                Some(Ok(_notes)) => {
-                    // AdvancedTabs for Notes/Player
-                    let tabs = vec![
-                        crate::ui::components::modal_confirmation::TabData {
-                            label: "All Notes".to_string(),
-                            content: rsx!(AllNotesTab {}),
-                            closable: false,
-                        },
-                        crate::ui::components::modal_confirmation::TabData {
-                            label: "Player".to_string(),
-                            content: rsx!(PlayerTab {}),
-                            closable: false,
-                        },
-                    ];
-                    let mut selected = use_signal(|| 0);
-
-                    rsx! {
-                        div {
-                            class: "flex flex-col h-full w-full",
-                            AdvancedTabs {
-                                tabs: tabs.clone(),
-                                selected: selected(),
-                                on_select: move |idx| selected.set(idx),
-                            }
-                        }
-                    }
-                }
-            }
+            rsx!(AllNotesTab {})
         }
         NotesPanelMode::CourseNotes(course_id) => {
             let video_id = None;
-            // Use course-specific notes resource
-            let notes_resource = crate::ui::hooks::use_notes_resource(course_id, video_id);
-
-            match &*notes_resource.read_unchecked() {
-                None => {
-                    return rsx! {
-                        div {
-                            class: "flex flex-col h-full w-full p-4",
-                            div { class: "tabs tabs-boxed flex gap-2 p-2 bg-base-100/80 mb-4 animate-pulse" }
-                            {(0..3).map(|_| rsx! {
-                                div { class: "card bg-base-200 shadow-sm p-4 mb-4 animate-pulse",
-                                    div { class: "h-4 w-1/2 bg-base-300 rounded mb-2" }
-                                    div { class: "h-3 w-full bg-base-300 rounded mb-2" }
-                                    div { class: "h-2 w-1/3 bg-base-300 rounded" }
-                                }
-                            })}
-                        }
-                    };
-                }
-                Some(Err(_err)) => {
-                    return rsx! {
-                        div {
-                            class: "flex flex-col h-full w-full items-center justify-center",
-                            div { class: "text-error", "Failed to load notes" }
-                        }
-                    };
-                }
-                Some(Ok(_notes)) => {
-                    // AdvancedTabs for Notes/Player
-                    let tabs = vec![
-                        crate::ui::components::modal_confirmation::TabData {
-                            label: "Course Notes".to_string(),
-                            content: rsx!(NotesTab {
-                                course_id: course_id,
-                                video_id: video_id
-                            }),
-                            closable: false,
-                        },
-                        crate::ui::components::modal_confirmation::TabData {
-                            label: "Player".to_string(),
-                            content: rsx!(PlayerTab {}),
-                            closable: false,
-                        },
-                    ];
-                    let mut selected = use_signal(|| 0);
-
-                    rsx! {
-                        div {
-                            class: "flex flex-col h-full w-full",
-                            AdvancedTabs {
-                                tabs: tabs.clone(),
-                                selected: selected(),
-                                on_select: move |idx| selected.set(idx),
-                            }
-                        }
-                    }
-                }
-            }
+            rsx!(NotesTab {
+                course_id: course_id,
+                video_id: video_id
+            })
         }
     }
 }
@@ -448,7 +341,7 @@ fn NotesTab(course_id: uuid::Uuid, video_id: Option<uuid::Uuid>) -> Element {
                                     class: "relative",
                                     div {
                                         class: "absolute z-10 mt-1 w-full bg-base-200 shadow-lg rounded-md p-3",
-                                        crate::ui::components::SearchHistory {
+                                        SearchHistory {
                                             recent_searches: recent_searches(),
                                             saved_searches: saved_searches(),
                                             on_select: handle_search_history_select,
@@ -798,15 +691,20 @@ fn AllNotesTab() -> Element {
             div {
                 class: "p-4",
                 div { class: "text-center", "Loading all notes..." }
+                div { class: "text-xs text-base-content/60 mt-2", "Debug: Resource is None (still loading)" }
             }
         },
         Some(Err(err)) => return rsx! {
             div {
                 class: "p-4",
                 div { class: "text-error text-center", "Error loading notes: {err}" }
+                div { class: "text-xs text-base-content/60 mt-2", "Debug: Resource returned error" }
             }
         },
-        Some(Ok(notes)) => notes.clone(),
+        Some(Ok(notes)) => {
+            log::info!("Debug: Loaded {} notes from database", notes.len());
+            notes.clone()
+        },
     };
 
     // Filter notes based on search query
@@ -825,6 +723,17 @@ fn AllNotesTab() -> Element {
                 .collect()
         }
     });
+
+    // Simple edit handler for AllNotesTab - just show a toast for now
+    // In a future implementation, this could navigate to the specific course or open an edit modal
+    let handle_edit_note = move |note: crate::types::Note| {
+        crate::ui::components::toast::toast::info(&format!("Note editing from All Notes view will be implemented in a future update. Note: '{}'", 
+            if note.content.len() > 50 { 
+                format!("{}...", &note.content[..50]) 
+            } else { 
+                note.content 
+            }));
+    };
 
     rsx! {
         div {
@@ -873,6 +782,8 @@ fn AllNotesTab() -> Element {
                     {filtered_notes().into_iter().map(|note| {
                         let created_at = note.created_at.format("%Y-%m-%d %H:%M").to_string();
                         let updated_at = note.updated_at.format("%Y-%m-%d %H:%M").to_string();
+                        let handle_edit_note = handle_edit_note.clone();
+                        let note_for_edit = note.clone();
                         
                         rsx! {
                             NoteCard {
@@ -883,23 +794,12 @@ fn AllNotesTab() -> Element {
                                 created_at: created_at,
                                 updated_at: updated_at,
                                 search_highlight: search_query(),
+                                on_edit: move |_| handle_edit_note(note_for_edit.clone()),
                             }
                         }
                     })}
                 }
             }
-        }
-    }
-}
-
-/// PlayerTab: Placeholder for embedded video player
-#[component]
-fn PlayerTab() -> Element {
-    rsx! {
-        div {
-            class: "p-4 text-center",
-            h2 { class: "text-lg font-semibold", "Video Player" }
-            p { class: "text-base-content/70", "Player will be implemented in a future phase." }
         }
     }
 }
