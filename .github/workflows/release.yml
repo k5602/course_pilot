@@ -2,7 +2,7 @@ name: Release Pipeline
 on:
   push:
     tags:
-      - "v*.1.0"
+      - "v*.*.*"
 
 permissions:
   contents: write
@@ -118,11 +118,13 @@ jobs:
 
       - name: Install Dioxus CLI
         run: |
-          run: |\n          $env:RUSTFLAGS="-C target-feature=+crt-static -C link-arg=/SUBSYSTEM:WINDOWS -C link-arg=/LIBPATH:C:\\\\Windows\\\\System32 -C link-arg=advapi32.lib -C link-arg=secur32.lib -C link-arg=crypt32.lib -C link-arg=ole32.lib -C link-arg=userenv.lib"\n          cargo install dioxus-cli --locked
+          $env:RUSTFLAGS="-C target-feature=+crt-static"
+          cargo install dioxus-cli --locked
 
       - name: Build Dioxus app for Windows
         run: |
-          run: |\n          $env:RUSTFLAGS="-C target-feature=+crt-static -C link-arg=/SUBSYSTEM:WINDOWS -C link-arg=/LIBPATH:C:\\\\Windows\\\\System32 -C link-arg=advapi32.lib -C link-arg=secur32.lib -C link-arg=crypt32.lib -C link-arg=ole32.lib -C link-arg=userenv.lib"\n          dx build --release --platform desktop
+          $env:RUSTFLAGS="-C target-feature=+crt-static"
+          dx build --release --platform desktop
 
       - name: Package Windows build
         run: |
