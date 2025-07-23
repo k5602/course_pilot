@@ -2,7 +2,7 @@ name: Release Pipeline
 on:
   push:
     tags:
-      - 'v*.*.*' # Trigger on tags like v1.0.0, v1.2.3, etc.
+      - 'v*.1.*' # Trigger on tags like v1.0.0, v1.2.3, etc.
 
 permissions:
   contents: write
@@ -19,16 +19,17 @@ jobs:
         with:
           toolchain: stable
 
-      - name: Cache cargo
+      - name: Cache cargo dependencies
         uses: actions/cache@v4
         with:
           path: |
+            ~/.cargo/bin/
             ~/.cargo/registry/index/
             ~/.cargo/registry/cache/
             ~/.cargo/git/db/
-            course_pilot/target/
-          key: ${{ runner.os }}-cargo-${{ hashFiles('course_pilot/Cargo.lock') }}
-          restore-keys: ${{ runner.os }}-cargo-
+          # The key is changed to invalidate previous caches, and we no longer cache the target directory
+          key: ${{ runner.os }}-cargo-deps-${{ hashFiles('course_pilot/Cargo.lock') }}
+          restore-keys: ${{ runner.os }}-cargo-deps-
 
       - name: Install Linux dependencies
         run: |
@@ -58,10 +59,13 @@ jobs:
       - name: Install Dioxus CLI
         run: cargo install dioxus-cli --locked
 
+      - name: Clean previous build artifacts
+        run: cargo clean
+        working-directory: ./course_pilot
+
       - name: Build Dioxus app for Linux
         run: dx build --release --platform desktop
         working-directory: ./course_pilot
-        # The problematic 'env' block has been removed from this step.
 
       - name: Strip binary (reduce size)
         run: strip ./course_pilot/target/release/course_pilot
@@ -90,16 +94,16 @@ jobs:
         with:
           toolchain: stable
 
-      - name: Cache cargo
+      - name: Cache cargo dependencies
         uses: actions/cache@v4
         with:
           path: |
+            ~/.cargo/bin/
             ~/.cargo/registry/index/
             ~/.cargo/registry/cache/
             ~/.cargo/git/db/
-            course_pilot/target/
-          key: ${{ runner.os }}-cargo-${{ hashFiles('course_pilot/Cargo.lock') }}
-          restore-keys: ${{ runner.os }}-cargo-
+          key: ${{ runner.os }}-cargo-deps-${{ hashFiles('course_pilot/Cargo.lock') }}
+          restore-keys: ${{ runner.os }}-cargo-deps-
 
       - name: Install Dioxus CLI
         run: cargo install dioxus-cli --locked
