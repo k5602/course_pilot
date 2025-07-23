@@ -43,10 +43,25 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: '18'
-          cache: 'npm'
+
+      - name: Verify Node.js files
+        run: |
+          echo "Checking for Node.js dependency files..."
+          ls -la package*.json || echo "No package files found"
+          pwd
 
       - name: Install Node dependencies
-        run: npm ci
+        run: |
+          if [ -f package-lock.json ]; then
+            echo "Using npm ci with existing lock file"
+            npm ci
+          else
+            echo "No lock file found, using npm install"
+            npm install
+          fi
+
+      - name: Ensure assets directory exists
+        run: mkdir -p assets
 
       - name: Build CSS
         run: npm run build:css

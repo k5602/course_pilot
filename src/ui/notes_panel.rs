@@ -691,7 +691,6 @@ fn highlight_search_term(html: &str, search_term: &str) -> String {
         return html.to_string();
     }
 
-    // Simple case-insensitive replacement
     // In a real implementation, you would want to use a proper HTML parser
     // to avoid breaking HTML tags, but this is a simple demonstration
     let search_term_lower = search_term.to_lowercase();
@@ -773,7 +772,6 @@ fn AllNotesTab() -> Element {
         }
     });
 
-    // Simple edit handler for AllNotesTab - just show a toast for now
     // In a future implementation, this could navigate to the specific course or open an edit modal
     let handle_edit_note = move |note: crate::types::Note| {
         crate::ui::components::toast::toast::info(&format!(

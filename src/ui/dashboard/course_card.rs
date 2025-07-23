@@ -1,7 +1,7 @@
 use crate::types::Course;
 use crate::ui::components::card::{BadgeData, Card, CardVariant};
 use crate::ui::components::export_format_dialog::ExportFormatDialog;
-use crate::ui::components::unified_dropdown::{
+use crate::ui::components::dropdown::{
     DropdownTrigger, UnifiedDropdown, create_course_actions,
 };
 use crate::ui::dashboard::course_actions::CourseActions;

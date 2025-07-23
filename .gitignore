@@ -15,13 +15,12 @@ Cargo.lock
 
 # CSS/Tailwind artifacts
 /css/target
-assets/tailwind.out.css
 *.css.map
 
 # Node.js/npm artifacts
 /node_modules
 node_modules/
-package-lock.json
+# package-lock.json should be committed for reproducible builds
 pnpm-lock.yaml
 yarn.lock
 *.npmrc
