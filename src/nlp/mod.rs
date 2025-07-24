@@ -3,6 +3,7 @@
 //! This module provides functionality for analyzing course content and
 //! structuring video titles into logical course hierarchies.
 
+pub mod clustering;
 pub mod processor;
 
 // Re-export main processing function
