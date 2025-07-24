@@ -5,8 +5,8 @@ use dioxus_motion::prelude::*;
 use std::collections::HashMap;
 
 use crate::types::{Plan, PlanItem};
-use crate::ui::hooks::use_toggle_plan_item_action;
 use crate::ui::components::Badge;
+use crate::ui::hooks::use_toggle_plan_item_action;
 
 #[derive(Debug, Clone)]
 pub struct ModuleGroup {
@@ -309,7 +309,7 @@ pub fn PlanChecklistItem(props: PlanChecklistItemProps) -> Element {
                     class: "text-xs text-base-content/60 mt-1",
                     "{props.item.date.format(\"%Y-%m-%d\")}"
                 }
-                
+
                 // Duration information
                 div {
                     class: "flex items-center gap-2 mt-1",
@@ -323,7 +323,7 @@ pub fn PlanChecklistItem(props: PlanChecklistItemProps) -> Element {
                         title: "Estimated completion time (with buffer)",
                         "⏱️ {crate::types::duration_utils::format_duration(props.item.estimated_completion_time)}"
                     }
-                    
+
                     // Show warning indicator if there are overflow warnings
                     if !props.item.overflow_warnings.is_empty() {
                         div {

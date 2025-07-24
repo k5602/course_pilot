@@ -3,7 +3,7 @@
 //! This module implements Term Frequency-Inverse Document Frequency (TF-IDF) analysis
 //! to extract semantic features from video titles and calculate content similarity.
 
-use super::{ClusteringError, ContentClusterer, VideoCluster, OptimizedCluster};
+use super::{ClusteringError, ContentClusterer, OptimizedCluster, VideoCluster};
 use crate::nlp::normalize_text;
 use anyhow::Result;
 use serde::{Deserialize, Serialize};
@@ -21,7 +21,10 @@ impl FeatureVector {
     /// Create a new feature vector from term frequencies
     pub fn new(features: HashMap<String, f32>) -> Self {
         let magnitude = features.values().map(|&v| v * v).sum::<f32>().sqrt();
-        Self { features, magnitude }
+        Self {
+            features,
+            magnitude,
+        }
     }
 
     /// Calculate cosine similarity with another feature vector
@@ -30,10 +33,14 @@ impl FeatureVector {
             return 0.0;
         }
 
-        let dot_product: f32 = self.features
+        let dot_product: f32 = self
+            .features
             .iter()
             .filter_map(|(term, &value)| {
-                other.features.get(term).map(|&other_value| value * other_value)
+                other
+                    .features
+                    .get(term)
+                    .map(|&other_value| value * other_value)
             })
             .sum();
 
@@ -42,7 +49,9 @@ impl FeatureVector {
 
     /// Get the top N most significant features
     pub fn top_features(&self, n: usize) -> Vec<(String, f32)> {
-        let mut features: Vec<_> = self.features.iter()
+        let mut features: Vec<_> = self
+            .features
+            .iter()
             .map(|(term, &score)| (term.clone(), score))
             .collect();
         features.sort_by(|a, b| b.1.partial_cmp(&a.1).unwrap_or(std::cmp::Ordering::Equal));
@@ -112,11 +121,7 @@ impl SimilarityMatrix {
             }
         }
 
-        if count > 0 {
-            sum / count as f32
-        } else {
-            0.0
-        }
+        if count > 0 { sum / count as f32 } else { 0.0 }
     }
 }
 
@@ -167,15 +172,13 @@ impl TfIdfAnalyzer {
     /// Default English stop words for filtering
     fn default_stop_words() -> HashSet<String> {
         [
-            "a", "an", "and", "are", "as", "at", "be", "by", "for", "from",
-            "has", "he", "in", "is", "it", "its", "of", "on", "that", "the",
-            "to", "was", "will", "with", "the", "this", "but", "they", "have",
-            "had", "what", "said", "each", "which", "she", "do", "how", "their",
-            "if", "up", "out", "many", "then", "them", "these", "so", "some",
-            "her", "would", "make", "like", "into", "him", "time", "two", "more",
-            "go", "no", "way", "could", "my", "than", "first", "been", "call",
-            "who", "oil", "sit", "now", "find", "down", "day", "did", "get",
-            "come", "made", "may", "part"
+            "a", "an", "and", "are", "as", "at", "be", "by", "for", "from", "has", "he", "in",
+            "is", "it", "its", "of", "on", "that", "the", "to", "was", "will", "with", "the",
+            "this", "but", "they", "have", "had", "what", "said", "each", "which", "she", "do",
+            "how", "their", "if", "up", "out", "many", "then", "them", "these", "so", "some",
+            "her", "would", "make", "like", "into", "him", "time", "two", "more", "go", "no",
+            "way", "could", "my", "than", "first", "been", "call", "who", "oil", "sit", "now",
+            "find", "down", "day", "did", "get", "come", "made", "may", "part",
         ]
         .iter()
         .map(|&s| s.to_string())
@@ -188,9 +191,9 @@ impl TfIdfAnalyzer {
         normalized
             .split_whitespace()
             .filter(|word| {
-                word.len() > 2 && 
-                !self.stop_words.contains(*word) &&
-                word.chars().any(|c| c.is_alphabetic())
+                word.len() > 2
+                    && !self.stop_words.contains(*word)
+                    && word.chars().any(|c| c.is_alphabetic())
             })
             .map(|word| word.to_string())
             .collect()
@@ -334,7 +337,7 @@ impl ContentClusterer for TfIdfAnalyzer {
         let similarity_matrix = self.calculate_similarity_matrix(&feature_vectors);
 
         let vocabulary: HashSet<String> = document_frequencies.keys().cloned().collect();
-        
+
         let topic_keywords = self.identify_topic_keywords(titles);
         let mut sorted_keywords: Vec<_> = topic_keywords.into_iter().collect();
         sorted_keywords.sort_by(|a, b| b.1.partial_cmp(&a.1).unwrap_or(std::cmp::Ordering::Equal));
@@ -353,7 +356,11 @@ impl ContentClusterer for TfIdfAnalyzer {
         })
     }
 
-    fn cluster_videos(&self, analysis: &ContentAnalysis, target_clusters: usize) -> Result<Vec<VideoCluster>, ClusteringError> {
+    fn cluster_videos(
+        &self,
+        analysis: &ContentAnalysis,
+        target_clusters: usize,
+    ) -> Result<Vec<VideoCluster>, ClusteringError> {
         // Simple similarity-based clustering
         let mut clusters = Vec::new();
         let mut assigned = vec![false; analysis.feature_vectors.len()];
@@ -367,7 +374,9 @@ impl ContentClusterer for TfIdfAnalyzer {
             assigned[i] = true;
 
             // Find similar videos
-            let similar = analysis.similarity_matrix.most_similar(i, self.min_similarity_threshold);
+            let similar = analysis
+                .similarity_matrix
+                .most_similar(i, self.min_similarity_threshold);
             for (j, _similarity) in similar {
                 if !assigned[j] && cluster_videos.len() < target_clusters {
                     cluster_videos.push(j);
@@ -377,7 +386,7 @@ impl ContentClusterer for TfIdfAnalyzer {
 
             // Calculate cluster centroid (average of feature vectors)
             let centroid = self.calculate_centroid(&analysis.feature_vectors, &cluster_videos);
-            
+
             // Calculate average similarity within cluster
             let similarity_score = if cluster_videos.len() > 1 {
                 let mut total_similarity = 0.0;
@@ -390,13 +399,18 @@ impl ContentClusterer for TfIdfAnalyzer {
                         }
                     }
                 }
-                if count > 0 { total_similarity / count as f32 } else { 0.0 }
+                if count > 0 {
+                    total_similarity / count as f32
+                } else {
+                    0.0
+                }
             } else {
                 1.0
             };
 
             // Extract topic keywords for this cluster
-            let topic_keywords = centroid.top_features(5)
+            let topic_keywords = centroid
+                .top_features(5)
                 .into_iter()
                 .map(|(keyword, _)| keyword)
                 .collect();
@@ -412,7 +426,11 @@ impl ContentClusterer for TfIdfAnalyzer {
         Ok(clusters)
     }
 
-    fn optimize_clusters(&self, clusters: Vec<VideoCluster>, durations: &[Duration]) -> Result<Vec<OptimizedCluster>, ClusteringError> {
+    fn optimize_clusters(
+        &self,
+        clusters: Vec<VideoCluster>,
+        durations: &[Duration],
+    ) -> Result<Vec<OptimizedCluster>, ClusteringError> {
         if durations.len() != clusters.iter().map(|c| c.videos.len()).sum::<usize>() {
             return Err(ClusteringError::InvalidDurations(durations.len()));
         }
@@ -420,7 +438,8 @@ impl ContentClusterer for TfIdfAnalyzer {
         let mut optimized = Vec::new();
 
         for cluster in clusters {
-            let videos: Vec<_> = cluster.videos
+            let videos: Vec<_> = cluster
+                .videos
                 .into_iter()
                 .map(|index| super::VideoWithMetadata {
                     index,
@@ -503,7 +522,7 @@ mod tests {
     fn test_text_preprocessing() {
         let analyzer = TfIdfAnalyzer::default();
         let tokens = analyzer.preprocess_text("Hello, World! This is a test.");
-        
+
         assert!(!tokens.contains(&"is".to_string())); // Stop word removed
         assert!(tokens.contains(&"hello".to_string()));
         assert!(tokens.contains(&"world".to_string()));
@@ -519,7 +538,7 @@ mod tests {
 
         assert_eq!(matrix.get(0, 1), 0.8);
         assert_eq!(matrix.get(1, 0), 0.8); // Symmetric
-        
+
         let similar = matrix.most_similar(0, 0.5);
         assert_eq!(similar.len(), 1);
         assert_eq!(similar[0].0, 1);
@@ -538,7 +557,7 @@ mod tests {
 
         let result = analyzer.analyze_content(&titles);
         assert!(result.is_ok());
-        
+
         let analysis = result.unwrap();
         assert_eq!(analysis.feature_vectors.len(), 5);
         assert_eq!(analysis.similarity_matrix.size, 5);
@@ -549,8 +568,11 @@ mod tests {
     fn test_insufficient_content_error() {
         let analyzer = TfIdfAnalyzer::default();
         let titles = vec!["Title 1".to_string(), "Title 2".to_string()];
-        
+
         let result = analyzer.analyze_content(&titles);
-        assert!(matches!(result, Err(ClusteringError::InsufficientContent(2))));
+        assert!(matches!(
+            result,
+            Err(ClusteringError::InsufficientContent(2))
+        ));
     }
 }

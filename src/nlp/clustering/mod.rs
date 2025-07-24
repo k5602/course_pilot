@@ -6,43 +6,34 @@
 pub mod content_similarity;
 pub mod duration_balancer;
 pub mod kmeans;
+pub mod metadata_generator;
 pub mod topic_extractor;
 
 // Re-export main clustering types and functions
-pub use content_similarity::{TfIdfAnalyzer, ContentAnalysis, FeatureVector, SimilarityMatrix};
-pub use duration_balancer::{DurationBalancer, BalancedCluster};
-pub use kmeans::{KMeansClusterer, Cluster};
-pub use topic_extractor::{TopicExtractor, TopicInfo};
+pub use content_similarity::{ContentAnalysis, FeatureVector, SimilarityMatrix, TfIdfAnalyzer};
+pub use duration_balancer::{BalancedCluster, DurationBalancer};
+pub use kmeans::{Cluster, KMeansClusterer};
+pub use topic_extractor::TopicExtractor;
 
 use crate::types::Section;
 use anyhow::Result;
-use serde::{Deserialize, Serialize};
 use std::time::Duration;
-
-/// Clustering algorithm types
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
-pub enum ClusteringAlgorithm {
-    TfIdf,
-    KMeans,
-    Hierarchical,
-    Hybrid,
-}
 
 /// Clustering error types
 #[derive(Debug, thiserror::Error)]
 pub enum ClusteringError {
     #[error("Insufficient content for clustering: {0} videos (minimum 5 required)")]
     InsufficientContent(usize),
-    
+
     #[error("Content analysis failed: {0}")]
     AnalysisFailed(String),
-    
+
     #[error("Clustering algorithm failed to converge after {0} iterations")]
     ConvergenceFailed(usize),
-    
+
     #[error("Duration data missing or invalid for {0} videos")]
     InvalidDurations(usize),
-    
+
     #[error("Optimization timeout after {0}ms")]
     OptimizationTimeout(u64),
 }
@@ -86,36 +77,29 @@ pub struct ClusteringQuality {
     pub duration_balance_score: f32,
 }
 
+// Re-export types from main types module to avoid duplication
+pub use crate::types::{
+    ClusteringConfidenceScores, ClusteringRationale, InputMetrics, ModuleConfidence,
+    ModuleRationale, PerformanceMetrics,
+};
+
 /// Main content clusterer trait
 pub trait ContentClusterer {
     fn analyze_content(&self, titles: &[String]) -> Result<ContentAnalysis, ClusteringError>;
-    fn cluster_videos(&self, analysis: &ContentAnalysis, target_clusters: usize) -> Result<Vec<VideoCluster>, ClusteringError>;
-    fn optimize_clusters(&self, clusters: Vec<VideoCluster>, durations: &[Duration]) -> Result<Vec<OptimizedCluster>, ClusteringError>;
+    fn cluster_videos(
+        &self,
+        analysis: &ContentAnalysis,
+        target_clusters: usize,
+    ) -> Result<Vec<VideoCluster>, ClusteringError>;
+    fn optimize_clusters(
+        &self,
+        clusters: Vec<VideoCluster>,
+        durations: &[Duration],
+    ) -> Result<Vec<OptimizedCluster>, ClusteringError>;
 }
 
-/// Clustering metadata for course structure
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct ClusteringMetadata {
-    pub algorithm_used: ClusteringAlgorithm,
-    pub similarity_threshold: f32,
-    pub cluster_count: usize,
-    pub quality_score: f32,
-    pub processing_time_ms: u64,
-    pub content_topics: Vec<TopicInfo>,
-}
-
-impl Default for ClusteringMetadata {
-    fn default() -> Self {
-        Self {
-            algorithm_used: ClusteringAlgorithm::TfIdf,
-            similarity_threshold: 0.6,
-            cluster_count: 0,
-            quality_score: 0.0,
-            processing_time_ms: 0,
-            content_topics: Vec::new(),
-        }
-    }
-}
+// Use ClusteringMetadata from types.rs to avoid duplication
+pub use crate::types::ClusteringMetadata;
 
 /// Convert sections to videos with metadata for clustering
 pub fn sections_to_videos_with_metadata(sections: &[Section]) -> Vec<VideoWithMetadata> {
@@ -136,30 +120,43 @@ pub fn sections_to_videos_with_metadata(sections: &[Section]) -> Vec<VideoWithMe
 /// Estimate difficulty score based on title content
 fn estimate_difficulty_score(title: &str) -> f32 {
     let title_lower = title.to_lowercase();
-    
+
     let beginner_keywords = [
-        "introduction", "basics", "fundamentals", "getting started", 
-        "beginner", "overview", "what is", "how to"
+        "introduction",
+        "basics",
+        "fundamentals",
+        "getting started",
+        "beginner",
+        "overview",
+        "what is",
+        "how to",
     ];
     let advanced_keywords = [
-        "advanced", "expert", "master", "deep dive", "optimization", 
-        "architecture", "complex", "sophisticated", "implementation"
+        "advanced",
+        "expert",
+        "master",
+        "deep dive",
+        "optimization",
+        "architecture",
+        "complex",
+        "sophisticated",
+        "implementation",
     ];
-    
+
     let mut score: f32 = 0.5; // Default intermediate score
-    
+
     for keyword in &beginner_keywords {
         if title_lower.contains(keyword) {
             score -= 0.1;
         }
     }
-    
+
     for keyword in &advanced_keywords {
         if title_lower.contains(keyword) {
             score += 0.1;
         }
     }
-    
+
     score.clamp(0.0, 1.0)
 }
 
@@ -182,3 +179,5 @@ mod tests {
         assert_eq!(metadata.cluster_count, 0);
     }
 }
+
+

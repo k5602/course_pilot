@@ -31,6 +31,17 @@ pub use nlp::structure_course;
 pub use planner::generate_plan;
 pub use storage::{init_db, load_courses, load_plan, save_course, save_plan};
 
+// Re-export enhanced integrated functions
+pub use ingest::{
+    ImportProgress, ImportStage, import_and_structure_local_folder, import_and_structure_youtube,
+};
+pub use storage::{
+    ClusteringAnalytics, ClusteringPerformancePoint, ProcessingTimeStats, QualityDistribution,
+    get_clustering_analytics, get_clustering_performance_history,
+    get_courses_by_clustering_quality, get_similar_courses_by_clustering,
+    update_clustering_metadata,
+};
+
 // Custom error types
 use thiserror::Error;
 

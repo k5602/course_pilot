@@ -678,6 +678,9 @@ pub fn import_from_folder(
         title: "Course Content".to_string(),
         sections,
         total_duration,
+        similarity_score: None,
+        topic_keywords: Vec::new(),
+        difficulty_level: None,
     };
 
     // Create course structure
@@ -688,7 +691,10 @@ pub fn import_from_folder(
             total_duration,
             estimated_duration_hours: Some(total_duration.as_secs_f32() / 3600.0),
             difficulty_level: Some("Beginner".to_string()),
+            structure_quality_score: None,
+            content_coherence_score: None,
         },
+        clustering_metadata: None,
     };
 
     // Create course

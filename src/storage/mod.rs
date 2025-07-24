@@ -9,8 +9,25 @@ pub mod settings;
 
 // Re-export main database functions
 pub use database::{
-    delete_course, delete_plan, get_course_by_id, get_plan_by_course_id, init_db, load_courses,
-    load_plan, save_course, save_plan,
+    ClusteringAnalytics,
+    ClusteringPerformancePoint,
+    ProcessingTimeStats,
+    QualityDistribution,
+    delete_course,
+    delete_plan,
+    get_clustering_analytics,
+    get_clustering_performance_history,
+    get_course_by_id,
+    // Enhanced clustering functions
+    get_courses_by_clustering_quality,
+    get_plan_by_course_id,
+    get_similar_courses_by_clustering,
+    init_db,
+    load_courses,
+    load_plan,
+    save_course,
+    save_plan,
+    update_clustering_metadata,
 };
 
 // Re-export error types

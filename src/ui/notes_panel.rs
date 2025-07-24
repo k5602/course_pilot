@@ -667,7 +667,7 @@ fn NoteCard(props: NoteCardProps) -> Element {
                 variant: confirmation_modal(
                     "Are you sure you want to delete this note? This action cannot be undone.",
                     "Delete",
-                    "Cancel", 
+                    "Cancel",
                     "error",
                     Some(Callback::new(move |_| {
                         show_delete_modal.set(false);

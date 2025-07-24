@@ -253,26 +253,31 @@ fn render_no_plan_state(course_id: Uuid) -> Element {
 /// Render duration summary and validation feedback
 fn render_duration_summary(plan: &crate::types::Plan) -> Element {
     // Calculate total duration and warnings
-    let total_video_duration: std::time::Duration = plan.items.iter()
-        .map(|item| item.total_duration)
-        .sum();
-    
-    let total_estimated_time: std::time::Duration = plan.items.iter()
+    let total_video_duration: std::time::Duration =
+        plan.items.iter().map(|item| item.total_duration).sum();
+
+    let total_estimated_time: std::time::Duration = plan
+        .items
+        .iter()
         .map(|item| item.estimated_completion_time)
         .sum();
-    
-    let total_warnings: Vec<&String> = plan.items.iter()
+
+    let total_warnings: Vec<&String> = plan
+        .items
+        .iter()
         .flat_map(|item| &item.overflow_warnings)
         .collect();
-    
-    let sessions_with_warnings = plan.items.iter()
+
+    let sessions_with_warnings = plan
+        .items
+        .iter()
         .filter(|item| !item.overflow_warnings.is_empty())
         .count();
 
     rsx! {
         div {
             class: "bg-base-100 border border-base-300 rounded-lg p-4 mb-6",
-            
+
             div {
                 class: "flex items-center justify-between mb-3",
                 h3 {
@@ -288,7 +293,7 @@ fn render_duration_summary(plan: &crate::types::Plan) -> Element {
             // Duration statistics
             div {
                 class: "grid grid-cols-1 md:grid-cols-3 gap-4 mb-4",
-                
+
                 div {
                     class: "bg-primary/5 border border-primary/20 rounded-lg p-3",
                     div {
@@ -300,7 +305,7 @@ fn render_duration_summary(plan: &crate::types::Plan) -> Element {
                         "{crate::types::duration_utils::format_duration_verbose(total_video_duration)}"
                     }
                 }
-                
+
                 div {
                     class: "bg-accent/5 border border-accent/20 rounded-lg p-3",
                     div {
@@ -316,7 +321,7 @@ fn render_duration_summary(plan: &crate::types::Plan) -> Element {
                         "Includes buffer time"
                     }
                 }
-                
+
                 div {
                     class: if sessions_with_warnings > 0 { "bg-warning/5 border border-warning/20 rounded-lg p-3" } else { "bg-success/5 border border-success/20 rounded-lg p-3" },
                     div {

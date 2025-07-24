@@ -53,7 +53,7 @@ impl TopicExtractor {
             }
 
             let related_videos = self.find_videos_with_keyword(titles, keyword);
-            
+
             if related_videos.len() >= self.min_frequency {
                 topics.push(TopicInfo {
                     keyword: keyword.clone(),
@@ -65,7 +65,11 @@ impl TopicExtractor {
         }
 
         // Sort by relevance score descending
-        topics.sort_by(|a, b| b.relevance_score.partial_cmp(&a.relevance_score).unwrap_or(std::cmp::Ordering::Equal));
+        topics.sort_by(|a, b| {
+            b.relevance_score
+                .partial_cmp(&a.relevance_score)
+                .unwrap_or(std::cmp::Ordering::Equal)
+        });
         topics
     }
 
@@ -74,9 +78,7 @@ impl TopicExtractor {
         titles
             .iter()
             .enumerate()
-            .filter(|(_, title)| {
-                title.to_lowercase().contains(&keyword.to_lowercase())
-            })
+            .filter(|(_, title)| title.to_lowercase().contains(&keyword.to_lowercase()))
             .map(|(index, _)| index)
             .collect()
     }
@@ -165,7 +167,7 @@ mod tests {
         tfidf_scores.insert("web".to_string(), 0.2);
 
         let topics = extractor.extract_topics(&titles, &tfidf_scores);
-        
+
         assert!(!topics.is_empty());
         assert_eq!(topics[0].keyword, "programming");
         assert_eq!(topics[0].frequency, 3);
@@ -174,11 +176,12 @@ mod tests {
     #[test]
     fn test_cluster_title_generation() {
         let extractor = TopicExtractor::default();
-        
+
         let title1 = extractor.generate_cluster_title(&["programming".to_string()]);
         assert_eq!(title1, "Programming");
 
-        let title2 = extractor.generate_cluster_title(&["web".to_string(), "development".to_string()]);
+        let title2 =
+            extractor.generate_cluster_title(&["web".to_string(), "development".to_string()]);
         assert_eq!(title2, "Web and development");
 
         let title3 = extractor.generate_cluster_title(&[]);
@@ -206,6 +209,9 @@ mod tests {
         let analysis = extractor.analyze_topic_distribution(&topics);
         assert_eq!(analysis.total_topics, 2);
         assert_eq!(analysis.total_video_coverage, 4);
-        assert_eq!(analysis.most_relevant_topic, Some("programming".to_string()));
+        assert_eq!(
+            analysis.most_relevant_topic,
+            Some("programming".to_string())
+        );
     }
 }

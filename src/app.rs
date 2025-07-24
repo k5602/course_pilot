@@ -2,8 +2,6 @@
 //
 //! This is the root application module for backend logic only.
 
-/// No frontend logic present.
-
 /// Initialize the application with any required setup
 pub fn initialize_app() -> Result<(), Box<dyn std::error::Error>> {
     #[cfg(debug_assertions)]
@@ -15,7 +13,7 @@ pub fn initialize_app() -> Result<(), Box<dyn std::error::Error>> {
     Ok(())
 }
 
-/// Demo data for development and testing
+/// data for development and testing
 #[cfg(debug_assertions)]
 pub fn load_demo_data() -> Vec<crate::types::Course> {
     use crate::types::{Course, CourseStructure, Module, Section, StructureMetadata};
@@ -57,6 +55,9 @@ pub fn load_demo_data() -> Vec<crate::types::Course> {
                             },
                         ],
                         total_duration: Duration::from_secs(15 * 60 + 20 * 60),
+                        similarity_score: None,
+                        topic_keywords: Vec::new(),
+                        difficulty_level: None,
                     },
                     Module {
                         title: "Core Concepts".to_string(),
@@ -78,6 +79,9 @@ pub fn load_demo_data() -> Vec<crate::types::Course> {
                             },
                         ],
                         total_duration: Duration::from_secs(25 * 60 + 30 * 60 + 35 * 60),
+                        similarity_score: None,
+                        topic_keywords: Vec::new(),
+                        difficulty_level: None,
                     },
                 ],
                 metadata: StructureMetadata {
@@ -87,7 +91,10 @@ pub fn load_demo_data() -> Vec<crate::types::Course> {
                     ),
                     estimated_duration_hours: Some(4.5),
                     difficulty_level: Some("Intermediate".to_string()),
+                    structure_quality_score: None,
+                    content_coherence_score: None,
                 },
+                clustering_metadata: None,
             }),
         },
         Course {

@@ -112,6 +112,35 @@ Capture insights while you learn:
 - **Tag Management**: Add, remove, and organize tags with visual indicators
 - **Search History**: Track and reuse previous searches for power users
 
+### ✅ NEW: Intelligent Video Clustering Algorithms
+Advanced content analysis for automatic course structuring:
+
+#### **🧠 Content-Aware Clustering System**
+- **TF-IDF Content Analysis**: Sophisticated text analysis using Term Frequency-Inverse Document Frequency
+  - Advanced text preprocessing with stop word removal and normalization
+  - Feature vector extraction with configurable vocabulary limits
+  - Cosine similarity calculation for content relationships
+  - Topic keyword identification from TF-IDF features
+
+- **K-Means Clustering Algorithm**: Machine learning-based video grouping
+  - Optimal cluster determination using elbow method and silhouette analysis
+  - K-means++ initialization for better convergence
+  - Clustering quality evaluation with multiple metrics
+  - Edge case handling for identical content and insufficient data
+
+- **Duration-Aware Balancing**: Intelligent session optimization
+  - Bin-packing algorithms for optimal duration distribution
+  - Multi-factor optimization considering content coherence and time constraints
+  - Advanced rebalancing to avoid extremely long/short modules
+  - Dynamic programming for optimal split point determination
+
+#### **⚡ Clustering Features**
+- **Content Similarity Analysis**: Groups videos by semantic similarity rather than just title patterns
+- **Balanced Session Creation**: Ensures sessions fit within user's time constraints while maintaining content flow
+- **Quality Metrics**: Silhouette scoring, intra-cluster similarity, and inter-cluster separation analysis
+- **Flexible Configuration**: Adjustable similarity thresholds, cluster sizes, and duration constraints
+- **Comprehensive Testing**: Full test coverage with unit, integration, and edge case testing
+
 ### ✅ NEW: AI-Powered Study Planning Engine
 Revolutionary scheduling algorithms that adapt to your learning style:
 
@@ -181,7 +210,15 @@ match (course_complexity, user_experience_level, module_count) {
 
 ### 🎯 Next Priority Features (In Development)
 
-#### **Phase 5:integrating and linking** 🚧 IN PROGRESS
+#### **Phase 2: Intelligent Clustering Integration** 🚧 IN PROGRESS
+Complete the integration of advanced clustering algorithms:
+- **NLP Processor Integration**: Connect clustering algorithms to course structuring workflow
+- **Clustering Metadata System**: Add algorithm info, quality scores, and performance metrics
+- **UI Integration**: Display clustering status, progress, and quality indicators
+- **User Controls**: Allow clustering sensitivity adjustment and manual boundary modification
+- **Performance Optimization**: Implement caching and background processing for large courses
+
+#### **Phase 5: Frontend/Backend Integration** 🚧 IN PROGRESS
 
 
 ## 🔮 Future Enhancements: The Power-Up Suite
@@ -307,7 +344,12 @@ src/
 │   ├── youtube.rs      # YouTube API integration
 │   └── local_folder.rs # Local video scanning
 ├── nlp/                # Content analysis engine
-│   └── processor.rs    # Smart course structuring
+│   ├── processor.rs    # Smart course structuring
+│   └── clustering/     # Intelligent video clustering algorithms
+│       ├── content_similarity.rs  # TF-IDF analysis and feature extraction
+│       ├── kmeans.rs              # K-means clustering with quality metrics
+│       ├── duration_balancer.rs   # Duration-aware cluster optimization
+│       └── topic_extractor.rs     # Topic identification and keyword extraction
 ├── planner/            # Advanced AI-powered study scheduling
 │   ├── mod.rs          # Planning utilities and defaults
 │   └── scheduler.rs    # 6 intelligent distribution strategies with learning science
@@ -380,6 +422,9 @@ let (progress, status, badge_color) = use_course_progress(course_id);
 #### **Data Processing**
 - **ytextract**: YouTube metadata extraction
 - **regex**: Pattern matching for NLP analysis
+- **TF-IDF Analysis**: Advanced text processing for content similarity
+- **K-means Clustering**: Machine learning algorithms for video grouping
+- **Dynamic Programming**: Optimal cluster splitting and balancing
 - **chrono**: Date/time handling for scheduling
 - **serde**: Serialization with future-proof formats
 - **csv**: CSV export functionality
@@ -568,6 +613,12 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 ## Recent Updates (July 2025)
 
 ### Completed Features
+- **🧠 Intelligent Video Clustering Algorithms**: Complete implementation of advanced content-aware clustering system
+  - TF-IDF content similarity analysis with sophisticated text processing
+  - K-means clustering with optimal cluster determination and quality metrics
+  - Duration-aware balancing with bin-packing optimization and dynamic programming
+  - Comprehensive test coverage and edge case handling
+  - Ready for integration into main course structuring workflow
 - **Enhanced Notes Panel**: Fully implemented tagging system with autocomplete, real-time search with fuzzy matching, and advanced filtering capabilities
 - **Unified Card Component**: Completed the migration to a flexible card architecture with support for courses, plans, notes, and generic content
 - **Navigation System**: Fixed routing issues and implemented breadcrumb navigation for improved user experience

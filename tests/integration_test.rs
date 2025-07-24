@@ -97,16 +97,22 @@ fn test_module_and_course_duration_aggregation() {
         title: "Test Module".to_string(),
         sections: sections.clone(),
         total_duration: sections.iter().map(|s| s.duration).sum(),
+        similarity_score: None,
+        topic_keywords: Vec::new(),
+        difficulty_level: None,
     };
     let metadata = StructureMetadata {
         total_videos: 0,
         total_duration: Duration::from_secs(0),
         estimated_duration_hours: None,
         difficulty_level: None,
+        structure_quality_score: None,
+        content_coherence_score: None,
     };
     let structure = CourseStructure {
         modules: vec![module],
         metadata,
+        clustering_metadata: None,
     }
     .with_aggregated_metadata();
 
@@ -208,7 +214,10 @@ fn test_course_structured_status() {
             total_duration: std::time::Duration::from_secs(36000),
             estimated_duration_hours: Some(10.0),
             difficulty_level: Some("Beginner".to_string()),
+            structure_quality_score: None,
+            content_coherence_score: None,
         },
+        clustering_metadata: None,
     });
 
     assert!(course.is_structured());
@@ -280,6 +289,9 @@ async fn test_complete_plan_item_workflow() {
         section_title: "Introduction".to_string(),
         video_indices: vec![0],
         completed: false,
+        total_duration: Duration::from_secs(600),
+        estimated_completion_time: Duration::from_secs(720),
+        overflow_warnings: Vec::new(),
     });
 
     plan.items.push(PlanItem {
@@ -288,6 +300,9 @@ async fn test_complete_plan_item_workflow() {
         section_title: "Advanced".to_string(),
         video_indices: vec![1],
         completed: false,
+        total_duration: Duration::from_secs(900),
+        estimated_completion_time: Duration::from_secs(1080),
+        overflow_warnings: Vec::new(),
     });
 
     let plan_id = plan.id;

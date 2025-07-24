@@ -3,10 +3,22 @@
 //! This module provides functionality for generating intelligent study schedules
 //! from structured course content.
 
+pub mod clustering_integration;
 pub mod scheduler;
 
 // Re-export main planning function
-pub use scheduler::generate_plan;
+pub use scheduler::{
+    choose_distribution_strategy, generate_plan, generate_spaced_repetition_plan, optimize_plan,
+    pack_videos_into_session,
+};
+
+// Re-export clustering-aware planning functions
+pub use clustering_integration::{
+    choose_clustering_aware_strategy, generate_clustering_adaptive_plan,
+    generate_clustering_difficulty_plan, generate_clustering_hybrid_plan,
+    generate_duration_optimized_plan, generate_topic_aware_module_plan,
+    generate_topic_spaced_repetition_plan, optimize_clustering_aware_plan,
+};
 
 // Re-export error types
 pub use crate::PlanError;

@@ -1,11 +1,11 @@
 use crate::ui::components::{modal::Badge, modal::Modal, toast};
 use dioxus::prelude::*;
 use dioxus_free_icons::Icon;
+use dioxus_free_icons::icons::fa_brands_icons::FaYoutube;
 use dioxus_free_icons::icons::fa_solid_icons::{
-    FaCheck, FaClock, FaCircleExclamation, FaFolder, FaGlobe, FaCircleInfo, FaPlay, FaSpinner,
+    FaCheck, FaCircleExclamation, FaCircleInfo, FaClock, FaFolder, FaGlobe, FaPlay, FaSpinner,
     FaVideo,
 };
-use dioxus_free_icons::icons::fa_brands_icons::FaYoutube;
 
 /// Import source types
 #[derive(Debug, Clone, Copy, PartialEq)]

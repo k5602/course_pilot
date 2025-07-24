@@ -24,6 +24,9 @@ fn create_test_plan() -> Plan {
         section_title: "Section 1".to_string(),
         video_indices: vec![0],
         completed: true,
+        total_duration: Duration::from_secs(600),
+        estimated_completion_time: Duration::from_secs(720),
+        overflow_warnings: Vec::new(),
     });
 
     plan.items.push(PlanItem {
@@ -32,6 +35,9 @@ fn create_test_plan() -> Plan {
         section_title: "Section 2".to_string(),
         video_indices: vec![1],
         completed: false,
+        total_duration: Duration::from_secs(900),
+        estimated_completion_time: Duration::from_secs(1080),
+        overflow_warnings: Vec::new(),
     });
 
     plan.items.push(PlanItem {
@@ -40,6 +46,9 @@ fn create_test_plan() -> Plan {
         section_title: "Section 1".to_string(),
         video_indices: vec![2],
         completed: true,
+        total_duration: Duration::from_secs(1200),
+        estimated_completion_time: Duration::from_secs(1440),
+        overflow_warnings: Vec::new(),
     });
 
     plan

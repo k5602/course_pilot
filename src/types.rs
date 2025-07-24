@@ -17,6 +17,140 @@ pub struct Course {
 pub struct CourseStructure {
     pub modules: Vec<Module>,
     pub metadata: StructureMetadata,
+    pub clustering_metadata: Option<ClusteringMetadata>,
+}
+
+/// Clustering metadata for course structure
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+pub struct ClusteringMetadata {
+    pub algorithm_used: ClusteringAlgorithm,
+    pub similarity_threshold: f32,
+    pub cluster_count: usize,
+    pub quality_score: f32,
+    pub processing_time_ms: u64,
+    pub content_topics: Vec<TopicInfo>,
+    pub strategy_used: ClusteringStrategy,
+    pub confidence_scores: ClusteringConfidenceScores,
+    pub rationale: ClusteringRationale,
+    pub performance_metrics: PerformanceMetrics,
+}
+
+/// Confidence scores for clustering decisions
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+pub struct ClusteringConfidenceScores {
+    /// Overall confidence in the clustering result (0.0 - 1.0)
+    pub overall_confidence: f32,
+    /// Confidence in module groupings (0.0 - 1.0)
+    pub module_grouping_confidence: f32,
+    /// Confidence in similarity calculations (0.0 - 1.0)
+    pub similarity_confidence: f32,
+    /// Confidence in topic extraction (0.0 - 1.0)
+    pub topic_extraction_confidence: f32,
+    /// Per-module confidence scores
+    pub module_confidences: Vec<ModuleConfidence>,
+}
+
+/// Confidence score for individual modules
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+pub struct ModuleConfidence {
+    pub module_index: usize,
+    pub confidence_score: f32,
+    pub similarity_strength: f32,
+    pub topic_coherence: f32,
+    pub duration_balance: f32,
+}
+
+/// Rationale explaining clustering decisions
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+pub struct ClusteringRationale {
+    /// Primary reason for clustering approach
+    pub primary_strategy: String,
+    /// Detailed explanation of clustering decisions
+    pub explanation: String,
+    /// Key factors that influenced clustering
+    pub key_factors: Vec<String>,
+    /// Alternative strategies considered
+    pub alternatives_considered: Vec<String>,
+    /// Per-module rationale
+    pub module_rationales: Vec<ModuleRationale>,
+}
+
+/// Rationale for individual module groupings
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+pub struct ModuleRationale {
+    pub module_index: usize,
+    pub module_title: String,
+    pub grouping_reason: String,
+    pub similarity_explanation: String,
+    pub topic_keywords: Vec<String>,
+    pub video_count: usize,
+}
+
+/// Performance metrics for clustering operations
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+pub struct PerformanceMetrics {
+    /// Total processing time in milliseconds
+    pub total_processing_time_ms: u64,
+    /// Time spent on content analysis
+    pub content_analysis_time_ms: u64,
+    /// Time spent on clustering algorithm
+    pub clustering_time_ms: u64,
+    /// Time spent on optimization
+    pub optimization_time_ms: u64,
+    /// Peak memory usage during clustering (in bytes)
+    pub peak_memory_usage_bytes: u64,
+    /// Number of iterations for convergence
+    pub algorithm_iterations: u32,
+    /// Input data size metrics
+    pub input_metrics: InputMetrics,
+}
+
+/// Metrics about the input data processed
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+pub struct InputMetrics {
+    pub video_count: usize,
+    pub unique_words: usize,
+    pub vocabulary_size: usize,
+    pub average_title_length: f32,
+    pub content_diversity_score: f32,
+}
+
+/// Clustering algorithm types
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, Hash)]
+pub enum ClusteringAlgorithm {
+    TfIdf,
+    KMeans,
+    Hierarchical,
+    Hybrid,
+    Fallback,
+}
+
+/// Clustering strategy selection
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, Hash)]
+pub enum ClusteringStrategy {
+    ContentBased,
+    DurationBased,
+    Hybrid,
+    Fallback,
+}
+
+/// Topic information from clustering analysis
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+pub struct TopicInfo {
+    pub keyword: String,
+    pub relevance_score: f32,
+    pub video_count: usize,
+}
+
+impl Eq for TopicInfo {}
+
+impl std::hash::Hash for TopicInfo {
+    fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
+        self.keyword.hash(state);
+        // Hash f32 as bits to make it hashable
+        self.relevance_score.to_bits().hash(state);
+        self.video_count.hash(state);
+    }
 }
 
 impl CourseStructure {
@@ -30,6 +164,33 @@ impl CourseStructure {
         self.metadata.total_duration = total_duration;
         self
     }
+
+    /// Create a new CourseStructure without clustering metadata (for fallback)
+    pub fn new_basic(modules: Vec<Module>, metadata: StructureMetadata) -> Self {
+        Self {
+            modules,
+            metadata,
+            clustering_metadata: None,
+        }
+    }
+
+    /// Create a new CourseStructure with clustering metadata
+    pub fn new_with_clustering(
+        modules: Vec<Module>,
+        metadata: StructureMetadata,
+        clustering_metadata: ClusteringMetadata,
+    ) -> Self {
+        Self {
+            modules,
+            metadata,
+            clustering_metadata: Some(clustering_metadata),
+        }
+    }
+
+    /// Check if this structure was created using clustering
+    pub fn is_clustered(&self) -> bool {
+        self.clustering_metadata.is_some()
+    }
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
@@ -38,6 +199,8 @@ pub struct StructureMetadata {
     pub total_duration: std::time::Duration,
     pub estimated_duration_hours: Option<f32>,
     pub difficulty_level: Option<String>,
+    pub structure_quality_score: Option<f32>,
+    pub content_coherence_score: Option<f32>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
@@ -45,11 +208,46 @@ pub struct Module {
     pub title: String,
     pub sections: Vec<Section>,
     pub total_duration: Duration,
+    pub similarity_score: Option<f32>,
+    pub topic_keywords: Vec<String>,
+    pub difficulty_level: Option<DifficultyLevel>,
 }
 
 impl Module {
     pub fn aggregate_total_duration(&self) -> Duration {
         self.sections.iter().map(|s| s.duration).sum()
+    }
+
+    /// Create a new basic module without clustering metadata
+    pub fn new_basic(title: String, sections: Vec<Section>) -> Self {
+        let total_duration = sections.iter().map(|s| s.duration).sum();
+        Self {
+            title,
+            sections,
+            total_duration,
+            similarity_score: None,
+            topic_keywords: Vec::new(),
+            difficulty_level: None,
+        }
+    }
+
+    /// Create a new module with clustering metadata
+    pub fn new_with_clustering(
+        title: String,
+        sections: Vec<Section>,
+        similarity_score: f32,
+        topic_keywords: Vec<String>,
+        difficulty_level: DifficultyLevel,
+    ) -> Self {
+        let total_duration = sections.iter().map(|s| s.duration).sum();
+        Self {
+            title,
+            sections,
+            total_duration,
+            similarity_score: Some(similarity_score),
+            topic_keywords,
+            difficulty_level: Some(difficulty_level),
+        }
     }
 }
 
@@ -127,7 +325,7 @@ pub enum DistributionStrategy {
 }
 
 /// Content difficulty levels for adaptive scheduling
-#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq)]
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub enum DifficultyLevel {
     Beginner,
     Intermediate,
@@ -551,6 +749,85 @@ impl Default for DistributionStrategy {
     }
 }
 
+impl Default for ClusteringMetadata {
+    fn default() -> Self {
+        Self {
+            algorithm_used: ClusteringAlgorithm::Fallback,
+            similarity_threshold: 0.6,
+            cluster_count: 0,
+            quality_score: 0.0,
+            processing_time_ms: 0,
+            content_topics: Vec::new(),
+            strategy_used: ClusteringStrategy::Fallback,
+            confidence_scores: ClusteringConfidenceScores::default(),
+            rationale: ClusteringRationale::default(),
+            performance_metrics: PerformanceMetrics::default(),
+        }
+    }
+}
+
+impl Default for ClusteringConfidenceScores {
+    fn default() -> Self {
+        Self {
+            overall_confidence: 0.0,
+            module_grouping_confidence: 0.0,
+            similarity_confidence: 0.0,
+            topic_extraction_confidence: 0.0,
+            module_confidences: Vec::new(),
+        }
+    }
+}
+
+impl Default for ClusteringRationale {
+    fn default() -> Self {
+        Self {
+            primary_strategy: "Fallback".to_string(),
+            explanation: "No clustering applied".to_string(),
+            key_factors: Vec::new(),
+            alternatives_considered: Vec::new(),
+            module_rationales: Vec::new(),
+        }
+    }
+}
+
+impl Default for PerformanceMetrics {
+    fn default() -> Self {
+        Self {
+            total_processing_time_ms: 0,
+            content_analysis_time_ms: 0,
+            clustering_time_ms: 0,
+            optimization_time_ms: 0,
+            peak_memory_usage_bytes: 0,
+            algorithm_iterations: 0,
+            input_metrics: InputMetrics::default(),
+        }
+    }
+}
+
+impl Default for InputMetrics {
+    fn default() -> Self {
+        Self {
+            video_count: 0,
+            unique_words: 0,
+            vocabulary_size: 0,
+            average_title_length: 0.0,
+            content_diversity_score: 0.0,
+        }
+    }
+}
+
+impl Default for ClusteringAlgorithm {
+    fn default() -> Self {
+        ClusteringAlgorithm::TfIdf
+    }
+}
+
+impl Default for ClusteringStrategy {
+    fn default() -> Self {
+        ClusteringStrategy::Hybrid
+    }
+}
+
 impl Default for DifficultyLevel {
     fn default() -> Self {
         DifficultyLevel::Intermediate
@@ -776,8 +1053,12 @@ pub mod duration_utils {
     }
 
     /// Calculate estimated completion time with buffer
-    pub fn calculate_completion_time_with_buffer(video_duration: Duration, buffer_percentage: f32) -> Duration {
-        let buffer_time = Duration::from_secs((video_duration.as_secs() as f32 * buffer_percentage) as u64);
+    pub fn calculate_completion_time_with_buffer(
+        video_duration: Duration,
+        buffer_percentage: f32,
+    ) -> Duration {
+        let buffer_time =
+            Duration::from_secs((video_duration.as_secs() as f32 * buffer_percentage) as u64);
         video_duration + buffer_time
     }
 
@@ -789,7 +1070,7 @@ pub mod duration_utils {
         let mut warnings = Vec::new();
         let total_duration: Duration = sections.iter().map(|s| s.duration).sum();
         let session_limit = Duration::from_secs(settings.session_length_minutes as u64 * 60);
-        
+
         if total_duration > session_limit {
             warnings.push(format!(
                 "Session duration ({}) exceeds target ({})",
@@ -797,7 +1078,7 @@ pub mod duration_utils {
                 format_duration(session_limit)
             ));
         }
-        
+
         // Check for individual videos that are very long
         for section in sections {
             if section.duration.as_secs() > (settings.session_length_minutes as u64 * 60) / 2 {
@@ -808,7 +1089,7 @@ pub mod duration_utils {
                 ));
             }
         }
-        
+
         warnings
     }
 }

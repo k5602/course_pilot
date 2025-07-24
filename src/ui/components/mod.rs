@@ -16,10 +16,14 @@ pub mod toast;
 pub mod top_bar;
 
 // exports for convenience
-pub use modal::Badge;
 pub use dropdown::{DropdownItem, DropdownTrigger, UnifiedDropdown};
-pub use import_modal::{ImportModal, ImportModalProps, ImportPreview, ImportSettings, ImportSource, ImportVideoPreview};
-pub use progress::{ProgressBar, ProgressRing};
+pub use import_modal::{
+    ImportModal, ImportModalProps, ImportPreview, ImportSettings, ImportSource, ImportVideoPreview,
+};
+pub use modal::Badge;
+pub use progress::{
+     ProgressBar, ProgressRing,
+};
 pub use search_history::SearchHistory;
 pub use tag_input::TagInput;
 pub use toast::ToastContainer;

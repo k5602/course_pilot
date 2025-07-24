@@ -92,6 +92,9 @@ async fn test_plan_item_completion_toggle() {
         section_title: "Section 1".to_string(),
         video_indices: vec![0],
         completed: false,
+        total_duration: Duration::from_secs(600),
+        estimated_completion_time: Duration::from_secs(720),
+        overflow_warnings: Vec::new(),
     });
 
     backend.save_plan(plan.clone()).await.unwrap();
@@ -152,6 +155,9 @@ async fn test_plan_progress_calculation() {
         section_title: "Section 1".to_string(),
         video_indices: vec![0],
         completed: true, // Completed
+        total_duration: Duration::from_secs(600),
+        estimated_completion_time: Duration::from_secs(720),
+        overflow_warnings: Vec::new(),
     });
 
     plan.items.push(PlanItem {
@@ -160,6 +166,9 @@ async fn test_plan_progress_calculation() {
         section_title: "Section 2".to_string(),
         video_indices: vec![1],
         completed: false, // Not completed
+        total_duration: Duration::from_secs(900),
+        estimated_completion_time: Duration::from_secs(1080),
+        overflow_warnings: Vec::new(),
     });
 
     backend.save_plan(plan.clone()).await.unwrap();

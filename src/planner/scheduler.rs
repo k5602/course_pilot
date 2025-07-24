@@ -8,7 +8,7 @@
 //! - Prerequisite dependency tracking
 
 use crate::PlanError;
-use crate::planner::{get_next_session_date, validate_plan_settings};
+use crate::planner::validate_plan_settings;
 use crate::types::{Course, Plan, PlanItem, PlanSettings};
 use chrono::{DateTime, Datelike, Utc, Weekday};
 use std::collections::{HashMap, VecDeque};
@@ -24,6 +24,124 @@ use std::time::Duration;
 /// * `Ok(Plan)` - Generated study plan with scheduled sessions
 /// * `Err(PlanError)` - Error if plan generation fails
 pub fn generate_plan(course: &Course, settings: &PlanSettings) -> Result<Plan, PlanError> {
+    // Check if course has clustering metadata for enhanced planning
+    if let Some(structure) = &course.structure {
+        if structure.clustering_metadata.is_some() {
+            return generate_clustering_aware_plan(course, settings);
+        }
+    }
+
+    // Fallback to basic planning
+    generate_basic_plan(course, settings)
+}
+
+/// Generate clustering-aware study plan using advanced clustering insights
+pub fn generate_clustering_aware_plan(
+    course: &Course,
+    settings: &PlanSettings,
+) -> Result<Plan, PlanError> {
+    // Validate input parameters
+    validate_plan_settings(
+        settings.sessions_per_week,
+        settings.session_length_minutes,
+        settings.start_date,
+    )
+    .map_err(PlanError::InvalidSettings)?;
+
+    let structure = course
+        .structure
+        .as_ref()
+        .ok_or(PlanError::CourseNotStructured)?;
+
+    let clustering_metadata =
+        structure
+            .clustering_metadata
+            .as_ref()
+            .ok_or(PlanError::Algorithm(
+                "No clustering metadata available".to_string(),
+            ))?;
+
+    log::info!(
+        "Generating clustering-aware plan: algorithm={:?}, quality={:.3}, clusters={}",
+        clustering_metadata.algorithm_used,
+        clustering_metadata.quality_score,
+        clustering_metadata.cluster_count
+    );
+
+    // Choose strategy based on clustering insights
+    let strategy = crate::planner::clustering_integration::choose_clustering_aware_strategy(
+        course,
+        settings,
+        clustering_metadata,
+    )?;
+
+    // Generate plan items using clustering-enhanced strategies
+    let plan_items = match strategy {
+        DistributionStrategy::ModuleBased => {
+            crate::planner::clustering_integration::generate_topic_aware_module_plan(
+                course,
+                settings,
+                clustering_metadata,
+            )?
+        }
+        DistributionStrategy::TimeBased => {
+            crate::planner::clustering_integration::generate_duration_optimized_plan(
+                course,
+                settings,
+                clustering_metadata,
+            )?
+        }
+        DistributionStrategy::Hybrid => {
+            crate::planner::clustering_integration::generate_clustering_hybrid_plan(
+                course,
+                settings,
+                clustering_metadata,
+            )?
+        }
+        DistributionStrategy::DifficultyBased => {
+            crate::planner::clustering_integration::generate_clustering_difficulty_plan(
+                course,
+                settings,
+                clustering_metadata,
+            )?
+        }
+        DistributionStrategy::SpacedRepetition => {
+            crate::planner::clustering_integration::generate_topic_spaced_repetition_plan(
+                course,
+                settings,
+                clustering_metadata,
+            )?
+        }
+        DistributionStrategy::Adaptive => {
+            crate::planner::clustering_integration::generate_clustering_adaptive_plan(
+                course,
+                settings,
+                clustering_metadata,
+            )?
+        }
+    };
+
+    // Create plan with clustering metadata
+    let mut plan = Plan::new(course.id, settings.clone());
+    plan.items = plan_items;
+
+    // Apply clustering-aware optimization
+    crate::planner::clustering_integration::optimize_clustering_aware_plan(
+        &mut plan,
+        clustering_metadata,
+    )?;
+
+    log::info!(
+        "Generated clustering-aware plan: {} sessions, strategy={:?}",
+        plan.items.len(),
+        strategy
+    );
+
+    Ok(plan)
+}
+
+/// Generate basic study plan (fallback when no clustering data available)
+pub fn generate_basic_plan(course: &Course, settings: &PlanSettings) -> Result<Plan, PlanError> {
     // Validate input parameters
     validate_plan_settings(
         settings.sessions_per_week,
@@ -75,7 +193,7 @@ enum SessionType {
     Assessment,   // Knowledge check
     Project,      // Applied project work
     #[allow(dead_code)]
-    Break,        // Rest/consolidation
+    Break, // Rest/consolidation
 }
 
 /// Enhanced session planning with cognitive load considerations
@@ -87,7 +205,7 @@ struct EnhancedSessionPlan {
     difficulty_level: DifficultyLevel,
     estimated_cognitive_load: f32, // 0.0 to 1.0
     #[allow(dead_code)]
-    prerequisites: Vec<usize>,     // Session indices that must be completed first
+    prerequisites: Vec<usize>, // Session indices that must be completed first
     #[allow(dead_code)]
     optimal_time_of_day: Option<TimeOfDay>,
 }
@@ -115,7 +233,7 @@ const COGNITIVE_LOAD_FACTORS: &[(f32, &str)] = &[
 ];
 
 /// Enhanced strategy selection with AI-driven analysis
-fn choose_distribution_strategy(
+pub fn choose_distribution_strategy(
     course: &Course,
     settings: &PlanSettings,
 ) -> Result<DistributionStrategy, PlanError> {
@@ -230,8 +348,13 @@ fn generate_module_based_plan(
         for group in session_groups {
             let video_indices: Vec<usize> = group.iter().map(|s| s.video_index).collect();
             let total_duration: Duration = group.iter().map(|s| s.duration).sum();
-            let estimated_completion_time = crate::types::duration_utils::calculate_completion_time_with_buffer(total_duration, 0.25);
-            let overflow_warnings = crate::types::duration_utils::validate_session_duration(&group, settings);
+            let estimated_completion_time =
+                crate::types::duration_utils::calculate_completion_time_with_buffer(
+                    total_duration,
+                    0.25,
+                );
+            let overflow_warnings =
+                crate::types::duration_utils::validate_session_duration(&group, settings);
 
             plan_items.push(PlanItem {
                 date: current_date,
@@ -245,7 +368,7 @@ fn generate_module_based_plan(
             });
 
             // Calculate next session date
-            current_date = get_next_session_date(
+            current_date = crate::planner::get_next_session_date(
                 current_date,
                 settings.sessions_per_week,
                 settings.include_weekends,
@@ -282,11 +405,11 @@ fn generate_time_based_plan(
     // Apply bin-packing logic to optimize session utilization
     while !video_queue.is_empty() {
         let session_videos = pack_videos_into_session(&mut video_queue, settings)?;
-        
+
         if !session_videos.is_empty() {
             plan_items.push(create_plan_item_from_videos(session_videos, current_date));
 
-            current_date = get_next_session_date(
+            current_date = crate::planner::get_next_session_date(
                 current_date,
                 settings.sessions_per_week,
                 settings.include_weekends,
@@ -298,14 +421,15 @@ fn generate_time_based_plan(
 }
 
 /// Pack videos into a session using bin-packing algorithm with duration constraints
-fn pack_videos_into_session(
+pub fn pack_videos_into_session(
     video_queue: &mut VecDeque<VideoItem>,
     settings: &PlanSettings,
 ) -> Result<Vec<VideoItem>, PlanError> {
     let session_limit = Duration::from_secs(settings.session_length_minutes as u64 * 60);
     // Apply 20% buffer time for breaks, notes, and processing
-    let effective_session_limit = Duration::from_secs((session_limit.as_secs() as f32 * 0.8) as u64);
-    
+    let effective_session_limit =
+        Duration::from_secs((session_limit.as_secs() as f32 * 0.8) as u64);
+
     let mut session_videos = Vec::new();
     let mut session_duration = Duration::from_secs(0);
     let mut overflow_warnings = Vec::new();
@@ -313,7 +437,7 @@ fn pack_videos_into_session(
     // First pass: try to fit videos in order
     while let Some(video) = video_queue.front() {
         let video_duration = video.duration;
-        
+
         // Handle videos that exceed session time limits
         if video_exceeds_session_limit(video_duration, settings) {
             if session_videos.is_empty() {
@@ -334,7 +458,8 @@ fn pack_videos_into_session(
         }
 
         // Check if video fits in current session
-        if session_duration + video_duration <= effective_session_limit || session_videos.is_empty() {
+        if session_duration + video_duration <= effective_session_limit || session_videos.is_empty()
+        {
             let video = video_queue.pop_front().unwrap();
             session_duration += video_duration;
             session_videos.push(video);
@@ -345,7 +470,8 @@ fn pack_videos_into_session(
 
     // Second pass: try to optimize utilization with smaller videos
     if session_duration < effective_session_limit && video_queue.len() > 1 {
-        session_videos = optimize_session_utilization(session_videos, video_queue, effective_session_limit);
+        session_videos =
+            optimize_session_utilization(session_videos, video_queue, effective_session_limit);
     }
 
     // Log overflow warnings (in a real implementation, these would be stored for UI display)
@@ -364,29 +490,29 @@ fn optimize_session_utilization(
 ) -> Vec<VideoItem> {
     let mut current_duration: Duration = session_videos.iter().map(|v| v.duration).sum();
     let remaining_time = effective_session_limit.saturating_sub(current_duration);
-    
+
     // Look for videos that can fit in the remaining time
     let queue_items: Vec<VideoItem> = video_queue.drain(..).collect();
     let mut remaining_items = Vec::new();
-    
+
     for video in queue_items {
-        if video.duration <= remaining_time && current_duration + video.duration <= effective_session_limit {
+        if video.duration <= remaining_time
+            && current_duration + video.duration <= effective_session_limit
+        {
             current_duration += video.duration;
             session_videos.push(video);
         } else {
             remaining_items.push(video);
         }
     }
-    
+
     // Put remaining items back in the queue
     for item in remaining_items {
         video_queue.push_back(item);
     }
-    
+
     session_videos
 }
-
-
 
 /// Generate a hybrid study plan
 fn generate_hybrid_plan(
@@ -402,8 +528,12 @@ fn generate_hybrid_plan(
         let module_sessions = plan_module_sessions(module, settings)?;
 
         for session in module_sessions {
-            let estimated_completion_time = crate::types::duration_utils::calculate_completion_time_with_buffer(session.total_duration, 0.25);
-            
+            let estimated_completion_time =
+                crate::types::duration_utils::calculate_completion_time_with_buffer(
+                    session.total_duration,
+                    0.25,
+                );
+
             plan_items.push(PlanItem {
                 date: current_date,
                 module_title: module.title.clone(),
@@ -415,7 +545,7 @@ fn generate_hybrid_plan(
                 overflow_warnings: session.overflow_warnings,
             });
 
-            current_date = get_next_session_date(
+            current_date = crate::planner::get_next_session_date(
                 current_date,
                 settings.sessions_per_week,
                 settings.include_weekends,
@@ -476,27 +606,28 @@ fn calculate_session_capacity_with_duration(
     settings: &PlanSettings,
 ) -> usize {
     let session_duration = Duration::from_secs(settings.session_length_minutes as u64 * 60);
-    
+
     // Apply 20% buffer time for breaks, notes, and processing
-    let effective_session_duration = Duration::from_secs((session_duration.as_secs() as f32 * 0.8) as u64);
-    
+    let effective_session_duration =
+        Duration::from_secs((session_duration.as_secs() as f32 * 0.8) as u64);
+
     // Handle edge case where videos are longer than session time
     if average_video_duration >= effective_session_duration {
         return 1; // At least one video per session
     }
-    
-    let videos_per_session = effective_session_duration.as_secs() / average_video_duration.as_secs();
+
+    let videos_per_session =
+        effective_session_duration.as_secs() / average_video_duration.as_secs();
     std::cmp::max(1, videos_per_session as usize)
 }
 
 /// Check if a video exceeds the session time limit
 fn video_exceeds_session_limit(video_duration: Duration, settings: &PlanSettings) -> bool {
     let session_duration = Duration::from_secs(settings.session_length_minutes as u64 * 60);
-    let effective_session_duration = Duration::from_secs((session_duration.as_secs() as f32 * 0.8) as u64);
+    let effective_session_duration =
+        Duration::from_secs((session_duration.as_secs() as f32 * 0.8) as u64);
     video_duration > effective_session_duration
 }
-
-
 
 /// Fallback calculation when course structure is not available
 fn calculate_videos_per_session_fallback(settings: &PlanSettings) -> usize {
@@ -635,15 +766,16 @@ fn group_sections_by_capacity<'a>(
 ) -> Vec<Vec<&'a crate::types::Section>> {
     let session_limit = Duration::from_secs(settings.session_length_minutes as u64 * 60);
     // Apply 20% buffer time for breaks, notes, and processing
-    let effective_session_limit = Duration::from_secs((session_limit.as_secs() as f32 * 0.8) as u64);
-    
+    let effective_session_limit =
+        Duration::from_secs((session_limit.as_secs() as f32 * 0.8) as u64);
+
     let mut groups = Vec::new();
     let mut current_group = Vec::new();
     let mut current_group_duration = Duration::from_secs(0);
 
     for section in &module.sections {
         let section_duration = section.duration;
-        
+
         // Handle videos that exceed session time limits
         if video_exceeds_session_limit(section_duration, settings) {
             if !current_group.is_empty() {
@@ -651,14 +783,16 @@ fn group_sections_by_capacity<'a>(
                 groups.push(std::mem::take(&mut current_group));
                 current_group_duration = Duration::from_secs(0);
             }
-            
+
             // Add the oversized video in its own group
             groups.push(vec![section]);
             continue;
         }
-        
+
         // Check if adding this section would exceed the session limit
-        if current_group_duration + section_duration > effective_session_limit && !current_group.is_empty() {
+        if current_group_duration + section_duration > effective_session_limit
+            && !current_group.is_empty()
+        {
             // Finalize current group
             groups.push(std::mem::take(&mut current_group));
             current_group_duration = Duration::from_secs(0);
@@ -696,12 +830,14 @@ fn create_plan_item_from_videos(videos: Vec<VideoItem>, date: DateTime<Utc>) -> 
     };
 
     let total_duration: Duration = videos.iter().map(|v| v.duration).sum();
-    let estimated_completion_time = crate::types::duration_utils::calculate_completion_time_with_buffer(total_duration, 0.25);
+    let estimated_completion_time =
+        crate::types::duration_utils::calculate_completion_time_with_buffer(total_duration, 0.25);
     let video_indices = videos.into_iter().map(|v| v.video_index).collect();
 
     // Generate basic overflow warnings for mixed content
     let mut overflow_warnings = Vec::new();
-    if total_duration.as_secs() > 90 * 60 { // More than 90 minutes
+    if total_duration.as_secs() > 90 * 60 {
+        // More than 90 minutes
         overflow_warnings.push(format!(
             "Session duration ({}) is quite long",
             crate::types::duration_utils::format_duration(total_duration)
@@ -727,8 +863,9 @@ fn plan_module_sessions(
 ) -> Result<Vec<SessionPlan>, PlanError> {
     let session_limit = Duration::from_secs(settings.session_length_minutes as u64 * 60);
     // Apply 20% buffer time for breaks, notes, and processing
-    let effective_session_limit = Duration::from_secs((session_limit.as_secs() as f32 * 0.8) as u64);
-    
+    let effective_session_limit =
+        Duration::from_secs((session_limit.as_secs() as f32 * 0.8) as u64);
+
     let mut sessions = Vec::new();
     let mut current_session_videos = Vec::new();
     let mut current_session_duration = Duration::from_secs(0);
@@ -749,7 +886,7 @@ fn plan_module_sessions(
                 });
                 current_session_duration = Duration::from_secs(0);
             }
-            
+
             // Add the oversized video in its own session
             let overflow_warnings = vec![format!(
                 "Video '{}' ({}) exceeds session limit",
@@ -800,13 +937,20 @@ fn plan_module_sessions(
 }
 
 /// Create an appropriate session title for module-based sessions
-fn create_module_session_title(video_indices: &[usize], existing_sessions: &[SessionPlan]) -> String {
+fn create_module_session_title(
+    video_indices: &[usize],
+    existing_sessions: &[SessionPlan],
+) -> String {
     if video_indices.len() == 1 {
         format!("Section {}", existing_sessions.len() + 1)
     } else if existing_sessions.is_empty() {
         "Complete Module".to_string()
     } else {
-        format!("Sections {}-{}", existing_sessions.len() + 1, existing_sessions.len() + video_indices.len())
+        format!(
+            "Sections {}-{}",
+            existing_sessions.len() + 1,
+            existing_sessions.len() + video_indices.len()
+        )
     }
 }
 
@@ -867,14 +1011,14 @@ fn generate_difficulty_based_plan(
 
         // Create duration-aware sessions for each difficulty phase
         let phase_sessions = create_difficulty_phase_sessions(content, phase, settings)?;
-        
+
         for session_videos in phase_sessions {
             if !session_videos.is_empty() {
                 plan_items.push(create_plan_item_from_videos(session_videos, current_date));
 
                 // Add extra time between difficult sessions
                 let days_to_add = if phase >= 2 { 2 } else { 1 };
-                current_date = get_next_session_date(
+                current_date = crate::planner::get_next_session_date(
                     current_date + chrono::Duration::days(days_to_add - 1),
                     settings.sessions_per_week,
                     settings.include_weekends,
@@ -895,18 +1039,19 @@ fn create_difficulty_phase_sessions(
     let session_limit = Duration::from_secs(settings.session_length_minutes as u64 * 60);
     // Apply 20% buffer time and adjust based on difficulty
     let buffer_factor = match phase {
-        0 => 0.7, // Beginner: more buffer time for processing
-        1 => 0.8, // Intermediate: standard buffer
+        0 => 0.7,  // Beginner: more buffer time for processing
+        1 => 0.8,  // Intermediate: standard buffer
         2 => 0.85, // Advanced: less buffer, more focused
-        3 => 0.9, // Expert: minimal buffer, intensive sessions
+        3 => 0.9,  // Expert: minimal buffer, intensive sessions
         _ => 0.8,
     };
-    let effective_session_limit = Duration::from_secs((session_limit.as_secs() as f32 * buffer_factor) as u64);
-    
+    let effective_session_limit =
+        Duration::from_secs((session_limit.as_secs() as f32 * buffer_factor) as u64);
+
     let mut sessions = Vec::new();
     let mut current_session = Vec::new();
     let mut current_duration = Duration::from_secs(0);
-    
+
     for video in content {
         // Handle videos that exceed session time limits
         if video_exceeds_session_limit(video.duration, settings) {
@@ -914,39 +1059,41 @@ fn create_difficulty_phase_sessions(
                 sessions.push(std::mem::take(&mut current_session));
                 current_duration = Duration::from_secs(0);
             }
-            
+
             // Add oversized video in its own session
             sessions.push(vec![video.clone()]);
             continue;
         }
-        
+
         // Check if adding this video would exceed the session limit
-        if current_duration + video.duration > effective_session_limit && !current_session.is_empty() {
+        if current_duration + video.duration > effective_session_limit
+            && !current_session.is_empty()
+        {
             sessions.push(std::mem::take(&mut current_session));
             current_duration = Duration::from_secs(0);
         }
-        
+
         // Add video to current session
         current_session.push(video.clone());
         current_duration += video.duration;
-        
+
         // For expert content (phase 3), limit to one video per session
         if phase == 3 {
             sessions.push(std::mem::take(&mut current_session));
             current_duration = Duration::from_secs(0);
         }
     }
-    
+
     // Add remaining videos as final session
     if !current_session.is_empty() {
         sessions.push(current_session);
     }
-    
+
     Ok(sessions)
 }
 
 /// Generate a spaced repetition plan optimized for memory retention
-fn generate_spaced_repetition_plan(
+pub fn generate_spaced_repetition_plan(
     course: &Course,
     settings: &PlanSettings,
 ) -> Result<Vec<PlanItem>, PlanError> {
@@ -958,8 +1105,15 @@ fn generate_spaced_repetition_plan(
     // First pass: Create initial learning sessions
     for module in &structure.modules {
         for section in &module.sections {
-            let estimated_completion_time = crate::types::duration_utils::calculate_completion_time_with_buffer(section.duration, 0.25);
-            let overflow_warnings = if crate::types::duration_utils::is_duration_excessive(section.duration, settings.session_length_minutes) {
+            let estimated_completion_time =
+                crate::types::duration_utils::calculate_completion_time_with_buffer(
+                    section.duration,
+                    0.25,
+                );
+            let overflow_warnings = if crate::types::duration_utils::is_duration_excessive(
+                section.duration,
+                settings.session_length_minutes,
+            ) {
                 vec![format!(
                     "Video '{}' ({}) exceeds session limit",
                     section.title,
@@ -988,7 +1142,7 @@ fn generate_spaced_repetition_plan(
             }
             review_schedule.insert(section.video_index, review_dates);
 
-            current_date = get_next_session_date(
+            current_date = crate::planner::get_next_session_date(
                 current_date,
                 settings.sessions_per_week,
                 settings.include_weekends,
@@ -1010,13 +1164,18 @@ fn generate_spaced_repetition_plan(
                         section_title = format!("Review: {}", section.title);
                         module_title = format!("Review: {}", module.title);
                         // Review sessions are typically shorter than original
-                        section_duration = Duration::from_secs((section.duration.as_secs() as f32 * 0.6) as u64);
+                        section_duration =
+                            Duration::from_secs((section.duration.as_secs() as f32 * 0.6) as u64);
                         break;
                     }
                 }
             }
 
-            let estimated_completion_time = crate::types::duration_utils::calculate_completion_time_with_buffer(section_duration, 0.25);
+            let estimated_completion_time =
+                crate::types::duration_utils::calculate_completion_time_with_buffer(
+                    section_duration,
+                    0.25,
+                );
 
             plan_items.push(PlanItem {
                 date: review_date,
@@ -1089,7 +1248,11 @@ fn generate_adaptive_plan(
             }
         }
 
-        let estimated_completion_time = crate::types::duration_utils::calculate_completion_time_with_buffer(section_duration, 0.25);
+        let estimated_completion_time =
+            crate::types::duration_utils::calculate_completion_time_with_buffer(
+                section_duration,
+                0.25,
+            );
 
         plan_items.push(PlanItem {
             date: adjusted_date,
@@ -1102,7 +1265,7 @@ fn generate_adaptive_plan(
             overflow_warnings: Vec::new(),
         });
 
-        current_date = get_next_session_date(
+        current_date = crate::planner::get_next_session_date(
             adjusted_date + chrono::Duration::days(spacing_days),
             settings.sessions_per_week,
             settings.include_weekends,
@@ -1683,8 +1846,6 @@ pub fn optimize_plan(plan: &mut Plan) -> Result<(), PlanError> {
     Ok(())
 }
 
-
-
 /// Balance cognitive load across sessions using advanced algorithms
 fn balance_cognitive_load(plan: &mut Plan) -> Result<(), PlanError> {
     if plan.items.len() < 2 {
@@ -1875,14 +2036,18 @@ fn add_review_sessions(plan: &mut Plan) -> Result<(), PlanError> {
     let mut review_items = Vec::new();
     for (i, item) in plan.items.iter().enumerate() {
         if (i + 1) % review_interval == 0 && i < plan.items.len() - 1 {
-            let review_date = get_next_session_date(
+            let review_date = crate::planner::get_next_session_date(
                 item.date,
                 plan.settings.sessions_per_week,
                 plan.settings.include_weekends,
             );
 
             let review_duration = Duration::from_secs(45 * 60); // 45 minutes for module review
-            let estimated_completion_time = crate::types::duration_utils::calculate_completion_time_with_buffer(review_duration, 0.25);
+            let estimated_completion_time =
+                crate::types::duration_utils::calculate_completion_time_with_buffer(
+                    review_duration,
+                    0.25,
+                );
 
             review_items.push(PlanItem {
                 date: review_date,
@@ -1904,10 +2069,6 @@ fn add_review_sessions(plan: &mut Plan) -> Result<(), PlanError> {
     Ok(())
 }
 
-
-
-
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -1916,11 +2077,11 @@ mod tests {
     use uuid::Uuid;
 
     fn create_test_course() -> Course {
-        let structure = CourseStructure {
-            modules: vec![
-                Module {
-                    title: "Introduction".to_string(),
-                    sections: vec![
+        let structure = CourseStructure::new_basic(
+            vec![
+                Module::new_basic(
+                    "Introduction".to_string(),
+                    vec![
                         Section {
                             title: "Welcome".to_string(),
                             video_index: 0,
@@ -1932,25 +2093,25 @@ mod tests {
                             duration: Duration::from_secs(900),
                         },
                     ],
-                    total_duration: Duration::from_secs(600 + 900),
-                },
-                Module {
-                    title: "Advanced Topics".to_string(),
-                    sections: vec![Section {
+                ),
+                Module::new_basic(
+                    "Advanced Topics".to_string(),
+                    vec![Section {
                         title: "Complex Example".to_string(),
                         video_index: 2,
                         duration: Duration::from_secs(1800),
                     }],
-                    total_duration: Duration::from_secs(1800),
-                },
+                ),
             ],
-            metadata: StructureMetadata {
+            StructureMetadata {
                 total_videos: 3,
                 total_duration: Duration::from_secs(600 + 900 + 1800),
                 estimated_duration_hours: Some(1.0),
                 difficulty_level: Some("Intermediate".to_string()),
+                structure_quality_score: None,
+                content_coherence_score: None,
             },
-        };
+        );
 
         Course {
             id: Uuid::new_v4(),
@@ -2019,7 +2180,7 @@ mod tests {
     fn test_videos_per_session_fallback() {
         let mut course = create_test_course();
         course.structure = None; // No structure available
-        
+
         let settings = PlanSettings {
             start_date: Utc::now(),
             sessions_per_week: 3,
@@ -2043,17 +2204,32 @@ mod tests {
         };
 
         // 60 minutes * 0.8 = 48 minutes effective session time
-        assert!(!video_exceeds_session_limit(Duration::from_secs(30 * 60), &settings)); // 30 min - OK
-        assert!(!video_exceeds_session_limit(Duration::from_secs(45 * 60), &settings)); // 45 min - OK
-        assert!(video_exceeds_session_limit(Duration::from_secs(50 * 60), &settings)); // 50 min - exceeds
-        assert!(video_exceeds_session_limit(Duration::from_secs(90 * 60), &settings)); // 90 min - exceeds
+        assert!(!video_exceeds_session_limit(
+            Duration::from_secs(30 * 60),
+            &settings
+        )); // 30 min - OK
+        assert!(!video_exceeds_session_limit(
+            Duration::from_secs(45 * 60),
+            &settings
+        )); // 45 min - OK
+        assert!(video_exceeds_session_limit(
+            Duration::from_secs(50 * 60),
+            &settings
+        )); // 50 min - exceeds
+        assert!(video_exceeds_session_limit(
+            Duration::from_secs(90 * 60),
+            &settings
+        )); // 90 min - exceeds
     }
 
     #[test]
     fn test_completion_time_calculation() {
         let video_duration = Duration::from_secs(45 * 60); // 45 minutes
-        let completion_time = crate::types::duration_utils::calculate_completion_time_with_buffer(video_duration, 0.25);
-        
+        let completion_time = crate::types::duration_utils::calculate_completion_time_with_buffer(
+            video_duration,
+            0.25,
+        );
+
         // Total video time: 45 minutes
         // Buffer time: 45 * 0.25 = 11.25 minutes
         // Total: ~56.25 minutes
@@ -2113,42 +2289,41 @@ mod tests {
     #[test]
     fn test_bin_packing_optimization() {
         // Create a course with videos of varying durations
-        let structure = CourseStructure {
-            modules: vec![
-                Module {
-                    title: "Test Module".to_string(),
-                    sections: vec![
-                        Section {
-                            title: "Short Video 1".to_string(),
-                            video_index: 0,
-                            duration: Duration::from_secs(10 * 60), // 10 minutes
-                        },
-                        Section {
-                            title: "Short Video 2".to_string(),
-                            video_index: 1,
-                            duration: Duration::from_secs(15 * 60), // 15 minutes
-                        },
-                        Section {
-                            title: "Medium Video".to_string(),
-                            video_index: 2,
-                            duration: Duration::from_secs(25 * 60), // 25 minutes
-                        },
-                        Section {
-                            title: "Short Video 3".to_string(),
-                            video_index: 3,
-                            duration: Duration::from_secs(12 * 60), // 12 minutes
-                        },
-                    ],
-                    total_duration: Duration::from_secs(62 * 60),
-                },
-            ],
-            metadata: StructureMetadata {
+        let structure = CourseStructure::new_basic(
+            vec![Module::new_basic(
+                "Test Module".to_string(),
+                vec![
+                    Section {
+                        title: "Short Video 1".to_string(),
+                        video_index: 0,
+                        duration: Duration::from_secs(10 * 60), // 10 minutes
+                    },
+                    Section {
+                        title: "Short Video 2".to_string(),
+                        video_index: 1,
+                        duration: Duration::from_secs(15 * 60), // 15 minutes
+                    },
+                    Section {
+                        title: "Medium Video".to_string(),
+                        video_index: 2,
+                        duration: Duration::from_secs(25 * 60), // 25 minutes
+                    },
+                    Section {
+                        title: "Short Video 3".to_string(),
+                        video_index: 3,
+                        duration: Duration::from_secs(12 * 60), // 12 minutes
+                    },
+                ],
+            )],
+            StructureMetadata {
                 total_videos: 4,
                 total_duration: Duration::from_secs(62 * 60),
                 estimated_duration_hours: Some(1.0),
                 difficulty_level: Some("Beginner".to_string()),
+                structure_quality_score: None,
+                content_coherence_score: None,
             },
-        };
+        );
 
         let course = Course {
             id: Uuid::new_v4(),
@@ -2175,12 +2350,12 @@ mod tests {
         assert!(result.is_ok());
 
         let plan_items = result.unwrap();
-        
+
         // With 60-minute sessions and 20% buffer (48 min effective):
         // Should be able to fit multiple short videos in first session
         // Medium video (25 min) should fit with some short videos
         assert!(plan_items.len() <= 3); // Should not need more than 3 sessions for 62 minutes of content
-        
+
         // First session should contain multiple videos if bin-packing works
         if let Some(first_session) = plan_items.first() {
             // Should be able to fit at least 2 videos in first session
@@ -2288,7 +2463,7 @@ mod tests {
                 // Estimated completion time should be longer than total duration (due to buffer)
                 assert!(item.estimated_completion_time >= item.total_duration);
             }
-            
+
             // Overflow warnings should be a valid vector (can be empty)
             assert!(item.overflow_warnings.len() >= 0);
         }
@@ -2297,26 +2472,41 @@ mod tests {
     #[test]
     fn test_duration_formatting_utilities() {
         use crate::types::duration_utils::*;
-        
+
         // Test basic duration formatting
         assert_eq!(format_duration(Duration::from_secs(30)), "30s");
         assert_eq!(format_duration(Duration::from_secs(90)), "1m");
         assert_eq!(format_duration(Duration::from_secs(3600)), "1h");
         assert_eq!(format_duration(Duration::from_secs(3690)), "1h 1m");
-        
+
         // Test verbose formatting
-        assert_eq!(format_duration_verbose(Duration::from_secs(90)), "1 minutes");
-        assert_eq!(format_duration_verbose(Duration::from_secs(3600)), "1 hours");
-        assert_eq!(format_duration_verbose(Duration::from_secs(3690)), "1 hours 1 minutes");
-        
+        assert_eq!(
+            format_duration_verbose(Duration::from_secs(90)),
+            "1 minutes"
+        );
+        assert_eq!(
+            format_duration_verbose(Duration::from_secs(3600)),
+            "1 hours"
+        );
+        assert_eq!(
+            format_duration_verbose(Duration::from_secs(3690)),
+            "1 hours 1 minutes"
+        );
+
         // Test decimal hours formatting
-        assert_eq!(format_duration_decimal_hours(Duration::from_secs(3600)), "1.0 hours");
-        assert_eq!(format_duration_decimal_hours(Duration::from_secs(1800)), "30 minutes");
-        
+        assert_eq!(
+            format_duration_decimal_hours(Duration::from_secs(3600)),
+            "1.0 hours"
+        );
+        assert_eq!(
+            format_duration_decimal_hours(Duration::from_secs(1800)),
+            "30 minutes"
+        );
+
         // Test excessive duration check
         assert!(is_duration_excessive(Duration::from_secs(90 * 60), 60)); // 90 min > 60 min
         assert!(!is_duration_excessive(Duration::from_secs(45 * 60), 60)); // 45 min < 60 min
-        
+
         // Test completion time calculation with buffer
         let video_duration = Duration::from_secs(60 * 60); // 1 hour
         let completion_time = calculate_completion_time_with_buffer(video_duration, 0.25);
@@ -2326,27 +2516,24 @@ mod tests {
     #[test]
     fn test_session_overflow_warnings() {
         // Create a course with a very long video
-        let structure = CourseStructure {
-            modules: vec![
-                Module {
-                    title: "Test Module".to_string(),
-                    sections: vec![
-                        Section {
-                            title: "Very Long Video".to_string(),
-                            video_index: 0,
-                            duration: Duration::from_secs(90 * 60), // 90 minutes
-                        },
-                    ],
-                    total_duration: Duration::from_secs(90 * 60),
-                },
-            ],
-            metadata: StructureMetadata {
+        let structure = CourseStructure::new_basic(
+            vec![Module::new_basic(
+                "Test Module".to_string(),
+                vec![Section {
+                    title: "Very Long Video".to_string(),
+                    video_index: 0,
+                    duration: Duration::from_secs(90 * 60), // 90 minutes
+                }],
+            )],
+            StructureMetadata {
                 total_videos: 1,
                 total_duration: Duration::from_secs(90 * 60),
                 estimated_duration_hours: Some(1.5),
                 difficulty_level: Some("Advanced".to_string()),
+                structure_quality_score: None,
+                content_coherence_score: None,
             },
-        };
+        );
 
         let course = Course {
             id: Uuid::new_v4(),
@@ -2373,7 +2560,7 @@ mod tests {
         // The plan item should have overflow warnings
         let first_item = &plan.items[0];
         assert!(!first_item.overflow_warnings.is_empty());
-        
+
         // The warning should mention that the video exceeds the session limit
         let warning_text = first_item.overflow_warnings.join(" ");
         assert!(warning_text.contains("exceeds") || warning_text.contains("long"));
@@ -2382,37 +2569,36 @@ mod tests {
     #[test]
     fn test_overflow_handling() {
         // Create a course with a very long video
-        let structure = CourseStructure {
-            modules: vec![
-                Module {
-                    title: "Test Module".to_string(),
-                    sections: vec![
-                        Section {
-                            title: "Normal Video".to_string(),
-                            video_index: 0,
-                            duration: Duration::from_secs(20 * 60), // 20 minutes
-                        },
-                        Section {
-                            title: "Very Long Video".to_string(),
-                            video_index: 1,
-                            duration: Duration::from_secs(90 * 60), // 90 minutes - exceeds 60 min session
-                        },
-                        Section {
-                            title: "Another Normal Video".to_string(),
-                            video_index: 2,
-                            duration: Duration::from_secs(15 * 60), // 15 minutes
-                        },
-                    ],
-                    total_duration: Duration::from_secs(125 * 60),
-                },
-            ],
-            metadata: StructureMetadata {
+        let structure = CourseStructure::new_basic(
+            vec![Module::new_basic(
+                "Test Module".to_string(),
+                vec![
+                    Section {
+                        title: "Normal Video".to_string(),
+                        video_index: 0,
+                        duration: Duration::from_secs(20 * 60), // 20 minutes
+                    },
+                    Section {
+                        title: "Very Long Video".to_string(),
+                        video_index: 1,
+                        duration: Duration::from_secs(90 * 60), // 90 minutes - exceeds 60 min session
+                    },
+                    Section {
+                        title: "Another Normal Video".to_string(),
+                        video_index: 2,
+                        duration: Duration::from_secs(15 * 60), // 15 minutes
+                    },
+                ],
+            )],
+            StructureMetadata {
                 total_videos: 3,
                 total_duration: Duration::from_secs(125 * 60),
                 estimated_duration_hours: Some(2.0),
                 difficulty_level: Some("Intermediate".to_string()),
+                structure_quality_score: None,
+                content_coherence_score: None,
             },
-        };
+        );
 
         let course = Course {
             id: Uuid::new_v4(),
@@ -2439,13 +2625,13 @@ mod tests {
 
         let plan_items = result.unwrap();
         assert!(plan_items.len() >= 2); // Should create at least 2 sessions
-        
+
         // The long video should be in its own session
         let long_video_session = plan_items.iter().find(|item| {
             item.video_indices.contains(&1) // video_index 1 is the long video
         });
         assert!(long_video_session.is_some());
-        
+
         // The long video session should only contain that one video (due to overflow)
         if let Some(session) = long_video_session {
             assert_eq!(session.video_indices.len(), 1);
@@ -2647,4 +2833,602 @@ mod tests {
         );
         assert_eq!(determine_optimal_time_of_day("General Topic"), None);
     }
+}
+// ============================================================================
+// CLUSTERING-AWARE PLANNING FUNCTIONS
+// ============================================================================
+
+use crate::types::ClusteringMetadata;
+
+/// Choose distribution strategy based on clustering insights
+fn choose_clustering_aware_strategy(
+    course: &Course,
+    settings: &PlanSettings,
+    clustering_metadata: &ClusteringMetadata,
+) -> Result<DistributionStrategy, PlanError> {
+    let basic_strategy = choose_distribution_strategy(course, settings)?;
+
+    // Enhance strategy selection with clustering insights
+    let enhanced_strategy = match clustering_metadata.algorithm_used {
+        crate::types::ClusteringAlgorithm::KMeans | crate::types::ClusteringAlgorithm::TfIdf => {
+            // High-quality content clustering favors topic-aware approaches
+            if clustering_metadata.quality_score > 0.7 {
+                match basic_strategy.clone() {
+                    DistributionStrategy::TimeBased => DistributionStrategy::Hybrid,
+                    other => other,
+                }
+            } else {
+                basic_strategy.clone()
+            }
+        }
+        crate::types::ClusteringAlgorithm::Hybrid => {
+            // Hybrid clustering works well with hybrid planning
+            DistributionStrategy::Hybrid
+        }
+        _ => basic_strategy.clone(),
+    };
+
+    log::info!(
+        "Strategy selection: basic={:?}, enhanced={:?}, quality={:.3}",
+        basic_strategy,
+        enhanced_strategy,
+        clustering_metadata.quality_score
+    );
+
+    Ok(enhanced_strategy)
+}
+
+/// Generate topic-aware module-based plan
+fn generate_topic_aware_module_plan(
+    course: &Course,
+    settings: &PlanSettings,
+    clustering_metadata: &ClusteringMetadata,
+) -> Result<Vec<PlanItem>, PlanError> {
+    let structure = course.structure.as_ref().unwrap();
+    let mut plan_items = Vec::new();
+    let mut current_date = settings.start_date;
+
+    // Group modules by topic similarity for better session flow
+    let topic_grouped_modules =
+        group_modules_by_topic_similarity(&structure.modules, clustering_metadata);
+
+    for module_group in topic_grouped_modules {
+        for module in module_group {
+            // Create topic-aware sessions within each module
+            let module_sessions =
+                create_topic_aware_sessions(module, settings, clustering_metadata)?;
+
+            for session_videos in module_sessions {
+                let plan_item = create_plan_item_from_videos(session_videos, current_date);
+                plan_items.push(plan_item);
+
+                current_date = crate::planner::get_next_session_date(
+                    current_date,
+                    settings.sessions_per_week,
+                    settings.include_weekends,
+                );
+            }
+        }
+    }
+
+    Ok(plan_items)
+}
+
+/// Generate duration-optimized plan using clustering duration insights
+fn generate_duration_optimized_plan(
+    course: &Course,
+    settings: &PlanSettings,
+    clustering_metadata: &ClusteringMetadata,
+) -> Result<Vec<PlanItem>, PlanError> {
+    let structure = course.structure.as_ref().unwrap();
+    let mut plan_items = Vec::new();
+    let mut current_date = settings.start_date;
+
+    // Use clustering duration balancing insights
+    let duration_optimized_sessions =
+        create_duration_balanced_sessions(&structure.modules, settings, clustering_metadata)?;
+
+    for session_videos in duration_optimized_sessions {
+        let plan_item = create_plan_item_from_videos(session_videos, current_date);
+        plan_items.push(plan_item);
+
+        current_date = crate::planner::get_next_session_date(
+            current_date,
+            settings.sessions_per_week,
+            settings.include_weekends,
+        );
+    }
+
+    Ok(plan_items)
+}
+
+/// Generate clustering-enhanced hybrid plan
+fn generate_clustering_hybrid_plan(
+    course: &Course,
+    settings: &PlanSettings,
+    clustering_metadata: &ClusteringMetadata,
+) -> Result<Vec<PlanItem>, PlanError> {
+    let structure = course.structure.as_ref().unwrap();
+    let mut plan_items = Vec::new();
+    let mut current_date = settings.start_date;
+
+    // Balance topic coherence and duration optimization
+    let hybrid_sessions =
+        create_hybrid_clustering_sessions(&structure.modules, settings, clustering_metadata)?;
+
+    for session_videos in hybrid_sessions {
+        let plan_item = create_plan_item_from_videos(session_videos, current_date);
+        plan_items.push(plan_item);
+
+        current_date = crate::planner::get_next_session_date(
+            current_date,
+            settings.sessions_per_week,
+            settings.include_weekends,
+        );
+    }
+
+    Ok(plan_items)
+}
+
+/// Generate difficulty-based plan using clustering difficulty insights
+fn generate_clustering_difficulty_plan(
+    course: &Course,
+    settings: &PlanSettings,
+    clustering_metadata: &ClusteringMetadata,
+) -> Result<Vec<PlanItem>, PlanError> {
+    let structure = course.structure.as_ref().unwrap();
+    let mut plan_items = Vec::new();
+    let mut current_date = settings.start_date;
+
+    // Use module difficulty levels from clustering
+    let difficulty_ordered_modules = order_modules_by_clustering_difficulty(&structure.modules);
+
+    for module in difficulty_ordered_modules {
+        let module_sessions =
+            create_difficulty_aware_sessions(module, settings, clustering_metadata)?;
+
+        for session_videos in module_sessions {
+            let plan_item = create_plan_item_from_videos(session_videos, current_date);
+            plan_items.push(plan_item);
+
+            current_date = crate::planner::get_next_session_date(
+                current_date,
+                settings.sessions_per_week,
+                settings.include_weekends,
+            );
+        }
+    }
+
+    Ok(plan_items)
+}
+
+/// Generate topic-based spaced repetition plan
+fn generate_topic_spaced_repetition_plan(
+    course: &Course,
+    settings: &PlanSettings,
+    clustering_metadata: &ClusteringMetadata,
+) -> Result<Vec<PlanItem>, PlanError> {
+    // Start with basic spaced repetition
+    let mut plan_items = generate_spaced_repetition_plan(course, settings)?;
+
+    // Enhance with topic-based spacing
+    enhance_plan_with_topic_spacing(&mut plan_items, clustering_metadata);
+
+    Ok(plan_items)
+}
+
+/// Generate adaptive plan using clustering insights
+fn generate_clustering_adaptive_plan(
+    course: &Course,
+    settings: &PlanSettings,
+    clustering_metadata: &ClusteringMetadata,
+) -> Result<Vec<PlanItem>, PlanError> {
+    // Use clustering quality to determine adaptation level
+    let adaptation_factor = clustering_metadata.quality_score;
+
+    if adaptation_factor > 0.8 {
+        // High-quality clustering: use topic-aware approach
+        generate_topic_aware_module_plan(course, settings, clustering_metadata)
+    } else if adaptation_factor > 0.6 {
+        // Medium-quality clustering: use hybrid approach
+        generate_clustering_hybrid_plan(course, settings, clustering_metadata)
+    } else {
+        // Lower-quality clustering: fall back to duration optimization
+        generate_duration_optimized_plan(course, settings, clustering_metadata)
+    }
+}
+
+/// Apply clustering-aware optimization to plan
+fn optimize_clustering_aware_plan(
+    plan: &mut Plan,
+    clustering_metadata: &ClusteringMetadata,
+) -> Result<(), PlanError> {
+    // Apply basic optimization first
+    optimize_plan(plan)?;
+
+    // Apply clustering-specific optimizations
+    optimize_topic_flow(plan, clustering_metadata)?;
+    optimize_difficulty_progression_with_clustering(plan, clustering_metadata)?;
+
+    Ok(())
+}
+
+// Helper functions for clustering-aware planning
+
+/// Group modules by topic similarity
+fn group_modules_by_topic_similarity<'a>(
+    modules: &'a [crate::types::Module],
+    clustering_metadata: &'a ClusteringMetadata,
+) -> Vec<Vec<&'a crate::types::Module>> {
+    let mut groups = Vec::new();
+    let mut used_modules = std::collections::HashSet::new();
+
+    // Group modules with similar topic keywords
+    for (i, module) in modules.iter().enumerate() {
+        if used_modules.contains(&i) {
+            continue;
+        }
+
+        let mut group = vec![module];
+        used_modules.insert(i);
+
+        // Find modules with similar topics
+        for (j, other_module) in modules.iter().enumerate().skip(i + 1) {
+            if used_modules.contains(&j) {
+                continue;
+            }
+
+            if modules_have_similar_topics(module, other_module, clustering_metadata) {
+                group.push(other_module);
+                used_modules.insert(j);
+            }
+        }
+
+        groups.push(group);
+    }
+
+    groups
+}
+
+/// Check if two modules have similar topics
+fn modules_have_similar_topics(
+    module1: &crate::types::Module,
+    module2: &crate::types::Module,
+    _clustering_metadata: &ClusteringMetadata,
+) -> bool {
+    let keywords1: std::collections::HashSet<_> = module1.topic_keywords.iter().collect();
+    let keywords2: std::collections::HashSet<_> = module2.topic_keywords.iter().collect();
+
+    let intersection = keywords1.intersection(&keywords2).count();
+    let union = keywords1.union(&keywords2).count();
+
+    if union == 0 {
+        return false;
+    }
+
+    let similarity = intersection as f32 / union as f32;
+    similarity > 0.3 // 30% topic overlap threshold
+}
+
+/// Create topic-aware sessions within a module
+fn create_topic_aware_sessions(
+    module: &crate::types::Module,
+    settings: &PlanSettings,
+    _clustering_metadata: &ClusteringMetadata,
+) -> Result<Vec<Vec<VideoItem>>, PlanError> {
+    let videos: Vec<VideoItem> = module
+        .sections
+        .iter()
+        .map(|section| VideoItem {
+            module_title: module.title.clone(),
+            section_title: section.title.clone(),
+            video_index: section.video_index,
+            duration: section.duration,
+        })
+        .collect();
+
+    // Group videos by session capacity, maintaining topic coherence
+    let mut sessions = Vec::new();
+    let mut current_session = Vec::new();
+    let mut current_duration = Duration::from_secs(0);
+    let session_limit = Duration::from_secs(settings.session_length_minutes as u64 * 60);
+
+    for video in videos {
+        if current_duration + video.duration > session_limit && !current_session.is_empty() {
+            sessions.push(std::mem::take(&mut current_session));
+            current_duration = Duration::from_secs(0);
+        }
+
+        current_duration += video.duration;
+        current_session.push(video);
+    }
+
+    if !current_session.is_empty() {
+        sessions.push(current_session);
+    }
+
+    Ok(sessions)
+}
+
+/// Create duration-balanced sessions using clustering insights
+fn create_duration_balanced_sessions(
+    modules: &[crate::types::Module],
+    settings: &PlanSettings,
+    clustering_metadata: &ClusteringMetadata,
+) -> Result<Vec<Vec<VideoItem>>, PlanError> {
+    let mut all_videos = Vec::new();
+
+    // Collect all videos with clustering context
+    for module in modules {
+        for section in &module.sections {
+            all_videos.push(VideoItem {
+                module_title: module.title.clone(),
+                section_title: section.title.clone(),
+                video_index: section.video_index,
+                duration: section.duration,
+            });
+        }
+    }
+
+    // Use clustering quality to determine balancing aggressiveness
+    let balance_factor = clustering_metadata.quality_score;
+    let session_limit = Duration::from_secs(
+        (settings.session_length_minutes as f32 * (1.0 + balance_factor * 0.1)) as u64 * 60,
+    );
+
+    // Create balanced sessions
+    let mut sessions = Vec::new();
+    let mut video_queue = VecDeque::from(all_videos);
+
+    while !video_queue.is_empty() {
+        let session_videos = pack_videos_into_session(&mut video_queue, settings)?;
+        if !session_videos.is_empty() {
+            sessions.push(session_videos);
+        }
+    }
+
+    Ok(sessions)
+}
+
+/// Create hybrid sessions balancing topics and duration
+fn create_hybrid_clustering_sessions(
+    modules: &[crate::types::Module],
+    settings: &PlanSettings,
+    clustering_metadata: &ClusteringMetadata,
+) -> Result<Vec<Vec<VideoItem>>, PlanError> {
+    // Weight between topic coherence and duration balance based on clustering quality
+    let topic_weight = clustering_metadata.quality_score;
+    let duration_weight = 1.0 - topic_weight;
+
+    if topic_weight > 0.6 {
+        // Favor topic coherence
+        let mut sessions = Vec::new();
+        for module in modules {
+            let module_sessions =
+                create_topic_aware_sessions(module, settings, clustering_metadata)?;
+            sessions.extend(module_sessions);
+        }
+        Ok(sessions)
+    } else {
+        // Favor duration balance
+        create_duration_balanced_sessions(modules, settings, clustering_metadata)
+    }
+}
+
+/// Order modules by difficulty using clustering insights
+fn order_modules_by_clustering_difficulty(
+    modules: &[crate::types::Module],
+) -> Vec<&crate::types::Module> {
+    let mut ordered_modules: Vec<_> = modules.iter().collect();
+
+    ordered_modules.sort_by(|a, b| {
+        let difficulty_a = a.difficulty_level.unwrap_or(DifficultyLevel::Intermediate);
+        let difficulty_b = b.difficulty_level.unwrap_or(DifficultyLevel::Intermediate);
+
+        difficulty_a
+            .partial_cmp(&difficulty_b)
+            .unwrap_or(std::cmp::Ordering::Equal)
+    });
+
+    ordered_modules
+}
+
+/// Create difficulty-aware sessions
+fn create_difficulty_aware_sessions(
+    module: &crate::types::Module,
+    settings: &PlanSettings,
+    clustering_metadata: &ClusteringMetadata,
+) -> Result<Vec<Vec<VideoItem>>, PlanError> {
+    // Adjust session size based on module difficulty and clustering quality
+    let difficulty_factor = match module
+        .difficulty_level
+        .unwrap_or(DifficultyLevel::Intermediate)
+    {
+        DifficultyLevel::Beginner => 1.2,
+        DifficultyLevel::Intermediate => 1.0,
+        DifficultyLevel::Advanced => 0.8,
+        DifficultyLevel::Expert => 0.6,
+    };
+
+    let quality_factor = clustering_metadata.quality_score;
+    let adjusted_session_length =
+        (settings.session_length_minutes as f32 * difficulty_factor * quality_factor) as u32;
+
+    let adjusted_settings = PlanSettings {
+        session_length_minutes: adjusted_session_length,
+        ..settings.clone()
+    };
+
+    create_topic_aware_sessions(module, &adjusted_settings, clustering_metadata)
+}
+
+/// Enhance plan with topic-based spacing
+fn enhance_plan_with_topic_spacing(
+    plan_items: &mut Vec<PlanItem>,
+    clustering_metadata: &ClusteringMetadata,
+) {
+    // Use topic information to adjust spacing between related content
+    if clustering_metadata.content_topics.is_empty() {
+        return;
+    }
+
+    // Group plan items by topic similarity and adjust dates
+    for i in 1..plan_items.len() {
+        let current_item = &plan_items[i];
+        let previous_item = &plan_items[i - 1];
+
+        // Check topic similarity between consecutive items
+        let topic_similarity = calculate_topic_similarity_between_items(
+            current_item,
+            previous_item,
+            clustering_metadata,
+        );
+
+        if topic_similarity > 0.7 {
+            // High similarity: reduce spacing for reinforcement
+            let reduced_gap = chrono::Duration::days(1);
+            plan_items[i].date = plan_items[i - 1].date + reduced_gap;
+        } else if topic_similarity < 0.3 {
+            // Low similarity: increase spacing for context switching
+            let increased_gap = chrono::Duration::days(3);
+            plan_items[i].date = plan_items[i - 1].date + increased_gap;
+        }
+    }
+}
+
+/// Optimize topic flow in plan
+fn optimize_topic_flow(
+    plan: &mut Plan,
+    clustering_metadata: &ClusteringMetadata,
+) -> Result<(), PlanError> {
+    if clustering_metadata.content_topics.is_empty() {
+        return Ok(());
+    }
+
+    // Reorder sessions to improve topic flow
+    plan.items.sort_by(|a, b| {
+        let topic_score_a = calculate_item_topic_score(a, clustering_metadata);
+        let topic_score_b = calculate_item_topic_score(b, clustering_metadata);
+        topic_score_a
+            .partial_cmp(&topic_score_b)
+            .unwrap_or(std::cmp::Ordering::Equal)
+    });
+
+    // Reassign dates after reordering
+    let mut current_date = plan
+        .items
+        .first()
+        .map(|item| item.date)
+        .unwrap_or_else(chrono::Utc::now);
+
+    for item in &mut plan.items {
+        item.date = current_date;
+        current_date = crate::planner::get_next_session_date(
+            current_date,
+            plan.settings.sessions_per_week,
+            plan.settings.include_weekends,
+        );
+    }
+
+    Ok(())
+}
+
+/// Optimize difficulty progression with clustering insights
+fn optimize_difficulty_progression_with_clustering(
+    plan: &mut Plan,
+    clustering_metadata: &ClusteringMetadata,
+) -> Result<(), PlanError> {
+    // Use clustering quality to determine progression aggressiveness
+    let progression_factor = clustering_metadata.quality_score;
+
+    if progression_factor > 0.7 {
+        // High-quality clustering: trust the difficulty progression
+        return Ok(());
+    }
+
+    // Lower-quality clustering: apply conservative difficulty progression
+    plan.items.sort_by(|a, b| {
+        let difficulty_a = estimate_item_difficulty(a);
+        let difficulty_b = estimate_item_difficulty(b);
+        difficulty_a
+            .partial_cmp(&difficulty_b)
+            .unwrap_or(std::cmp::Ordering::Equal)
+    });
+
+    Ok(())
+}
+
+// Helper functions
+
+fn calculate_topic_similarity_between_items(
+    item1: &PlanItem,
+    item2: &PlanItem,
+    clustering_metadata: &ClusteringMetadata,
+) -> f32 {
+    // Simple similarity based on module titles and topics
+    if item1.module_title == item2.module_title {
+        return 0.8;
+    }
+
+    // Check topic keyword overlap
+    let topics1: std::collections::HashSet<_> = clustering_metadata
+        .content_topics
+        .iter()
+        .filter(|topic| {
+            item1
+                .module_title
+                .to_lowercase()
+                .contains(&topic.keyword.to_lowercase())
+        })
+        .collect();
+
+    let topics2: std::collections::HashSet<_> = clustering_metadata
+        .content_topics
+        .iter()
+        .filter(|topic| {
+            item2
+                .module_title
+                .to_lowercase()
+                .contains(&topic.keyword.to_lowercase())
+        })
+        .collect();
+
+    let intersection = topics1.intersection(&topics2).count();
+    let union = topics1.union(&topics2).count();
+
+    if union == 0 {
+        0.0
+    } else {
+        intersection as f32 / union as f32
+    }
+}
+
+fn calculate_item_topic_score(item: &PlanItem, clustering_metadata: &ClusteringMetadata) -> f32 {
+    clustering_metadata
+        .content_topics
+        .iter()
+        .filter(|topic| {
+            item.module_title
+                .to_lowercase()
+                .contains(&topic.keyword.to_lowercase())
+        })
+        .map(|topic| topic.relevance_score)
+        .sum::<f32>()
+}
+
+fn estimate_item_difficulty(item: &PlanItem) -> f32 {
+    let title_lower = item.section_title.to_lowercase();
+    let mut difficulty: f32 = 0.5; // Default intermediate
+
+    if title_lower.contains("introduction") || title_lower.contains("basic") {
+        difficulty -= 0.2;
+    }
+    if title_lower.contains("advanced") || title_lower.contains("expert") {
+        difficulty += 0.3;
+    }
+    if title_lower.contains("project") || title_lower.contains("exercise") {
+        difficulty += 0.1;
+    }
+
+    difficulty.clamp(0.0, 1.0)
 }
