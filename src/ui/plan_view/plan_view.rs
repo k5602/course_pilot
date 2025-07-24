@@ -162,6 +162,9 @@ fn render_enhanced_plan_content(
                 total_sections: total_sections,
             }
 
+            // Duration summary and validation feedback
+            {render_duration_summary(&plan)}
+
             SessionControlPanel {
                 plan: plan.clone(),
                 on_settings_change: handle_settings_change,
@@ -242,6 +245,123 @@ fn render_no_plan_state(course_id: Uuid) -> Element {
                     "Creating Plan..."
                 } else {
                     "Create Study Plan"
+                }
+            }
+        }
+    }
+}
+/// Render duration summary and validation feedback
+fn render_duration_summary(plan: &crate::types::Plan) -> Element {
+    // Calculate total duration and warnings
+    let total_video_duration: std::time::Duration = plan.items.iter()
+        .map(|item| item.total_duration)
+        .sum();
+    
+    let total_estimated_time: std::time::Duration = plan.items.iter()
+        .map(|item| item.estimated_completion_time)
+        .sum();
+    
+    let total_warnings: Vec<&String> = plan.items.iter()
+        .flat_map(|item| &item.overflow_warnings)
+        .collect();
+    
+    let sessions_with_warnings = plan.items.iter()
+        .filter(|item| !item.overflow_warnings.is_empty())
+        .count();
+
+    rsx! {
+        div {
+            class: "bg-base-100 border border-base-300 rounded-lg p-4 mb-6",
+            
+            div {
+                class: "flex items-center justify-between mb-3",
+                h3 {
+                    class: "text-lg font-semibold text-base-content",
+                    "Course Duration Overview"
+                }
+                div {
+                    class: "text-sm text-base-content/60",
+                    "{plan.items.len()} sessions planned"
+                }
+            }
+
+            // Duration statistics
+            div {
+                class: "grid grid-cols-1 md:grid-cols-3 gap-4 mb-4",
+                
+                div {
+                    class: "bg-primary/5 border border-primary/20 rounded-lg p-3",
+                    div {
+                        class: "text-xs text-primary font-medium mb-1",
+                        "Total Video Content"
+                    }
+                    div {
+                        class: "text-lg font-bold text-primary",
+                        "{crate::types::duration_utils::format_duration_verbose(total_video_duration)}"
+                    }
+                }
+                
+                div {
+                    class: "bg-accent/5 border border-accent/20 rounded-lg p-3",
+                    div {
+                        class: "text-xs text-accent font-medium mb-1",
+                        "Estimated Study Time"
+                    }
+                    div {
+                        class: "text-lg font-bold text-accent",
+                        "{crate::types::duration_utils::format_duration_verbose(total_estimated_time)}"
+                    }
+                    div {
+                        class: "text-xs text-accent/70 mt-1",
+                        "Includes buffer time"
+                    }
+                }
+                
+                div {
+                    class: if sessions_with_warnings > 0 { "bg-warning/5 border border-warning/20 rounded-lg p-3" } else { "bg-success/5 border border-success/20 rounded-lg p-3" },
+                    div {
+                        class: if sessions_with_warnings > 0 { "text-xs text-warning font-medium mb-1" } else { "text-xs text-success font-medium mb-1" },
+                        "Session Validation"
+                    }
+                    div {
+                        class: if sessions_with_warnings > 0 { "text-lg font-bold text-warning" } else { "text-lg font-bold text-success" },
+                        if sessions_with_warnings > 0 {
+                            "{sessions_with_warnings} warnings"
+                        } else {
+                            "All sessions OK"
+                        }
+                    }
+                    if sessions_with_warnings > 0 {
+                        div {
+                            class: "text-xs text-warning/70 mt-1",
+                            "Check sessions below"
+                        }
+                    }
+                }
+            }
+
+            // Global warnings summary
+            if !total_warnings.is_empty() {
+                div {
+                    class: "bg-warning/10 border border-warning/20 rounded-lg p-3",
+                    div {
+                        class: "flex items-start gap-2 mb-2",
+                        div {
+                            class: "text-warning text-sm",
+                            "⚠️"
+                        }
+                        div {
+                            class: "flex-1",
+                            div {
+                                class: "text-sm font-medium text-warning mb-1",
+                                "Plan Duration Warnings ({total_warnings.len()})"
+                            }
+                            div {
+                                class: "text-xs text-base-content/70",
+                                "Some sessions may exceed your preferred session length. Consider adjusting session duration or splitting content."
+                            }
+                        }
+                    }
                 }
             }
         }

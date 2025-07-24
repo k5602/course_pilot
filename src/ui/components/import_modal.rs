@@ -1,7 +1,11 @@
-use crate::ui::components::{
-    modal::Modal, tabs::Tabs, toast,
-};
+use crate::ui::components::{modal::Badge, modal::Modal, toast};
 use dioxus::prelude::*;
+use dioxus_free_icons::Icon;
+use dioxus_free_icons::icons::fa_solid_icons::{
+    FaCheck, FaClock, FaCircleExclamation, FaFolder, FaGlobe, FaCircleInfo, FaPlay, FaSpinner,
+    FaVideo,
+};
+use dioxus_free_icons::icons::fa_brands_icons::FaYoutube;
 
 /// Import source types
 #[derive(Debug, Clone, Copy, PartialEq)]
@@ -270,18 +274,18 @@ pub fn ImportModal(props: ImportModalProps) -> Element {
         Modal {
             variant: crate::ui::components::modal::form_modal(rsx! {
                 button {
-                    class: "btn btn-ghost",
+                    class: "btn btn-ghost btn-sm",
                     onclick: move |_| props.on_close.call(()),
                     "Cancel"
                 }
                 // Only show import button for non-YouTube tabs (YouTube has its own button)
                 if current_source != ImportSource::YouTube {
                     button {
-                        class: "btn btn-primary",
+                        class: "btn btn-primary btn-sm",
                         disabled: !is_valid || is_validating() || props.preview_loading,
                         onclick: handle_import,
                         if props.preview_loading {
-                            span { class: "loading loading-spinner loading-sm mr-2" }
+                            Icon { icon: FaSpinner, class: "w-4 h-4 mr-2 animate-spin" }
                         }
                         "Import Course"
                     }
@@ -290,18 +294,49 @@ pub fn ImportModal(props: ImportModalProps) -> Element {
             open: props.open,
             on_close: props.on_close,
             title: "Import Course Content".to_string(),
+            size: Some("lg".to_string()),
 
-            div { class: "space-y-4",
-                // Source selection tabs
-                Tabs {
-                    tabs: tab_labels,
-                    selected: selected_tab(),
-                    on_select: move |idx| selected_tab.set(idx),
-                    class: Some("tabs-boxed".to_string()),
+            div { class: "space-y-6",
+                // Enhanced header with description
+                div { class: "text-center pb-4 border-b border-base-300",
+                    h2 { class: "text-xl font-semibold text-base-content mb-2", "Import Course Content" }
+                    p { class: "text-sm text-base-content/70",
+                        "Choose your content source and import videos to create a structured learning experience"
+                    }
                 }
 
-                // Tab content
-                div { class: "min-h-[200px]",
+                // Enhanced source selection tabs with icons
+                div { class: "w-full",
+                    div { class: "tabs tabs-boxed tabs-lg w-full justify-center bg-base-200 p-1",
+                        {tab_labels.iter().enumerate().map(|(idx, label)| {
+                            let is_selected = selected_tab() == idx;
+                            let color_class = match idx {
+                                0 => if is_selected { "text-primary" } else { "text-base-content/70" },
+                                1 => if is_selected { "text-red-500" } else { "text-base-content/70" },
+                                _ => if is_selected { "text-secondary" } else { "text-base-content/70" },
+                            };
+
+                            rsx! {
+                                button {
+                                    key: "{idx}",
+                                    class: format!("tab tab-lg flex-1 gap-2 {}",
+                                        if is_selected { "tab-active" } else { "" }
+                                    ),
+                                    onclick: move |_| selected_tab.set(idx),
+                                    {match idx {
+                                        0 => rsx! { Icon { icon: FaFolder, class: format!("w-4 h-4 {}", color_class) } },
+                                        1 => rsx! { Icon { icon: FaYoutube, class: format!("w-4 h-4 {}", color_class) } },
+                                        _ => rsx! { Icon { icon: FaGlobe, class: format!("w-4 h-4 {}", color_class) } },
+                                    }}
+                                    span { class: color_class, "{label}" }
+                                }
+                            }
+                        })}
+                    }
+                }
+
+                // Enhanced tab content with better spacing
+                div { class: "min-h-[300px] bg-base-50 rounded-lg p-6",
                     match current_source {
                         ImportSource::LocalFolder => rsx! {
                             LocalFolderImportForm {
@@ -329,10 +364,12 @@ pub fn ImportModal(props: ImportModalProps) -> Element {
                     }
                 }
 
-                // Import settings
-                ImportSettingsPanel {
-                    settings: import_settings(),
-                    on_settings_change: move |settings| import_settings.set(settings),
+                // Enhanced import settings with better styling
+                if current_source != ImportSource::OtherResources {
+                    ImportSettingsPanel {
+                        settings: import_settings(),
+                        on_settings_change: move |settings| import_settings.set(settings),
+                    }
                 }
             }
         }
@@ -367,7 +404,8 @@ fn YouTubeImportForm(
     let backend = crate::ui::backend_adapter::use_backend_adapter();
 
     // Load settings and initialize API key from storage
-    let settings = use_resource(|| async { crate::storage::AppSettings::load().unwrap_or_default() });
+    let settings =
+        use_resource(|| async { crate::storage::AppSettings::load().unwrap_or_default() });
 
     // Form state
     let url = use_signal(String::new);
@@ -429,13 +467,22 @@ fn YouTubeImportForm(
 
                 spawn(async move {
                     // First validate the playlist exists
-                    match crate::ingest::youtube::validate_playlist_url(&new_url, &api_key_val).await {
+                    match crate::ingest::youtube::validate_playlist_url(&new_url, &api_key_val)
+                        .await
+                    {
                         Ok(true) => {
                             // Load preview data
-                            match crate::ingest::youtube::import_from_youtube(&new_url, &api_key_val).await {
+                            match crate::ingest::youtube::import_from_youtube(
+                                &new_url,
+                                &api_key_val,
+                            )
+                            .await
+                            {
                                 Ok((sections, metadata)) => {
-                                    let total_duration =
-                                        sections.iter().map(|s| s.duration).sum::<std::time::Duration>();
+                                    let total_duration = sections
+                                        .iter()
+                                        .map(|s| s.duration)
+                                        .sum::<std::time::Duration>();
 
                                     let videos = sections
                                         .into_iter()
@@ -561,7 +608,9 @@ fn YouTubeImportForm(
 
             spawn(async move {
                 // Create initial import job
-                let job = crate::types::ImportJob::new("Starting import from YouTube playlist".to_string());
+                let job = crate::types::ImportJob::new(
+                    "Starting import from YouTube playlist".to_string(),
+                );
                 import_job.set(Some(job.clone()));
 
                 // Progress callback
@@ -699,45 +748,78 @@ fn YouTubeImportForm(
 
     rsx! {
         div { class: "space-y-6",
-            // API Key input
+            // Enhanced header section
+            div { class: "flex items-center gap-3 mb-6",
+                div { class: "w-10 h-10 bg-red-100 rounded-full flex items-center justify-center",
+                    Icon { icon: FaYoutube, class: "w-5 h-5 text-red-500" }
+                }
+                div {
+                    h3 { class: "text-lg font-semibold text-base-content", "YouTube Playlist Import" }
+                    p { class: "text-sm text-base-content/70", "Import videos from a YouTube playlist" }
+                }
+            }
+
+            // API Key input with enhanced styling
             div { class: "form-control",
                 label { class: "label",
-                    span { class: "label-text font-medium", "YouTube Data API Key" }
+                    span { class: "label-text font-medium flex items-center gap-2",
+                        Icon { icon: FaCircleInfo, class: "w-4 h-4 text-info" }
+                        "YouTube Data API Key"
+                    }
                     span { class: "label-text-alt",
                         a {
                             href: "https://developers.google.com/youtube/v3/getting-started",
                             target: "_blank",
-                            class: "link link-primary text-xs",
+                            class: "link link-primary text-xs hover:link-hover",
                             "Get API Key"
                         }
                     }
                 }
-                input {
-                    r#type: "password",
-                    placeholder: "Enter your YouTube Data API v3 key",
-                    class: "input input-bordered w-full",
-                    value: api_key(),
-                    oninput: move |evt| handle_api_key_change(evt.value()),
-                    disabled: is_importing,
+                div { class: "relative",
+                    input {
+                        r#type: "password",
+                        placeholder: "Enter your YouTube Data API v3 key",
+                        class: format!("input input-bordered w-full pr-10 {}",
+                            if api_key().trim().is_empty() { "input-warning" } else { "input-success" }
+                        ),
+                        value: api_key(),
+                        oninput: move |evt| handle_api_key_change(evt.value()),
+                        disabled: is_importing,
+                    }
+                    if !api_key().trim().is_empty() {
+                        div { class: "absolute right-3 top-1/2 transform -translate-y-1/2",
+                            Icon { icon: FaCheck, class: "w-4 h-4 text-success" }
+                        }
+                    }
                 }
                 label { class: "label",
-                    span { class: "label-text-alt text-base-content/70",
+                    span { class: "label-text-alt text-base-content/70 flex items-center gap-1",
+                        Icon { icon: FaCircleInfo, class: "w-3 h-3" }
                         "Required for accessing YouTube playlist data. Your key is stored locally and never shared."
                     }
                 }
             }
 
-            // URL input
+            // URL input with enhanced styling
             div { class: "form-control",
                 label { class: "label",
-                    span { class: "label-text font-medium", "YouTube Playlist URL" }
+                    span { class: "label-text font-medium flex items-center gap-2",
+                        Icon { icon: FaYoutube, class: "w-4 h-4 text-red-500" }
+                        "YouTube Playlist URL"
+                    }
                 }
                 div { class: "relative",
                     input {
                         r#type: "url",
                         placeholder: "https://www.youtube.com/playlist?list=...",
                         class: format!("input input-bordered w-full pr-10 {}",
-                            if validation_error().is_some() { "input-error" } else { "" }
+                            if validation_error().is_some() {
+                                "input-error"
+                            } else if !url().trim().is_empty() && validation_error().is_none() {
+                                "input-success"
+                            } else {
+                                ""
+                            }
                         ),
                         value: url(),
                         oninput: move |evt| handle_url_change(evt.value()),
@@ -745,7 +827,11 @@ fn YouTubeImportForm(
                     }
                     if is_validating() {
                         div { class: "absolute right-3 top-1/2 transform -translate-y-1/2",
-                            span { class: "loading loading-spinner loading-sm" }
+                            Icon { icon: FaSpinner, class: "w-4 h-4 animate-spin text-primary" }
+                        }
+                    } else if !url().trim().is_empty() && validation_error().is_none() {
+                        div { class: "absolute right-3 top-1/2 transform -translate-y-1/2",
+                            Icon { icon: FaCheck, class: "w-4 h-4 text-success" }
                         }
                     }
                 }
@@ -756,53 +842,52 @@ fn YouTubeImportForm(
                 }
             }
 
-            // Validation feedback
+            // Enhanced validation feedback
             if let Some(error) = validation_error() {
-                div { class: "alert alert-error",
-                    svg {
-                        class: "stroke-current shrink-0 h-6 w-6",
-                        fill: "none",
-                        view_box: "0 0 24 24",
-                        path {
-                            stroke_linecap: "round",
-                            stroke_linejoin: "round",
-                            stroke_width: "2",
-                            d: "M10 14l2-2m0 0l2-2m-2 2l-2-2m2 2l2 2m7-2a9 9 0 11-18 0 9 9 0 0118 0z"
-                        }
+                div { class: "alert alert-error shadow-sm",
+                    Icon { icon: FaCircleExclamation, class: "w-5 h-5" }
+                    div {
+                        div { class: "font-medium", "Validation Error" }
+                        div { class: "text-sm opacity-90", "{error}" }
                     }
-                    span { "{error}" }
                 }
             }
 
-            // Preview section
+            // Enhanced preview section
             if let Some(preview_data) = preview() {
                 YouTubePlaylistPreviewPanel { preview: preview_data }
             } else if is_loading_preview() {
-                div { class: "card bg-base-200",
+                div { class: "card bg-gradient-to-r from-base-200 to-base-300 shadow-sm",
                     div { class: "card-body",
                         div { class: "flex items-center gap-3",
-                            span { class: "loading loading-spinner loading-md" }
-                            span { "Loading playlist preview..." }
+                            Icon { icon: FaSpinner, class: "w-5 h-5 animate-spin text-primary" }
+                            span { class: "text-base-content", "Loading playlist preview..." }
+                        }
+                        div { class: "mt-2",
+                            progress { class: "progress progress-primary w-full" }
                         }
                     }
                 }
             }
 
-            // Import progress
+            // Enhanced import progress
             if let Some(job) = import_job() {
                 YouTubeImportProgressPanel { job }
             }
 
-            // Import button
-            div { class: "flex justify-end",
+            // Enhanced import button
+            div { class: "flex justify-end pt-4 border-t border-base-300",
                 button {
-                    class: "btn btn-primary",
+                    class: format!("btn btn-primary btn-lg gap-2 {}",
+                        if is_importing { "loading" } else { "" }
+                    ),
                     disabled: !is_valid_for_import || is_importing,
                     onclick: handle_import,
                     if is_importing {
-                        span { class: "loading loading-spinner loading-sm mr-2" }
+                        Icon { icon: FaSpinner, class: "w-4 h-4 animate-spin" }
                         "Importing..."
                     } else {
+                        Icon { icon: FaPlay, class: "w-4 h-4" }
                         "Import Course"
                     }
                 }
@@ -825,39 +910,63 @@ fn YouTubePlaylistPreviewPanel(preview: YouTubePlaylistPreview) -> Element {
     };
 
     rsx! {
-        div { class: "card bg-base-200 border border-base-300",
+        div { class: "card bg-gradient-to-br from-red-50 to-red-100 border border-red-200 shadow-lg",
             div { class: "card-body",
-                h3 { class: "card-title text-lg flex items-center gap-2",
-                    svg {
-                        class: "w-5 h-5 text-red-500",
-                        fill: "currentColor",
-                        view_box: "0 0 24 24",
-                        path { d: "M23.498 6.186a3.016 3.016 0 0 0-2.122-2.136C19.505 3.545 12 3.545 12 3.545s-7.505 0-9.377.505A3.017 3.017 0 0 0 .502 6.186C0 8.07 0 12 0 12s0 3.93.502 5.814a3.016 3.016 0 0 0 2.122 2.136c1.871.505 9.376.505 9.376.505s7.505 0 9.377-.505a3.015 3.015 0 0 0 2.122-2.136C24 15.93 24 12 24 12s0-3.93-.502-5.814zM9.545 15.568V8.432L15.818 12l-6.273 3.568z" }
+                div { class: "flex items-center justify-between mb-4",
+                    h3 { class: "card-title text-lg flex items-center gap-2",
+                        Icon { icon: FaYoutube, class: "w-5 h-5 text-red-500" }
+                        "Playlist Preview"
+                        Badge {
+                            label: "Ready".to_string(),
+                            color: Some("success".to_string()),
+                            class: Some("badge-sm".to_string())
+                        }
                     }
-                    "Playlist Preview"
+                    div { class: "text-xs text-base-content/60",
+                        "Found {preview.video_count} videos"
+                    }
                 }
 
-                // Summary stats
-                div { class: "stats stats-horizontal shadow-sm bg-base-100 w-full",
+                // Enhanced summary stats
+                div { class: "stats stats-horizontal shadow-md bg-white/80 backdrop-blur-sm w-full mb-4",
                     div { class: "stat",
-                        div { class: "stat-title", "Course Title" }
-                        div { class: "stat-value text-base", "{preview.title}" }
+                        div { class: "stat-figure text-red-500",
+                            Icon { icon: FaYoutube, class: "w-8 h-8" }
+                        }
+                        div { class: "stat-title text-xs", "Course Title" }
+                        div { class: "stat-value text-sm text-base-content truncate", "{preview.title}" }
                     }
                     div { class: "stat",
-                        div { class: "stat-title", "Videos" }
+                        div { class: "stat-figure text-primary",
+                            Icon { icon: FaVideo, class: "w-6 h-6" }
+                        }
+                        div { class: "stat-title text-xs", "Videos" }
                         div { class: "stat-value text-primary", "{preview.video_count}" }
                     }
                     div { class: "stat",
-                        div { class: "stat-title", "Duration" }
-                        div { class: "stat-value text-secondary", "{duration_text}" }
+                        div { class: "stat-figure text-secondary",
+                            Icon { icon: FaClock, class: "w-6 h-6" }
+                        }
+                        div { class: "stat-title text-xs", "Duration" }
+                        div { class: "stat-value text-secondary text-sm", "{duration_text}" }
                     }
                 }
 
-                // Video list preview (first 5 videos)
+                // Enhanced video list preview
                 if !preview.videos.is_empty() {
                     div { class: "mt-4",
-                        h4 { class: "font-medium mb-2", "Video Preview:" }
-                        div { class: "space-y-1 max-h-32 overflow-y-auto",
+                        div { class: "flex items-center justify-between mb-3",
+                            h4 { class: "font-medium text-base-content flex items-center gap-2",
+                                Icon { icon: FaPlay, class: "w-4 h-4 text-primary" }
+                                "Video Preview"
+                            }
+                            Badge {
+                                label: format!("{} videos", preview.videos.len()),
+                                color: Some("info".to_string()),
+                                class: Some("badge-sm".to_string())
+                            }
+                        }
+                        div { class: "space-y-2 max-h-40 overflow-y-auto bg-white/50 rounded-lg p-3",
                             {preview.videos.iter().take(5).enumerate().map(|(idx, video)| {
                                 let duration_str = {
                                     let minutes = video.duration.as_secs() / 60;
@@ -868,16 +977,28 @@ fn YouTubePlaylistPreviewPanel(preview: YouTubePlaylistPreview) -> Element {
                                 rsx! {
                                     div {
                                         key: "{idx}",
-                                        class: "flex justify-between items-center text-sm p-2 bg-base-100 rounded",
-                                        span { class: "truncate flex-1 mr-2", "{video.title}" }
-                                        span { class: "text-base-content/70 text-xs", "{duration_str}" }
+                                        class: "flex justify-between items-center text-sm p-3 bg-white rounded-lg shadow-sm hover:shadow-md transition-shadow",
+                                        div { class: "flex items-center gap-3 flex-1 min-w-0",
+                                            div { class: "w-6 h-6 bg-primary/10 rounded-full flex items-center justify-center flex-shrink-0",
+                                                span { class: "text-xs font-medium text-primary", "{idx + 1}" }
+                                            }
+                                            span { class: "truncate text-base-content", "{video.title}" }
+                                        }
+                                        div { class: "flex items-center gap-2 flex-shrink-0",
+                                            Icon { icon: FaClock, class: "w-3 h-3 text-base-content/50" }
+                                            span { class: "text-xs text-base-content/70 font-mono", "{duration_str}" }
+                                        }
                                     }
                                 }
                             })}
 
                             if preview.videos.len() > 5 {
-                                div { class: "text-center text-sm text-base-content/70 py-2",
-                                    "... and {preview.videos.len() - 5} more videos"
+                                div { class: "text-center py-3 border-t border-base-300",
+                                    Badge {
+                                        label: format!("+ {} more videos", preview.videos.len() - 5),
+                                        color: Some("ghost".to_string()),
+                                        class: Some("badge-sm".to_string())
+                                    }
                                 }
                             }
                         }
@@ -906,58 +1027,86 @@ fn YouTubeImportProgressPanel(job: crate::types::ImportJob) -> Element {
     };
 
     rsx! {
-        div { class: "card bg-base-200 border border-base-300",
+        div { class: format!("card shadow-lg border {}",
+            match job.status {
+                crate::types::ImportStatus::Completed => "bg-gradient-to-br from-success/10 to-success/5 border-success/20",
+                crate::types::ImportStatus::Failed => "bg-gradient-to-br from-error/10 to-error/5 border-error/20",
+                _ => "bg-gradient-to-br from-primary/10 to-primary/5 border-primary/20",
+            }
+        ),
             div { class: "card-body",
-                h3 { class: "card-title text-lg flex items-center gap-2",
-                    if matches!(job.status, crate::types::ImportStatus::Starting | crate::types::ImportStatus::InProgress) {
-                        span { class: "loading loading-spinner loading-sm" }
+                div { class: "flex items-center justify-between mb-4",
+                    h3 { class: "card-title text-lg flex items-center gap-2",
+                        if matches!(job.status, crate::types::ImportStatus::Starting | crate::types::ImportStatus::InProgress) {
+                            Icon { icon: FaSpinner, class: "w-5 h-5 animate-spin text-primary" }
+                        } else if matches!(job.status, crate::types::ImportStatus::Completed) {
+                            Icon { icon: FaCheck, class: "w-5 h-5 text-success" }
+                        } else {
+                            Icon { icon: FaCircleExclamation, class: "w-5 h-5 text-error" }
+                        }
+                        "Import Progress"
+                        Badge {
+                            label: status_text.to_string(),
+                            color: Some(match job.status {
+                                crate::types::ImportStatus::Completed => "success",
+                                crate::types::ImportStatus::Failed => "error",
+                                _ => "primary",
+                            }.to_string()),
+                            class: Some("badge-sm".to_string())
+                        }
                     }
-                    "Import Progress"
+                    div { class: "text-sm font-mono {status_color}",
+                        "{job.progress_percentage:.1}%"
+                    }
                 }
 
-                div { class: "space-y-3",
-                    // Status and message
-                    div { class: "flex justify-between items-center",
-                        span { class: "font-medium {status_color}", "{status_text}" }
-                        span { class: "text-sm text-base-content/70", "{job.progress_percentage:.1}%" }
-                    }
-
-                    // Progress bar
-                    div { class: "w-full bg-base-300 rounded-full h-2",
-                        div {
-                            class: format!("h-2 rounded-full transition-all duration-300 {}",
-                                match job.status {
-                                    crate::types::ImportStatus::Completed => "bg-success",
-                                    crate::types::ImportStatus::Failed => "bg-error",
-                                    _ => "bg-primary",
-                                }
-                            ),
-                            style: "width: {job.progress_percentage}%",
+                div { class: "space-y-4",
+                    // Enhanced progress bar
+                    div { class: "w-full",
+                        div { class: "flex justify-between items-center mb-2",
+                            span { class: "text-sm font-medium {status_color}", "{status_text}" }
+                            span { class: "text-xs text-base-content/60", "Step {job.progress_percentage:.0}/100" }
+                        }
+                        div { class: "w-full bg-base-300 rounded-full h-3 shadow-inner",
+                            div {
+                                class: format!("h-3 rounded-full transition-all duration-500 ease-out {}",
+                                    match job.status {
+                                        crate::types::ImportStatus::Completed => "bg-gradient-to-r from-success to-success/80",
+                                        crate::types::ImportStatus::Failed => "bg-gradient-to-r from-error to-error/80",
+                                        _ => "bg-gradient-to-r from-primary to-primary/80",
+                                    }
+                                ),
+                                style: "width: {job.progress_percentage}%",
+                            }
                         }
                     }
 
-                    // Current message
-                    div { class: "text-sm text-base-content/80",
-                        "{job.message}"
+                    // Enhanced current message
+                    div { class: "bg-white/50 rounded-lg p-3 border border-base-300",
+                        div { class: "flex items-center gap-2",
+                            Icon { icon: FaCircleInfo, class: "w-4 h-4 text-info flex-shrink-0" }
+                            span { class: "text-sm text-base-content", "{job.message}" }
+                        }
                     }
 
-                    // Error details for failed imports
+                    // Enhanced error details for failed imports
                     if matches!(job.status, crate::types::ImportStatus::Failed) {
-                        div { class: "alert alert-error",
-                            svg {
-                                class: "stroke-current shrink-0 h-6 w-6",
-                                fill: "none",
-                                view_box: "0 0 24 24",
-                                path {
-                                    stroke_linecap: "round",
-                                    stroke_linejoin: "round",
-                                    stroke_width: "2",
-                                    d: "M10 14l2-2m0 0l2-2m-2 2l-2-2m2 2l2 2m7-2a9 9 0 11-18 0 9 9 0 0118 0z"
-                                }
-                            }
+                        div { class: "alert alert-error shadow-sm",
+                            Icon { icon: FaCircleExclamation, class: "w-5 h-5" }
                             div {
                                 div { class: "font-medium", "Import Failed" }
-                                div { class: "text-sm", "Please check your API key and playlist URL, then try again." }
+                                div { class: "text-sm opacity-90", "Please check your API key and playlist URL, then try again." }
+                            }
+                        }
+                    }
+
+                    // Success message for completed imports
+                    if matches!(job.status, crate::types::ImportStatus::Completed) {
+                        div { class: "alert alert-success shadow-sm",
+                            Icon { icon: FaCheck, class: "w-5 h-5" }
+                            div {
+                                div { class: "font-medium", "Import Completed Successfully!" }
+                                div { class: "text-sm opacity-90", "Your course has been imported and is ready to use." }
                             }
                         }
                     }
@@ -1001,22 +1150,59 @@ fn LocalFolderImportForm(
 ) -> Element {
     let backend = crate::ui::backend_adapter::use_backend_adapter();
     rsx! {
-        div { class: "space-y-4",
-            // Path input
+        div { class: "space-y-6",
+            // Enhanced header section
+            div { class: "flex items-center gap-3 mb-6",
+                div { class: "w-10 h-10 bg-primary/10 rounded-full flex items-center justify-center",
+                    Icon { icon: FaFolder, class: "w-5 h-5 text-primary" }
+                }
+                div {
+                    h3 { class: "text-lg font-semibold text-base-content", "Local Folder Import" }
+                    p { class: "text-sm text-base-content/70", "Import videos from a local folder on your computer" }
+                }
+            }
+
+            // Enhanced path input
             div { class: "form-control",
                 label { class: "label",
-                    span { class: "label-text font-medium", "Local Folder Path" }
+                    span { class: "label-text font-medium flex items-center gap-2",
+                        Icon { icon: FaFolder, class: "w-4 h-4 text-primary" }
+                        "Local Folder Path"
+                    }
                 }
-                div { class: "flex gap-2",
-                    input {
-                        r#type: "text",
-                        placeholder: "/path/to/video/folder",
-                        class: "input input-bordered flex-1",
-                        value: path,
-                        oninput: move |evt| on_path_change.call(evt.value()),
+                div { class: "flex gap-3",
+                    div { class: "relative flex-1",
+                        input {
+                            r#type: "text",
+                            placeholder: "/path/to/video/folder",
+                            class: format!("input input-bordered w-full pr-10 {}",
+                                if path.trim().is_empty() {
+                                    ""
+                                } else if folder_validation.is_some() && folder_validation.as_ref().unwrap().is_valid {
+                                    "input-success"
+                                } else if folder_validation.is_some() {
+                                    "input-error"
+                                } else {
+                                    "input-warning"
+                                }
+                            ),
+                            value: path,
+                            oninput: move |evt| on_path_change.call(evt.value()),
+                        }
+                        if !path.trim().is_empty() {
+                            div { class: "absolute right-3 top-1/2 transform -translate-y-1/2",
+                                if is_validating {
+                                    Icon { icon: FaSpinner, class: "w-4 h-4 animate-spin text-primary" }
+                                } else if folder_validation.is_some() && folder_validation.as_ref().unwrap().is_valid {
+                                    Icon { icon: FaCheck, class: "w-4 h-4 text-success" }
+                                } else if folder_validation.is_some() {
+                                    Icon { icon: FaCircleExclamation, class: "w-4 h-4 text-error" }
+                                }
+                            }
+                        }
                     }
                     button {
-                        class: "btn btn-outline",
+                        class: "btn btn-outline btn-primary gap-2",
                         onclick: {
                             let backend = backend.clone();
                             let on_path_change = on_path_change;
@@ -1043,6 +1229,7 @@ fn LocalFolderImportForm(
                                 });
                             }
                         },
+                        Icon { icon: FaFolder, class: "w-4 h-4" }
                         "Browse"
                     }
                 }
@@ -1053,36 +1240,42 @@ fn LocalFolderImportForm(
                 }
             }
 
-            // Supported formats info
-            div { class: "alert alert-info",
-                svg {
-                    class: "stroke-current shrink-0 h-6 w-6",
-                    fill: "none",
-                    view_box: "0 0 24 24",
-                    path {
-                        stroke_linecap: "round",
-                        stroke_linejoin: "round",
-                        stroke_width: "2",
-                        d: "M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"
-                    }
-                }
+            // Enhanced supported formats info
+            div { class: "alert alert-info shadow-sm",
+                Icon { icon: FaCircleInfo, class: "w-5 h-5" }
                 div {
                     div { class: "font-medium", "Supported video formats:" }
-                    div { class: "text-sm opacity-80", "MP4, AVI, MKV, MOV, WMV, FLV, WebM, M4V, MPG, MPEG" }
+                    div { class: "text-sm opacity-90 mt-1",
+                        div { class: "flex flex-wrap gap-1",
+                            {["MP4", "AVI", "MKV", "MOV", "WMV", "FLV", "WebM", "M4V", "MPG", "MPEG"].iter().map(|format| {
+                                rsx! {
+                                    Badge {
+                                        key: "{format}",
+                                        label: format.to_string(),
+                                        color: Some("info".to_string()),
+                                        class: Some("badge-xs".to_string())
+                                    }
+                                }
+                            })}
+                        }
+                    }
                 }
             }
 
-            // Preview section
+            // Enhanced preview section
             if let Some(preview_data) = preview {
                 ImportPreviewPanel { preview: preview_data }
-            } else if let Some(validation) = folder_validation {
-                FolderValidationPanel { validation: validation }
+            } else if let Some(ref validation) = folder_validation {
+                FolderValidationPanel { validation: validation.clone() }
             } else if is_validating {
-                div { class: "card bg-base-200",
+                div { class: "card bg-gradient-to-r from-base-200 to-base-300 shadow-sm",
                     div { class: "card-body",
                         div { class: "flex items-center gap-3",
-                            span { class: "loading loading-spinner loading-md" }
-                            span { "Validating folder..." }
+                            Icon { icon: FaSpinner, class: "w-5 h-5 animate-spin text-primary" }
+                            span { class: "text-base-content", "Validating folder..." }
+                        }
+                        div { class: "mt-2",
+                            progress { class: "progress progress-primary w-full" }
                         }
                     }
                 }
@@ -1091,77 +1284,125 @@ fn LocalFolderImportForm(
     }
 }
 
-/// Import settings configuration panel
+/// Enhanced import settings configuration panel
 #[component]
 fn ImportSettingsPanel(
     settings: ImportSettings,
     on_settings_change: EventHandler<ImportSettings>,
 ) -> Element {
     rsx! {
-        div { class: "collapse collapse-arrow bg-base-200",
+        div { class: "collapse collapse-arrow bg-gradient-to-r from-base-200 to-base-300 shadow-sm border border-base-300",
             input { r#type: "checkbox" }
-            div { class: "collapse-title font-medium", "Import Settings" }
-            div { class: "collapse-content space-y-3",
-                div { class: "form-control",
-                    label { class: "label cursor-pointer",
-                        span { class: "label-text", "Sort videos by title" }
-                        input {
-                            r#type: "checkbox",
-                            class: "checkbox checkbox-primary",
-                            checked: settings.sort_by_title,
-                            onchange: move |evt| {
-                                let mut new_settings = settings;
-                                new_settings.sort_by_title = evt.checked();
-                                on_settings_change.call(new_settings);
-                            },
+            div { class: "collapse-title font-medium text-base-content flex items-center gap-2",
+                Icon { icon: FaCircleInfo, class: "w-4 h-4 text-info" }
+                "Import Settings"
+                Badge {
+                    label: "Optional".to_string(),
+                    color: Some("ghost".to_string()),
+                    class: Some("badge-sm".to_string())
+                }
+            }
+            div { class: "collapse-content space-y-4 bg-white/50 rounded-lg p-4",
+                div { class: "grid grid-cols-1 md:grid-cols-2 gap-4",
+                    // Sort by title setting
+                    div { class: "form-control bg-white rounded-lg p-3 shadow-sm",
+                        label { class: "label cursor-pointer",
+                            div { class: "flex flex-col items-start",
+                                span { class: "label-text font-medium", "Sort videos by title" }
+                                span { class: "label-text-alt text-xs", "Alphabetically organize imported videos" }
+                            }
+                            input {
+                                r#type: "checkbox",
+                                class: "checkbox checkbox-primary",
+                                checked: settings.sort_by_title,
+                                onchange: move |evt| {
+                                    let mut new_settings = settings;
+                                    new_settings.sort_by_title = evt.checked();
+                                    on_settings_change.call(new_settings);
+                                },
+                            }
+                        }
+                    }
+
+                    // Filter duplicates setting
+                    div { class: "form-control bg-white rounded-lg p-3 shadow-sm",
+                        label { class: "label cursor-pointer",
+                            div { class: "flex flex-col items-start",
+                                span { class: "label-text font-medium", "Filter duplicate videos" }
+                                span { class: "label-text-alt text-xs", "Remove videos with identical titles" }
+                            }
+                            input {
+                                r#type: "checkbox",
+                                class: "checkbox checkbox-primary",
+                                checked: settings.filter_duplicates,
+                                onchange: move |evt| {
+                                    let mut new_settings = settings;
+                                    new_settings.filter_duplicates = evt.checked();
+                                    on_settings_change.call(new_settings);
+                                },
+                            }
+                        }
+                    }
+
+                    // Include metadata setting
+                    div { class: "form-control bg-white rounded-lg p-3 shadow-sm",
+                        label { class: "label cursor-pointer",
+                            div { class: "flex flex-col items-start",
+                                span { class: "label-text font-medium", "Include video metadata" }
+                                span { class: "label-text-alt text-xs", "Import additional video information" }
+                            }
+                            input {
+                                r#type: "checkbox",
+                                class: "checkbox checkbox-primary",
+                                checked: settings.include_metadata,
+                                onchange: move |evt| {
+                                    let mut new_settings = settings;
+                                    new_settings.include_metadata = evt.checked();
+                                    on_settings_change.call(new_settings);
+                                },
+                            }
+                        }
+                    }
+
+                    // Auto-structure setting
+                    div { class: "form-control bg-white rounded-lg p-3 shadow-sm",
+                        label { class: "label cursor-pointer",
+                            div { class: "flex flex-col items-start",
+                                span { class: "label-text font-medium", "Auto-structure course content" }
+                                span { class: "label-text-alt text-xs", "Automatically organize into modules" }
+                            }
+                            input {
+                                r#type: "checkbox",
+                                class: "checkbox checkbox-primary",
+                                checked: settings.auto_structure,
+                                onchange: move |evt| {
+                                    let mut new_settings = settings;
+                                    new_settings.auto_structure = evt.checked();
+                                    on_settings_change.call(new_settings);
+                                },
+                            }
                         }
                     }
                 }
 
-                div { class: "form-control",
-                    label { class: "label cursor-pointer",
-                        span { class: "label-text", "Filter duplicate videos" }
-                        input {
-                            r#type: "checkbox",
-                            class: "checkbox checkbox-primary",
-                            checked: settings.filter_duplicates,
-                            onchange: move |evt| {
-                                let mut new_settings = settings;
-                                new_settings.filter_duplicates = evt.checked();
-                                on_settings_change.call(new_settings);
-                            },
-                        }
+                // Settings summary
+                div { class: "mt-4 p-3 bg-info/10 rounded-lg border border-info/20",
+                    div { class: "flex items-center gap-2 mb-2",
+                        Icon { icon: FaCircleInfo, class: "w-4 h-4 text-info" }
+                        span { class: "text-sm font-medium text-info", "Current Settings" }
                     }
-                }
-
-                div { class: "form-control",
-                    label { class: "label cursor-pointer",
-                        span { class: "label-text", "Include video metadata" }
-                        input {
-                            r#type: "checkbox",
-                            class: "checkbox checkbox-primary",
-                            checked: settings.include_metadata,
-                            onchange: move |evt| {
-                                let mut new_settings = settings;
-                                new_settings.include_metadata = evt.checked();
-                                on_settings_change.call(new_settings);
-                            },
+                    div { class: "flex flex-wrap gap-1",
+                        if settings.sort_by_title {
+                            Badge { label: "Sort by title".to_string(), color: Some("success".to_string()), class: Some("badge-xs".to_string()) }
                         }
-                    }
-                }
-
-                div { class: "form-control",
-                    label { class: "label cursor-pointer",
-                        span { class: "label-text", "Auto-structure course content" }
-                        input {
-                            r#type: "checkbox",
-                            class: "checkbox checkbox-primary",
-                            checked: settings.auto_structure,
-                            onchange: move |evt| {
-                                let mut new_settings = settings;
-                                new_settings.auto_structure = evt.checked();
-                                on_settings_change.call(new_settings);
-                            },
+                        if settings.filter_duplicates {
+                            Badge { label: "Filter duplicates".to_string(), color: Some("success".to_string()), class: Some("badge-xs".to_string()) }
+                        }
+                        if settings.include_metadata {
+                            Badge { label: "Include metadata".to_string(), color: Some("success".to_string()), class: Some("badge-xs".to_string()) }
+                        }
+                        if settings.auto_structure {
+                            Badge { label: "Auto-structure".to_string(), color: Some("success".to_string()), class: Some("badge-xs".to_string()) }
                         }
                     }
                 }
@@ -1254,78 +1495,116 @@ fn FolderValidationPanel(validation: crate::ui::backend_adapter::FolderValidatio
     };
 
     rsx! {
-        div { class: "card bg-base-200 border border-base-300",
+        div { class: format!("card shadow-lg border {}",
+            if validation.is_valid {
+                "bg-gradient-to-br from-success/10 to-success/5 border-success/20"
+            } else {
+                "bg-gradient-to-br from-error/10 to-error/5 border-error/20"
+            }
+        ),
             div { class: "card-body",
-                if validation.is_valid {
-                    h3 { class: "card-title text-lg text-success",
-                        svg {
-                            class: "w-5 h-5",
-                            fill: "currentColor",
-                            view_box: "0 0 20 20",
-                            path { d: "M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" }
+                div { class: "flex items-center justify-between mb-4",
+                    if validation.is_valid {
+                        h3 { class: "card-title text-lg text-success flex items-center gap-2",
+                            Icon { icon: FaCheck, class: "w-5 h-5" }
+                            "Folder Validation - Success"
+                            Badge {
+                                label: "Valid".to_string(),
+                                color: Some("success".to_string()),
+                                class: Some("badge-sm".to_string())
+                            }
                         }
-                        "Folder Validation - Success"
-                    }
-                } else {
-                    h3 { class: "card-title text-lg text-error",
-                        svg {
-                            class: "w-5 h-5",
-                            fill: "currentColor",
-                            view_box: "0 0 20 20",
-                            path { d: "M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" }
+                    } else {
+                        h3 { class: "card-title text-lg text-error flex items-center gap-2",
+                            Icon { icon: FaCircleExclamation, class: "w-5 h-5" }
+                            "Folder Validation - Error"
+                            Badge {
+                                label: "Invalid".to_string(),
+                                color: Some("error".to_string()),
+                                class: Some("badge-sm".to_string())
+                            }
                         }
-                        "Folder Validation - Error"
                     }
                 }
 
                 if validation.is_valid {
-                    // Success stats
-                    div { class: "stats stats-horizontal shadow-sm bg-base-100 w-full mt-4",
+                    // Enhanced success stats
+                    div { class: "stats stats-horizontal shadow-md bg-white/80 backdrop-blur-sm w-full mt-4",
                         div { class: "stat",
-                            div { class: "stat-title", "Video Files" }
+                            div { class: "stat-figure text-primary",
+                                Icon { icon: FaVideo, class: "w-6 h-6" }
+                            }
+                            div { class: "stat-title text-xs", "Video Files" }
                             div { class: "stat-value text-primary", "{validation.video_count}" }
                         }
                         div { class: "stat",
-                            div { class: "stat-title", "Total Size" }
-                            div { class: "stat-value text-secondary", "{size_text}" }
+                            div { class: "stat-figure text-secondary",
+                                Icon { icon: FaFolder, class: "w-6 h-6" }
+                            }
+                            div { class: "stat-title text-xs", "Total Size" }
+                            div { class: "stat-value text-secondary text-sm", "{size_text}" }
                         }
                         if !validation.unsupported_files.is_empty() {
                             div { class: "stat",
-                                div { class: "stat-title", "Unsupported" }
-                                div { class: "stat-value text-warning", "{validation.unsupported_files.len()}" }
+                                div { class: "stat-figure text-warning",
+                                    Icon { icon: FaCircleExclamation, class: "w-6 h-6" }
+                                }
+                                div { class: "stat-title text-xs", "Unsupported" }
+                                div { class: "stat-value text-warning text-sm", "{validation.unsupported_files.len()}" }
                             }
                         }
                     }
 
-                    // File list preview (first 5 files)
+                    // Enhanced file list preview
                     if !validation.supported_files.is_empty() {
                         div { class: "mt-4",
-                            h4 { class: "font-medium mb-2", "Video Files Found:" }
-                            div { class: "space-y-1 max-h-32 overflow-y-auto",
+                            div { class: "flex items-center justify-between mb-3",
+                                h4 { class: "font-medium text-base-content flex items-center gap-2",
+                                    Icon { icon: FaVideo, class: "w-4 h-4 text-primary" }
+                                    "Video Files Found"
+                                }
+                                Badge {
+                                    label: format!("{} files", validation.supported_files.len()),
+                                    color: Some("success".to_string()),
+                                    class: Some("badge-sm".to_string())
+                                }
+                            }
+                            div { class: "space-y-2 max-h-40 overflow-y-auto bg-white/50 rounded-lg p-3",
                                 {validation.supported_files.iter().take(5).enumerate().map(|(idx, file_path)| {
                                     let file_name = file_path.file_name()
                                         .and_then(|name| name.to_str())
                                         .unwrap_or("Unknown");
+                                    let extension = file_path.extension()
+                                        .and_then(|ext| ext.to_str())
+                                        .unwrap_or("")
+                                        .to_uppercase();
 
                                     rsx! {
                                         div {
                                             key: "{idx}",
-                                            class: "flex justify-between items-center text-sm p-2 bg-base-100 rounded",
-                                            span { class: "truncate flex-1 mr-2", "{file_name}" }
-                                            span { class: "text-base-content/70 text-xs",
-                                                {file_path.extension()
-                                                    .and_then(|ext| ext.to_str())
-                                                    .unwrap_or("")
-                                                    .to_uppercase()
+                                            class: "flex justify-between items-center text-sm p-3 bg-white rounded-lg shadow-sm hover:shadow-md transition-shadow",
+                                            div { class: "flex items-center gap-3 flex-1 min-w-0",
+                                                div { class: "w-6 h-6 bg-success/10 rounded-full flex items-center justify-center flex-shrink-0",
+                                                    Icon { icon: FaVideo, class: "w-3 h-3 text-success" }
                                                 }
+                                                span { class: "truncate text-base-content", "{file_name}" }
+                                            }
+                                            Badge {
+                                                label: extension,
+                                                color: Some("primary".to_string()),
+                                                class: Some("badge-xs".to_string())
                                             }
                                         }
                                     }
                                 })}
 
                                 if validation.supported_files.len() > 5 {
-                                    div { class: "text-center text-sm text-base-content/70 py-2",
-                                        "... and {validation.supported_files.len() - 5} more video files"
+                                    div { class: "text-center py-3 border-t border-base-300",
+                                        Badge {
+                                            label: format!("+ {} more video files", validation.supported_files.len() - 5),
+                                            color: Some("ghost".to_string()),
+                                            class: Some("badge-sm".to_string())
+                                        }
                                     }
                                 }
                             }
@@ -1379,84 +1658,96 @@ fn FolderValidationPanel(validation: crate::ui::backend_adapter::FolderValidatio
     }
 }
 
-/// Other resources form component (to be implemented)
+/// Enhanced other resources form component
 #[component]
 fn OtherResourcesForm() -> Element {
     rsx! {
-        div { class: "space-y-4",
-            // Coming soon message
-            div { class: "alert alert-info",
-                svg {
-                    class: "stroke-current shrink-0 h-6 w-6",
-                    fill: "none",
-                    view_box: "0 0 24 24",
-                    path {
-                        stroke_linecap: "round",
-                        stroke_linejoin: "round",
-                        stroke_width: "2",
-                        d: "M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"
-                    }
+        div { class: "space-y-6",
+            // Enhanced header section
+            div { class: "flex items-center gap-3 mb-6",
+                div { class: "w-10 h-10 bg-secondary/10 rounded-full flex items-center justify-center",
+                    Icon { icon: FaGlobe, class: "w-5 h-5 text-secondary" }
                 }
                 div {
-                    div { class: "font-medium", "Coming Soon!" }
-                    div { class: "text-sm opacity-80", "Support for additional course sources will be added in future updates." }
+                    h3 { class: "text-lg font-semibold text-base-content", "Other Resources" }
+                    p { class: "text-sm text-base-content/70", "Additional import sources coming soon" }
                 }
             }
 
-            // Placeholder content
-            div { class: "card bg-base-200",
+            // Enhanced coming soon message
+            div { class: "alert alert-info shadow-sm",
+                Icon { icon: FaCircleInfo, class: "w-5 h-5" }
+                div {
+                    div { class: "font-medium", "Coming Soon!" }
+                    div { class: "text-sm opacity-90", "Support for additional course sources will be added in future updates." }
+                }
+            }
+
+            // Enhanced placeholder content
+            div { class: "card bg-gradient-to-br from-base-200 to-base-300 shadow-lg",
                 div { class: "card-body text-center",
-                    h3 { class: "card-title justify-center mb-4", "Additional Import Sources" }
+                    h3 { class: "card-title justify-center mb-6 text-xl", "Additional Import Sources" }
 
-                    div { class: "space-y-3 text-base-content/70",
-                        div { class: "flex items-center gap-3 p-3 bg-base-100 rounded",
-                            div { class: "w-8 h-8 bg-primary/20 rounded-full flex items-center justify-center",
-                                svg {
-                                    class: "w-4 h-4 text-primary",
-                                    fill: "currentColor",
-                                    view_box: "0 0 24 24",
-                                    path { d: "M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-2 15l-5-5 1.41-1.41L10 14.17l7.59-7.59L19 8l-9 9z" }
+                    div { class: "grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 mb-6",
+                        // Online Course Platforms
+                        div { class: "card bg-white shadow-md hover:shadow-lg transition-shadow",
+                            div { class: "card-body p-4",
+                                div { class: "w-12 h-12 bg-primary/10 rounded-full flex items-center justify-center mx-auto mb-3",
+                                    Icon { icon: FaPlay, class: "w-6 h-6 text-primary" }
                                 }
-                            }
-                            div { class: "text-left",
-                                div { class: "font-medium text-base-content", "Online Course Platforms" }
-                                div { class: "text-sm", "Udemy, Coursera, edX, Khan Academy" }
+                                h4 { class: "font-semibold text-base-content mb-2", "Online Course Platforms" }
+                                p { class: "text-sm text-base-content/70 mb-3", "Import from popular learning platforms" }
+                                div { class: "flex flex-wrap gap-1 justify-center",
+                                    Badge { label: "Udemy".to_string(), color: Some("primary".to_string()), class: Some("badge-xs".to_string()) }
+                                    Badge { label: "Coursera".to_string(), color: Some("primary".to_string()), class: Some("badge-xs".to_string()) }
+                                    Badge { label: "edX".to_string(), color: Some("primary".to_string()), class: Some("badge-xs".to_string()) }
+                                    Badge { label: "Khan Academy".to_string(), color: Some("primary".to_string()), class: Some("badge-xs".to_string()) }
+                                }
                             }
                         }
 
-                        div { class: "flex items-center gap-3 p-3 bg-base-100 rounded",
-                            div { class: "w-8 h-8 bg-secondary/20 rounded-full flex items-center justify-center",
-                                svg {
-                                    class: "w-4 h-4 text-secondary",
-                                    fill: "currentColor",
-                                    view_box: "0 0 24 24",
-                                    path { d: "M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-2 15l-5-5 1.41-1.41L10 14.17l7.59-7.59L19 8l-9 9z" }
+                        // Video Streaming Services
+                        div { class: "card bg-white shadow-md hover:shadow-lg transition-shadow",
+                            div { class: "card-body p-4",
+                                div { class: "w-12 h-12 bg-secondary/10 rounded-full flex items-center justify-center mx-auto mb-3",
+                                    Icon { icon: FaVideo, class: "w-6 h-6 text-secondary" }
                                 }
-                            }
-                            div { class: "text-left",
-                                div { class: "font-medium text-base-content", "Video Streaming Services" }
-                                div { class: "text-sm", "Vimeo, Twitch, custom video URLs" }
+                                h4 { class: "font-semibold text-base-content mb-2", "Video Streaming Services" }
+                                p { class: "text-sm text-base-content/70 mb-3", "Import from video platforms" }
+                                div { class: "flex flex-wrap gap-1 justify-center",
+                                    Badge { label: "Vimeo".to_string(), color: Some("secondary".to_string()), class: Some("badge-xs".to_string()) }
+                                    Badge { label: "Twitch".to_string(), color: Some("secondary".to_string()), class: Some("badge-xs".to_string()) }
+                                    Badge { label: "Custom URLs".to_string(), color: Some("secondary".to_string()), class: Some("badge-xs".to_string()) }
+                                }
                             }
                         }
 
-                        div { class: "flex items-center gap-3 p-3 bg-base-100 rounded",
-                            div { class: "w-8 h-8 bg-accent/20 rounded-full flex items-center justify-center",
-                                svg {
-                                    class: "w-4 h-4 text-accent",
-                                    fill: "currentColor",
-                                    view_box: "0 0 24 24",
-                                    path { d: "M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-2 15l-5-5 1.41-1.41L10 14.17l7.59-7.59L19 8l-9 9z" }
+                        // Document & Text Sources
+                        div { class: "card bg-white shadow-md hover:shadow-lg transition-shadow",
+                            div { class: "card-body p-4",
+                                div { class: "w-12 h-12 bg-accent/10 rounded-full flex items-center justify-center mx-auto mb-3",
+                                    Icon { icon: FaCircleInfo, class: "w-6 h-6 text-accent" }
                                 }
-                            }
-                            div { class: "text-left",
-                                div { class: "font-medium text-base-content", "Document & Text Sources" }
-                                div { class: "text-sm", "PDFs, web articles, documentation sites" }
+                                h4 { class: "font-semibold text-base-content mb-2", "Document & Text Sources" }
+                                p { class: "text-sm text-base-content/70 mb-3", "Import from documents and articles" }
+                                div { class: "flex flex-wrap gap-1 justify-center",
+                                    Badge { label: "PDFs".to_string(), color: Some("accent".to_string()), class: Some("badge-xs".to_string()) }
+                                    Badge { label: "Web Articles".to_string(), color: Some("accent".to_string()), class: Some("badge-xs".to_string()) }
+                                    Badge { label: "Documentation".to_string(), color: Some("accent".to_string()), class: Some("badge-xs".to_string()) }
+                                }
                             }
                         }
                     }
 
-                    div { class: "mt-6 text-sm text-base-content/60",
-                        "These import sources are planned for future releases. Stay tuned for updates!"
+                    // Call to action
+                    div { class: "bg-info/10 rounded-lg p-4 border border-info/20",
+                        div { class: "flex items-center justify-center gap-2 mb-2",
+                            Icon { icon: FaCircleInfo, class: "w-4 h-4 text-info" }
+                            span { class: "text-sm font-medium text-info", "Stay Updated" }
+                        }
+                        p { class: "text-sm text-base-content/70",
+                            "These import sources are planned for future releases. Follow our updates to be notified when they become available!"
+                        }
                     }
                 }
             }

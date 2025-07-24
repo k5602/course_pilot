@@ -270,6 +270,15 @@ fn SessionAccordion(props: SessionAccordionProps) -> Element {
                         color: Some(badge_color.to_string()),
                         class: Some("text-xs font-medium".to_string()),
                     }
+
+                    // Duration display
+                    if let Some(first_item) = props.session.items.first() {
+                        div {
+                            class: "text-xs text-base-content/60 bg-base-200 px-2 py-1 rounded-full",
+                            title: "Estimated session duration with buffer time",
+                            "{crate::types::duration_utils::format_duration(first_item.1.total_duration)} / {crate::types::duration_utils::format_duration(first_item.1.estimated_completion_time)}"
+                        }
+                    }
                 }
 
                 // Right side: Progress indicator
@@ -297,6 +306,35 @@ fn SessionAccordion(props: SessionAccordionProps) -> Element {
             // Collapsible content with video items
             div {
                 class: "collapse-content bg-base-50/50",
+
+                // Display overflow warnings if any
+                if let Some(first_item) = props.session.items.first() {
+                    if !first_item.1.overflow_warnings.is_empty() {
+                        div {
+                            class: "bg-warning/10 border border-warning/20 rounded-lg p-3 mb-3 mt-2",
+                            div {
+                                class: "flex items-start gap-2",
+                                div {
+                                    class: "text-warning text-sm",
+                                    "⚠️"
+                                }
+                                div {
+                                    class: "flex-1",
+                                    div {
+                                        class: "text-sm font-medium text-warning mb-1",
+                                        "Session Duration Warning"
+                                    }
+                                    ul {
+                                        class: "text-xs text-base-content/70 space-y-1",
+                                        {first_item.1.overflow_warnings.iter().map(|warning| rsx! {
+                                            li { "• {warning}" }
+                                        })}
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
 
                 div {
                     class: "space-y-1 pt-2 pb-4",
@@ -518,6 +556,21 @@ fn VideoItem(props: VideoItemProps) -> Element {
                     class: "text-xs text-base-content/60 mt-1 truncate",
                     title: "Module: {props.item.module_title}",
                     "Module: {props.item.module_title}"
+                }
+
+                // Duration information
+                div {
+                    class: "flex items-center gap-2 mt-1",
+                    div {
+                        class: "text-xs text-base-content/50 bg-base-200 px-2 py-0.5 rounded-full",
+                        title: "Video duration",
+                        "📹 {crate::types::duration_utils::format_duration(props.item.total_duration)}"
+                    }
+                    div {
+                        class: "text-xs text-base-content/50 bg-primary/10 text-primary px-2 py-0.5 rounded-full",
+                        title: "Estimated completion time (with buffer)",
+                        "⏱️ {crate::types::duration_utils::format_duration(props.item.estimated_completion_time)}"
+                    }
                 }
             }
 

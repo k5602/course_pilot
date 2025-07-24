@@ -309,6 +309,30 @@ pub fn PlanChecklistItem(props: PlanChecklistItemProps) -> Element {
                     class: "text-xs text-base-content/60 mt-1",
                     "{props.item.date.format(\"%Y-%m-%d\")}"
                 }
+                
+                // Duration information
+                div {
+                    class: "flex items-center gap-2 mt-1",
+                    div {
+                        class: "text-xs text-base-content/50 bg-base-200 px-2 py-0.5 rounded-full",
+                        title: "Video duration",
+                        "📹 {crate::types::duration_utils::format_duration(props.item.total_duration)}"
+                    }
+                    div {
+                        class: "text-xs text-base-content/50 bg-primary/10 text-primary px-2 py-0.5 rounded-full",
+                        title: "Estimated completion time (with buffer)",
+                        "⏱️ {crate::types::duration_utils::format_duration(props.item.estimated_completion_time)}"
+                    }
+                    
+                    // Show warning indicator if there are overflow warnings
+                    if !props.item.overflow_warnings.is_empty() {
+                        div {
+                            class: "text-xs text-warning bg-warning/10 px-2 py-0.5 rounded-full",
+                            title: "Session duration warnings: {props.item.overflow_warnings.join(\", \")}",
+                            "⚠️ {props.item.overflow_warnings.len()}"
+                        }
+                    }
+                }
             }
 
             Badge {

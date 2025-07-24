@@ -173,20 +173,32 @@ jobs:
       - name: Build CSS
         run: npm run build:css
 
-      - name: Install Dioxus CLI
-        run: cargo install dioxus-cli --locked
+      - name: Configure Windows build environment
+        run: |
+          New-Item -ItemType Directory -Force -Path .cargo
+          @"
+          [target.x86_64-pc-windows-msvc]
+          rustflags = [
+            "-C", "target-feature=+crt-static",
+            "-l", "advapi32",
+            "-l", "crypt32",
+            "-l", "secur32",
+            "-l", "userenv",
+            "-l", "ws2_32"
+          ]
+          "@ | Out-File -FilePath .cargo/config.toml -Encoding utf8
+          Write-Host "Created .cargo/config.toml with Windows system libraries"
 
       - name: Build Dioxus app for Windows
         run: |
           Write-Host "Building Dioxus app for Windows..."
           Write-Host "Rust version: $(rustc --version)"
           Write-Host "Cargo version: $(cargo --version)"
-          Write-Host "Dioxus CLI version: $(dx --version)"
           
-          # Build the application with Dioxus CLI for consistency
-          dx build --release --platform desktop
+          # Build directly with cargo to avoid Dioxus CLI installation issues on Windows
+          Write-Host "Building with cargo directly..."
+          cargo build --release --bin course_pilot --verbose
         env:
-          # Set environment variables for Windows build
           RUSTFLAGS: "-C target-feature=+crt-static"
 
       - name: Package Windows build

@@ -193,6 +193,17 @@ pub struct PlanItem {
     pub section_title: String,
     pub video_indices: Vec<usize>,
     pub completed: bool,
+    #[serde(
+        serialize_with = "serialize_duration_as_secs",
+        deserialize_with = "deserialize_duration_from_secs"
+    )]
+    pub total_duration: Duration,
+    #[serde(
+        serialize_with = "serialize_duration_as_secs",
+        deserialize_with = "deserialize_duration_from_secs"
+    )]
+    pub estimated_completion_time: Duration,
+    pub overflow_warnings: Vec<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
@@ -701,5 +712,103 @@ impl ImportJob {
     pub fn mark_failed(&mut self, error_message: String) {
         self.status = ImportStatus::Failed;
         self.message = error_message;
+    }
+}
+
+/// Duration formatting utilities
+pub mod duration_utils {
+    use std::time::Duration;
+
+    /// Format duration as "Xh Ym" or "Ym" or "Xs"
+    pub fn format_duration(duration: Duration) -> String {
+        let total_seconds = duration.as_secs();
+        let hours = total_seconds / 3600;
+        let minutes = (total_seconds % 3600) / 60;
+        let seconds = total_seconds % 60;
+
+        if hours > 0 {
+            if minutes > 0 {
+                format!("{}h {}m", hours, minutes)
+            } else {
+                format!("{}h", hours)
+            }
+        } else if minutes > 0 {
+            format!("{}m", minutes)
+        } else {
+            format!("{}s", seconds)
+        }
+    }
+
+    /// Format duration as "X minutes" or "X hours Y minutes"
+    pub fn format_duration_verbose(duration: Duration) -> String {
+        let total_seconds = duration.as_secs();
+        let hours = total_seconds / 3600;
+        let minutes = (total_seconds % 3600) / 60;
+
+        if hours > 0 {
+            if minutes > 0 {
+                format!("{} hours {} minutes", hours, minutes)
+            } else {
+                format!("{} hours", hours)
+            }
+        } else if minutes > 0 {
+            format!("{} minutes", minutes)
+        } else {
+            format!("{} seconds", total_seconds)
+        }
+    }
+
+    /// Format duration as decimal hours (e.g., "1.5 hours")
+    pub fn format_duration_decimal_hours(duration: Duration) -> String {
+        let hours = duration.as_secs() as f32 / 3600.0;
+        if hours >= 1.0 {
+            format!("{:.1} hours", hours)
+        } else {
+            let minutes = duration.as_secs() / 60;
+            format!("{} minutes", minutes)
+        }
+    }
+
+    /// Check if duration exceeds a reasonable session length
+    pub fn is_duration_excessive(duration: Duration, session_limit_minutes: u32) -> bool {
+        let session_limit = Duration::from_secs(session_limit_minutes as u64 * 60);
+        duration > session_limit
+    }
+
+    /// Calculate estimated completion time with buffer
+    pub fn calculate_completion_time_with_buffer(video_duration: Duration, buffer_percentage: f32) -> Duration {
+        let buffer_time = Duration::from_secs((video_duration.as_secs() as f32 * buffer_percentage) as u64);
+        video_duration + buffer_time
+    }
+
+    /// Validate session duration and generate overflow warnings
+    pub fn validate_session_duration(
+        sections: &[&crate::types::Section],
+        settings: &crate::types::PlanSettings,
+    ) -> Vec<String> {
+        let mut warnings = Vec::new();
+        let total_duration: Duration = sections.iter().map(|s| s.duration).sum();
+        let session_limit = Duration::from_secs(settings.session_length_minutes as u64 * 60);
+        
+        if total_duration > session_limit {
+            warnings.push(format!(
+                "Session duration ({}) exceeds target ({})",
+                format_duration(total_duration),
+                format_duration(session_limit)
+            ));
+        }
+        
+        // Check for individual videos that are very long
+        for section in sections {
+            if section.duration.as_secs() > (settings.session_length_minutes as u64 * 60) / 2 {
+                warnings.push(format!(
+                    "Video '{}' is very long ({}) for session length",
+                    section.title,
+                    format_duration(section.duration)
+                ));
+            }
+        }
+        
+        warnings
     }
 }
