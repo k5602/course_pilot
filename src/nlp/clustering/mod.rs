@@ -4,6 +4,7 @@
 //! to group related content together while respecting duration constraints.
 
 pub mod content_similarity;
+pub mod difficulty_analyzer;
 pub mod duration_balancer;
 pub mod kmeans;
 pub mod metadata_generator;
@@ -11,6 +12,10 @@ pub mod topic_extractor;
 
 // Re-export main clustering types and functions
 pub use content_similarity::{ContentAnalysis, FeatureVector, SimilarityMatrix, TfIdfAnalyzer};
+pub use difficulty_analyzer::{
+    DifficultyAnalyzer, DifficultyProgression, PacingRecommendation, ProgressionIssue,
+    ProgressionValidation, SessionDifficultyAnalysis,
+};
 pub use duration_balancer::{BalancedCluster, DurationBalancer};
 pub use kmeans::{Cluster, KMeansClusterer};
 pub use topic_extractor::TopicExtractor;
@@ -103,6 +108,16 @@ pub use crate::types::ClusteringMetadata;
 
 /// Convert sections to videos with metadata for clustering
 pub fn sections_to_videos_with_metadata(sections: &[Section]) -> Vec<VideoWithMetadata> {
+    sections_to_videos_with_metadata_for_user(sections, crate::types::DifficultyLevel::Intermediate)
+}
+
+/// Convert sections to videos with metadata for clustering with user experience level
+pub fn sections_to_videos_with_metadata_for_user(
+    sections: &[Section],
+    user_level: crate::types::DifficultyLevel,
+) -> Vec<VideoWithMetadata> {
+    let analyzer = DifficultyAnalyzer::new(user_level);
+    
     sections
         .iter()
         .enumerate()
@@ -111,7 +126,7 @@ pub fn sections_to_videos_with_metadata(sections: &[Section]) -> Vec<VideoWithMe
             title: section.title.clone(),
             duration: section.duration,
             feature_vector: FeatureVector::default(), // Will be populated during analysis
-            difficulty_score: estimate_difficulty_score(&section.title),
+            difficulty_score: analyzer.calculate_difficulty_score(section),
             topic_tags: Vec::new(), // Will be populated during analysis
         })
         .collect()
@@ -174,7 +189,7 @@ mod tests {
     #[test]
     fn test_clustering_metadata_default() {
         let metadata = ClusteringMetadata::default();
-        assert_eq!(metadata.algorithm_used, ClusteringAlgorithm::TfIdf);
+        assert_eq!(metadata.algorithm_used, crate::types::ClusteringAlgorithm::TfIdf);
         assert_eq!(metadata.similarity_threshold, 0.6);
         assert_eq!(metadata.cluster_count, 0);
     }

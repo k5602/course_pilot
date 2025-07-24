@@ -4,6 +4,7 @@
 //! from structured course content.
 
 pub mod clustering_integration;
+pub mod difficulty_progression;
 pub mod scheduler;
 
 // Re-export main planning function
@@ -18,6 +19,12 @@ pub use clustering_integration::{
     generate_clustering_difficulty_plan, generate_clustering_hybrid_plan,
     generate_duration_optimized_plan, generate_topic_aware_module_plan,
     generate_topic_spaced_repetition_plan, optimize_clustering_aware_plan,
+};
+
+// Re-export difficulty progression functions
+pub use difficulty_progression::{
+    AdaptivePacingConfig, DifficultyProgressionPlanner, PacingAdjustment,
+    ProgressionValidationResult, SessionReorderingResult,
 };
 
 // Re-export error types

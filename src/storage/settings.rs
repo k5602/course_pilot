@@ -6,9 +6,24 @@ use std::path::PathBuf;
 /// Application settings that are persisted locally
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub struct AppSettings {
+    // API Configuration
     pub youtube_api_key: Option<String>,
+    pub gemini_api_key: Option<String>,
+    
+    // General Settings
     pub theme: Option<String>,
     pub auto_structure: bool,
+    pub notifications_enabled: bool,
+    
+    // Course Defaults
+    pub default_plan_settings: crate::types::PlanSettings,
+    pub auto_create_plan: bool,
+    
+    // Analytics Preferences
+    pub analytics_enabled: bool,
+    pub track_study_time: bool,
+    
+    // Import Preferences
     pub import_preferences: ImportPreferences,
 }
 
@@ -23,9 +38,30 @@ pub struct ImportPreferences {
 impl Default for AppSettings {
     fn default() -> Self {
         Self {
+            // API Configuration
             youtube_api_key: None,
+            gemini_api_key: None,
+            
+            // General Settings
             theme: Some("corporate".to_string()),
             auto_structure: true,
+            notifications_enabled: true,
+            
+            // Course Defaults
+            default_plan_settings: crate::types::PlanSettings {
+                start_date: chrono::Utc::now() + chrono::Duration::days(1),
+                sessions_per_week: 3,
+                session_length_minutes: 60,
+                include_weekends: false,
+                advanced_settings: None,
+            },
+            auto_create_plan: false,
+            
+            // Analytics Preferences
+            analytics_enabled: true,
+            track_study_time: true,
+            
+            // Import Preferences
             import_preferences: ImportPreferences::default(),
         }
     }
@@ -100,6 +136,17 @@ impl AppSettings {
         self.youtube_api_key.as_deref()
     }
 
+    /// Update the Gemini API key and save settings
+    pub fn set_gemini_api_key(&mut self, api_key: Option<String>) -> Result<()> {
+        self.gemini_api_key = api_key;
+        self.save()
+    }
+
+    /// Get the Gemini API key if available
+    pub fn get_gemini_api_key(&self) -> Option<&str> {
+        self.gemini_api_key.as_deref()
+    }
+
     /// Update theme and save settings
     pub fn set_theme(&mut self, theme: String) -> Result<()> {
         self.theme = Some(theme);
@@ -109,6 +156,29 @@ impl AppSettings {
     /// Get the current theme
     pub fn get_theme(&self) -> &str {
         self.theme.as_deref().unwrap_or("corporate")
+    }
+
+    /// Update default plan settings and save
+    pub fn set_default_plan_settings(&mut self, settings: crate::types::PlanSettings) -> Result<()> {
+        self.default_plan_settings = settings;
+        self.save()
+    }
+
+    /// Get default plan settings
+    pub fn get_default_plan_settings(&self) -> &crate::types::PlanSettings {
+        &self.default_plan_settings
+    }
+
+    /// Update analytics preferences and save
+    pub fn set_analytics_enabled(&mut self, enabled: bool) -> Result<()> {
+        self.analytics_enabled = enabled;
+        self.save()
+    }
+
+    /// Update notifications preference and save
+    pub fn set_notifications_enabled(&mut self, enabled: bool) -> Result<()> {
+        self.notifications_enabled = enabled;
+        self.save()
     }
 }
 
