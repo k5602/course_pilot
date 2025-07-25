@@ -68,7 +68,7 @@ jobs:
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: '18'
+          node-version: "18"
 
       - name: Verify Node.js files
         run: |
@@ -93,7 +93,7 @@ jobs:
         run: npm run build:css
 
       - name: Install Dioxus CLI
-        run: cargo install dioxus-cli --locked
+        run: cargo install dioxus-cli --locked --force
 
       - name: Clean previous build artifacts
         run: cargo clean
@@ -149,7 +149,7 @@ jobs:
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: '18'
+          node-version: "18"
 
       - name: Verify Node.js files
         run: |
@@ -194,7 +194,7 @@ jobs:
           Write-Host "Building Dioxus app for Windows..."
           Write-Host "Rust version: $(rustc --version)"
           Write-Host "Cargo version: $(cargo --version)"
-          
+
           # Build directly with cargo to avoid Dioxus CLI installation issues on Windows
           Write-Host "Building with cargo directly..."
           cargo build --release --bin course_pilot --verbose
@@ -205,13 +205,13 @@ jobs:
         run: |
           Write-Host "Packaging Windows build..."
           New-Item -ItemType Directory -Force -Path release-artifacts
-          
+
           # Try multiple possible locations for the binary
           $possiblePaths = @(
             "./target/release/course_pilot.exe",
             "./target/x86_64-pc-windows-msvc/release/course_pilot.exe"
           )
-          
+
           $binaryFound = $false
           foreach ($path in $possiblePaths) {
             if (Test-Path $path) {
@@ -221,18 +221,18 @@ jobs:
               break
             }
           }
-          
+
           if (-not $binaryFound) {
             Write-Host "course_pilot.exe not found at any expected location"
             Write-Host "Searching for all .exe files in target directory:"
             Get-ChildItem ./target/ -Recurse -Name "*.exe" | ForEach-Object { Write-Host "Found: $_" }
             exit 1
           }
-          
+
           Copy-Item -Recurse ./assets ./release-artifacts/
           Write-Host "Successfully copied course_pilot.exe and assets"
           Write-Host "Binary size: $((Get-Item ./release-artifacts/course_pilot.exe).Length) bytes"
-          
+
           Compress-Archive -Path ./release-artifacts/* -DestinationPath course-pilot-windows-x64.zip
           Write-Host "Package created: course-pilot-windows-x64.zip"
 
