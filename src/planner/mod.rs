@@ -4,7 +4,7 @@
 //! from structured course content.
 
 pub mod clustering_integration;
-pub mod difficulty_progression;
+pub mod multi_factor_optimizer;
 pub mod scheduler;
 
 // Re-export main planning function
@@ -21,10 +21,11 @@ pub use clustering_integration::{
     generate_topic_spaced_repetition_plan, optimize_clustering_aware_plan,
 };
 
-// Re-export difficulty progression functions
-pub use difficulty_progression::{
-    AdaptivePacingConfig, DifficultyProgressionPlanner, PacingAdjustment,
-    ProgressionValidationResult, SessionReorderingResult,
+// Re-export multi-factor optimizer functions
+pub use multi_factor_optimizer::{
+    CognitiveLoadConfig, ContentGroupingPreference, DifficultyPreference, FactorScores,
+    ImprovementType, LearningStyle, LoadDistribution, MultiFactorOptimizer,
+    OptimizationImprovement, OptimizationResult, PacingPreference, UserPreferences,
 };
 
 // Re-export error types

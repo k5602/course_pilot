@@ -4,10 +4,14 @@
 //! structuring video titles into logical course hierarchies.
 
 pub mod clustering;
+pub mod preference_service;
 pub mod processor;
 
 // Re-export main processing function
 pub use processor::structure_course;
+
+// Re-export preference service
+pub use preference_service::{AutoTuningService, PreferenceService};
 
 // Re-export error types
 pub use crate::NlpError;

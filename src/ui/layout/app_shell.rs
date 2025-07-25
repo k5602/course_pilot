@@ -30,6 +30,13 @@ fn render_route_content(route: Route) -> Element {
                 p { class: "text-base-content/70", "Add a new course to your collection." }
             }
         },
+        Route::AllCourses => rsx! {
+            div {
+                class: "p-8",
+                h1 { class: "text-3xl font-bold mb-4", "All Courses" }
+                p { class: "text-base-content/70", "Manage all your courses here." }
+            }
+        },
         #[cfg(debug_assertions)]
         Route::ToastTest => rsx! {
             div {

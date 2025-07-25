@@ -120,14 +120,23 @@ impl DurationBalancer {
             let mut i = 0;
 
             while i < working_clusters.len() {
-                let current = &working_clusters[i];
+                let current_utilization = working_clusters[i].utilization_percentage;
+                let needs_rebalancing = self.needs_rebalancing(&working_clusters[i]);
 
                 // Check if cluster needs rebalancing
-                if self.needs_rebalancing(current) {
-                    if current.utilization_percentage < 30.0 {
+                if needs_rebalancing {
+                    if current_utilization < 30.0 {
                         // Try to merge with similar small clusters
-                        if let Some((merged, merged_indices)) =
-                            self.try_merge_small_clusters_advanced(&working_clusters, i)?
+                        // Clone the working_clusters to avoid borrow conflicts
+                        let clusters_clone = working_clusters.clone();
+                        if let Some(merged_clusters) =
+                            self.try_merge_small_clusters(&mut working_clusters, i)?
+                        {
+                            rebalanced.extend(merged_clusters);
+                            changed = true;
+                            continue;
+                        } else if let Some((merged, merged_indices)) =
+                            self.try_merge_small_clusters_advanced(&clusters_clone, i)?
                         {
                             rebalanced.extend(merged);
                             // Skip merged clusters
@@ -141,10 +150,21 @@ impl DurationBalancer {
                             changed = true;
                             continue;
                         }
-                    } else if current.utilization_percentage > 150.0 {
-                        // Split oversized clusters with improved logic
+                    } else if current_utilization > 150.0 {
+                        // Split oversized clusters using the dedicated function
+                        let current_cluster = working_clusters[i].clone();
+                        let split_clusters = self.split_oversized_cluster(current_cluster)?;
+                        if split_clusters.len() > 1 {
+                            rebalanced.extend(split_clusters);
+                            changed = true;
+                            i += 1;
+                            continue;
+                        }
+
+                        // Fallback to advanced splitting if basic splitting didn't work
+                        let current_cluster = working_clusters[i].clone();
                         let split_clusters =
-                            self.split_oversized_cluster_advanced(current.clone())?;
+                            self.split_oversized_cluster_advanced(current_cluster)?;
                         if split_clusters.len() > 1 {
                             rebalanced.extend(split_clusters);
                             changed = true;
@@ -154,7 +174,7 @@ impl DurationBalancer {
                     }
                 }
 
-                rebalanced.push(current.clone());
+                rebalanced.push(working_clusters[i].clone());
                 i += 1;
             }
 

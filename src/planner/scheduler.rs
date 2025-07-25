@@ -558,7 +558,7 @@ fn generate_hybrid_plan(
 
 /// Helper struct for video items in planning
 #[derive(Debug, Clone)]
-struct VideoItem {
+pub struct VideoItem {
     module_title: String,
     section_title: String,
     video_index: usize,
@@ -2840,6 +2840,8 @@ mod tests {
 
 use crate::types::ClusteringMetadata;
 
+// TODO: Task 3.3 - Advanced clustering algorithms
+// This function will be used when implementing hierarchical clustering and LDA topic modeling
 /// Choose distribution strategy based on clustering insights
 fn choose_clustering_aware_strategy(
     course: &Course,
@@ -2878,6 +2880,8 @@ fn choose_clustering_aware_strategy(
     Ok(enhanced_strategy)
 }
 
+// TODO: Task 3.3 - Advanced clustering algorithms
+// This function will be used for topic modeling using LDA (Latent Dirichlet Allocation)
 /// Generate topic-aware module-based plan
 fn generate_topic_aware_module_plan(
     course: &Course,
@@ -2914,6 +2918,8 @@ fn generate_topic_aware_module_plan(
     Ok(plan_items)
 }
 
+// TODO: Task 3.3 - Advanced clustering algorithms
+// This function will be used for hybrid clustering combining multiple algorithms
 /// Generate duration-optimized plan using clustering duration insights
 fn generate_duration_optimized_plan(
     course: &Course,
@@ -3017,6 +3023,8 @@ fn generate_topic_spaced_repetition_plan(
     Ok(plan_items)
 }
 
+// TODO: Task 3.4 - User preference learning
+// This function will be used for clustering parameter auto-tuning based on user feedback
 /// Generate adaptive plan using clustering insights
 fn generate_clustering_adaptive_plan(
     course: &Course,
@@ -3172,7 +3180,7 @@ fn create_duration_balanced_sessions(
 
     // Use clustering quality to determine balancing aggressiveness
     let balance_factor = clustering_metadata.quality_score;
-    let session_limit = Duration::from_secs(
+    let _session_limit = Duration::from_secs(
         (settings.session_length_minutes as f32 * (1.0 + balance_factor * 0.1)) as u64 * 60,
     );
 
@@ -3198,7 +3206,7 @@ fn create_hybrid_clustering_sessions(
 ) -> Result<Vec<Vec<VideoItem>>, PlanError> {
     // Weight between topic coherence and duration balance based on clustering quality
     let topic_weight = clustering_metadata.quality_score;
-    let duration_weight = 1.0 - topic_weight;
+    let _duration_weight = 1.0 - topic_weight;
 
     if topic_weight > 0.6 {
         // Favor topic coherence

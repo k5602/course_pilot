@@ -121,6 +121,18 @@ pub fn generate_breadcrumbs(
                 active: true,
             },
         ],
+        Route::AllCourses => vec![
+            BreadcrumbItem {
+                label: "Dashboard".to_string(),
+                route: Some(Route::Dashboard),
+                active: false,
+            },
+            BreadcrumbItem {
+                label: "All Courses".to_string(),
+                route: None,
+                active: true,
+            },
+        ],
         #[cfg(debug_assertions)]
         Route::ToastTest => vec![
             BreadcrumbItem {

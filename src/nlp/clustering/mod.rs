@@ -6,8 +6,12 @@
 pub mod content_similarity;
 pub mod difficulty_analyzer;
 pub mod duration_balancer;
+pub mod hierarchical;
+pub mod hybrid;
 pub mod kmeans;
+pub mod lda;
 pub mod metadata_generator;
+pub mod preference_learning;
 pub mod topic_extractor;
 
 // Re-export main clustering types and functions
@@ -17,7 +21,16 @@ pub use difficulty_analyzer::{
     ProgressionValidation, SessionDifficultyAnalysis,
 };
 pub use duration_balancer::{BalancedCluster, DurationBalancer};
+pub use hierarchical::{HierarchicalClusterer, LinkageMethod};
+pub use hybrid::{
+    ContentCharacteristics, EnsembleMethod, EnsembleResults, HybridClusterer, StrategySelection,
+};
 pub use kmeans::{Cluster, KMeansClusterer};
+pub use lda::{DocumentTopics, LdaClusterer, LdaModel, Topic};
+pub use preference_learning::{
+    ABTestAnalysis, ABTestConfig, ABTestResult, ABTestVariant, AdjustmentType, ClusteringFeedback,
+    ClusteringPreferences, FeedbackType, ManualAdjustment, PreferenceLearningEngine,
+};
 pub use topic_extractor::TopicExtractor;
 
 use crate::types::Section;
@@ -117,7 +130,7 @@ pub fn sections_to_videos_with_metadata_for_user(
     user_level: crate::types::DifficultyLevel,
 ) -> Vec<VideoWithMetadata> {
     let analyzer = DifficultyAnalyzer::new(user_level);
-    
+
     sections
         .iter()
         .enumerate()
@@ -132,8 +145,9 @@ pub fn sections_to_videos_with_metadata_for_user(
         .collect()
 }
 
-/// Estimate difficulty score based on title content
-fn estimate_difficulty_score(title: &str) -> f32 {
+/// Estimate difficulty score based on title content (simple heuristic)
+/// This is a lightweight alternative to DifficultyAnalyzer for quick estimates
+pub fn estimate_difficulty_score(title: &str) -> f32 {
     let title_lower = title.to_lowercase();
 
     let beginner_keywords = [
@@ -189,10 +203,11 @@ mod tests {
     #[test]
     fn test_clustering_metadata_default() {
         let metadata = ClusteringMetadata::default();
-        assert_eq!(metadata.algorithm_used, crate::types::ClusteringAlgorithm::TfIdf);
+        assert_eq!(
+            metadata.algorithm_used,
+            crate::types::ClusteringAlgorithm::TfIdf
+        );
         assert_eq!(metadata.similarity_threshold, 0.6);
         assert_eq!(metadata.cluster_count, 0);
     }
 }
-
-

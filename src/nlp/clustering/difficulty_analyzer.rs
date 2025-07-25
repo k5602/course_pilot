@@ -55,6 +55,24 @@ pub enum PacingRecommendation {
     Mixed,
 }
 
+impl Default for SessionDifficultyAnalysis {
+    fn default() -> Self {
+        Self {
+            average_difficulty: 0.5,
+            difficulty_variance: 0.0,
+            cognitive_load_score: 0.5,
+            recommended_pacing: PacingRecommendation::Standard,
+            break_points: Vec::new(),
+        }
+    }
+}
+
+impl Default for PacingRecommendation {
+    fn default() -> Self {
+        Self::Standard
+    }
+}
+
 impl Default for DurationThresholds {
     fn default() -> Self {
         Self {
@@ -176,15 +194,19 @@ impl DifficultyAnalyzer {
         score.clamp(0.0, 1.0)
     }
 
-    /// Calculate duration-based complexity factor
+    /// Calculate duration-based complexity factor using configured thresholds
     fn calculate_duration_complexity_factor(&self, duration_minutes: u32) -> f32 {
+        let short_threshold = self.duration_thresholds.short_video_minutes;
+        let medium_threshold = self.duration_thresholds.medium_video_minutes;
+        let long_threshold = self.duration_thresholds.long_video_minutes;
+
         match duration_minutes {
-            0..=5 => -0.1,  // Very short videos are often simple
-            6..=10 => 0.0,  // Short videos are neutral
-            11..=20 => 0.1, // Medium videos slightly more complex
-            21..=40 => 0.2, // Long videos more complex
-            41..=60 => 0.3, // Very long videos quite complex
-            _ => 0.4,       // Extremely long videos very complex
+            0..=5 => -0.1,                        // Very short videos are often simple
+            d if d <= short_threshold => 0.0,     // Short videos are neutral
+            d if d <= medium_threshold => 0.1,    // Medium videos slightly more complex
+            d if d <= long_threshold => 0.2,      // Long videos more complex
+            d if d <= long_threshold + 20 => 0.3, // Very long videos quite complex
+            _ => 0.4,                             // Extremely long videos very complex
         }
     }
 
@@ -282,7 +304,7 @@ impl DifficultyAnalyzer {
                 d if d >= -0.05 && d <= 0.15 => quality_score += 1.0, // Good progression
                 d if d >= -0.1 && d <= 0.25 => quality_score += 0.7,  // Acceptable
                 d if d >= -0.2 && d <= 0.35 => quality_score += 0.4,  // Suboptimal
-                _ => quality_score += 0.0,                             // Poor progression
+                _ => quality_score += 0.0,                            // Poor progression
             }
         }
 
@@ -319,8 +341,11 @@ impl DifficultyAnalyzer {
         }
 
         // Create pairs of (index, score) and sort by score
-        let mut indexed_scores: Vec<(usize, f32)> =
-            scores.iter().enumerate().map(|(i, &score)| (i, score)).collect();
+        let mut indexed_scores: Vec<(usize, f32)> = scores
+            .iter()
+            .enumerate()
+            .map(|(i, &score)| (i, score))
+            .collect();
 
         // Sort by difficulty score (ascending)
         indexed_scores.sort_by(|a, b| a.1.partial_cmp(&b.1).unwrap_or(std::cmp::Ordering::Equal));
@@ -401,7 +426,10 @@ impl DifficultyAnalyzer {
     }
 
     /// Analyze difficulty for a session
-    pub fn analyze_session_difficulty(&self, sections: &[Section]) -> Result<SessionDifficultyAnalysis> {
+    pub fn analyze_session_difficulty(
+        &self,
+        sections: &[Section],
+    ) -> Result<SessionDifficultyAnalysis> {
         if sections.is_empty() {
             return Ok(SessionDifficultyAnalysis {
                 average_difficulty: 0.0,
@@ -420,7 +448,8 @@ impl DifficultyAnalyzer {
         let average_difficulty = scores.iter().sum::<f32>() / scores.len() as f32;
         let difficulty_variance = self.calculate_variance(&scores, average_difficulty);
         let cognitive_load_score = self.calculate_session_cognitive_load(&scores);
-        let recommended_pacing = self.determine_pacing_recommendation(average_difficulty, difficulty_variance);
+        let recommended_pacing =
+            self.determine_pacing_recommendation(average_difficulty, difficulty_variance);
         let break_points = self.identify_break_points(&scores);
 
         Ok(SessionDifficultyAnalysis {
@@ -472,17 +501,21 @@ impl DifficultyAnalyzer {
     }
 
     /// Determine pacing recommendation based on difficulty analysis
-    fn determine_pacing_recommendation(&self, average_difficulty: f32, variance: f32) -> PacingRecommendation {
+    fn determine_pacing_recommendation(
+        &self,
+        average_difficulty: f32,
+        variance: f32,
+    ) -> PacingRecommendation {
         match (average_difficulty, variance) {
             // High difficulty, low variance = consistently hard
             (avg, var) if avg > 0.7 && var < 0.1 => PacingRecommendation::Decelerated,
-            
+
             // Low difficulty, low variance = consistently easy
             (avg, var) if avg < 0.3 && var < 0.1 => PacingRecommendation::Accelerated,
-            
+
             // High variance = mixed difficulty
             (_, var) if var > 0.2 => PacingRecommendation::Mixed,
-            
+
             // Everything else = standard pacing
             _ => PacingRecommendation::Standard,
         }
@@ -491,7 +524,7 @@ impl DifficultyAnalyzer {
     /// Identify optimal break points in a session
     fn identify_break_points(&self, scores: &[f32]) -> Vec<usize> {
         let mut break_points = Vec::new();
-        
+
         if scores.len() < 3 {
             return break_points;
         }
@@ -500,7 +533,7 @@ impl DifficultyAnalyzer {
         for (i, window) in scores.windows(2).enumerate() {
             let current_difficulty = window[0];
             let next_difficulty = window[1];
-            
+
             // Break point after high difficulty content
             if current_difficulty > 0.6 && next_difficulty < current_difficulty - 0.2 {
                 break_points.push(i + 1);
@@ -520,12 +553,15 @@ impl DifficultyAnalyzer {
     }
 
     /// Validate difficulty progression and suggest improvements
-    pub fn validate_and_improve_progression(&self, sections: &[Section]) -> Result<ProgressionValidation> {
+    pub fn validate_and_improve_progression(
+        &self,
+        sections: &[Section],
+    ) -> Result<ProgressionValidation> {
         let progression = self.analyze_progression(sections)?;
-        
+
         let issues = self.identify_progression_issues(&progression);
         let suggestions = self.generate_improvement_suggestions(&progression, sections);
-        
+
         Ok(ProgressionValidation {
             progression,
             issues,
@@ -534,51 +570,72 @@ impl DifficultyAnalyzer {
     }
 
     /// Identify issues in difficulty progression
-    fn identify_progression_issues(&self, progression: &DifficultyProgression) -> Vec<ProgressionIssue> {
+    fn identify_progression_issues(
+        &self,
+        progression: &DifficultyProgression,
+    ) -> Vec<ProgressionIssue> {
         let mut issues = Vec::new();
 
         // Check for steep jumps
         if !progression.steep_jumps.is_empty() {
-            issues.push(ProgressionIssue::SteepDifficultyJumps(progression.steep_jumps.clone()));
+            issues.push(ProgressionIssue::SteepDifficultyJumps(
+                progression.steep_jumps.clone(),
+            ));
         }
 
         // Check for poor progression quality
         if progression.progression_quality < 0.5 {
-            issues.push(ProgressionIssue::PoorProgression(progression.progression_quality));
+            issues.push(ProgressionIssue::PoorProgression(
+                progression.progression_quality,
+            ));
         }
 
         // Check for high cognitive load concentration
-        let high_load_count = progression.cognitive_load_distribution
+        let high_load_count = progression
+            .cognitive_load_distribution
             .iter()
             .filter(|&&load| load > 0.8)
             .count();
-        
+
         if high_load_count > progression.scores.len() / 3 {
-            issues.push(ProgressionIssue::HighCognitiveLoadConcentration(high_load_count));
+            issues.push(ProgressionIssue::HighCognitiveLoadConcentration(
+                high_load_count,
+            ));
         }
 
         issues
     }
 
     /// Generate suggestions for improving difficulty progression
-    fn generate_improvement_suggestions(&self, progression: &DifficultyProgression, sections: &[Section]) -> Vec<String> {
+    fn generate_improvement_suggestions(
+        &self,
+        progression: &DifficultyProgression,
+        sections: &[Section],
+    ) -> Vec<String> {
         let mut suggestions = Vec::new();
 
         if !progression.steep_jumps.is_empty() {
-            suggestions.push("Consider adding intermediate content before steep difficulty increases".to_string());
+            suggestions.push(
+                "Consider adding intermediate content before steep difficulty increases"
+                    .to_string(),
+            );
         }
 
         if progression.progression_quality < 0.3 {
-            suggestions.push("Reorder content to create smoother difficulty progression".to_string());
+            suggestions
+                .push("Reorder content to create smoother difficulty progression".to_string());
         }
 
         if progression.recommended_reordering != (0..sections.len()).collect::<Vec<_>>() {
             suggestions.push("Consider reordering videos based on difficulty analysis".to_string());
         }
 
-        let avg_cognitive_load = progression.cognitive_load_distribution.iter().sum::<f32>() / progression.cognitive_load_distribution.len() as f32;
+        let avg_cognitive_load = progression.cognitive_load_distribution.iter().sum::<f32>()
+            / progression.cognitive_load_distribution.len() as f32;
         if avg_cognitive_load > 0.7 {
-            suggestions.push("Consider breaking high-difficulty content into smaller sessions".to_string());
+            suggestions.push(
+                "Consider breaking high-difficulty content into smaller sessions".to_string(),
+            );
         }
 
         if suggestions.is_empty() {
@@ -680,7 +737,10 @@ mod tests {
         let analysis = analyzer.analyze_session_difficulty(&sections).unwrap();
 
         assert!(analysis.average_difficulty > 0.5);
-        assert_eq!(analysis.recommended_pacing, PacingRecommendation::Decelerated);
+        assert_eq!(
+            analysis.recommended_pacing,
+            PacingRecommendation::Decelerated
+        );
     }
 
     #[test]

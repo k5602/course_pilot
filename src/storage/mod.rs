@@ -5,6 +5,7 @@
 
 pub mod database;
 pub mod notes;
+pub mod preference_storage;
 pub mod settings;
 
 // Re-export main database functions
@@ -38,6 +39,9 @@ pub use notes::{get_notes_by_course, init_notes_table};
 
 // Re-export settings functions for convenience
 pub use settings::{AppSettings, save_app_settings, use_app_settings};
+
+// Re-export preference storage functions for convenience
+pub use preference_storage::PreferenceStorage;
 
 // Seed data functionality removed
 

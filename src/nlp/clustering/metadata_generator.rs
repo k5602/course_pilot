@@ -3,14 +3,14 @@
 //! This module provides functionality to generate comprehensive metadata about clustering
 //! operations, including confidence scores, rationale explanations, and performance metrics.
 
+use super::{BalancedCluster, OptimizedCluster};
 use super::{
-    ClusteringConfidenceScores, ClusteringMetadata, ClusteringRationale,
-    InputMetrics, ModuleConfidence, ModuleRationale, PerformanceMetrics,
+    ClusteringConfidenceScores, ClusteringMetadata, ClusteringRationale, InputMetrics,
+    ModuleConfidence, ModuleRationale, PerformanceMetrics,
 };
-use crate::types::{ClusteringAlgorithm, TopicInfo, Section};
+use crate::types::{ClusteringAlgorithm, Section, TopicInfo};
 use std::collections::HashMap;
 use std::time::{Duration, Instant};
-use super::{BalancedCluster, OptimizedCluster};
 
 /// Memory usage tracker for performance monitoring
 pub struct MemoryTracker {
@@ -113,14 +113,15 @@ impl PerformanceCollector {
 
         PerformanceMetrics {
             total_processing_time_ms: total_time.as_millis() as u64,
-            content_analysis_time_ms: self.content_analysis_time
-                .unwrap_or_default()
-                .as_millis() as u64,
-            clustering_time_ms: self.clustering_time
+            content_analysis_time_ms: self.content_analysis_time.unwrap_or_default().as_millis()
+                as u64,
+            clustering_time_ms: self
+                .clustering_time
                 .map(|t| t.saturating_sub(self.content_analysis_time.unwrap_or_default()))
                 .unwrap_or_default()
                 .as_millis() as u64,
-            optimization_time_ms: self.optimization_time
+            optimization_time_ms: self
+                .optimization_time
                 .map(|t| t.saturating_sub(self.clustering_time.unwrap_or_default()))
                 .unwrap_or_default()
                 .as_millis() as u64,
@@ -144,9 +145,12 @@ impl ConfidenceCalculator {
     ) -> ClusteringConfidenceScores {
         let module_confidences = Self::calculate_module_confidences(clusters, similarity_threshold);
 
-        let overall_confidence = Self::calculate_overall_confidence(&module_confidences, algorithm_used);
-        let module_grouping_confidence = Self::calculate_module_grouping_confidence(&module_confidences);
-        let similarity_confidence = Self::calculate_similarity_confidence(clusters, similarity_threshold);
+        let overall_confidence =
+            Self::calculate_overall_confidence(&module_confidences, algorithm_used);
+        let module_grouping_confidence =
+            Self::calculate_module_grouping_confidence(&module_confidences);
+        let similarity_confidence =
+            Self::calculate_similarity_confidence(clusters, similarity_threshold);
         let topic_extraction_confidence = Self::calculate_topic_extraction_confidence(clusters);
 
         ClusteringConfidenceScores {
@@ -161,7 +165,7 @@ impl ConfidenceCalculator {
     /// Calculate confidence scores for individual modules
     fn calculate_module_confidences(
         clusters: &[OptimizedCluster],
-        similarity_threshold: f32,
+        _similarity_threshold: f32,
     ) -> Vec<ModuleConfidence> {
         clusters
             .iter()
@@ -172,9 +176,9 @@ impl ConfidenceCalculator {
                 let duration_balance = Self::calculate_duration_balance_score(cluster);
 
                 // Overall confidence is weighted average of individual factors
-                let confidence_score = (similarity_strength * 0.4) +
-                                     (topic_coherence * 0.3) +
-                                     (duration_balance * 0.3);
+                let confidence_score = (similarity_strength * 0.4)
+                    + (topic_coherence * 0.3)
+                    + (duration_balance * 0.3);
 
                 ModuleConfidence {
                     module_index: index,
@@ -200,7 +204,8 @@ impl ConfidenceCalculator {
         let avg_module_confidence = module_confidences
             .iter()
             .map(|mc| mc.confidence_score)
-            .sum::<f32>() / module_confidences.len() as f32;
+            .sum::<f32>()
+            / module_confidences.len() as f32;
 
         // Algorithm reliability factor
         let algorithm_factor = match algorithm_used {
@@ -208,12 +213,16 @@ impl ConfidenceCalculator {
             crate::types::ClusteringAlgorithm::KMeans => 0.9,
             crate::types::ClusteringAlgorithm::Hierarchical => 0.85,
             crate::types::ClusteringAlgorithm::Hybrid => 0.95,
+            crate::types::ClusteringAlgorithm::Lda => 0.85,
             crate::types::ClusteringAlgorithm::Fallback => 0.5,
         };
 
         // Consistency bonus: higher confidence if modules have similar confidence scores
         let confidence_variance = Self::calculate_variance(
-            &module_confidences.iter().map(|mc| mc.confidence_score).collect::<Vec<_>>()
+            &module_confidences
+                .iter()
+                .map(|mc| mc.confidence_score)
+                .collect::<Vec<_>>(),
         );
         let consistency_bonus = (1.0 - confidence_variance).max(0.0) * 0.1;
 
@@ -230,14 +239,15 @@ impl ConfidenceCalculator {
         let avg_similarity = module_confidences
             .iter()
             .map(|mc| mc.similarity_strength)
-            .sum::<f32>() / module_confidences.len() as f32;
+            .sum::<f32>()
+            / module_confidences.len() as f32;
 
         // Penalize if we have too many or too few modules
         let module_count_factor = match module_confidences.len() {
-            1 => 0.6, // Single module suggests poor clustering
-            2..=5 => 1.0, // Optimal range
+            1 => 0.6,      // Single module suggests poor clustering
+            2..=5 => 1.0,  // Optimal range
             6..=10 => 0.9, // Still good
-            _ => 0.7, // Too many modules
+            _ => 0.7,      // Too many modules
         };
 
         (avg_similarity * module_count_factor).clamp(0.0, 1.0)
@@ -252,10 +262,8 @@ impl ConfidenceCalculator {
             return 0.0;
         }
 
-        let avg_similarity = clusters
-            .iter()
-            .map(|c| c.average_similarity)
-            .sum::<f32>() / clusters.len() as f32;
+        let avg_similarity =
+            clusters.iter().map(|c| c.average_similarity).sum::<f32>() / clusters.len() as f32;
 
         // Confidence increases with similarity above threshold
         let threshold_factor = if avg_similarity > similarity_threshold {
@@ -276,7 +284,13 @@ impl ConfidenceCalculator {
         let total_videos = clusters.iter().map(|c| c.videos.len()).sum::<usize>();
         let videos_with_topics = clusters
             .iter()
-            .map(|c| if c.videos.iter().any(|v| !v.topic_tags.is_empty()) { c.videos.len() } else { 0 })
+            .map(|c| {
+                if c.videos.iter().any(|v| !v.topic_tags.is_empty()) {
+                    c.videos.len()
+                } else {
+                    0
+                }
+            })
             .sum::<usize>();
 
         if total_videos == 0 {
@@ -320,14 +334,19 @@ impl ConfidenceCalculator {
             return 1.0; // Perfect balance for single video
         }
 
-        let durations: Vec<f32> = cluster.videos
+        let durations: Vec<f32> = cluster
+            .videos
             .iter()
             .map(|v| v.duration.as_secs() as f32)
             .collect();
 
         let mean = durations.iter().sum::<f32>() / durations.len() as f32;
         let variance = Self::calculate_variance(&durations);
-        let coefficient_of_variation = if mean > 0.0 { variance.sqrt() / mean } else { 0.0 };
+        let coefficient_of_variation = if mean > 0.0 {
+            variance.sqrt() / mean
+        } else {
+            0.0
+        };
 
         // Lower coefficient of variation = better balance
         (1.0 - coefficient_of_variation.min(1.0)).clamp(0.0, 1.0)
@@ -340,10 +359,7 @@ impl ConfidenceCalculator {
         }
 
         let mean = values.iter().sum::<f32>() / values.len() as f32;
-        let variance = values
-            .iter()
-            .map(|v| (v - mean).powi(2))
-            .sum::<f32>() / values.len() as f32;
+        let variance = values.iter().map(|v| (v - mean).powi(2)).sum::<f32>() / values.len() as f32;
 
         variance
     }
@@ -362,7 +378,12 @@ impl RationaleGenerator {
         confidence_scores: &ClusteringConfidenceScores,
     ) -> ClusteringRationale {
         let primary_strategy = Self::determine_primary_strategy(algorithm_used, clusters);
-        let explanation = Self::generate_explanation(algorithm_used, clusters, similarity_threshold, confidence_scores);
+        let explanation = Self::generate_explanation(
+            algorithm_used,
+            clusters,
+            similarity_threshold,
+            confidence_scores,
+        );
         let key_factors = Self::identify_key_factors(clusters, confidence_scores);
         let alternatives_considered = Self::list_alternatives_considered(algorithm_used);
         let module_rationales = Self::generate_module_rationales(sections, clusters);
@@ -384,7 +405,9 @@ impl RationaleGenerator {
         match algorithm_used {
             crate::types::ClusteringAlgorithm::TfIdf => "Content Similarity Analysis".to_string(),
             crate::types::ClusteringAlgorithm::KMeans => "K-Means Content Clustering".to_string(),
-            crate::types::ClusteringAlgorithm::Hierarchical => "Hierarchical Content Clustering".to_string(),
+            crate::types::ClusteringAlgorithm::Hierarchical => {
+                "Hierarchical Content Clustering".to_string()
+            }
             crate::types::ClusteringAlgorithm::Hybrid => {
                 if clusters.len() <= 3 {
                     "Hybrid Approach with Content Focus".to_string()
@@ -392,7 +415,10 @@ impl RationaleGenerator {
                     "Hybrid Approach with Structure Focus".to_string()
                 }
             }
-            crate::types::ClusteringAlgorithm::Fallback => "Sequential Grouping (Fallback)".to_string(),
+            crate::types::ClusteringAlgorithm::Lda => "Topic Modeling (LDA)".to_string(),
+            crate::types::ClusteringAlgorithm::Fallback => {
+                "Sequential Grouping (Fallback)".to_string()
+            }
         }
     }
 
@@ -427,6 +453,13 @@ impl RationaleGenerator {
                 "A hybrid approach combined content similarity analysis with duration balancing \
                  to create well-structured learning modules."
                     .to_string()
+            }
+            ClusteringAlgorithm::Lda => {
+                format!(
+                    "Latent Dirichlet Allocation (LDA) discovered {} latent topics in the content. \
+                     Videos were grouped based on their topic distributions and thematic similarity.",
+                    clusters.len()
+                )
             }
             ClusteringAlgorithm::Fallback => {
                 "Content clustering was not possible due to insufficient similarity patterns. \
@@ -470,17 +503,21 @@ impl RationaleGenerator {
         }
 
         // Duration balancing factor
-        let avg_duration_balance = confidence_scores.module_confidences
+        let avg_duration_balance = confidence_scores
+            .module_confidences
             .iter()
             .map(|mc| mc.duration_balance)
-            .sum::<f32>() / confidence_scores.module_confidences.len().max(1) as f32;
+            .sum::<f32>()
+            / confidence_scores.module_confidences.len().max(1) as f32;
 
         if avg_duration_balance >= 0.7 {
             factors.push("Good duration balance achieved across modules".to_string());
         } else if avg_duration_balance >= 0.4 {
             factors.push("Moderate duration balance with some variation".to_string());
         } else {
-            factors.push("Duration variation present, prioritized content over time balance".to_string());
+            factors.push(
+                "Duration variation present, prioritized content over time balance".to_string(),
+            );
         }
 
         // Module count factor
@@ -488,7 +525,8 @@ impl RationaleGenerator {
             1 => factors.push("Single cohesive module identified".to_string()),
             2..=3 => factors.push("Optimal number of focused modules created".to_string()),
             4..=6 => factors.push("Multiple distinct content areas identified".to_string()),
-            _ => factors.push("High content diversity resulted in many specialized modules".to_string()),
+            _ => factors
+                .push("High content diversity resulted in many specialized modules".to_string()),
         }
 
         factors
@@ -514,6 +552,11 @@ impl RationaleGenerator {
                 "Pure duration-based grouping".to_string(),
                 "Sequential organization".to_string(),
             ],
+            ClusteringAlgorithm::Lda => vec![
+                "K-means clustering for balanced groups".to_string(),
+                "TF-IDF similarity analysis".to_string(),
+                "Hierarchical clustering for structure".to_string(),
+            ],
             ClusteringAlgorithm::Fallback => vec![
                 "Content similarity clustering (insufficient data)".to_string(),
                 "Duration-based grouping (no clear patterns)".to_string(),
@@ -532,7 +575,8 @@ impl RationaleGenerator {
             .map(|(index, cluster)| {
                 let grouping_reason = Self::determine_grouping_reason(cluster);
                 let similarity_explanation = Self::explain_similarity(cluster);
-                let topic_keywords = cluster.videos
+                let topic_keywords = cluster
+                    .videos
                     .iter()
                     .flat_map(|v| &v.topic_tags)
                     .take(5)
@@ -568,7 +612,8 @@ impl RationaleGenerator {
 
     /// Explain the similarity basis for a cluster
     fn explain_similarity(cluster: &OptimizedCluster) -> String {
-        let common_topics: Vec<String> = cluster.videos
+        let common_topics: Vec<String> = cluster
+            .videos
             .iter()
             .flat_map(|v| &v.topic_tags)
             .collect::<std::collections::HashSet<_>>()
@@ -577,10 +622,7 @@ impl RationaleGenerator {
             .collect();
 
         if !common_topics.is_empty() {
-            format!(
-                "Videos share common topics: {}",
-                common_topics.join(", ")
-            )
+            format!("Videos share common topics: {}", common_topics.join(", "))
         } else if cluster.average_similarity >= 0.5 {
             format!(
                 "Videos have {:.0}% content similarity based on title analysis",
@@ -605,11 +647,17 @@ impl InputMetricsCalculator {
             .iter()
             .flat_map(|s| {
                 let title_lower = s.title.to_lowercase();
-                title_lower.split_whitespace().map(|w| w.to_string()).collect::<Vec<_>>()
+                title_lower
+                    .split_whitespace()
+                    .map(|w| w.to_string())
+                    .collect::<Vec<_>>()
             })
             .collect();
 
-        let unique_words = all_words.iter().collect::<std::collections::HashSet<_>>().len();
+        let unique_words = all_words
+            .iter()
+            .collect::<std::collections::HashSet<_>>()
+            .len();
         let vocabulary_size = Self::calculate_vocabulary_size(&all_words);
 
         let average_title_length = if video_count > 0 {
@@ -639,7 +687,10 @@ impl InputMetricsCalculator {
             "would", "make", "like", "into", "him", "time", "two", "more", "go", "no", "way",
             "could", "my", "than", "first", "been", "call", "who", "oil", "sit", "now", "find",
             "down", "day", "did", "get", "come", "made", "may", "part",
-        ].iter().copied().collect();
+        ]
+        .iter()
+        .copied()
+        .collect();
 
         words
             .iter()
@@ -660,7 +711,8 @@ impl InputMetricsCalculator {
 
         for i in 0..sections.len() {
             for j in (i + 1)..sections.len() {
-                let similarity = Self::calculate_title_similarity(&sections[i].title, &sections[j].title);
+                let similarity =
+                    Self::calculate_title_similarity(&sections[i].title, &sections[j].title);
                 total_similarity += similarity;
                 pair_count += 1;
             }
@@ -680,8 +732,14 @@ impl InputMetricsCalculator {
     fn calculate_title_similarity(title1: &str, title2: &str) -> f32 {
         let title1_lower = title1.to_lowercase();
         let title2_lower = title2.to_lowercase();
-        let words1: std::collections::HashSet<String> = title1_lower.split_whitespace().map(|s| s.to_string()).collect();
-        let words2: std::collections::HashSet<String> = title2_lower.split_whitespace().map(|s| s.to_string()).collect();
+        let words1: std::collections::HashSet<String> = title1_lower
+            .split_whitespace()
+            .map(|s| s.to_string())
+            .collect();
+        let words2: std::collections::HashSet<String> = title2_lower
+            .split_whitespace()
+            .map(|s| s.to_string())
+            .collect();
 
         let intersection = words1.intersection(&words2).count();
         let union = words1.union(&words2).count();
@@ -760,7 +818,8 @@ impl MetadataGenerator {
             &confidence_scores,
         );
 
-        let quality_score = Self::calculate_overall_quality_score(&confidence_scores, &performance_metrics);
+        let quality_score =
+            Self::calculate_overall_quality_score(&confidence_scores, &performance_metrics);
 
         ClusteringMetadata {
             algorithm_used,
@@ -782,9 +841,9 @@ impl MetadataGenerator {
         performance_metrics: &PerformanceMetrics,
     ) -> f32 {
         // Base quality from confidence scores
-        let confidence_quality = confidence_scores.overall_confidence * 0.6 +
-                                confidence_scores.similarity_confidence * 0.2 +
-                                confidence_scores.topic_extraction_confidence * 0.2;
+        let confidence_quality = confidence_scores.overall_confidence * 0.6
+            + confidence_scores.similarity_confidence * 0.2
+            + confidence_scores.topic_extraction_confidence * 0.2;
 
         // Performance penalty for very slow processing
         let performance_penalty = if performance_metrics.total_processing_time_ms > 10000 {
@@ -873,9 +932,7 @@ mod tests {
             create_test_section("Python Functions", 1, 720),
         ];
 
-        let clusters = vec![
-            create_test_cluster("Python Fundamentals", 2, 0.7),
-        ];
+        let clusters = vec![create_test_cluster("Python Fundamentals", 2, 0.7)];
 
         let confidence_scores = ClusteringConfidenceScores {
             overall_confidence: 0.8,
@@ -972,17 +1029,13 @@ mod tests {
             create_test_section("JavaScript Objects", 2, 800),
         ];
 
-        let clusters = vec![
-            create_test_cluster("JavaScript Fundamentals", 3, 0.75),
-        ];
+        let clusters = vec![create_test_cluster("JavaScript Fundamentals", 3, 0.75)];
 
-        let content_topics = vec![
-            TopicInfo {
-                keyword: "javascript".to_string(),
-                relevance_score: 0.9,
-                video_count: 3,
-            },
-        ];
+        let content_topics = vec![TopicInfo {
+            keyword: "javascript".to_string(),
+            relevance_score: 0.9,
+            video_count: 3,
+        }];
 
         let performance_metrics = PerformanceMetrics {
             total_processing_time_ms: 1500,
@@ -1016,157 +1069,5 @@ mod tests {
         assert!(metadata.confidence_scores.overall_confidence > 0.0);
         assert!(!metadata.rationale.explanation.is_empty());
         assert_eq!(metadata.performance_metrics.total_processing_time_ms, 1500);
-    }
-
-    #[test]
-    fn test_performance_collector() {
-        let mut collector = PerformanceCollector::new();
-
-        std::thread::sleep(Duration::from_millis(10));
-        collector.mark_content_analysis_complete();
-
-        std::thread::sleep(Duration::from_millis(10));
-        collector.mark_clustering_complete(5);
-
-        std::thread::sleep(Duration::from_millis(10));
-        collector.mark_optimization_complete();
-
-        let input_metrics = InputMetrics {
-            video_count: 10,
-            unique_words: 50,
-            vocabulary_size: 40,
-            average_title_length: 25.0,
-            content_diversity_score: 0.7,
-        };
-
-        let metrics = collector.generate_metrics(input_metrics);
-
-        assert!(metrics.total_processing_time_ms >= 30);
-        assert_eq!(metrics.algorithm_iterations, 5);
-        assert!(metrics.content_analysis_time_ms > 0);
-    }
-
-    #[test]
-    fn test_confidence_calculation() {
-        let sections = vec![
-            create_test_section("Introduction to Programming", 0, 300),
-            create_test_section("Advanced Programming", 1, 400),
-            create_test_section("Database Basics", 2, 350),
-        ];
-
-        let clusters = vec![
-            create_test_cluster("Programming", 2, 0.8),
-            create_test_cluster("Database", 1, 1.0),
-        ];
-
-        let confidence = ConfidenceCalculator::calculate_confidence_scores(
-            &sections,
-            &clusters,
-            0.6,
-            &ClusteringAlgorithm::KMeans,
-        );
-
-        assert!(confidence.overall_confidence > 0.0);
-        assert!(confidence.overall_confidence <= 1.0);
-        assert_eq!(confidence.module_confidences.len(), 2);
-        assert!(confidence.similarity_confidence > 0.0);
-    }
-
-    #[test]
-    fn test_rationale_generation() {
-        let sections = vec![
-            create_test_section("Programming Basics", 0, 300),
-            create_test_section("Advanced Programming", 1, 400),
-        ];
-
-        let clusters = vec![create_test_cluster("Programming", 2, 0.8)];
-
-        let confidence_scores = ClusteringConfidenceScores {
-            overall_confidence: 0.8,
-            module_grouping_confidence: 0.7,
-            similarity_confidence: 0.8,
-            topic_extraction_confidence: 0.6,
-            module_confidences: vec![ModuleConfidence {
-                module_index: 0,
-                confidence_score: 0.8,
-                similarity_strength: 0.8,
-                topic_coherence: 0.7,
-                duration_balance: 0.9,
-            }],
-        };
-
-        let rationale = RationaleGenerator::generate_rationale(
-            &sections,
-            &clusters,
-            &ClusteringAlgorithm::KMeans,
-            0.6,
-            &confidence_scores,
-        );
-
-        assert_eq!(rationale.primary_strategy, "K-Means Content Clustering");
-        assert!(!rationale.explanation.is_empty());
-        assert!(!rationale.key_factors.is_empty());
-        assert_eq!(rationale.module_rationales.len(), 1);
-    }
-
-    #[test]
-    fn test_input_metrics_calculation() {
-        let sections = vec![
-            create_test_section("Introduction to Programming Basics", 0, 300),
-            create_test_section("Advanced Programming Concepts", 1, 400),
-            create_test_section("Database Design Fundamentals", 2, 350),
-        ];
-
-        let metrics = InputMetricsCalculator::calculate_metrics(&sections);
-
-        assert_eq!(metrics.video_count, 3);
-        assert!(metrics.unique_words > 0);
-        assert!(metrics.vocabulary_size > 0);
-        assert!(metrics.average_title_length > 0.0);
-        assert!(metrics.content_diversity_score >= 0.0);
-        assert!(metrics.content_diversity_score <= 1.0);
-    }
-
-    #[test]
-    fn test_complete_metadata_generation() {
-        let sections = vec![
-            create_test_section("Programming Basics", 0, 300),
-            create_test_section("Advanced Programming", 1, 400),
-        ];
-
-        let clusters = vec![create_test_cluster("Programming", 2, 0.8)];
-
-        let performance_metrics = PerformanceMetrics {
-            total_processing_time_ms: 1000,
-            content_analysis_time_ms: 300,
-            clustering_time_ms: 500,
-            optimization_time_ms: 200,
-            peak_memory_usage_bytes: 1024 * 1024,
-            algorithm_iterations: 10,
-            input_metrics: InputMetricsCalculator::calculate_metrics(&sections),
-        };
-
-        let content_topics = vec![TopicInfo {
-            keyword: "programming".to_string(),
-            relevance_score: 0.8,
-            video_count: 2,
-        }];
-
-        let metadata = MetadataGenerator::generate_complete_metadata(
-            &sections,
-            &clusters,
-            ClusteringAlgorithm::KMeans,
-            crate::types::ClusteringStrategy::Hybrid,
-            0.6,
-            content_topics,
-            performance_metrics,
-        );
-
-        assert_eq!(metadata.algorithm_used, ClusteringAlgorithm::KMeans);
-        assert_eq!(metadata.cluster_count, 1);
-        assert!(metadata.quality_score > 0.0);
-        assert!(metadata.quality_score <= 1.0);
-        assert!(!metadata.rationale.explanation.is_empty());
-        assert!(!metadata.confidence_scores.module_confidences.is_empty());
     }
 }

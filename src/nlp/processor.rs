@@ -6,14 +6,14 @@
 
 use crate::NlpError;
 use crate::nlp::clustering::{
-    BalancedCluster, ContentAnalysis, ContentClusterer,
-    DurationBalancer, KMeansClusterer, OptimizedCluster, TfIdfAnalyzer, TopicExtractor,
-    VideoCluster, VideoWithMetadata,
+    BalancedCluster, ContentAnalysis, ContentClusterer, DurationBalancer, EnsembleMethod,
+    HierarchicalClusterer, HybridClusterer, KMeansClusterer, LdaClusterer, OptimizedCluster,
+    StrategySelection, TfIdfAnalyzer, TopicExtractor, VideoCluster, VideoWithMetadata,
 };
 use crate::nlp::{extract_numbers, is_module_indicator, normalize_text};
 use crate::types::{
-    ClusteringMetadata, ClusteringStrategy, CourseStructure, DifficultyLevel,
-    Module, PlanSettings, Section, StructureMetadata, TopicInfo,
+    ClusteringMetadata, ClusteringStrategy, CourseStructure, DifficultyLevel, Module, PlanSettings,
+    Section, StructureMetadata, TopicInfo,
 };
 use regex::Regex;
 use std::collections::HashMap;
@@ -83,7 +83,9 @@ fn structure_course_with_clustering(titles: &[String]) -> Result<CourseStructure
     let (modules, clustering_metadata) = match clustering_strategy {
         ClusteringStrategy::ContentBased => apply_advanced_content_clustering(titles)?,
         ClusteringStrategy::DurationBased => apply_advanced_duration_clustering(titles)?,
-        ClusteringStrategy::Hybrid => apply_advanced_hybrid_clustering(titles)?,
+        ClusteringStrategy::Hierarchical => apply_hierarchical_clustering(titles)?,
+        ClusteringStrategy::Lda => apply_lda_clustering(titles)?,
+        ClusteringStrategy::Hybrid => apply_advanced_hybrid_clustering_v2(titles)?,
         ClusteringStrategy::Fallback => {
             return Err(NlpError::Processing(
                 "Clustering strategy selection failed".to_string(),
@@ -148,10 +150,13 @@ struct TitleAnalysis {
 #[derive(Debug)]
 struct AdvancedContentAnalysis {
     content_analysis: ContentAnalysis,
+    // TODO: Integrate later - Could be used for topic-based session grouping
     extracted_topics: Vec<TopicInfo>,
     content_diversity_score: f32,
+    // TODO: Integrate later - Could be used for similarity-based optimization
     title_similarity_score: f32,
     has_clear_topics: bool,
+    // TODO: Integrate later - Could be used for dynamic cluster count selection
     estimated_optimal_clusters: usize,
     content_complexity: f32,
     duration_variance: f32,
@@ -620,17 +625,40 @@ fn select_optimal_clustering_strategy(analysis: &AdvancedContentAnalysis) -> Clu
         hybrid_score
     );
 
+    // Calculate additional scores for new algorithms
+    let hierarchical_score = calculate_hierarchical_strategy_score(analysis);
+    let lda_score = calculate_lda_strategy_score(analysis);
+
+    log::info!(
+        "Extended strategy scores - Content: {:.3}, Duration: {:.3}, Hybrid: {:.3}, Hierarchical: {:.3}, LDA: {:.3}",
+        content_score,
+        duration_score,
+        hybrid_score,
+        hierarchical_score,
+        lda_score
+    );
+
     // Select strategy with highest score, with minimum feasibility threshold
-    if content_score > duration_score && content_score > hybrid_score && content_score > 0.6 {
-        ClusteringStrategy::ContentBased
-    } else if duration_score > hybrid_score && duration_score > 0.5 {
-        ClusteringStrategy::DurationBased
-    } else if hybrid_score > 0.4 {
-        ClusteringStrategy::Hybrid
-    } else {
-        // Fallback if all scores are too low
-        log::warn!("All clustering strategies scored low, using fallback");
-        ClusteringStrategy::Fallback
+    let scores = [
+        (ClusteringStrategy::ContentBased, content_score),
+        (ClusteringStrategy::DurationBased, duration_score),
+        (ClusteringStrategy::Hierarchical, hierarchical_score),
+        (ClusteringStrategy::Lda, lda_score),
+        (ClusteringStrategy::Hybrid, hybrid_score),
+    ];
+
+    // Find the strategy with the highest score above threshold
+    let best_strategy = scores
+        .iter()
+        .max_by(|a, b| a.1.partial_cmp(&b.1).unwrap_or(std::cmp::Ordering::Equal))
+        .map(|(strategy, score)| (strategy.clone(), *score));
+
+    match best_strategy {
+        Some((strategy, score)) if score > 0.4 => strategy,
+        _ => {
+            log::warn!("All clustering strategies scored low, using fallback");
+            ClusteringStrategy::Fallback
+        }
     }
 }
 
@@ -721,12 +749,15 @@ fn apply_advanced_content_clustering(
         })
         .collect();
 
-    let input_metrics = crate::nlp::clustering::metadata_generator::InputMetricsCalculator::calculate_metrics(&sections);
+    let input_metrics =
+        crate::nlp::clustering::metadata_generator::InputMetricsCalculator::calculate_metrics(
+            &sections,
+        );
     let performance_metrics = crate::nlp::clustering::PerformanceMetrics {
         total_processing_time_ms: start_time.elapsed().as_millis() as u64,
         content_analysis_time_ms: (start_time.elapsed().as_millis() / 3) as u64, // Estimate
-        clustering_time_ms: (start_time.elapsed().as_millis() / 3) as u64, // Estimate
-        optimization_time_ms: (start_time.elapsed().as_millis() / 3) as u64, // Estimate
+        clustering_time_ms: (start_time.elapsed().as_millis() / 3) as u64,       // Estimate
+        optimization_time_ms: (start_time.elapsed().as_millis() / 3) as u64,     // Estimate
         peak_memory_usage_bytes: 1024 * 1024, // Simplified estimate
         algorithm_iterations: optimal_k as u32,
         input_metrics,
@@ -810,14 +841,17 @@ fn apply_advanced_duration_clustering(
         })
         .collect();
 
-    let input_metrics = crate::nlp::clustering::metadata_generator::InputMetricsCalculator::calculate_metrics(&sections);
+    let input_metrics =
+        crate::nlp::clustering::metadata_generator::InputMetricsCalculator::calculate_metrics(
+            &sections,
+        );
     let performance_metrics = crate::nlp::clustering::PerformanceMetrics {
         total_processing_time_ms: start_time.elapsed().as_millis() as u64,
         content_analysis_time_ms: (start_time.elapsed().as_millis() / 4) as u64, // Estimate
         clustering_time_ms: (start_time.elapsed().as_millis() / 2) as u64, // Duration clustering is simpler
         optimization_time_ms: (start_time.elapsed().as_millis() / 4) as u64, // Estimate
         peak_memory_usage_bytes: 512 * 1024, // Lower memory usage for duration-based
-        algorithm_iterations: 1, // Duration clustering doesn't iterate
+        algorithm_iterations: 1,             // Duration clustering doesn't iterate
         input_metrics,
     };
 
@@ -938,12 +972,15 @@ fn apply_advanced_hybrid_clustering(
         })
         .collect();
 
-    let input_metrics = crate::nlp::clustering::metadata_generator::InputMetricsCalculator::calculate_metrics(&sections);
+    let input_metrics =
+        crate::nlp::clustering::metadata_generator::InputMetricsCalculator::calculate_metrics(
+            &sections,
+        );
     let performance_metrics = crate::nlp::clustering::PerformanceMetrics {
         total_processing_time_ms: start_time.elapsed().as_millis() as u64,
         content_analysis_time_ms: (start_time.elapsed().as_millis() / 3) as u64, // Estimate
-        clustering_time_ms: (start_time.elapsed().as_millis() / 3) as u64, // Estimate
-        optimization_time_ms: (start_time.elapsed().as_millis() / 3) as u64, // Estimate
+        clustering_time_ms: (start_time.elapsed().as_millis() / 3) as u64,       // Estimate
+        optimization_time_ms: (start_time.elapsed().as_millis() / 3) as u64,     // Estimate
         peak_memory_usage_bytes: 2 * 1024 * 1024, // Higher memory usage for hybrid approach
         algorithm_iterations: optimal_k as u32,
         input_metrics,
@@ -971,6 +1008,7 @@ fn apply_advanced_hybrid_clustering(
     Ok((modules, clustering_metadata))
 }
 
+// TODO: Integrate later - This function could be used for post-processing module optimization
 /// Balance modules by duration constraints
 fn balance_modules_by_duration(modules: &mut Vec<Module>) {
     // Simple duration balancing - split oversized modules
@@ -995,6 +1033,7 @@ fn balance_modules_by_duration(modules: &mut Vec<Module>) {
     }
 }
 
+// TODO: Integrate later - This function could be used for dynamic module splitting
 /// Split a module into smaller duration-balanced modules
 fn split_module_by_duration(module: Module, target_duration: Duration) -> Vec<Module> {
     let mut result = Vec::new();
@@ -1076,6 +1115,7 @@ fn calculate_clustering_quality_score(clusters: &[crate::nlp::clustering::VideoC
     avg_similarity.clamp(0.0, 1.0)
 }
 
+// TODO: Integrate later - This function could be used for quality assessment
 /// Calculate content coherence score for modules
 fn calculate_content_coherence_score(modules: &[Module]) -> f32 {
     if modules.is_empty() {
@@ -1142,7 +1182,7 @@ fn configure_tfidf_analyzer(titles: &[String]) -> TfIdfAnalyzer {
 
 /// Configure TF-IDF analyzer specifically for hybrid clustering
 fn configure_tfidf_analyzer_for_hybrid(
-    titles: &[String],
+    _titles: &[String],
     analysis: &AdvancedContentAnalysis,
 ) -> TfIdfAnalyzer {
     // Balance content and duration considerations
@@ -1172,7 +1212,7 @@ fn configure_kmeans_clusterer(content_analysis: &ContentAnalysis) -> KMeansClust
 
 /// Configure K-means clusterer for hybrid approach
 fn configure_kmeans_clusterer_for_hybrid(
-    content_analysis: &ContentAnalysis,
+    _content_analysis: &ContentAnalysis,
     advanced_analysis: &AdvancedContentAnalysis,
 ) -> KMeansClusterer {
     let max_iterations = if advanced_analysis.content_complexity > 0.6 {
@@ -1350,6 +1390,78 @@ fn calculate_hybrid_strategy_score(analysis: &AdvancedContentAnalysis) -> f32 {
     (base_score * balance_factor + 0.1).clamp(0.0, 1.0)
 }
 
+/// Calculate hierarchical clustering strategy score
+fn calculate_hierarchical_strategy_score(analysis: &AdvancedContentAnalysis) -> f32 {
+    let mut score: f32 = 0.0;
+
+    // Hierarchical works well with smaller datasets
+    let total_videos = analysis.content_analysis.feature_vectors.len();
+    let size_factor = if total_videos <= 50 {
+        0.8
+    } else if total_videos <= 100 {
+        0.6
+    } else {
+        0.3
+    };
+    score += size_factor * 0.3;
+
+    // Good for discovering natural hierarchies
+    let hierarchy_factor = if analysis.content_diversity_score > 0.4 {
+        0.9
+    } else {
+        0.5
+    };
+    score += hierarchy_factor * 0.3;
+
+    // Works well when there's moderate similarity variance
+    let variance_factor = if analysis.duration_variance > 0.15 && analysis.duration_variance < 0.4 {
+        0.8
+    } else {
+        0.4
+    };
+    score += variance_factor * 0.4;
+
+    score.clamp(0.0, 1.0)
+}
+
+/// Calculate LDA clustering strategy score
+fn calculate_lda_strategy_score(analysis: &AdvancedContentAnalysis) -> f32 {
+    let mut score: f32 = 0.0;
+
+    // LDA works well with sufficient vocabulary diversity
+    let vocab_factor = if analysis.vocabulary_richness > 0.3 {
+        0.9
+    } else if analysis.vocabulary_richness > 0.2 {
+        0.6
+    } else {
+        0.2
+    };
+    score += vocab_factor * 0.4;
+
+    // Good for text-rich content (use content complexity as proxy)
+    let content_factor = if analysis.content_complexity > 0.6 {
+        0.8
+    } else if analysis.content_complexity > 0.4 {
+        0.6
+    } else {
+        0.3
+    };
+    score += content_factor * 0.3;
+
+    // Needs sufficient documents for topic modeling
+    let total_videos = analysis.content_analysis.feature_vectors.len();
+    let size_factor = if total_videos >= 10 {
+        0.8
+    } else if total_videos >= 6 {
+        0.5
+    } else {
+        0.1
+    };
+    score += size_factor * 0.3;
+
+    score.clamp(0.0, 1.0)
+}
+
 /// Create video metadata from titles with enhanced duration estimation
 fn create_video_metadata_from_titles(titles: &[String]) -> Vec<VideoWithMetadata> {
     titles
@@ -1498,6 +1610,424 @@ fn extract_topic_tags_from_features(
         .into_iter()
         .map(|(term, _)| term)
         .collect()
+}
+
+/// Apply hierarchical clustering with automatic threshold determination
+fn apply_hierarchical_clustering(
+    titles: &[String],
+) -> Result<(Vec<Module>, ClusteringMetadata), NlpError> {
+    let start_time = Instant::now();
+
+    // Step 1: Configure hierarchical clusterer
+    let mut hierarchical_clusterer = HierarchicalClusterer::default();
+
+    // Determine optimal threshold based on content characteristics
+    let analysis = hierarchical_clusterer
+        .analyze_content(titles)
+        .map_err(|e| NlpError::Processing(format!("Hierarchical analysis failed: {}", e)))?;
+
+    let optimal_threshold =
+        hierarchical_clusterer.determine_optimal_threshold(&analysis.feature_vectors);
+    hierarchical_clusterer.distance_threshold = optimal_threshold;
+
+    // Step 2: Perform hierarchical clustering
+    let clusters = hierarchical_clusterer
+        .cluster_videos(&analysis, 0)
+        .map_err(|e| NlpError::Processing(format!("Hierarchical clustering failed: {}", e)))?;
+
+    // Step 3: Create video metadata for optimization
+    let video_metadata = create_enhanced_video_metadata(titles, &analysis);
+
+    // Step 4: Optimize clusters
+    let optimized_clusters = hierarchical_clusterer
+        .optimize_clusters(
+            clusters.clone(),
+            &video_metadata
+                .iter()
+                .map(|v| v.duration)
+                .collect::<Vec<_>>(),
+        )
+        .map_err(|e| NlpError::Processing(format!("Hierarchical optimization failed: {}", e)))?;
+
+    // Step 5: Apply duration balancing
+    let default_settings = create_default_plan_settings();
+    let target_duration =
+        Duration::from_secs((default_settings.session_length_minutes * 60) as u64);
+    let max_duration =
+        Duration::from_secs((default_settings.session_length_minutes * 60 * 120 / 100) as u64); // 120% of target
+    let duration_balancer = DurationBalancer::new(
+        target_duration,
+        max_duration,
+        0.8, // Allow 80% utilization
+    );
+
+    let balanced_clusters = duration_balancer
+        .balance_clusters(optimized_clusters)
+        .map_err(|e| NlpError::Processing(format!("Hierarchical balancing failed: {}", e)))?;
+
+    // Step 6: Extract topics
+    let topic_extractor = TopicExtractor::new(3, 0.15);
+    let clustering_topics = topic_extractor.extract_topics(
+        titles,
+        &analysis
+            .topic_keywords
+            .iter()
+            .enumerate()
+            .map(|(i, keyword)| (keyword.clone(), 1.0 - (i as f32 * 0.1)))
+            .collect(),
+    );
+
+    let extracted_topics: Vec<crate::types::TopicInfo> = clustering_topics
+        .into_iter()
+        .map(|topic| crate::types::TopicInfo {
+            keyword: topic.keyword,
+            relevance_score: topic.relevance_score,
+            video_count: topic.related_videos.len(),
+        })
+        .collect();
+
+    // Step 7: Convert to modules
+    let modules = convert_balanced_clusters_to_modules_with_topics(
+        balanced_clusters.clone(),
+        &extracted_topics,
+        titles,
+    )?;
+
+    // Step 8: Generate metadata
+    let sections: Vec<Section> = titles
+        .iter()
+        .enumerate()
+        .map(|(i, title)| Section {
+            title: title.clone(),
+            video_index: i,
+            duration: estimate_video_duration(title).unwrap_or_else(|| Duration::from_secs(600)),
+        })
+        .collect();
+
+    let input_metrics =
+        crate::nlp::clustering::metadata_generator::InputMetricsCalculator::calculate_metrics(
+            &sections,
+        );
+    let performance_metrics = crate::nlp::clustering::PerformanceMetrics {
+        total_processing_time_ms: start_time.elapsed().as_millis() as u64,
+        content_analysis_time_ms: (start_time.elapsed().as_millis() / 3) as u64,
+        clustering_time_ms: (start_time.elapsed().as_millis() / 3) as u64,
+        optimization_time_ms: (start_time.elapsed().as_millis() / 3) as u64,
+        peak_memory_usage_bytes: 1024 * 1024, // 1MB estimate
+        algorithm_iterations: clusters.len() as u32,
+        input_metrics,
+    };
+
+    let clustering_metadata = crate::nlp::clustering::metadata_generator::MetadataGenerator::generate_complete_metadata_from_balanced(
+        &sections,
+        &balanced_clusters,
+        crate::types::ClusteringAlgorithm::Hierarchical,
+        crate::types::ClusteringStrategy::ContentBased,
+        optimal_threshold,
+        extracted_topics,
+        performance_metrics,
+    );
+
+    log::info!(
+        "Hierarchical clustering completed: {} modules, threshold: {:.3}, time: {}ms",
+        modules.len(),
+        optimal_threshold,
+        clustering_metadata.processing_time_ms
+    );
+
+    Ok((modules, clustering_metadata))
+}
+
+/// Apply LDA topic modeling for content clustering
+fn apply_lda_clustering(titles: &[String]) -> Result<(Vec<Module>, ClusteringMetadata), NlpError> {
+    let start_time = Instant::now();
+
+    // Step 1: Configure LDA clusterer
+    let mut lda_clusterer = LdaClusterer::default();
+    let optimal_topics = lda_clusterer.determine_optimal_topics(titles);
+    lda_clusterer.num_topics = optimal_topics;
+
+    // Step 2: Fit LDA model
+    let lda_model = lda_clusterer
+        .fit_lda(titles)
+        .map_err(|e| NlpError::Processing(format!("LDA fitting failed: {}", e)))?;
+
+    // Step 3: Cluster videos based on topics
+    let clusters = lda_clusterer
+        .cluster_by_topics(&lda_model, 0.3)
+        .map_err(|e| NlpError::Processing(format!("LDA clustering failed: {}", e)))?;
+
+    // Step 4: Create video metadata for optimization
+    let video_metadata: Vec<VideoWithMetadata> = titles
+        .iter()
+        .enumerate()
+        .map(|(i, title)| VideoWithMetadata {
+            index: i,
+            title: title.clone(),
+            duration: estimate_enhanced_video_duration(title),
+            feature_vector: crate::nlp::clustering::FeatureVector::default(),
+            difficulty_score: estimate_difficulty_score_from_title(title),
+            topic_tags: extract_basic_topic_tags(title),
+        })
+        .collect();
+
+    // Step 5: Optimize clusters
+    let optimized_clusters = lda_clusterer
+        .optimize_clusters(
+            clusters.clone(),
+            &video_metadata
+                .iter()
+                .map(|v| v.duration)
+                .collect::<Vec<_>>(),
+        )
+        .map_err(|e| NlpError::Processing(format!("LDA optimization failed: {}", e)))?;
+
+    // Step 6: Apply duration balancing
+    let default_settings = create_default_plan_settings();
+    let target_duration =
+        Duration::from_secs((default_settings.session_length_minutes * 60) as u64);
+    let max_duration =
+        Duration::from_secs((default_settings.session_length_minutes * 60 * 120 / 100) as u64); // 120% of target
+    let duration_balancer = DurationBalancer::new(target_duration, max_duration, 0.8);
+
+    let balanced_clusters = duration_balancer
+        .balance_clusters(optimized_clusters)
+        .map_err(|e| NlpError::Processing(format!("LDA balancing failed: {}", e)))?;
+
+    // Step 7: Extract topics from LDA model
+    let extracted_topics: Vec<crate::types::TopicInfo> = lda_model
+        .topics
+        .into_iter()
+        .map(|topic| crate::types::TopicInfo {
+            keyword: topic
+                .top_words
+                .first()
+                .map(|(word, _)| word.clone())
+                .unwrap_or_default(),
+            relevance_score: topic
+                .top_words
+                .first()
+                .map(|(_, score)| *score)
+                .unwrap_or(0.0),
+            video_count: 0, // Will be calculated later
+        })
+        .collect();
+
+    // Step 8: Convert to modules
+    let modules = convert_balanced_clusters_to_modules_with_topics(
+        balanced_clusters.clone(),
+        &extracted_topics,
+        titles,
+    )?;
+
+    // Step 9: Generate metadata
+    let sections: Vec<Section> = titles
+        .iter()
+        .enumerate()
+        .map(|(i, title)| Section {
+            title: title.clone(),
+            video_index: i,
+            duration: estimate_video_duration(title).unwrap_or_else(|| Duration::from_secs(600)),
+        })
+        .collect();
+
+    let input_metrics =
+        crate::nlp::clustering::metadata_generator::InputMetricsCalculator::calculate_metrics(
+            &sections,
+        );
+    let performance_metrics = crate::nlp::clustering::PerformanceMetrics {
+        total_processing_time_ms: start_time.elapsed().as_millis() as u64,
+        content_analysis_time_ms: (start_time.elapsed().as_millis() / 4) as u64,
+        clustering_time_ms: (start_time.elapsed().as_millis() / 2) as u64, // LDA takes more time
+        optimization_time_ms: (start_time.elapsed().as_millis() / 4) as u64,
+        peak_memory_usage_bytes: 1536 * 1024, // 1.5MB estimate for LDA
+        algorithm_iterations: lda_clusterer.num_iterations as u32,
+        input_metrics,
+    };
+
+    let clustering_metadata = crate::nlp::clustering::metadata_generator::MetadataGenerator::generate_complete_metadata_from_balanced(
+        &sections,
+        &balanced_clusters,
+        crate::types::ClusteringAlgorithm::Lda,
+        crate::types::ClusteringStrategy::ContentBased,
+        0.3, // LDA similarity threshold
+        extracted_topics,
+        performance_metrics,
+    );
+
+    log::info!(
+        "LDA clustering completed: {} modules, {} topics, time: {}ms",
+        modules.len(),
+        optimal_topics,
+        clustering_metadata.processing_time_ms
+    );
+
+    Ok((modules, clustering_metadata))
+}
+
+/// Apply advanced hybrid clustering using multiple algorithms
+fn apply_advanced_hybrid_clustering_v2(
+    titles: &[String],
+) -> Result<(Vec<Module>, ClusteringMetadata), NlpError> {
+    let start_time = Instant::now();
+
+    // Step 1: Configure hybrid clusterer with automatic strategy selection
+    let hybrid_clusterer = HybridClusterer::new(
+        StrategySelection::Automatic,
+        EnsembleMethod::BestQuality,
+        0.6,
+    );
+
+    // Step 2: Perform hybrid clustering
+    let ensemble_results = hybrid_clusterer
+        .cluster_hybrid(titles)
+        .map_err(|e| NlpError::Processing(format!("Hybrid clustering failed: {}", e)))?;
+
+    // Step 3: Create video metadata for optimization
+    let video_metadata: Vec<VideoWithMetadata> = titles
+        .iter()
+        .enumerate()
+        .map(|(i, title)| VideoWithMetadata {
+            index: i,
+            title: title.clone(),
+            duration: estimate_enhanced_video_duration(title),
+            feature_vector: crate::nlp::clustering::FeatureVector::default(),
+            difficulty_score: estimate_difficulty_score_from_title(title),
+            topic_tags: extract_basic_topic_tags(title),
+        })
+        .collect();
+
+    // Step 4: Optimize the best clusters
+    let optimized_clusters = hybrid_clusterer
+        .optimize_clusters(
+            ensemble_results.final_clusters.clone(),
+            &video_metadata
+                .iter()
+                .map(|v| v.duration)
+                .collect::<Vec<_>>(),
+        )
+        .map_err(|e| NlpError::Processing(format!("Hybrid optimization failed: {}", e)))?;
+
+    // Step 5: Apply duration balancing
+    let default_settings = create_default_plan_settings();
+    let target_duration =
+        Duration::from_secs((default_settings.session_length_minutes * 60) as u64);
+    let max_duration =
+        Duration::from_secs((default_settings.session_length_minutes * 60 * 120 / 100) as u64); // 120% of target
+    let duration_balancer = DurationBalancer::new(target_duration, max_duration, 0.8);
+
+    let balanced_clusters = duration_balancer
+        .balance_clusters(optimized_clusters)
+        .map_err(|e| NlpError::Processing(format!("Hybrid balancing failed: {}", e)))?;
+
+    // Step 6: Extract topics from the best performing algorithm
+    let topic_extractor = TopicExtractor::new(3, 0.12);
+    let clustering_topics = topic_extractor.extract_topics(
+        titles,
+        &std::collections::HashMap::new(), // Use default topic extraction
+    );
+
+    let extracted_topics: Vec<crate::types::TopicInfo> = clustering_topics
+        .into_iter()
+        .map(|topic| crate::types::TopicInfo {
+            keyword: topic.keyword,
+            relevance_score: topic.relevance_score,
+            video_count: topic.related_videos.len(),
+        })
+        .collect();
+
+    // Step 7: Convert to modules
+    let modules = convert_balanced_clusters_to_modules_with_topics(
+        balanced_clusters.clone(),
+        &extracted_topics,
+        titles,
+    )?;
+
+    // Step 8: Generate metadata with ensemble information
+    let sections: Vec<Section> = titles
+        .iter()
+        .enumerate()
+        .map(|(i, title)| Section {
+            title: title.clone(),
+            video_index: i,
+            duration: estimate_video_duration(title).unwrap_or_else(|| Duration::from_secs(600)),
+        })
+        .collect();
+
+    let input_metrics =
+        crate::nlp::clustering::metadata_generator::InputMetricsCalculator::calculate_metrics(
+            &sections,
+        );
+    let performance_metrics = crate::nlp::clustering::PerformanceMetrics {
+        total_processing_time_ms: start_time.elapsed().as_millis() as u64,
+        content_analysis_time_ms: (start_time.elapsed().as_millis() / 4) as u64,
+        clustering_time_ms: (start_time.elapsed().as_millis() / 2) as u64, // Multiple algorithms
+        optimization_time_ms: (start_time.elapsed().as_millis() / 4) as u64,
+        peak_memory_usage_bytes: 2048 * 1024, // 2MB estimate for multiple algorithms
+        algorithm_iterations: ensemble_results.quality_scores.len() as u32,
+        input_metrics,
+    };
+
+    let clustering_metadata = crate::nlp::clustering::metadata_generator::MetadataGenerator::generate_complete_metadata_from_balanced(
+        &sections,
+        &balanced_clusters,
+        crate::types::ClusteringAlgorithm::Hybrid,
+        crate::types::ClusteringStrategy::Hybrid,
+        0.6, // Hybrid threshold
+        extracted_topics,
+        performance_metrics,
+    );
+
+    log::info!(
+        "Advanced hybrid clustering completed: {} modules, selected: {}, quality scores: {:?}, time: {}ms",
+        modules.len(),
+        ensemble_results.selected_algorithm,
+        ensemble_results.quality_scores,
+        clustering_metadata.processing_time_ms
+    );
+
+    Ok((modules, clustering_metadata))
+}
+
+/// Convert balanced clusters to modules with topic information
+fn convert_balanced_clusters_to_modules_with_topics(
+    balanced_clusters: Vec<BalancedCluster>,
+    topics: &[crate::types::TopicInfo],
+    titles: &[String],
+) -> Result<Vec<Module>, NlpError> {
+    let mut modules = Vec::new();
+
+    for (i, cluster) in balanced_clusters.into_iter().enumerate() {
+        let sections: Vec<Section> = cluster
+            .videos
+            .into_iter()
+            .map(|video| Section {
+                title: titles.get(video.index).cloned().unwrap_or_default(),
+                video_index: video.index,
+                duration: video.duration,
+            })
+            .collect();
+
+        let total_duration = sections.iter().map(|s| s.duration).sum();
+
+        // Generate module title from topics or use default
+        let module_title = if let Some(topic) = topics.get(i % topics.len()) {
+            format!("Module {}: {}", i + 1, topic.keyword)
+        } else {
+            format!("Module {}", i + 1)
+        };
+
+        modules.push(Module {
+            title: module_title,
+            sections,
+            total_duration,
+            similarity_score: Some(0.5), // Default similarity score
+            topic_keywords: Vec::new(),
+            difficulty_level: Some(DifficultyLevel::Intermediate),
+        });
+    }
+
+    Ok(modules)
 }
 
 #[cfg(test)]
@@ -1952,7 +2482,7 @@ fn estimate_advanced_difficulty(
 fn calculate_comprehensive_quality_metrics(
     video_clusters: &[VideoCluster],
     modules: &[Module],
-    content_analysis: &ContentAnalysis,
+    _content_analysis: &ContentAnalysis,
 ) -> QualityMetrics {
     let clustering_quality = calculate_clustering_quality_score(video_clusters);
     let content_coherence = calculate_advanced_coherence_score(modules);
@@ -1978,7 +2508,7 @@ fn calculate_comprehensive_quality_metrics(
 fn calculate_hybrid_quality_metrics(
     video_clusters: &[VideoCluster],
     modules: &[Module],
-    content_analysis: &ContentAnalysis,
+    _content_analysis: &ContentAnalysis,
     advanced_analysis: &AdvancedContentAnalysis,
 ) -> QualityMetrics {
     let clustering_quality = calculate_clustering_quality_score(video_clusters);
@@ -2216,8 +2746,10 @@ fn estimate_content_complexity_from_titles(titles: &[String]) -> f32 {
 #[derive(Debug)]
 struct QualityMetrics {
     overall_quality: f32,
+    // TODO: Integrate later - Could be used for clustering algorithm selection
     clustering_quality: f32,
     content_quality: f32,
     duration_quality: f32,
+    // TODO: Integrate later - Could be used for topic coherence assessment
     topic_quality: f32,
 }

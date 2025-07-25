@@ -121,6 +121,7 @@ pub enum ClusteringAlgorithm {
     TfIdf,
     KMeans,
     Hierarchical,
+    Lda,
     Hybrid,
     Fallback,
 }
@@ -130,6 +131,8 @@ pub enum ClusteringAlgorithm {
 pub enum ClusteringStrategy {
     ContentBased,
     DurationBased,
+    Hierarchical,
+    Lda,
     Hybrid,
     Fallback,
 }
@@ -435,11 +438,11 @@ pub struct AppState {
 #[derive(Debug, Clone, Copy, PartialEq, Default)]
 pub enum Route {
     #[default]
-    Dashboard,        // Analytics hub with learning insights
-    AllCourses,       // Dedicated course management view
-    PlanView(Uuid),   // Individual course plan view
-    Settings,         // Comprehensive settings interface
-    AddCourse,        // Course import interface
+    Dashboard, // Analytics hub with learning insights
+    AllCourses,     // Dedicated course management view
+    PlanView(Uuid), // Individual course plan view
+    Settings,       // Comprehensive settings interface
+    AddCourse,      // Course import interface
     #[cfg(debug_assertions)]
     ToastTest,
 }

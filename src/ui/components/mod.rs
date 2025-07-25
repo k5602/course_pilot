@@ -3,6 +3,7 @@ pub mod accordion;
 pub mod breadcrumb;
 pub mod button;
 pub mod card;
+pub mod clustering_settings;
 pub mod command_palette;
 pub mod dropdown;
 pub mod export_format_dialog;
@@ -16,14 +17,13 @@ pub mod toast;
 pub mod top_bar;
 
 // exports for convenience
+pub use clustering_settings::{ABTestResults, ClusteringSettings, ManualAdjustmentInterface};
 pub use dropdown::{DropdownItem, DropdownTrigger, UnifiedDropdown};
 pub use import_modal::{
     ImportModal, ImportModalProps, ImportPreview, ImportSettings, ImportSource, ImportVideoPreview,
 };
 pub use modal::Badge;
-pub use progress::{
-     ProgressBar, ProgressRing,
-};
+pub use progress::{ProgressBar, ProgressRing};
 pub use search_history::SearchHistory;
 pub use tag_input::TagInput;
 pub use toast::ToastContainer;

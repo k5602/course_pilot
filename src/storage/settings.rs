@@ -9,20 +9,25 @@ pub struct AppSettings {
     // API Configuration
     pub youtube_api_key: Option<String>,
     pub gemini_api_key: Option<String>,
-    
+
     // General Settings
     pub theme: Option<String>,
     pub auto_structure: bool,
     pub notifications_enabled: bool,
-    
+
     // Course Defaults
     pub default_plan_settings: crate::types::PlanSettings,
     pub auto_create_plan: bool,
-    
+
     // Analytics Preferences
     pub analytics_enabled: bool,
     pub track_study_time: bool,
-    
+
+    // Clustering Preferences
+    pub clustering_preferences: crate::nlp::clustering::ClusteringPreferences,
+    pub enable_preference_learning: bool,
+    pub enable_ab_testing: bool,
+
     // Import Preferences
     pub import_preferences: ImportPreferences,
 }
@@ -41,12 +46,12 @@ impl Default for AppSettings {
             // API Configuration
             youtube_api_key: None,
             gemini_api_key: None,
-            
+
             // General Settings
             theme: Some("corporate".to_string()),
             auto_structure: true,
             notifications_enabled: true,
-            
+
             // Course Defaults
             default_plan_settings: crate::types::PlanSettings {
                 start_date: chrono::Utc::now() + chrono::Duration::days(1),
@@ -56,11 +61,16 @@ impl Default for AppSettings {
                 advanced_settings: None,
             },
             auto_create_plan: false,
-            
+
             // Analytics Preferences
             analytics_enabled: true,
             track_study_time: true,
-            
+
+            // Clustering Preferences
+            clustering_preferences: crate::nlp::clustering::ClusteringPreferences::default(),
+            enable_preference_learning: true,
+            enable_ab_testing: false, // Disabled by default for stability
+
             // Import Preferences
             import_preferences: ImportPreferences::default(),
         }
@@ -159,7 +169,10 @@ impl AppSettings {
     }
 
     /// Update default plan settings and save
-    pub fn set_default_plan_settings(&mut self, settings: crate::types::PlanSettings) -> Result<()> {
+    pub fn set_default_plan_settings(
+        &mut self,
+        settings: crate::types::PlanSettings,
+    ) -> Result<()> {
         self.default_plan_settings = settings;
         self.save()
     }
@@ -178,6 +191,32 @@ impl AppSettings {
     /// Update notifications preference and save
     pub fn set_notifications_enabled(&mut self, enabled: bool) -> Result<()> {
         self.notifications_enabled = enabled;
+        self.save()
+    }
+
+    /// Update clustering preferences and save
+    pub fn set_clustering_preferences(
+        &mut self,
+        preferences: crate::nlp::clustering::ClusteringPreferences,
+    ) -> Result<()> {
+        self.clustering_preferences = preferences;
+        self.save()
+    }
+
+    /// Get clustering preferences
+    pub fn get_clustering_preferences(&self) -> &crate::nlp::clustering::ClusteringPreferences {
+        &self.clustering_preferences
+    }
+
+    /// Update preference learning setting and save
+    pub fn set_preference_learning_enabled(&mut self, enabled: bool) -> Result<()> {
+        self.enable_preference_learning = enabled;
+        self.save()
+    }
+
+    /// Update A/B testing setting and save
+    pub fn set_ab_testing_enabled(&mut self, enabled: bool) -> Result<()> {
+        self.enable_ab_testing = enabled;
         self.save()
     }
 }

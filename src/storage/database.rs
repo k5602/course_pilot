@@ -697,7 +697,7 @@ pub fn get_courses_by_clustering_quality(
                     id: parse_uuid_sqlite(&row.get::<_, String>(0)?, 0)?,
                     name: row.get(1)?,
                     created_at: DateTime::parse_from_rfc3339(&row.get::<_, String>(2)?)
-                        .map_err(|e| {
+                        .map_err(|_e| {
                             rusqlite::Error::InvalidColumnType(
                                 2,
                                 "created_at".to_string(),
@@ -859,7 +859,7 @@ pub fn get_similar_courses_by_clustering(
                     id: parse_uuid_sqlite(&row.get::<_, String>(0)?, 0)?,
                     name: row.get(1)?,
                     created_at: DateTime::parse_from_rfc3339(&row.get::<_, String>(2)?)
-                        .map_err(|e| {
+                        .map_err(|_e| {
                             rusqlite::Error::InvalidColumnType(
                                 2,
                                 "created_at".to_string(),
@@ -902,7 +902,7 @@ pub fn get_clustering_performance_history(
 
     let performance_iter = stmt.query_map(params![cutoff_date.to_rfc3339()], |row| {
         let created_at = DateTime::parse_from_rfc3339(&row.get::<_, String>(0)?)
-            .map_err(|e| {
+            .map_err(|_e| {
                 rusqlite::Error::InvalidColumnType(
                     0,
                     "created_at".to_string(),
