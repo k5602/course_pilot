@@ -91,6 +91,10 @@ inherits = "dev"
 [profile.android-dev]
 inherits = "dev"
 
+[profile.wasm-dev]
+inherits = "dev"
+opt-level = 1
+
 [features]
 default = []
 ffmpeg = ["ffmpeg-next"]

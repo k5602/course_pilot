@@ -13,7 +13,6 @@ use crate::ui::components::{ToastContainer, toast};
 use crate::ui::layout::AppShell;
 use crate::ui::theme_unified::{AppTheme, ThemeContext};
 
-/// Clean app initialization and context providers only
 #[component]
 pub fn AppRoot() -> Element {
     // Initialize core services
@@ -29,7 +28,7 @@ pub fn AppRoot() -> Element {
     use_theme_sync();
 
     rsx! {
-        document::Stylesheet { href: asset!("/assets/tailwind.out.css") }
+        document::Style { {include_str!("../../assets/tailwind.out.css")} }
         ToastContainer {}
         AppShell {}
     }
