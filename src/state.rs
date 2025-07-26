@@ -3,7 +3,7 @@
 //! This module provides safe state operations that prevent corruption
 //! by eliminating direct mutations and providing atomic updates.
 
-use crate::types::{AppState, Course, CourseStructure, ImportJob, ImportStatus, Route};
+use crate::types::{AppState, Course, CourseStructure, ImportJob, ImportStatus};
 use dioxus::prelude::*;
 use uuid::Uuid;
 
@@ -108,13 +108,8 @@ pub fn delete_course(mut app_state: Signal<AppState>, id: Uuid) -> StateResult<(
         return Err(StateError::CourseNotFound(id));
     }
 
-    // Navigate away from plan view if we're deleting the current course
-    if let Route::PlanView(current_id) = &state.current_route {
-        if *current_id == id {
-            state.current_route = Route::Dashboard;
-            log::info!("Navigated to dashboard after deleting current course");
-        }
-    }
+    // Note: Navigation is now handled by dioxus-router
+    // Components should use navigator.push() to navigate after deletion
 
     log::info!("Course {id} deleted successfully");
     Ok(())
@@ -192,30 +187,7 @@ fn generate_unique_name(app_state: Signal<AppState>, base_name: &str) -> StateRe
     Ok(new_name)
 }
 
-/// Navigate to a route with validation
-pub fn navigate_to(mut app_state: Signal<AppState>, route: Route) -> StateResult<()> {
-    // Validation
-    if let Route::PlanView(course_id) = &route {
-        if *course_id == Uuid::nil() {
-            return Err(StateError::NavigationError(
-                "Invalid course ID for plan view".to_string(),
-            ));
-        }
-
-        // Verify course exists
-        let state = app_state.read();
-        if !state.courses.iter().any(|c| c.id == *course_id) {
-            return Err(StateError::NavigationError(
-                "Course not found for plan view".to_string(),
-            ));
-        }
-    }
-
-    // Atomic update
-    app_state.write().current_route = route;
-    log::info!("Navigation completed successfully");
-    Ok(())
-}
+// Navigation is now handled by dioxus-router
 
 /// Start an import job
 pub fn start_import(mut app_state: Signal<AppState>, job: ImportJob) -> StateResult<()> {
@@ -300,10 +272,7 @@ pub fn get_courses(app_state: Signal<AppState>) -> Vec<Course> {
     app_state.read().courses.clone()
 }
 
-/// Get current route
-pub fn get_current_route(app_state: Signal<AppState>) -> Route {
-    app_state.read().current_route
-}
+// Current route is now accessed via use_route::<Route>() hook
 
 /// Get active import
 pub fn get_active_import(app_state: Signal<AppState>) -> Option<ImportJob> {
@@ -340,11 +309,7 @@ pub fn use_course(id: Uuid) -> Memo<Option<Course>> {
     })
 }
 
-/// Hook for reactive access to current route
-pub fn use_current_route() -> Memo<Route> {
-    let app_state = use_context::<Signal<AppState>>();
-    use_memo(move || app_state.read().current_route)
-}
+// Current route is now accessed via use_route::<Route>() hook from dioxus-router
 
 /// Hook for reactive access to active import
 pub fn use_active_import() -> Memo<Option<ImportJob>> {
@@ -364,10 +329,7 @@ pub fn use_course_stats() -> Memo<(usize, usize, usize)> {
     })
 }
 
-/// Hook for getting app state signal
-pub fn use_app_state() -> Signal<AppState> {
-    use_context::<Signal<AppState>>()
-}
+// App state hook is now in src/ui/hooks.rs
 
 /// Hook for getting tag statistics from notes
 pub fn use_tag_statistics() -> Memo<std::collections::HashMap<String, usize>> {

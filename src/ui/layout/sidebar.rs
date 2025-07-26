@@ -1,7 +1,6 @@
 use dioxus::prelude::*;
 use dioxus_free_icons::Icon;
 use dioxus_free_icons::icons::fa_solid_icons::{FaBook, FaGauge, FaGear};
-use uuid::Uuid;
 
 use crate::types::Route;
 use crate::ui::hooks::use_app_state;
@@ -13,19 +12,17 @@ const NAV_ITEMS: &[NavItem] = if cfg!(debug_assertions) {
         NavItem {
             icon: IconData::Dashboard,
             label: "Dashboard",
-            route: Route::Dashboard,
+            route: Route::Dashboard {},
         },
         NavItem {
             icon: IconData::LibraryBooks,
             label: "All Courses",
-            // TODO: This should lead to a dedicated 'all courses' view, not a specific plan.
-            // For now, we'll use a placeholder ID. A better approach would be a new Route variant.
-            route: Route::PlanView(Uuid::nil()),
+            route: Route::AllCourses {},
         },
         NavItem {
             icon: IconData::Settings,
             label: "Settings",
-            route: Route::Settings,
+            route: Route::Settings {},
         },
     ]
 } else {
@@ -33,17 +30,17 @@ const NAV_ITEMS: &[NavItem] = if cfg!(debug_assertions) {
         NavItem {
             icon: IconData::Dashboard,
             label: "Dashboard",
-            route: Route::Dashboard,
+            route: Route::Dashboard {},
         },
         NavItem {
             icon: IconData::LibraryBooks,
             label: "All Courses",
-            route: Route::PlanView(Uuid::nil()),
+            route: Route::AllCourses {},
         },
         NavItem {
             icon: IconData::Settings,
             label: "Settings",
-            route: Route::Settings,
+            route: Route::Settings {},
         },
     ]
 };
@@ -68,12 +65,7 @@ pub fn Sidebar(props: SidebarProps) -> Element {
         "-translate-x-full"
     };
 
-    let on_route_change = EventHandler::new({
-        let mut app_state = app_state;
-        move |new_route: Route| {
-            app_state.write().current_route = new_route;
-        }
-    });
+    // No longer need manual route change handler - router handles this
 
     rsx! {
         // Mobile backdrop overlay (DaisyUI drawer-overlay)
@@ -106,7 +98,6 @@ pub fn Sidebar(props: SidebarProps) -> Element {
                 // Navigation menu using DaisyUI menu component
                 SidebarNav {
                     current_route: props.current_route,
-                    on_route_change: on_route_change,
                     is_expanded: props.is_hovered || props.is_mobile_open
                 }
 
@@ -129,7 +120,6 @@ pub fn Sidebar(props: SidebarProps) -> Element {
 #[component]
 fn SidebarNav(
     current_route: Route,
-    on_route_change: EventHandler<Route>,
     is_expanded: bool,
 ) -> Element {
     rsx! {
@@ -144,7 +134,7 @@ fn SidebarNav(
                         label: item.label,
                         active: is_active,
                         is_expanded: is_expanded,
-                        on_click: move |_| on_route_change.call(item.route),
+                        route: item.route.clone(),
                     }
                 }
             })}
@@ -159,7 +149,7 @@ fn SidebarNavItem(
     label: &'static str,
     active: bool,
     is_expanded: bool,
-    on_click: EventHandler<MouseEvent>,
+    route: Route,
 ) -> Element {
     let active_class = if active { "menu-active" } else { "" };
     let tooltip_class = if !is_expanded {
@@ -171,10 +161,10 @@ fn SidebarNavItem(
     rsx! {
         li {
             class: "w-full",
-            a {
+            Link {
+                to: route,
                 class: "flex items-center gap-3 {active_class} {tooltip_class}",
                 "data-tip": if !is_expanded { label } else { "" },
-                onclick: move |evt| on_click.call(evt),
 
                 {icon}
 

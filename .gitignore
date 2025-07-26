@@ -95,3 +95,4 @@ assets/tailwind.out.css
 # GitHub Actions
 .github/copilot-instructions.md
 /.theme_config.toml
+/docs

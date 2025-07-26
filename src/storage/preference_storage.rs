@@ -151,7 +151,7 @@ impl PreferenceStorage {
             Ok(ClusteringPreferences {
                 similarity_threshold: row.get(0)?,
                 preferred_algorithm: serde_json::from_str(&row.get::<_, String>(1)?).map_err(
-                    |e| {
+                    |_e| {
                         rusqlite::Error::InvalidColumnType(
                             1,
                             "preferred_algorithm".to_string(),
@@ -160,7 +160,7 @@ impl PreferenceStorage {
                     },
                 )?,
                 preferred_strategy: serde_json::from_str(&row.get::<_, String>(2)?).map_err(
-                    |e| {
+                    |_e| {
                         rusqlite::Error::InvalidColumnType(
                             2,
                             "preferred_strategy".to_string(),
@@ -169,7 +169,7 @@ impl PreferenceStorage {
                     },
                 )?,
                 user_experience_level: serde_json::from_str(&row.get::<_, String>(3)?).map_err(
-                    |e| {
+                    |_e| {
                         rusqlite::Error::InvalidColumnType(
                             3,
                             "user_experience_level".to_string(),
@@ -182,7 +182,7 @@ impl PreferenceStorage {
                 enable_duration_balancing: row.get(6)?,
                 content_vs_duration_weight: row.get(7)?,
                 last_updated: chrono::DateTime::parse_from_rfc3339(&row.get::<_, String>(8)?)
-                    .map_err(|e| {
+                    .map_err(|_e| {
                         rusqlite::Error::InvalidColumnType(
                             8,
                             "last_updated".to_string(),
@@ -239,14 +239,14 @@ impl PreferenceStorage {
 
         let feedback_iter = stmt.query_map([], |row| {
             Ok(ClusteringFeedback {
-                id: Uuid::parse_str(&row.get::<_, String>(0)?).map_err(|e| {
+                id: Uuid::parse_str(&row.get::<_, String>(0)?).map_err(|_e| {
                     rusqlite::Error::InvalidColumnType(
                         0,
                         "id".to_string(),
                         rusqlite::types::Type::Text,
                     )
                 })?,
-                course_id: Uuid::parse_str(&row.get::<_, String>(1)?).map_err(|e| {
+                course_id: Uuid::parse_str(&row.get::<_, String>(1)?).map_err(|_e| {
                     rusqlite::Error::InvalidColumnType(
                         1,
                         "course_id".to_string(),
@@ -254,7 +254,7 @@ impl PreferenceStorage {
                     )
                 })?,
                 clustering_parameters: serde_json::from_str(&row.get::<_, String>(2)?).map_err(
-                    |e| {
+                    |_e| {
                         rusqlite::Error::InvalidColumnType(
                             2,
                             "clustering_parameters".to_string(),
@@ -262,7 +262,7 @@ impl PreferenceStorage {
                         )
                     },
                 )?,
-                feedback_type: serde_json::from_str(&row.get::<_, String>(3)?).map_err(|e| {
+                feedback_type: serde_json::from_str(&row.get::<_, String>(3)?).map_err(|_e| {
                     rusqlite::Error::InvalidColumnType(
                         3,
                         "feedback_type".to_string(),
@@ -272,7 +272,7 @@ impl PreferenceStorage {
                 rating: row.get(4)?,
                 comments: row.get(5)?,
                 manual_adjustments: serde_json::from_str(&row.get::<_, String>(6)?).map_err(
-                    |e| {
+                    |_e| {
                         rusqlite::Error::InvalidColumnType(
                             6,
                             "manual_adjustments".to_string(),
@@ -281,7 +281,7 @@ impl PreferenceStorage {
                     },
                 )?,
                 created_at: chrono::DateTime::parse_from_rfc3339(&row.get::<_, String>(7)?)
-                    .map_err(|e| {
+                    .map_err(|_e| {
                         rusqlite::Error::InvalidColumnType(
                             7,
                             "created_at".to_string(),
@@ -343,7 +343,7 @@ impl PreferenceStorage {
 
         let config_iter = stmt.query_map([], |row| {
             Ok(ABTestConfig {
-                id: Uuid::parse_str(&row.get::<_, String>(0)?).map_err(|e| {
+                id: Uuid::parse_str(&row.get::<_, String>(0)?).map_err(|_e| {
                     rusqlite::Error::InvalidColumnType(
                         0,
                         "id".to_string(),
@@ -352,28 +352,28 @@ impl PreferenceStorage {
                 })?,
                 name: row.get(1)?,
                 description: row.get(2)?,
-                algorithm_a: serde_json::from_str(&row.get::<_, String>(3)?).map_err(|e| {
+                algorithm_a: serde_json::from_str(&row.get::<_, String>(3)?).map_err(|_e| {
                     rusqlite::Error::InvalidColumnType(
                         3,
                         "algorithm_a".to_string(),
                         rusqlite::types::Type::Text,
                     )
                 })?,
-                algorithm_b: serde_json::from_str(&row.get::<_, String>(4)?).map_err(|e| {
+                algorithm_b: serde_json::from_str(&row.get::<_, String>(4)?).map_err(|_e| {
                     rusqlite::Error::InvalidColumnType(
                         4,
                         "algorithm_b".to_string(),
                         rusqlite::types::Type::Text,
                     )
                 })?,
-                parameters_a: serde_json::from_str(&row.get::<_, String>(5)?).map_err(|e| {
+                parameters_a: serde_json::from_str(&row.get::<_, String>(5)?).map_err(|_e| {
                     rusqlite::Error::InvalidColumnType(
                         5,
                         "parameters_a".to_string(),
                         rusqlite::types::Type::Text,
                     )
                 })?,
-                parameters_b: serde_json::from_str(&row.get::<_, String>(6)?).map_err(|e| {
+                parameters_b: serde_json::from_str(&row.get::<_, String>(6)?).map_err(|_e| {
                     rusqlite::Error::InvalidColumnType(
                         6,
                         "parameters_b".to_string(),
@@ -383,7 +383,7 @@ impl PreferenceStorage {
                 target_sample_size: row.get(7)?,
                 current_sample_size: row.get(8)?,
                 start_date: chrono::DateTime::parse_from_rfc3339(&row.get::<_, String>(9)?)
-                    .map_err(|e| {
+                    .map_err(|_e| {
                         rusqlite::Error::InvalidColumnType(
                             9,
                             "start_date".to_string(),
@@ -395,7 +395,7 @@ impl PreferenceStorage {
                     .get::<_, Option<String>>(10)?
                     .map(|s| chrono::DateTime::parse_from_rfc3339(&s))
                     .transpose()
-                    .map_err(|e| {
+                    .map_err(|_e| {
                         rusqlite::Error::InvalidColumnType(
                             10,
                             "end_date".to_string(),
@@ -457,28 +457,28 @@ impl PreferenceStorage {
 
         let result_iter = stmt.query_map([test_id.to_string()], |row| {
             Ok(ABTestResult {
-                test_id: Uuid::parse_str(&row.get::<_, String>(0)?).map_err(|e| {
+                test_id: Uuid::parse_str(&row.get::<_, String>(0)?).map_err(|_e| {
                     rusqlite::Error::InvalidColumnType(
                         0,
                         "test_id".to_string(),
                         rusqlite::types::Type::Text,
                     )
                 })?,
-                course_id: Uuid::parse_str(&row.get::<_, String>(1)?).map_err(|e| {
+                course_id: Uuid::parse_str(&row.get::<_, String>(1)?).map_err(|_e| {
                     rusqlite::Error::InvalidColumnType(
                         1,
                         "course_id".to_string(),
                         rusqlite::types::Type::Text,
                     )
                 })?,
-                variant: serde_json::from_str(&row.get::<_, String>(2)?).map_err(|e| {
+                variant: serde_json::from_str(&row.get::<_, String>(2)?).map_err(|_e| {
                     rusqlite::Error::InvalidColumnType(
                         2,
                         "variant".to_string(),
                         rusqlite::types::Type::Text,
                     )
                 })?,
-                parameters_used: serde_json::from_str(&row.get::<_, String>(3)?).map_err(|e| {
+                parameters_used: serde_json::from_str(&row.get::<_, String>(3)?).map_err(|_e| {
                     rusqlite::Error::InvalidColumnType(
                         3,
                         "parameters_used".to_string(),
@@ -491,7 +491,7 @@ impl PreferenceStorage {
                 user_made_adjustments: row.get(7)?,
                 adjustment_count: row.get(8)?,
                 timestamp: chrono::DateTime::parse_from_rfc3339(&row.get::<_, String>(9)?)
-                    .map_err(|e| {
+                    .map_err(|_e| {
                         rusqlite::Error::InvalidColumnType(
                             9,
                             "timestamp".to_string(),

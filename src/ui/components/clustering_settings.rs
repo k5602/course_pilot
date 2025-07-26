@@ -7,7 +7,7 @@ use crate::nlp::clustering::{
     ABTestConfig, ABTestResult, ABTestVariant, AdjustmentType, ClusteringFeedback,
     ClusteringPreferences, FeedbackType, ManualAdjustment,
 };
-use crate::types::{ClusteringAlgorithm, ClusteringStrategy, DifficultyLevel};
+use crate::types::{ClusteringAlgorithm, DifficultyLevel};
 use dioxus::prelude::*;
 use uuid::Uuid;
 

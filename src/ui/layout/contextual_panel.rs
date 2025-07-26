@@ -13,7 +13,7 @@ pub fn ContextualPanel() -> Element {
     let is_open = app_state.read().contextual_panel.is_open;
     let active_tab = app_state.read().contextual_panel.active_tab;
     let video_context = app_state.read().contextual_panel.video_context.clone();
-    let current_route = app_state.read().current_route;
+    let current_route = use_route::<Route>();
 
     // Debug logging
     log::info!(
@@ -24,7 +24,13 @@ pub fn ContextualPanel() -> Element {
 
     // Determine current course_id from route
     let current_course_id = match current_route {
-        Route::PlanView(course_id) => Some(course_id),
+        Route::PlanView { course_id } => {
+            // Parse course_id string to UUID
+            match uuid::Uuid::parse_str(&course_id) {
+                Ok(uuid) => Some(uuid),
+                Err(_) => None,
+            }
+        },
         _ => None,
     };
 

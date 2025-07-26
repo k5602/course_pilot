@@ -9,16 +9,16 @@ pub struct CourseManager {
     pub courses: Vec<Course>,
     pub is_loading: bool,
     pub error: Option<String>,
-    pub create_course: EventHandler<String>,
-    pub update_course: EventHandler<(Uuid, String)>,
-    pub delete_course: EventHandler<Uuid>,
-    pub navigate_to_course: EventHandler<Uuid>,
-    pub refresh: EventHandler<()>,
+    pub create_course: Callback<String>,
+    pub update_course: Callback<(Uuid, String)>,
+    pub delete_course: Callback<Uuid>,
+    pub navigate_to_course: Callback<Uuid>,
+    pub refresh: Callback<()>,
 }
 
 pub fn use_course_manager() -> CourseManager {
     let backend = crate::ui::hooks::use_backend_adapter();
-    let app_state = crate::ui::hooks::use_app_state();
+    let _app_state = crate::ui::hooks::use_app_state();
 
     // Load courses
     let backend_clone = backend.clone();
@@ -39,7 +39,7 @@ pub fn use_course_manager() -> CourseManager {
     };
 
     // Event handlers with state refresh
-    let create_course = EventHandler::new({
+    let create_course = use_callback({
         let backend = backend.clone();
         let courses_resource = courses_resource;
         move |name: String| {
@@ -64,7 +64,7 @@ pub fn use_course_manager() -> CourseManager {
         }
     });
 
-    let update_course = EventHandler::new({
+    let update_course = use_callback({
         let backend = backend.clone();
         let courses_resource = courses_resource;
         move |(course_id, new_name): (Uuid, String)| {
@@ -92,7 +92,7 @@ pub fn use_course_manager() -> CourseManager {
         }
     });
 
-    let delete_course = EventHandler::new({
+    let delete_course = use_callback({
         let backend = backend.clone();
         let courses_resource = courses_resource;
         move |course_id: Uuid| {
@@ -111,14 +111,14 @@ pub fn use_course_manager() -> CourseManager {
         }
     });
 
-    let navigate_to_course = EventHandler::new({
-        let mut app_state = app_state;
+    let navigate_to_course = use_callback({
+        let navigator = use_navigator();
         move |course_id: Uuid| {
-            app_state.write().current_route = Route::PlanView(course_id);
+            navigator.push(Route::PlanView { course_id: course_id.to_string() });
         }
     });
 
-    let refresh = EventHandler::new({
+    let refresh = use_callback({
         let mut courses_resource = courses_resource;
         move |_| {
             courses_resource.restart();

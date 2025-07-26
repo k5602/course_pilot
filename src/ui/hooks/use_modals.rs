@@ -4,25 +4,25 @@ use dioxus::prelude::*;
 #[derive(Clone)]
 pub struct ModalManager {
     pub is_open: bool,
-    pub open: EventHandler<()>,
-    pub close: EventHandler<()>,
-    pub toggle: EventHandler<()>,
+    pub open: Callback<()>,
+    pub close: Callback<()>,
+    pub toggle: Callback<()>,
 }
 
 pub fn use_modal_manager(initial_state: bool) -> ModalManager {
     let is_open = use_signal(|| initial_state);
 
-    let open = EventHandler::new({
+    let open = use_callback({
         let mut is_open = is_open;
         move |_| is_open.set(true)
     });
 
-    let close = EventHandler::new({
+    let close = use_callback({
         let mut is_open = is_open;
         move |_| is_open.set(false)
     });
 
-    let toggle = EventHandler::new({
+    let toggle = use_callback({
         let mut is_open = is_open;
         move |_| is_open.set(!is_open())
     });
@@ -39,8 +39,8 @@ pub fn use_modal_manager(initial_state: bool) -> ModalManager {
 #[derive(Clone)]
 pub struct FormManager<T: Clone + PartialEq + 'static> {
     pub value: T,
-    pub set_value: EventHandler<T>,
-    pub reset: EventHandler<()>,
+    pub set_value: Callback<T>,
+    pub reset: Callback<()>,
     pub is_dirty: bool,
 }
 
@@ -48,12 +48,12 @@ pub fn use_form_manager<T: Clone + PartialEq + 'static>(initial_value: T) -> For
     let value = use_signal(|| initial_value.clone());
     let initial_ref = use_signal(|| initial_value);
 
-    let set_value = EventHandler::new({
+    let set_value = use_callback({
         let mut value = value;
         move |new_value: T| value.set(new_value)
     });
 
-    let reset = EventHandler::new({
+    let reset = use_callback({
         let mut value = value;
         let initial_ref = initial_ref;
         move |_| value.set(initial_ref())

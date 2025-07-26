@@ -5,7 +5,8 @@ use dioxus_motion::prelude::*;
 use std::collections::HashSet;
 use uuid::Uuid;
 
-use crate::state::{set_video_context_and_open_notes, use_app_state};
+use crate::state::set_video_context_and_open_notes;
+use crate::ui::hooks::use_app_state;
 use crate::types::{Plan, PlanItem, VideoContext};
 use crate::ui::components::Badge;
 use crate::ui::components::toast::toast;

@@ -14,9 +14,9 @@ dioxus-ssr = "0.6"
 dioxus = { version = "0.6.3", features = ["desktop", "macro", "hooks"] }
 dioxus-desktop = "0.6.3"
 dioxus-router = "0.6.3" 
+dioxus-signals = "0.6.3"
 dioxus-hooks = "0.6.2"
 dioxus-sdk = "0.6.0"
-dioxus-signals = "0.6.3"
 
 # Asset management
 manganis = "0.6.2"

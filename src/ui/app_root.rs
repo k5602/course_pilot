@@ -10,7 +10,7 @@ use crate::storage::database::Database;
 use crate::types::{AppState, Route};
 use crate::ui::backend_adapter::Backend;
 use crate::ui::components::{ToastContainer, toast};
-use crate::ui::layout::AppShell;
+use crate::ui::state_management;
 use crate::ui::theme_unified::{AppTheme, ThemeContext};
 
 #[component]
@@ -24,13 +24,16 @@ pub fn AppRoot() -> Element {
     provide_context(services.backend);
     provide_context(services.app_state);
 
+    // Initialize modern state management
+    state_management::initialize_global_state(services.app_state);
+
     // Handle theme synchronization
     use_theme_sync();
 
     rsx! {
         document::Style { {include_str!("../../assets/tailwind.out.css")} }
         ToastContainer {}
-        AppShell {}
+        Router::<Route> {}
     }
 }
 
@@ -76,7 +79,6 @@ fn load_initial_state(db: &Arc<Database>) -> AppState {
         courses,
         plans,
         notes,
-        current_route: Route::Dashboard,
         active_import: None,
         contextual_panel: Default::default(),
         sidebar_open_mobile: false,

@@ -8,4 +8,6 @@ pub mod layout;
 pub mod navigation;
 pub mod notes_panel;
 pub mod plan_view;
+pub mod routes;
+pub mod state_management;
 pub mod theme_unified;

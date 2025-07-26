@@ -4,55 +4,16 @@ use dioxus_motion::prelude::*;
 use super::{ContextualPanel, Sidebar};
 use crate::types::Route;
 use crate::ui::components::top_bar::TopBar;
-use crate::ui::dashboard::Dashboard;
 use crate::ui::hooks::use_app_state;
 use crate::ui::navigation::Breadcrumbs;
-use crate::ui::plan_view::PlanView;
 
-/// Render content based on current route
-fn render_route_content(route: Route) -> Element {
-    match route {
-        Route::Dashboard => rsx!(Dashboard {}),
-        Route::PlanView(course_id) => rsx!(PlanView {
-            course_id: course_id
-        }),
-        Route::Settings => rsx! {
-            div {
-                class: "p-8",
-                h1 { class: "text-3xl font-bold mb-4", "Settings" }
-                p { class: "text-base-content/70", "Configure your Course Pilot preferences here." }
-            }
-        },
-        Route::AddCourse => rsx! {
-            div {
-                class: "p-8",
-                h1 { class: "text-3xl font-bold mb-4", "Add Course" }
-                p { class: "text-base-content/70", "Add a new course to your collection." }
-            }
-        },
-        Route::AllCourses => rsx! {
-            div {
-                class: "p-8",
-                h1 { class: "text-3xl font-bold mb-4", "All Courses" }
-                p { class: "text-base-content/70", "Manage all your courses here." }
-            }
-        },
-        #[cfg(debug_assertions)]
-        Route::ToastTest => rsx! {
-            div {
-                class: "p-8",
-                h1 { class: "text-3xl font-bold mb-4", "Toast Test" }
-                p { class: "text-base-content/70", "Test toast notifications." }
-            }
-        },
-    }
-}
+// Route components are now in src/ui/routes.rs
 
 /// Clean app shell with integrated layout management
 #[component]
 pub fn AppShell() -> Element {
     let app_state = use_app_state();
-    let current_route = app_state.read().current_route;
+    let current_route = use_route::<Route>();
     let sidebar_open_mobile = app_state.read().sidebar_open_mobile;
     let panel_is_open = app_state.read().contextual_panel.is_open;
 
@@ -101,7 +62,7 @@ pub fn AppShell() -> Element {
                 class: "h-full flex flex-row",
 
                 Sidebar {
-                    current_route: current_route,
+                    current_route: current_route.clone(),
                     is_mobile_open: sidebar_open_mobile,
                     is_hovered: is_sidebar_hovered(),
                     on_hover: move |hover_state| is_sidebar_hovered.set(hover_state),
@@ -120,7 +81,7 @@ pub fn AppShell() -> Element {
 
                     div {
                         class: "flex-1 overflow-y-auto",
-                        {render_route_content(current_route)}
+                        Outlet::<Route> {}
                     }
                 }
 

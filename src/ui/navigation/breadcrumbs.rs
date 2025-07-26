@@ -19,7 +19,7 @@ pub fn Breadcrumbs(current_route: Route) -> Element {
             ul {
                 class: "flex items-center space-x-2",
                 {nav_manager.breadcrumbs.iter().enumerate().map(|(idx, item)| {
-                    render_breadcrumb_item(item, idx, nav_manager.breadcrumbs.len(), &nav_manager.navigate_to)
+                    render_breadcrumb_item(item, idx, nav_manager.breadcrumbs.len())
                 })}
             }
         }
@@ -31,22 +31,19 @@ fn render_breadcrumb_item(
     item: &BreadcrumbItem,
     idx: usize,
     total: usize,
-    navigate_to: &EventHandler<Route>,
 ) -> Element {
     let is_last = idx == total - 1;
-    let item_route = item.route;
-    let navigate_to = *navigate_to;
 
     rsx! {
         li {
             key: "{idx}",
             class: "flex items-center",
 
-            if let Some(route) = item_route {
+            if let Some(route) = &item.route {
                 if !is_last {
-                    button {
+                    Link {
+                        to: route.clone(),
                         class: "link link-hover text-base-content/70 hover:text-base-content",
-                        onclick: move |_| navigate_to.call(route),
                         "{item.label}"
                     }
                 } else {

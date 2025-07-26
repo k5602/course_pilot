@@ -3,6 +3,12 @@ use serde::{Deserialize, Serialize};
 use std::collections::HashSet;
 use std::time::Duration;
 use uuid::Uuid;
+use dioxus::prelude::*;
+
+// Import route components for the Routable derive
+use crate::ui::routes::{Home, Dashboard, AllCourses, PlanView, Settings, AddCourse};
+#[cfg(debug_assertions)]
+use crate::ui::routes::ToastTest;
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub struct Course {
@@ -429,22 +435,34 @@ pub struct AppState {
     pub courses: Vec<Course>,
     pub plans: Vec<Plan>,
     pub notes: Vec<Note>,
-    pub current_route: Route,
     pub active_import: Option<ImportJob>,
     pub contextual_panel: ContextualPanelState,
     pub sidebar_open_mobile: bool,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Default)]
+#[derive(Clone, Debug, PartialEq, dioxus_router::prelude::Routable)]
 pub enum Route {
-    #[default]
-    Dashboard, // Analytics hub with learning insights
-    AllCourses,     // Dedicated course management view
-    PlanView(Uuid), // Individual course plan view
-    Settings,       // Comprehensive settings interface
-    AddCourse,      // Course import interface
+    #[route("/")]
+    Home {},
+    
+    #[route("/dashboard")]
+    Dashboard {},
+    
+    #[route("/courses")]
+    AllCourses {},
+    
+    #[route("/plan/:course_id")]
+    PlanView { course_id: String },
+    
+    #[route("/settings")]
+    Settings {},
+    
+    #[route("/import")]
+    AddCourse {},
+    
     #[cfg(debug_assertions)]
-    ToastTest,
+    #[route("/toast-test")]
+    ToastTest {},
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
@@ -492,7 +510,6 @@ impl Default for AppState {
             courses: Vec::new(),
             plans: Vec::new(),
             notes: Vec::new(),
-            current_route: Route::Dashboard,
             active_import: None,
             contextual_panel: ContextualPanelState::default(),
             sidebar_open_mobile: false,

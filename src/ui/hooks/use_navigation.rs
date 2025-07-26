@@ -13,29 +13,29 @@ pub struct BreadcrumbItem {
 pub struct NavigationManager {
     pub current_route: Route,
     pub breadcrumbs: Vec<BreadcrumbItem>,
-    pub navigate_to: EventHandler<Route>,
-    pub go_back: EventHandler<()>,
+    pub navigate_to: Callback<Route>,
+    pub go_back: Callback<()>,
 }
 
 pub fn use_navigation_manager() -> NavigationManager {
     let app_state = crate::ui::hooks::use_app_state();
-    let current_route = app_state.read().current_route;
+    let current_route = use_route::<Route>();
+    let navigator = use_navigator();
     let courses = app_state.read().courses.clone();
 
-    let breadcrumbs = generate_breadcrumbs(current_route, &courses);
+    let breadcrumbs = generate_breadcrumbs(current_route.clone(), &courses);
 
-    let navigate_to = EventHandler::new({
-        let mut app_state = app_state;
+    let navigate_to = use_callback({
+        let navigator = navigator.clone();
         move |route: Route| {
-            app_state.write().current_route = route;
+            navigator.push(route);
         }
     });
 
-    let go_back = EventHandler::new({
-        let mut app_state = app_state;
+    let go_back = use_callback({
+        let navigator = navigator.clone();
         move |_| {
-            // Simple back navigation - go to dashboard
-            app_state.write().current_route = Route::Dashboard;
+            navigator.go_back();
         }
     });
 
@@ -50,22 +50,37 @@ pub fn use_navigation_manager() -> NavigationManager {
 /// Generate breadcrumbs based on current route
 fn generate_breadcrumbs(current_route: Route, courses: &[Course]) -> Vec<BreadcrumbItem> {
     match current_route {
-        Route::Dashboard => vec![BreadcrumbItem {
+        Route::Home {} => vec![BreadcrumbItem {
+            label: "Home".to_string(),
+            route: None,
+            active: true,
+        }],
+        Route::Dashboard {} => vec![BreadcrumbItem {
             label: "Dashboard".to_string(),
             route: None,
             active: true,
         }],
-        Route::PlanView(course_id) => {
+        Route::PlanView { course_id } => {
+            // Parse course_id string to UUID
+            let course_uuid = match uuid::Uuid::parse_str(&course_id) {
+                Ok(uuid) => uuid,
+                Err(_) => return vec![BreadcrumbItem {
+                    label: "Invalid Course".to_string(),
+                    route: None,
+                    active: true,
+                }],
+            };
+            
             let course_name = courses
                 .iter()
-                .find(|c| c.id == course_id)
+                .find(|c| c.id == course_uuid)
                 .map(|c| c.name.clone())
                 .unwrap_or_else(|| "Unknown Course".to_string());
 
             vec![
                 BreadcrumbItem {
                     label: "Dashboard".to_string(),
-                    route: Some(Route::Dashboard),
+                    route: Some(Route::Dashboard {}),
                     active: false,
                 },
                 BreadcrumbItem {
@@ -75,10 +90,10 @@ fn generate_breadcrumbs(current_route: Route, courses: &[Course]) -> Vec<Breadcr
                 },
             ]
         }
-        Route::Settings => vec![
+        Route::Settings {} => vec![
             BreadcrumbItem {
                 label: "Dashboard".to_string(),
-                route: Some(Route::Dashboard),
+                route: Some(Route::Dashboard {}),
                 active: false,
             },
             BreadcrumbItem {
@@ -87,10 +102,10 @@ fn generate_breadcrumbs(current_route: Route, courses: &[Course]) -> Vec<Breadcr
                 active: true,
             },
         ],
-        Route::AddCourse => vec![
+        Route::AddCourse {} => vec![
             BreadcrumbItem {
                 label: "Dashboard".to_string(),
-                route: Some(Route::Dashboard),
+                route: Some(Route::Dashboard {}),
                 active: false,
             },
             BreadcrumbItem {
@@ -99,10 +114,10 @@ fn generate_breadcrumbs(current_route: Route, courses: &[Course]) -> Vec<Breadcr
                 active: true,
             },
         ],
-        Route::AllCourses => vec![
+        Route::AllCourses {} => vec![
             BreadcrumbItem {
                 label: "Dashboard".to_string(),
-                route: Some(Route::Dashboard),
+                route: Some(Route::Dashboard {}),
                 active: false,
             },
             BreadcrumbItem {
@@ -112,10 +127,10 @@ fn generate_breadcrumbs(current_route: Route, courses: &[Course]) -> Vec<Breadcr
             },
         ],
         #[cfg(debug_assertions)]
-        Route::ToastTest => vec![
+        Route::ToastTest {} => vec![
             BreadcrumbItem {
                 label: "Dashboard".to_string(),
-                route: Some(Route::Dashboard),
+                route: Some(Route::Dashboard {}),
                 active: false,
             },
             BreadcrumbItem {
