@@ -47,10 +47,10 @@ pub fn CourseCard(props: CourseCardProps) -> Element {
             }
         }),
         EventHandler::new({
-            let backend = crate::ui::backend_adapter::use_backend_adapter();
+            let plan_manager = crate::ui::hooks::use_plan_manager();
             let course_manager = course_manager.clone();
             move |_| {
-                let backend = backend.clone();
+                let plan_manager = plan_manager.clone();
                 let course_manager = course_manager.clone();
                 spawn(async move {
                     crate::ui::components::toast::toast::info("Creating study plan...");
@@ -64,19 +64,9 @@ pub fn CourseCard(props: CourseCardProps) -> Element {
                         advanced_settings: None,
                     };
 
-                    match backend.generate_plan(props.course.id, settings).await {
-                        Ok(_plan) => {
-                            crate::ui::components::toast::toast::success(
-                                "Study plan created successfully!",
-                            );
-                            course_manager.refresh.call(());
-                        }
-                        Err(e) => {
-                            crate::ui::components::toast::toast::error(format!(
-                                "Failed to create study plan: {e}"
-                            ));
-                        }
-                    }
+                    // Call the callback (which handles the async work and toast messages internally)
+                    plan_manager.generate_plan.call((props.course.id, settings));
+                    course_manager.refresh.call(());
                 });
             }
         }),
@@ -87,27 +77,17 @@ pub fn CourseCard(props: CourseCardProps) -> Element {
             }
         }),
         EventHandler::new({
-            let backend = crate::ui::backend_adapter::use_backend_adapter();
+            let analytics_manager = crate::ui::hooks::use_analytics_manager();
             let course_manager = course_manager.clone();
             move |_| {
-                let backend = backend.clone();
+                let analytics_manager = analytics_manager.clone();
                 let course_manager = course_manager.clone();
                 spawn(async move {
                     crate::ui::components::toast::toast::info("Structuring course content...");
 
-                    match backend.structure_course(props.course.id).await {
-                        Ok(_) => {
-                            crate::ui::components::toast::toast::success(
-                                "Course structured successfully!",
-                            );
-                            course_manager.refresh.call(());
-                        }
-                        Err(e) => {
-                            crate::ui::components::toast::toast::error(format!(
-                                "Failed to structure course: {e}"
-                            ));
-                        }
-                    }
+                    // Call the callback (which handles the async work and toast messages internally)
+                    analytics_manager.structure_course.call(props.course.id);
+                    course_manager.refresh.call(());
                 });
             }
         }),
@@ -133,53 +113,28 @@ pub fn CourseCard(props: CourseCardProps) -> Element {
 
     // Handle export with format selection
     let handle_export_with_format = {
-        let backend = crate::ui::backend_adapter::use_backend_adapter();
+        let export_manager = crate::ui::hooks::use_export_manager();
         let course_id = props.course.id;
 
         move |format| {
-            let backend = backend.clone();
+            let export_manager = export_manager.clone();
             let course_id = course_id;
 
             spawn(async move {
                 crate::ui::components::toast::toast::info(format!("Preparing {format} export..."));
 
-                // Use the progress version for better user feedback
-                match backend
-                    .export_course_with_progress(course_id, format, |progress, message| {
+                // Call the callback (which handles the async work and toast messages internally)
+                export_manager.export_course_with_progress.call((
+                    course_id, 
+                    format, 
+                    Box::new(|progress, message| {
                         // Update toast with progress information
                         let progress_percent = (progress * 100.0).round() as u8;
                         crate::ui::components::toast::toast::info(format!(
                             "{message} ({progress_percent}%)"
                         ));
                     })
-                    .await
-                {
-                    Ok(export_result) => {
-                        // Save the exported data to a file
-                        match backend.save_export_data(export_result).await {
-                            Ok(path) => {
-                                crate::ui::components::toast::toast::success(format!(
-                                    "Course exported successfully! Saved to: {}",
-                                    path.display()
-                                ));
-                            }
-                            Err(e) => {
-                                if e.to_string().contains("cancelled") {
-                                    crate::ui::components::toast::toast::info("Export cancelled");
-                                } else {
-                                    crate::ui::components::toast::toast::error(format!(
-                                        "Failed to save export: {e}"
-                                    ));
-                                }
-                            }
-                        }
-                    }
-                    Err(e) => {
-                        crate::ui::components::toast::toast::error(format!(
-                            "Failed to export course: {e}"
-                        ));
-                    }
-                }
+                ));
             });
         }
     };

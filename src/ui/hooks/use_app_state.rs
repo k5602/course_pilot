@@ -8,6 +8,7 @@ pub fn use_app_state() -> Signal<AppState> {
 }
 
 /// Hook for accessing the backend adapter
-pub fn use_backend_adapter() -> std::sync::Arc<crate::ui::backend_adapter::Backend> {
-    use_context::<std::sync::Arc<crate::ui::backend_adapter::Backend>>()
+/// This now uses the new hook-based backend instead of the old adapter
+pub fn use_backend_adapter() -> super::use_backend::Backend {
+    super::use_backend::use_backend()
 }

@@ -1,5 +1,4 @@
 pub mod app_root;
-pub mod backend_adapter;
 pub mod components;
 pub mod dashboard;
 pub mod error_handling;

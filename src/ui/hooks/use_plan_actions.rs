@@ -1,21 +1,45 @@
+use crate::storage::database::Database;
 use crate::types::Plan;
 use crate::ui::components::toast::toast;
 use dioxus::prelude::*;
 use uuid::Uuid;
+use anyhow::Result;
+use std::sync::Arc;
 
 /// Hook for toggling plan item completion status
 pub fn use_toggle_plan_item_action() -> Callback<(Uuid, usize)> {
-    let backend = crate::ui::hooks::use_backend_adapter();
+    let db = use_context::<Arc<Database>>();
 
     use_callback(move |(plan_id, item_index): (Uuid, usize)| {
-        let backend = backend.clone();
+        let db = db.clone();
         spawn(async move {
-            match backend
-                .update_plan_item_completion(plan_id, item_index, true)
-                .await
-            {
-                Ok(_) => {
+            let result = tokio::task::spawn_blocking(move || {
+                // Load plan
+                let mut plan = crate::storage::load_plan(&db, &plan_id)?
+                    .ok_or_else(|| anyhow::anyhow!("Plan not found: {}", plan_id))?;
+
+                // Validate item index
+                if item_index >= plan.items.len() {
+                    return Err(anyhow::anyhow!(
+                        "Plan item index {} out of bounds (plan has {} items)",
+                        item_index,
+                        plan.items.len()
+                    ));
+                }
+
+                // Update item completion status
+                plan.items[item_index].completed = true;
+
+                // Save updated plan
+                crate::storage::save_plan(&db, &plan).map_err(Into::into)
+            }).await;
+
+            match result {
+                Ok(Ok(_)) => {
                     toast::success("Item status updated");
+                }
+                Ok(Err(e)) => {
+                    toast::error(format!("Failed to update item: {e}"));
                 }
                 Err(e) => {
                     toast::error(format!("Failed to update item: {e}"));
@@ -27,10 +51,14 @@ pub fn use_toggle_plan_item_action() -> Callback<(Uuid, usize)> {
 
 /// Hook for managing plan resources
 pub fn use_plan_resource(course_id: Uuid) -> Resource<Result<Option<Plan>, anyhow::Error>> {
-    let backend = crate::ui::hooks::use_backend_adapter();
+    let db = use_context::<Arc<Database>>();
 
     use_resource(move || {
-        let backend = backend.clone();
-        async move { backend.get_plan_by_course(course_id).await }
+        let db = db.clone();
+        async move {
+            tokio::task::spawn_blocking(move || {
+                crate::storage::get_plan_by_course_id(&db, &course_id).map_err(Into::into)
+            }).await.unwrap_or_else(|e| Err(anyhow::anyhow!("Join error: {}", e)))
+        }
     })
 }

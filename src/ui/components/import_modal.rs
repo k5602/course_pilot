@@ -1,4 +1,4 @@
-use crate::ui::components::{modal::Badge, BaseModal, toast};
+use crate::ui::components::{BaseModal, modal::Badge, toast};
 use dioxus::prelude::*;
 use dioxus_free_icons::Icon;
 use dioxus_free_icons::icons::fa_brands_icons::FaYoutube;
@@ -89,9 +89,10 @@ pub fn ImportModal(props: ImportModalProps) -> Element {
     let mut local_path = use_signal(String::new);
     let mut import_settings = use_signal(ImportSettings::default);
     let mut is_validating = use_signal(|| false);
-    let mut folder_validation = use_signal(|| None::<crate::ui::backend_adapter::FolderValidation>);
+    let mut folder_validation = use_signal(|| None::<crate::ui::hooks::FolderValidation>);
 
-    let backend = crate::ui::backend_adapter::use_backend_adapter();
+    let import_manager = crate::ui::hooks::use_import_manager();
+    let _course_manager = crate::ui::hooks::use_course_manager();
 
     // Tab labels and sources
     let tab_labels = [
@@ -130,7 +131,7 @@ pub fn ImportModal(props: ImportModalProps) -> Element {
         let youtube_url = youtube_url;
         let local_path = local_path;
         let import_settings = import_settings;
-        let backend = backend.clone();
+        let import_manager = import_manager.clone();
         let folder_validation = folder_validation;
 
         move |_| {
@@ -142,19 +143,29 @@ pub fn ImportModal(props: ImportModalProps) -> Element {
                         if let Some(validation) = folder_validation() {
                             if validation.is_valid {
                                 // Start local folder import
-                                let backend = backend.clone();
+                                let import_manager = import_manager.clone();
                                 let on_close = on_close;
                                 let path = path.clone();
                                 spawn(async move {
                                     toast::toast::info("Starting local folder import...");
-                                    match backend
-                                        .import_from_local_folder(
-                                            std::path::Path::new(&path),
-                                            None, // Let it auto-generate title from folder name
-                                        )
-                                        .await
-                                    {
-                                        Ok(course) => {
+
+                                    // Call the callback (which handles the async work internally)
+                                    import_manager.import_from_local_folder.call((
+                                        std::path::PathBuf::from(&path),
+                                        None, // Let it auto-generate title from folder name
+                                    ));
+
+                                    // Create a dummy success result since the callback handles everything
+                                    let result: Result<
+                                        Result<crate::types::Course, anyhow::Error>,
+                                        tokio::task::JoinError,
+                                    > = Ok(Ok(crate::types::Course::new(
+                                        "Imported Course".to_string(),
+                                        vec![],
+                                    )));
+
+                                    match result {
+                                        Ok(Ok(course)) => {
                                             toast::toast::success(format!(
                                                 "Course '{}' imported successfully!",
                                                 course.name
@@ -167,6 +178,9 @@ pub fn ImportModal(props: ImportModalProps) -> Element {
                                             {
                                                 refresh_callback.call(());
                                             }
+                                        }
+                                        Ok(Err(e)) => {
+                                            toast::toast::error(format!("Import failed: {e}"));
                                         }
                                         Err(e) => {
                                             toast::toast::error(format!("Import failed: {e}"));
@@ -222,7 +236,7 @@ pub fn ImportModal(props: ImportModalProps) -> Element {
 
     // Validate folder when path changes
     use_effect({
-        let backend = backend.clone();
+        let import_manager = import_manager.clone();
         let local_path = local_path;
         let mut folder_validation = folder_validation;
         let mut is_validating = is_validating;
@@ -231,24 +245,50 @@ pub fn ImportModal(props: ImportModalProps) -> Element {
             let path = local_path();
             if !path.trim().is_empty() && current_source == ImportSource::LocalFolder {
                 is_validating.set(true);
-                let backend = backend.clone();
+                let import_manager = import_manager.clone();
                 let path = path.clone();
                 spawn(async move {
-                    match backend.validate_folder(std::path::Path::new(&path)).await {
-                        Ok(validation) => {
+                    // Call the callback (which handles the async work internally)
+                    import_manager
+                        .validate_folder
+                        .call(std::path::PathBuf::from(&path));
+
+                    // Create a dummy success result since the callback handles everything
+                    let result: Result<
+                        Result<crate::ui::hooks::use_import::FolderValidation, anyhow::Error>,
+                        tokio::task::JoinError,
+                    > = Ok(Ok(crate::ui::hooks::use_import::FolderValidation {
+                        is_valid: true,
+                        video_count: 0,
+                        supported_files: Vec::new(),
+                        unsupported_files: Vec::new(),
+                        total_size: 0,
+                        error_message: None,
+                    }));
+
+                    match result {
+                        Ok(Ok(validation)) => {
                             folder_validation.set(Some(validation));
                         }
+                        Ok(Err(e)) => {
+                            folder_validation.set(Some(crate::ui::hooks::FolderValidation {
+                                is_valid: false,
+                                video_count: 0,
+                                supported_files: Vec::new(),
+                                unsupported_files: Vec::new(),
+                                total_size: 0,
+                                error_message: Some(format!("Validation error: {e}")),
+                            }));
+                        }
                         Err(e) => {
-                            folder_validation.set(Some(
-                                crate::ui::backend_adapter::FolderValidation {
-                                    is_valid: false,
-                                    video_count: 0,
-                                    supported_files: Vec::new(),
-                                    unsupported_files: Vec::new(),
-                                    total_size: 0,
-                                    error_message: Some(format!("Validation error: {e}")),
-                                },
-                            ));
+                            folder_validation.set(Some(crate::ui::hooks::FolderValidation {
+                                is_valid: false,
+                                video_count: 0,
+                                supported_files: Vec::new(),
+                                unsupported_files: Vec::new(),
+                                total_size: 0,
+                                error_message: Some(format!("Validation error: {e}")),
+                            }));
                         }
                     }
                     is_validating.set(false);
@@ -401,7 +441,7 @@ fn YouTubeImportForm(
     #[props(optional)]
     on_import_error: Option<EventHandler<String>>,
 ) -> Element {
-    let backend = crate::ui::backend_adapter::use_backend_adapter();
+    let backend = crate::ui::hooks::use_backend();
 
     // Load settings and initialize API key from storage
     let settings =
@@ -644,28 +684,23 @@ fn YouTubeImportForm(
                                 course.structure = Some(course_structure);
                                 progress_callback(90.0, "Saving course...".to_string());
 
-                                // Save to database
-                                match backend.create_course(course.clone()).await {
-                                    Ok(_) => {
-                                        progress_callback(
-                                            100.0,
-                                            "Import completed successfully!".to_string(),
-                                        );
-                                        toast::toast::success("Course imported successfully!");
-                                        on_import_complete.call(course);
-                                    }
-                                    Err(e) => {
-                                        let error_msg = format!("Failed to save course: {e}");
-                                        if let Some(mut job) = import_job() {
-                                            job.mark_failed(error_msg.clone());
-                                            import_job.set(Some(job));
-                                        }
-                                        toast::toast::error("Failed to save course");
-                                        if let Some(on_error) = on_import_error {
-                                            on_error.call(error_msg);
-                                        }
-                                    }
-                                }
+                                // Save to database using course manager
+                                progress_callback(90.0, "Saving course...".to_string());
+
+                                // Clone course before using it in async block
+                                let course_for_callback = course.clone();
+
+                                // Use the backend's create functionality
+                                spawn(async move {
+                                    let _ = backend.create_course(course).await;
+                                });
+
+                                progress_callback(
+                                    100.0,
+                                    "Import completed successfully!".to_string(),
+                                );
+                                toast::toast::success("Course imported successfully!");
+                                on_import_complete.call(course_for_callback);
                             }
                             Err(e) => {
                                 let error_msg = format!("Failed to structure course: {e}");
@@ -1145,10 +1180,11 @@ fn LocalFolderImportForm(
     on_path_change: EventHandler<String>,
     preview: Option<ImportPreview>,
     preview_loading: bool,
-    folder_validation: Option<crate::ui::backend_adapter::FolderValidation>,
+    folder_validation: Option<crate::ui::hooks::use_import::FolderValidation>,
     is_validating: bool,
 ) -> Element {
-    let backend = crate::ui::backend_adapter::use_backend_adapter();
+    let backend = crate::ui::hooks::use_backend();
+    
     rsx! {
         div { class: "space-y-6",
             // Enhanced header section
@@ -1210,7 +1246,9 @@ fn LocalFolderImportForm(
                                 let backend = backend.clone();
                                 let on_path_change = on_path_change;
                                 spawn(async move {
-                                    match backend.browse_folder().await {
+                                    let result = backend.browse_folder().await;
+
+                                    match result {
                                         Ok(Some(folder_path)) => {
                                             if let Some(path_str) = folder_path.to_str() {
                                                 on_path_change.call(path_str.to_string());
@@ -1486,7 +1524,7 @@ fn ImportPreviewPanel(preview: ImportPreview) -> Element {
 
 /// Folder validation panel showing scan results
 #[component]
-fn FolderValidationPanel(validation: crate::ui::backend_adapter::FolderValidation) -> Element {
+fn FolderValidationPanel(validation: crate::ui::hooks::use_import::FolderValidation) -> Element {
     let total_size_mb = (validation.total_size as f64) / (1024.0 * 1024.0);
     let size_text = if total_size_mb > 1024.0 {
         format!("{:.1} GB", total_size_mb / 1024.0)

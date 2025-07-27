@@ -13,8 +13,8 @@ use crate::state::{
 };
 use crate::storage::database::Database;
 use crate::types::{AppState, Route};
-use crate::ui::backend_adapter::Backend;
 use crate::ui::components::{ToastContainer, toast};
+// Backend hooks are accessed through individual components
 use crate::ui::theme_unified::{AppTheme, ThemeContext};
 
 #[component]
@@ -25,7 +25,7 @@ pub fn AppRoot() -> Element {
     // Provide all contexts
     use_context_provider(|| Signal::new(ThemeContext::new()));
     toast::provide_toast_manager();
-    provide_context(services.backend);
+    provide_context(services.database);
     provide_context(services.app_state);
 
     // Handle theme synchronization
@@ -64,20 +64,19 @@ fn AppWithContexts(app_state: Signal<AppState>) -> Element {
 
 /// Initialize core application services
 struct AppServices {
-    backend: Arc<Backend>,
+    database: Arc<Database>,
     app_state: Signal<AppState>,
 }
 
 fn use_app_services() -> AppServices {
     let db_path = PathBuf::from("course_pilot.db");
     let db = Arc::new(Database::new(&db_path).expect("Failed to initialize database"));
-    let backend = Arc::new(Backend::new(db.clone()));
 
     // Load initial data
     let initial_state = load_initial_state(&db);
     let app_state = use_signal(|| initial_state);
 
-    AppServices { backend, app_state }
+    AppServices { database: db, app_state }
 }
 
 /// Load initial application state from database

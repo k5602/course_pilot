@@ -5,14 +5,12 @@ use dioxus_free_icons::icons::fa_solid_icons::{
 };
 use dioxus_motion::prelude::*;
 
-use std::sync::Arc;
-
 use crate::types::{
     AdvancedSchedulerSettings, DifficultyLevel, DistributionStrategy, Plan, PlanSettings,
     RegenerationStatus,
 };
-use crate::ui::backend_adapter::Backend;
 use crate::ui::components::toast::toast;
+use crate::ui::hooks::use_backend;
 
 #[derive(Props, PartialEq, Clone)]
 pub struct SessionControlPanelProps {
@@ -50,8 +48,8 @@ pub fn SessionControlPanel(props: SessionControlPanelProps) -> Element {
     let mut regeneration_status = use_signal(|| RegenerationStatus::Idle);
     let mut show_advanced = use_signal(|| false);
 
-    // Backend context
-    let backend = use_context::<Arc<Backend>>();
+    // Backend hook
+    let backend = use_backend();
 
     // Animation for panel expansion
     let mut panel_height = use_motion(0.0f32);

@@ -1,8 +1,8 @@
 use crate::export::ExportFormat;
-use crate::ui::backend_adapter::Backend;
 use crate::ui::components::progress::ProgressRing;
 use crate::ui::components::toast::toast;
 use crate::ui::components::{DropdownItem, DropdownTrigger, UnifiedDropdown};
+use crate::ui::hooks::use_backend;
 use dioxus::prelude::*;
 use dioxus_free_icons::Icon;
 use dioxus_free_icons::icons::fa_solid_icons::{FaCheck, FaClock};
@@ -18,7 +18,7 @@ pub struct PlanHeaderProps {
 /// Enhanced plan header component with DaisyUI styling and accessibility
 #[component]
 pub fn PlanHeader(props: PlanHeaderProps) -> Element {
-    let backend = use_context::<std::sync::Arc<Backend>>();
+    let backend = use_backend();
 
     // Export action handler with proper error handling
     let handle_export = move |format: ExportFormat, format_name: &str| {
@@ -29,7 +29,7 @@ pub fn PlanHeader(props: PlanHeaderProps) -> Element {
         spawn(async move {
             toast::info(format!("Exporting plan as {format_name}..."));
             match backend.export_plan(plan_id, format).await {
-                Ok(export_result) => match backend.save_export_data(export_result).await {
+                Ok(export_result) => match backend.export.save_export_data(export_result).await {
                     Ok(file_path) => {
                         toast::success(format!(
                             "Plan exported successfully to {}",
