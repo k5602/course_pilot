@@ -1,5 +1,6 @@
 //! exports for all reusable UI components in Course Pilot.
 pub mod accordion;
+pub mod base;
 pub mod breadcrumb;
 pub mod button;
 pub mod card;
@@ -17,6 +18,7 @@ pub mod toast;
 pub mod top_bar;
 
 // exports for convenience
+pub use base::{BaseCard, BaseModal, BaseButton, BaseList, BasePage, BaseListItem};
 pub use clustering_settings::{ABTestResults, ClusteringSettings, ManualAdjustmentInterface};
 pub use dropdown::{DropdownItem, DropdownTrigger, UnifiedDropdown};
 pub use import_modal::{

@@ -1,5 +1,5 @@
 use crate::export::ExportFormat;
-use crate::ui::components::modal::Modal;
+use crate::ui::components::BaseModal;
 use dioxus::prelude::*;
 
 #[derive(Props, PartialEq, Clone)]
@@ -38,8 +38,11 @@ pub fn ExportFormatDialog(props: ExportFormatDialogProps) -> Element {
     };
 
     rsx! {
-        Modal {
-            variant: crate::ui::components::modal::form_modal(rsx! {
+        BaseModal {
+            open: props.open,
+            on_close: props.on_close,
+            title: Some(props.title.clone().unwrap_or_else(|| "Select Export Format".to_string())),
+            actions: Some(rsx! {
                 button {
                     class: "btn btn-ghost",
                     onclick: move |_| props.on_close.call(()),
@@ -51,9 +54,6 @@ pub fn ExportFormatDialog(props: ExportFormatDialogProps) -> Element {
                     "Export"
                 }
             }),
-            open: props.open,
-            on_close: props.on_close,
-            title: props.title.clone().unwrap_or_else(|| "Select Export Format".to_string()),
 
             div { class: "space-y-4",
                 div { class: "form-control",

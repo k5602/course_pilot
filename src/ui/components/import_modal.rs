@@ -1,4 +1,4 @@
-use crate::ui::components::{modal::Badge, modal::Modal, toast};
+use crate::ui::components::{modal::Badge, BaseModal, toast};
 use dioxus::prelude::*;
 use dioxus_free_icons::Icon;
 use dioxus_free_icons::icons::fa_brands_icons::FaYoutube;
@@ -271,8 +271,12 @@ pub fn ImportModal(props: ImportModalProps) -> Element {
     });
 
     rsx! {
-        Modal {
-            variant: crate::ui::components::modal::form_modal(rsx! {
+        BaseModal {
+            open: props.open,
+            on_close: props.on_close,
+            title: Some("Import Course Content".to_string()),
+            size: "modal-box max-w-4xl",
+            actions: Some(rsx! {
                 button {
                     class: "btn btn-ghost btn-sm",
                     onclick: move |_| props.on_close.call(()),
@@ -291,10 +295,6 @@ pub fn ImportModal(props: ImportModalProps) -> Element {
                     }
                 }
             }),
-            open: props.open,
-            on_close: props.on_close,
-            title: "Import Course Content".to_string(),
-            size: Some("lg".to_string()),
 
             div { class: "space-y-6",
                 // Enhanced header with description
