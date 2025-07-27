@@ -7,12 +7,12 @@ use crate::types::Route;
 #[component]
 pub fn Home() -> Element {
     let navigator = use_navigator();
-    
+
     // Redirect to dashboard
     use_effect(move || {
         navigator.push(Route::Dashboard {});
     });
-    
+
     rsx! {
         div { class: "p-8",
             "Redirecting to dashboard..."
@@ -36,10 +36,10 @@ pub fn PlanView(course_id: String) -> Element {
                     h1 { class: "text-3xl font-bold mb-4 text-error", "Invalid Course ID" }
                     p { class: "text-base-content/70", "The course ID '{course_id}' is not valid." }
                 }
-            }
+            };
         }
     };
-    
+
     rsx! { crate::ui::plan_view::PlanView { course_id: course_uuid } }
 }
 

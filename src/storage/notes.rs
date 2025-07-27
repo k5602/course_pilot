@@ -33,7 +33,7 @@ pub fn init_notes_table(conn: &Connection) -> Result<()> {
         .query_map([], |row| row.get(1))?
         .collect::<std::result::Result<Vec<String>, _>>()?;
 
-    log::info!("Existing columns in notes table: {:?}", columns);
+    log::info!("Existing columns in notes table: {columns:?}");
 
     if !columns.iter().any(|c| c == "tags") {
         log::info!("Adding tags column to notes table");
@@ -56,11 +56,11 @@ pub fn init_notes_table(conn: &Connection) -> Result<()> {
                 log::info!("Successfully added video_index column");
                 // Create the index after adding the column
                 if let Err(e) = conn.execute("CREATE INDEX IF NOT EXISTS idx_notes_course_video_index ON notes(course_id, video_index);", []) {
-                    log::warn!("Failed to create index for video_index: {}", e);
+                    log::warn!("Failed to create index for video_index: {e}");
                 }
             }
             Err(e) => {
-                log::error!("Failed to add video_index column: {}", e);
+                log::error!("Failed to add video_index column: {e}");
                 return Err(anyhow::anyhow!("Failed to add video_index column: {}", e));
             }
         }
@@ -72,7 +72,7 @@ pub fn init_notes_table(conn: &Connection) -> Result<()> {
         .query_map([], |row| row.get(1))?
         .collect::<std::result::Result<Vec<String>, _>>()?;
 
-    log::info!("Final columns in notes table: {:?}", final_columns);
+    log::info!("Final columns in notes table: {final_columns:?}");
 
     if !final_columns.iter().any(|c| c == "video_index") {
         log::error!("video_index column still missing after migration attempt");

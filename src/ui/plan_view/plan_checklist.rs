@@ -249,7 +249,7 @@ pub fn PlanChecklistItem(props: PlanChecklistItemProps) -> Element {
         move |_| {
             let new_state = !local_completed();
             local_completed.set(new_state);
-            toggle_completion(plan_id, item_index, new_state);
+            toggle_completion((plan_id, item_index));
         }
     };
 

@@ -5,11 +5,11 @@ use dioxus_motion::prelude::*;
 use std::collections::HashSet;
 use uuid::Uuid;
 
-use crate::state::set_video_context_and_open_notes;
-use crate::ui::hooks::use_app_state;
+use crate::state::set_video_context_and_open_notes_reactive;
 use crate::types::{Plan, PlanItem, VideoContext};
 use crate::ui::components::Badge;
 use crate::ui::components::toast::toast;
+use crate::ui::hooks::use_app_state;
 use crate::ui::hooks::use_toggle_plan_item_action;
 
 /// Session group data structure for organizing plan items by date
@@ -389,7 +389,7 @@ fn VideoItem(props: VideoItemProps) -> Element {
         let item_index = props.item_index;
         let mut local_completed = local_completed;
         let mut is_updating = is_updating;
-        let toggle_completion = toggle_completion.clone();
+        let toggle_completion = toggle_completion;
 
         move |_| {
             let new_state = !local_completed();
@@ -397,12 +397,12 @@ fn VideoItem(props: VideoItemProps) -> Element {
             is_updating.set(true);
 
             // Clone values for the async block
-            let toggle_completion = toggle_completion.clone();
+            let toggle_completion = toggle_completion;
             let mut is_updating = is_updating;
 
             // Optimistic update with backend sync
             spawn(async move {
-                toggle_completion(plan_id, item_index, new_state);
+                toggle_completion((plan_id, item_index));
 
                 // Small delay to show loading state
                 tokio::time::sleep(tokio::time::Duration::from_millis(300)).await;
@@ -420,7 +420,7 @@ fn VideoItem(props: VideoItemProps) -> Element {
     let notes_handler = {
         let course_id = props.course_id;
         let item = props.item.clone();
-        let app_state = app_state;
+        let _app_state = app_state;
 
         move |_| {
             let video_context = VideoContext {
@@ -430,7 +430,7 @@ fn VideoItem(props: VideoItemProps) -> Element {
                 module_title: item.module_title.clone(),
             };
 
-            if let Err(e) = set_video_context_and_open_notes(app_state, video_context) {
+            if let Err(e) = set_video_context_and_open_notes_reactive(video_context) {
                 toast::error(format!("Failed to open notes: {e}"));
             } else {
                 toast::success("Notes panel opened for this video");

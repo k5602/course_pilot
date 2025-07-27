@@ -327,7 +327,7 @@ pub fn FeedbackModal(
     on_close: EventHandler<()>,
 ) -> Element {
     let mut rating = use_signal(|| 3.0);
-    let mut comments = use_signal(|| String::new());
+    let mut comments = use_signal(String::new);
     let mut feedback_type = use_signal(|| FeedbackType::ExplicitRating);
 
     let handle_submit = move |_| {
@@ -539,9 +539,9 @@ pub fn ManualAdjustmentInterface(
     modules: Vec<crate::types::Module>,
     on_adjustment: EventHandler<ManualAdjustment>,
 ) -> Element {
-    let mut selected_videos = use_signal(|| Vec::<usize>::new());
+    let mut selected_videos = use_signal(Vec::<usize>::new);
     let mut target_module = use_signal(|| 0usize);
-    let mut adjustment_reason = use_signal(|| String::new());
+    let mut adjustment_reason = use_signal(String::new);
 
     rsx! {
         div { class: "card bg-base-100 shadow-xl",

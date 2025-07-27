@@ -6,11 +6,15 @@ use std::fmt;
 use std::path::PathBuf;
 use std::sync::Arc;
 
+use crate::state::{
+    ContextualPanelContextProvider, CourseContextProvider, ImportContextProvider,
+    MobileSidebarContextProvider, NotesContextProvider, PlanContextProvider,
+    initialize_global_state,
+};
 use crate::storage::database::Database;
 use crate::types::{AppState, Route};
 use crate::ui::backend_adapter::Backend;
 use crate::ui::components::{ToastContainer, toast};
-use crate::ui::state_management;
 use crate::ui::theme_unified::{AppTheme, ThemeContext};
 
 #[component]
@@ -24,15 +28,36 @@ pub fn AppRoot() -> Element {
     provide_context(services.backend);
     provide_context(services.app_state);
 
-    // Initialize modern state management
-    state_management::initialize_global_state(services.app_state);
-
     // Handle theme synchronization
     use_theme_sync();
 
     rsx! {
         document::Style { {include_str!("../../assets/tailwind.out.css")} }
         ToastContainer {}
+
+        // Wrap the app with modern context providers
+        CourseContextProvider {
+            NotesContextProvider {
+                PlanContextProvider {
+                    ImportContextProvider {
+                        ContextualPanelContextProvider {
+                            MobileSidebarContextProvider {
+                                AppWithContexts { app_state: services.app_state }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+#[component]
+fn AppWithContexts(app_state: Signal<AppState>) -> Element {
+    // Initialize modern state management after contexts are provided
+    initialize_global_state(app_state);
+
+    rsx! {
         Router::<Route> {}
     }
 }

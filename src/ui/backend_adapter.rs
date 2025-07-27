@@ -970,10 +970,9 @@ impl Backend {
             // First validate the folder
             let validation = Self::validate_folder_sync(&folder_path)?;
             if !validation.is_valid {
-                return Err(anyhow::anyhow!("Invalid folder: {}", 
+                return Err(anyhow::anyhow!("Invalid folder: {}",
                     validation.error_message.unwrap_or_else(|| "Unknown error".to_string())));
             }
-            
             // Generate course title
             let course_title = course_title.unwrap_or_else(|| {
                 folder_path.file_name()
@@ -981,7 +980,6 @@ impl Backend {
                     .unwrap_or("Imported Course")
                     .to_string()
             });
-            
             // Check if a course with the same title and similar content already exists
             let existing_courses = storage::load_courses(&db)?;
             for existing_course in &existing_courses {
@@ -995,7 +993,6 @@ impl Backend {
                     }
                 }
             }
-            
             // Use the ingest module to import from local folder
             crate::ingest::local_folder::import_from_folder(&db, &folder_path, &course_title)
                 .map_err(|e| anyhow::anyhow!("Local folder import failed: {}", e))

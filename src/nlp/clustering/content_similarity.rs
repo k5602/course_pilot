@@ -443,7 +443,7 @@ impl ContentClusterer for TfIdfAnalyzer {
                 .into_iter()
                 .map(|index| super::VideoWithMetadata {
                     index,
-                    title: format!("Video {}", index), // This will be populated by caller
+                    title: format!("Video {index}"), // This will be populated by caller
                     duration: durations.get(index).copied().unwrap_or_default(),
                     feature_vector: cluster.centroid.clone(),
                     difficulty_score: 0.5, // Will be calculated by caller

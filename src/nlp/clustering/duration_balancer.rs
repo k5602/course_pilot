@@ -516,7 +516,7 @@ impl DurationBalancer {
             combined_duration.as_secs() as f32 / self.target_session_duration.as_secs() as f32;
 
         // Prefer merges that result in good utilization (70-100%)
-        let utilization_score = if target_utilization >= 0.7 && target_utilization <= 1.0 {
+        let utilization_score = if (0.7..=1.0).contains(&target_utilization) {
             target_utilization
         } else if target_utilization < 0.7 {
             target_utilization * 0.8 // Penalize under-utilization

@@ -16,21 +16,14 @@ pub fn ContextualPanel() -> Element {
     let current_route = use_route::<Route>();
 
     // Debug logging
-    log::info!(
-        "ContextualPanel render: is_open={}, active_tab={:?}",
-        is_open,
-        active_tab
-    );
+    log::info!("ContextualPanel render: is_open={is_open}, active_tab={active_tab:?}");
 
     // Determine current course_id from route
     let current_course_id = match current_route {
         Route::PlanView { course_id } => {
             // Parse course_id string to UUID
-            match uuid::Uuid::parse_str(&course_id) {
-                Ok(uuid) => Some(uuid),
-                Err(_) => None,
-            }
-        },
+            uuid::Uuid::parse_str(&course_id).ok()
+        }
         _ => None,
     };
 

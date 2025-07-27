@@ -46,7 +46,7 @@ pub fn SessionControlPanel(props: SessionControlPanelProps) -> Element {
     let mut cognitive_load_balancing = use_signal(|| advanced_settings().cognitive_load_balancing);
 
     // Form validation and regeneration state
-    let mut form_errors = use_signal(|| Vec::<String>::new());
+    let mut form_errors = use_signal(Vec::<String>::new);
     let mut regeneration_status = use_signal(|| RegenerationStatus::Idle);
     let mut show_advanced = use_signal(|| false);
 
@@ -166,7 +166,7 @@ pub fn SessionControlPanel(props: SessionControlPanelProps) -> Element {
 
         let plan_id = props.plan.id;
         let backend_clone = backend.clone();
-        let on_plan_regenerated = props.on_plan_regenerated.clone();
+        let on_plan_regenerated = props.on_plan_regenerated;
 
         spawn(async move {
             // Use the simpler regenerate_plan method without progress callback
@@ -185,7 +185,7 @@ pub fn SessionControlPanel(props: SessionControlPanelProps) -> Element {
                     regeneration_status.set(RegenerationStatus::Failed {
                         error: e.to_string(),
                     });
-                    toast::error(&format!("Failed to regenerate plan: {}", e));
+                    toast::error(format!("Failed to regenerate plan: {e}"));
                 }
             }
         });

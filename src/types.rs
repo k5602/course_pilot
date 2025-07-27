@@ -1,14 +1,14 @@
 use chrono::{DateTime, Utc};
+use dioxus::prelude::*;
 use serde::{Deserialize, Serialize};
 use std::collections::HashSet;
 use std::time::Duration;
 use uuid::Uuid;
-use dioxus::prelude::*;
 
 // Import route components for the Routable derive
-use crate::ui::routes::{Home, Dashboard, AllCourses, PlanView, Settings, AddCourse};
 #[cfg(debug_assertions)]
 use crate::ui::routes::ToastTest;
+use crate::ui::routes::{AddCourse, AllCourses, Dashboard, Home, PlanView, Settings};
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub struct Course {
@@ -93,7 +93,7 @@ pub struct ModuleRationale {
 }
 
 /// Performance metrics for clustering operations
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Default)]
 pub struct PerformanceMetrics {
     /// Total processing time in milliseconds
     pub total_processing_time_ms: u64,
@@ -122,8 +122,9 @@ pub struct InputMetrics {
 }
 
 /// Clustering algorithm types
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, Hash)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, Hash, Default)]
 pub enum ClusteringAlgorithm {
+    #[default]
     TfIdf,
     KMeans,
     Hierarchical,
@@ -133,12 +134,13 @@ pub enum ClusteringAlgorithm {
 }
 
 /// Clustering strategy selection
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, Hash)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, Hash, Default)]
 pub enum ClusteringStrategy {
     ContentBased,
     DurationBased,
     Hierarchical,
     Lda,
+    #[default]
     Hybrid,
     Fallback,
 }
@@ -323,10 +325,11 @@ pub struct AdvancedSchedulerSettings {
 }
 
 /// Distribution strategies for course content scheduling
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Default)]
 pub enum DistributionStrategy {
     ModuleBased,
     TimeBased,
+    #[default]
     Hybrid,
     DifficultyBased,
     SpacedRepetition,
@@ -334,9 +337,12 @@ pub enum DistributionStrategy {
 }
 
 /// Content difficulty levels for adaptive scheduling
-#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq, PartialOrd, Ord, Hash)]
+#[derive(
+    Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq, PartialOrd, Ord, Hash, Default,
+)]
 pub enum DifficultyLevel {
     Beginner,
+    #[default]
     Intermediate,
     Advanced,
     Expert,
@@ -430,7 +436,7 @@ pub enum ImportStatus {
     Failed,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Default)]
 pub struct AppState {
     pub courses: Vec<Course>,
     pub plans: Vec<Plan>,
@@ -444,22 +450,22 @@ pub struct AppState {
 pub enum Route {
     #[route("/")]
     Home {},
-    
+
     #[route("/dashboard")]
     Dashboard {},
-    
+
     #[route("/courses")]
     AllCourses {},
-    
+
     #[route("/plan/:course_id")]
     PlanView { course_id: String },
-    
+
     #[route("/settings")]
     Settings {},
-    
+
     #[route("/import")]
     AddCourse {},
-    
+
     #[cfg(debug_assertions)]
     #[route("/toast-test")]
     ToastTest {},
@@ -487,7 +493,7 @@ pub struct VideoContext {
     pub module_title: String,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct ContextualPanelState {
     pub is_open: bool,
     pub active_tab: ContextualPanelTab,
@@ -500,19 +506,6 @@ impl Default for ContextualPanelState {
             is_open: false, // Closed by default, user can open via button
             active_tab: ContextualPanelTab::Notes,
             video_context: None,
-        }
-    }
-}
-
-impl Default for AppState {
-    fn default() -> Self {
-        Self {
-            courses: Vec::new(),
-            plans: Vec::new(),
-            notes: Vec::new(),
-            active_import: None,
-            contextual_panel: ContextualPanelState::default(),
-            sidebar_open_mobile: false,
         }
     }
 }
@@ -693,7 +686,7 @@ impl AdvancedSchedulerSettings {
         }
 
         if let Some(max_duration) = self.max_session_duration_minutes {
-            if max_duration < 15 || max_duration > 300 {
+            if !(15..=300).contains(&max_duration) {
                 return Err("Session duration must be between 15 and 300 minutes".to_string());
             }
         }
@@ -764,12 +757,6 @@ impl AdvancedSchedulerSettings {
     }
 }
 
-impl Default for DistributionStrategy {
-    fn default() -> Self {
-        DistributionStrategy::Hybrid
-    }
-}
-
 impl Default for ClusteringMetadata {
     fn default() -> Self {
         Self {
@@ -811,20 +798,6 @@ impl Default for ClusteringRationale {
     }
 }
 
-impl Default for PerformanceMetrics {
-    fn default() -> Self {
-        Self {
-            total_processing_time_ms: 0,
-            content_analysis_time_ms: 0,
-            clustering_time_ms: 0,
-            optimization_time_ms: 0,
-            peak_memory_usage_bytes: 0,
-            algorithm_iterations: 0,
-            input_metrics: InputMetrics::default(),
-        }
-    }
-}
-
 impl Default for InputMetrics {
     fn default() -> Self {
         Self {
@@ -834,24 +807,6 @@ impl Default for InputMetrics {
             average_title_length: 0.0,
             content_diversity_score: 0.0,
         }
-    }
-}
-
-impl Default for ClusteringAlgorithm {
-    fn default() -> Self {
-        ClusteringAlgorithm::TfIdf
-    }
-}
-
-impl Default for ClusteringStrategy {
-    fn default() -> Self {
-        ClusteringStrategy::Hybrid
-    }
-}
-
-impl Default for DifficultyLevel {
-    fn default() -> Self {
-        DifficultyLevel::Intermediate
     }
 }
 
@@ -1026,14 +981,14 @@ pub mod duration_utils {
 
         if hours > 0 {
             if minutes > 0 {
-                format!("{}h {}m", hours, minutes)
+                format!("{hours}h {minutes}m")
             } else {
-                format!("{}h", hours)
+                format!("{hours}h")
             }
         } else if minutes > 0 {
-            format!("{}m", minutes)
+            format!("{minutes}m")
         } else {
-            format!("{}s", seconds)
+            format!("{seconds}s")
         }
     }
 
@@ -1045,14 +1000,14 @@ pub mod duration_utils {
 
         if hours > 0 {
             if minutes > 0 {
-                format!("{} hours {} minutes", hours, minutes)
+                format!("{hours} hours {minutes} minutes")
             } else {
-                format!("{} hours", hours)
+                format!("{hours} hours")
             }
         } else if minutes > 0 {
-            format!("{} minutes", minutes)
+            format!("{minutes} minutes")
         } else {
-            format!("{} seconds", total_seconds)
+            format!("{total_seconds} seconds")
         }
     }
 
@@ -1060,10 +1015,10 @@ pub mod duration_utils {
     pub fn format_duration_decimal_hours(duration: Duration) -> String {
         let hours = duration.as_secs() as f32 / 3600.0;
         if hours >= 1.0 {
-            format!("{:.1} hours", hours)
+            format!("{hours:.1} hours")
         } else {
             let minutes = duration.as_secs() / 60;
-            format!("{} minutes", minutes)
+            format!("{minutes} minutes")
         }
     }
 

@@ -156,7 +156,7 @@ impl LdaClusterer {
         for doc_topics in &lda_model.document_topics {
             topic_groups
                 .entry(doc_topics.dominant_topic)
-                .or_insert_with(Vec::new)
+                .or_default()
                 .push(doc_topics.document_id);
         }
 
@@ -315,8 +315,7 @@ impl LdaClusterer {
             .zip(topic_assignments.iter_mut())
             .enumerate()
         {
-            for (_word_pos, (&word_id, topic)) in doc.iter().zip(assignments.iter_mut()).enumerate()
-            {
+            for (&word_id, topic) in doc.iter().zip(assignments.iter_mut()) {
                 // Remove current assignment from counts
                 doc_topic_counts[doc_id][*topic] -= 1;
                 topic_word_counts[*topic][word_id] -= 1;
@@ -573,7 +572,7 @@ impl LdaClusterer {
 
                 secondary_groups
                     .entry(secondary_topic)
-                    .or_insert_with(Vec::new)
+                    .or_default()
                     .push(video_id);
             }
         }
@@ -685,7 +684,7 @@ impl ContentClusterer for LdaClusterer {
             .map(|(i, _)| {
                 // Create placeholder feature vectors - these will be replaced by topic distributions
                 let mut features = HashMap::new();
-                features.insert(format!("doc_{}", i), 1.0);
+                features.insert(format!("doc_{i}"), 1.0);
                 FeatureVector::new(features)
             })
             .collect();
@@ -731,7 +730,7 @@ impl ContentClusterer for LdaClusterer {
                 .into_iter()
                 .map(|index| VideoWithMetadata {
                     index,
-                    title: format!("Video {}", index), // This will be populated by caller
+                    title: format!("Video {index}"), // This will be populated by caller
                     duration: durations.get(index).copied().unwrap_or_default(),
                     feature_vector: cluster.centroid.clone(),
                     difficulty_score: 0.5, // Will be calculated by caller

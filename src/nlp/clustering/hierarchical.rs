@@ -36,6 +36,7 @@ pub enum LinkageMethod {
 /// Internal cluster node for hierarchical clustering
 #[derive(Debug, Clone)]
 struct ClusterNode {
+    #[allow(dead_code)] // Used for debugging and future tree operations
     id: usize,
     points: Vec<usize>,
     centroid: FeatureVector,
@@ -47,6 +48,7 @@ struct ClusterNode {
 /// Distance matrix for hierarchical clustering
 struct DistanceMatrix {
     distances: Vec<Vec<f32>>,
+    #[allow(dead_code)] // Used for validation and debugging
     size: usize,
 }
 
@@ -549,7 +551,7 @@ impl ContentClusterer for HierarchicalClusterer {
                 .into_iter()
                 .map(|index| VideoWithMetadata {
                     index,
-                    title: format!("Video {}", index), // This will be populated by caller
+                    title: format!("Video {index}"), // This will be populated by caller
                     duration: durations.get(index).copied().unwrap_or_default(),
                     feature_vector: cluster.centroid.clone(),
                     difficulty_score: 0.5, // Will be calculated by caller

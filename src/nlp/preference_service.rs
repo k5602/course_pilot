@@ -446,10 +446,7 @@ impl AutoTuningService {
         let avg_satisfaction: f32 =
             recent_feedback.iter().map(|f| f.rating).sum::<f32>() / recent_feedback.len() as f32;
 
-        log::info!(
-            "Average satisfaction over last 30 days: {:.2}",
-            avg_satisfaction
-        );
+        log::info!("Average satisfaction over last 30 days: {avg_satisfaction:.2}");
 
         // If satisfaction is low, suggest parameter adjustments
         if avg_satisfaction < 0.6 {
@@ -485,7 +482,7 @@ impl AutoTuningService {
 
         loop {
             if let Err(e) = self.run_auto_tuning().await {
-                log::error!("Auto-tuning failed: {}", e);
+                log::error!("Auto-tuning failed: {e}");
             }
 
             tokio::time::sleep(interval).await;

@@ -103,7 +103,7 @@ pub async fn import_and_structure_youtube(
 
     let (sections, metadata) = youtube::import_from_youtube(url, api_key)
         .await
-        .map_err(|e| ImportError::Network(format!("YouTube import failed: {}", e)))?;
+        .map_err(|e| ImportError::Network(format!("YouTube import failed: {e}")))?;
 
     progress_callback(ImportProgress {
         stage: ImportStage::Importing,
@@ -149,7 +149,7 @@ pub async fn import_and_structure_youtube(
     });
 
     crate::storage::save_course(db, &course)
-        .map_err(|e| ImportError::Database(format!("Failed to save course: {}", e)))?;
+        .map_err(|e| ImportError::Database(format!("Failed to save course: {e}")))?;
 
     // Stage 6: Complete
     progress_callback(ImportProgress {
@@ -189,7 +189,7 @@ pub async fn import_and_structure_local_folder(
     });
 
     let sections = local_folder::import_from_local_folder(folder_path)
-        .map_err(|e| ImportError::FileSystem(format!("Folder import failed: {}", e)))?;
+        .map_err(|e| ImportError::FileSystem(format!("Folder import failed: {e}")))?;
 
     progress_callback(ImportProgress {
         stage: ImportStage::Importing,
@@ -234,7 +234,7 @@ pub async fn import_and_structure_local_folder(
     });
 
     crate::storage::save_course(db, &course)
-        .map_err(|e| ImportError::Database(format!("Failed to save course: {}", e)))?;
+        .map_err(|e| ImportError::Database(format!("Failed to save course: {e}")))?;
 
     // Stage 6: Complete
     progress_callback(ImportProgress {
@@ -270,7 +270,7 @@ fn structure_course_with_progress(
     std::thread::sleep(std::time::Duration::from_millis(100));
     progress_callback(4, "Finalizing structure...".to_string());
 
-    structure_course(titles).map_err(|e| ImportError::Network(format!("Clustering failed: {}", e)))
+    structure_course(titles).map_err(|e| ImportError::Network(format!("Clustering failed: {e}")))
 }
 
 /// Create import job for tracking

@@ -94,7 +94,7 @@ pub fn ImportModal(props: ImportModalProps) -> Element {
     let backend = crate::ui::backend_adapter::use_backend_adapter();
 
     // Tab labels and sources
-    let tab_labels = vec![
+    let tab_labels = [
         "Local Course".to_string(),
         "YouTube".to_string(),
         "Other Resources".to_string(),

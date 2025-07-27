@@ -133,8 +133,7 @@ pub fn sections_to_videos_with_metadata_for_user(
 
     sections
         .iter()
-        .enumerate()
-        .map(|(_i, section)| VideoWithMetadata {
+        .map(|section| VideoWithMetadata {
             index: section.video_index,
             title: section.title.clone(),
             duration: section.duration,

@@ -25,7 +25,7 @@ fn parse_uuid_sqlite(s: &str, idx: usize) -> Result<Uuid, rusqlite::Error> {
 /// Helper function to parse JSON from string, returning rusqlite::Error
 fn parse_json_sqlite<T: serde::de::DeserializeOwned>(s: &str) -> Result<T, rusqlite::Error> {
     serde_json::from_str(s).map_err(|e| {
-        rusqlite::Error::InvalidColumnType(0, format!("json: {}", e), rusqlite::types::Type::Text)
+        rusqlite::Error::InvalidColumnType(0, format!("json: {e}"), rusqlite::types::Type::Text)
     })
 }
 
@@ -166,10 +166,9 @@ fn init_tables(conn: &mut Connection) -> Result<(), DatabaseError> {
 
     // Initialize notes table with proper migration logic
     crate::storage::notes::init_notes_table(conn).map_err(|e| {
-        DatabaseError::Io(std::io::Error::new(
-            std::io::ErrorKind::Other,
-            format!("Notes table initialization failed: {}", e),
-        ))
+        DatabaseError::Io(std::io::Error::other(format!(
+            "Notes table initialization failed: {e}"
+        )))
     })?;
 
     // Start a new transaction for the remaining operations

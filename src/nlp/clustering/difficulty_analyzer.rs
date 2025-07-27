@@ -301,10 +301,10 @@ impl DifficultyAnalyzer {
 
             // Ideal progression is gradual increase
             match diff {
-                d if d >= -0.05 && d <= 0.15 => quality_score += 1.0, // Good progression
-                d if d >= -0.1 && d <= 0.25 => quality_score += 0.7,  // Acceptable
-                d if d >= -0.2 && d <= 0.35 => quality_score += 0.4,  // Suboptimal
-                _ => quality_score += 0.0,                            // Poor progression
+                d if (-0.05..=0.15).contains(&d) => quality_score += 1.0, // Good progression
+                d if (-0.1..=0.25).contains(&d) => quality_score += 0.7,  // Acceptable
+                d if (-0.2..=0.35).contains(&d) => quality_score += 0.4,  // Suboptimal
+                _ => quality_score += 0.0,                                // Poor progression
             }
         }
 

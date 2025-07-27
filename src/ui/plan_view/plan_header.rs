@@ -27,7 +27,7 @@ pub fn PlanHeader(props: PlanHeaderProps) -> Element {
         let format_name = format_name.to_string();
 
         spawn(async move {
-            toast::info(format!("Exporting plan as {}...", format_name));
+            toast::info(format!("Exporting plan as {format_name}..."));
             match backend.export_plan(plan_id, format).await {
                 Ok(export_result) => match backend.save_export_data(export_result).await {
                     Ok(file_path) => {
@@ -37,11 +37,11 @@ pub fn PlanHeader(props: PlanHeaderProps) -> Element {
                         ));
                     }
                     Err(e) => {
-                        toast::error(format!("Failed to save export: {}", e));
+                        toast::error(format!("Failed to save export: {e}"));
                     }
                 },
                 Err(e) => {
-                    toast::error(format!("Export failed: {}", e));
+                    toast::error(format!("Export failed: {e}"));
                 }
             }
         });

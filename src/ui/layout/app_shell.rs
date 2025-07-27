@@ -51,8 +51,7 @@ pub fn AppShell() -> Element {
     let panel_margin = if panel_is_open { "md:mr-96" } else { "md:mr-0" };
 
     let main_class = format!(
-        "flex-1 flex flex-col overflow-hidden {} {} transition-all duration-300",
-        sidebar_margin, panel_margin
+        "flex-1 flex flex-col overflow-hidden {sidebar_margin} {panel_margin} transition-all duration-300"
     );
 
     rsx! {

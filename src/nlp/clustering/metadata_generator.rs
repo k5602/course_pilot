@@ -18,6 +18,12 @@ pub struct MemoryTracker {
     peak_memory: u64,
 }
 
+impl Default for MemoryTracker {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl MemoryTracker {
     /// Create a new memory tracker
     pub fn new() -> Self {
@@ -73,6 +79,12 @@ pub struct PerformanceCollector {
     optimization_time: Option<Duration>,
     memory_tracker: MemoryTracker,
     algorithm_iterations: u32,
+}
+
+impl Default for PerformanceCollector {
+    fn default() -> Self {
+        Self::new()
+    }
 }
 
 impl PerformanceCollector {
@@ -359,9 +371,8 @@ impl ConfidenceCalculator {
         }
 
         let mean = values.iter().sum::<f32>() / values.len() as f32;
-        let variance = values.iter().map(|v| (v - mean).powi(2)).sum::<f32>() / values.len() as f32;
 
-        variance
+        values.iter().map(|v| (v - mean).powi(2)).sum::<f32>() / values.len() as f32
     }
 }
 
@@ -476,7 +487,7 @@ impl RationaleGenerator {
             " The clustering shows lower confidence due to diverse or unclear content patterns."
         };
 
-        format!("{}{}", base_explanation, confidence_note)
+        format!("{base_explanation}{confidence_note}")
     }
 
     /// Identify key factors that influenced clustering

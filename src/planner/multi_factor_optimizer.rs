@@ -623,10 +623,7 @@ impl MultiFactorOptimizer {
                 }
             }
             PacingPreference::Adaptive => 0.8, // Neutral score for adaptive
-            PacingPreference::Consistent => {
-                let duration_balance = self.calculate_duration_balance_score(items)?;
-                duration_balance
-            }
+            PacingPreference::Consistent => self.calculate_duration_balance_score(items)?,
         };
 
         // Apply experience level adjustment
@@ -965,7 +962,7 @@ impl MultiFactorOptimizer {
         match user_preferences.pacing_preference {
             PacingPreference::Intensive => {
                 // Allow higher cognitive loads
-                for (_i, analysis) in session_analyses.iter().enumerate() {
+                for analysis in session_analyses.iter() {
                     if analysis.cognitive_load_score < 0.5 {
                         // Could combine with next session if available
                         // Simplified implementation for now
@@ -974,7 +971,7 @@ impl MultiFactorOptimizer {
             }
             PacingPreference::Relaxed => {
                 // Ensure no session exceeds moderate load
-                for (_i, analysis) in session_analyses.iter().enumerate() {
+                for analysis in session_analyses.iter() {
                     if analysis.cognitive_load_score > 0.6 {
                         // Would split session in full implementation
                         // For now, just note the need for adjustment
@@ -1144,39 +1141,32 @@ impl MultiFactorOptimizer {
 
         // Check for difficulty jumps
         let steep_jumps = self.count_steep_difficulty_jumps(session_analyses);
-        if steep_jumps > 0 {
-            match user_preferences.difficulty_preference {
-                DifficultyPreference::GradualProgression => {
-                    warnings.push(format!(
-                        "{} steep difficulty jumps detected - may conflict with gradual progression preference",
-                        steep_jumps
-                    ));
-                }
-                _ => {}
-            }
+        if steep_jumps > 0
+            && user_preferences.difficulty_preference == DifficultyPreference::GradualProgression
+        {
+            warnings.push(format!(
+                    "{steep_jumps} steep difficulty jumps detected - may conflict with gradual progression preference"
+                ));
         }
 
         // Check for preference conflicts
-        match user_preferences.difficulty_preference {
-            DifficultyPreference::ConsistentLevel => {
-                let variance = session_analyses.len() as f32
-                    / session_analyses
-                        .iter()
-                        .map(|a| {
-                            (a.average_difficulty
-                                - session_analyses
-                                    .iter()
-                                    .map(|a| a.average_difficulty)
-                                    .sum::<f32>()
-                                    / session_analyses.len() as f32)
-                                .powi(2)
-                        })
-                        .sum::<f32>();
-                if variance > 0.1 {
-                    warnings.push("High difficulty variance detected - may conflict with consistent level preference".to_string());
-                }
+        if user_preferences.difficulty_preference == DifficultyPreference::ConsistentLevel {
+            let variance = session_analyses.len() as f32
+                / session_analyses
+                    .iter()
+                    .map(|a| {
+                        (a.average_difficulty
+                            - session_analyses
+                                .iter()
+                                .map(|a| a.average_difficulty)
+                                .sum::<f32>()
+                                / session_analyses.len() as f32)
+                            .powi(2)
+                    })
+                    .sum::<f32>();
+            if variance > 0.1 {
+                warnings.push("High difficulty variance detected - may conflict with consistent level preference".to_string());
             }
-            _ => {}
         }
 
         warnings

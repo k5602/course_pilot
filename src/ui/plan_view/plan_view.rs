@@ -17,7 +17,7 @@ pub struct PlanViewProps {
 #[component]
 pub fn PlanView(props: PlanViewProps) -> Element {
     let plan_resource = use_plan_resource(props.course_id);
-    let expanded_sessions = use_signal(|| HashSet::new());
+    let expanded_sessions = use_signal(HashSet::new);
 
     // Show loading toast only once when plan is None
     use_effect(use_reactive!(|plan_resource| {

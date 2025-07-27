@@ -138,7 +138,7 @@ fn NotesTab(
     let save_note_action = crate::ui::hooks::use_save_note_action();
 
     let handle_save_note = {
-        let save_note_action = save_note_action.clone();
+        let save_note_action = save_note_action;
         let video_context = video_context.clone();
         move |_| {
             let content = note_content();
@@ -774,7 +774,7 @@ fn AllNotesTab() -> Element {
 
     // In a future implementation, this could navigate to the specific course or open an edit modal
     let handle_edit_note = move |note: crate::types::Note| {
-        crate::ui::components::toast::toast::info(&format!(
+        crate::ui::components::toast::toast::info(format!(
             "Note editing from All Notes view will be implemented in a future update. Note: '{}'",
             if note.content.len() > 50 {
                 format!("{}...", &note.content[..50])
@@ -831,7 +831,7 @@ fn AllNotesTab() -> Element {
                     {filtered_notes().into_iter().map(|note| {
                         let created_at = note.created_at.format("%Y-%m-%d %H:%M").to_string();
                         let updated_at = note.updated_at.format("%Y-%m-%d %H:%M").to_string();
-                        let handle_edit_note = handle_edit_note.clone();
+                        let handle_edit_note = handle_edit_note;
                         let note_for_edit = note.clone();
 
                         rsx! {

@@ -428,9 +428,9 @@ fn create_hybrid_clustering_sessions(
 }
 
 /// Order modules by difficulty using clustering insights
-fn order_modules_by_clustering_difficulty<'a>(
-    modules: &'a [crate::types::Module],
-) -> Vec<&'a crate::types::Module> {
+fn order_modules_by_clustering_difficulty(
+    modules: &[crate::types::Module],
+) -> Vec<&crate::types::Module> {
     let mut ordered_modules: Vec<_> = modules.iter().collect();
 
     ordered_modules.sort_by(|a, b| {

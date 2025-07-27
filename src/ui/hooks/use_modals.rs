@@ -10,22 +10,11 @@ pub struct ModalManager {
 }
 
 pub fn use_modal_manager(initial_state: bool) -> ModalManager {
-    let is_open = use_signal(|| initial_state);
+    let mut is_open = use_signal(|| initial_state);
 
-    let open = use_callback({
-        let mut is_open = is_open;
-        move |_| is_open.set(true)
-    });
-
-    let close = use_callback({
-        let mut is_open = is_open;
-        move |_| is_open.set(false)
-    });
-
-    let toggle = use_callback({
-        let mut is_open = is_open;
-        move |_| is_open.set(!is_open())
-    });
+    let open = use_callback(move |_| is_open.set(true));
+    let close = use_callback(move |_| is_open.set(false));
+    let toggle = use_callback(move |_| is_open.set(!is_open()));
 
     ModalManager {
         is_open: is_open(),
@@ -45,19 +34,11 @@ pub struct FormManager<T: Clone + PartialEq + 'static> {
 }
 
 pub fn use_form_manager<T: Clone + PartialEq + 'static>(initial_value: T) -> FormManager<T> {
-    let value = use_signal(|| initial_value.clone());
+    let mut value = use_signal(|| initial_value.clone());
     let initial_ref = use_signal(|| initial_value);
 
-    let set_value = use_callback({
-        let mut value = value;
-        move |new_value: T| value.set(new_value)
-    });
-
-    let reset = use_callback({
-        let mut value = value;
-        let initial_ref = initial_ref;
-        move |_| value.set(initial_ref())
-    });
+    let set_value = use_callback(move |new_value: T| value.set(new_value));
+    let reset = use_callback(move |_| value.set(initial_ref()));
 
     let is_dirty = value() != initial_ref();
 

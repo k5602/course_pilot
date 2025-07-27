@@ -27,11 +27,7 @@ pub fn Breadcrumbs(current_route: Route) -> Element {
 }
 
 /// Render individual breadcrumb item
-fn render_breadcrumb_item(
-    item: &BreadcrumbItem,
-    idx: usize,
-    total: usize,
-) -> Element {
+fn render_breadcrumb_item(item: &BreadcrumbItem, idx: usize, total: usize) -> Element {
     let is_last = idx == total - 1;
 
     rsx! {

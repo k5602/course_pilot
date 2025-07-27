@@ -95,8 +95,7 @@ impl KMeansClusterer {
 
         if k == 0 || k > features.len() {
             return Err(ClusteringError::AnalysisFailed(format!(
-                "Invalid k value: {}",
-                k
+                "Invalid k value: {k}"
             )));
         }
 
@@ -612,9 +611,7 @@ impl ContentClusterer for KMeansClusterer {
         target_clusters: usize,
     ) -> Result<Vec<VideoCluster>, ClusteringError> {
         // Handle edge cases first
-        if let Err(e) = self.handle_edge_cases(&analysis.feature_vectors) {
-            return Err(e);
-        }
+        self.handle_edge_cases(&analysis.feature_vectors)?;
 
         // Determine optimal k if target_clusters is 0
         let k = if target_clusters == 0 {
@@ -664,7 +661,7 @@ impl ContentClusterer for KMeansClusterer {
                 .into_iter()
                 .map(|index| super::VideoWithMetadata {
                     index,
-                    title: format!("Video {}", index), // This will be populated by caller
+                    title: format!("Video {index}"), // This will be populated by caller
                     duration: durations.get(index).copied().unwrap_or_default(),
                     feature_vector: cluster.centroid.clone(),
                     difficulty_score: 0.5, // Will be calculated by caller

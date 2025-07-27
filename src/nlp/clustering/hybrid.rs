@@ -135,7 +135,7 @@ impl HybridClusterer {
                     results.kmeans_result = Some(clusters);
                 }
                 Err(e) => {
-                    eprintln!("K-means clustering failed: {}", e);
+                    eprintln!("K-means clustering failed: {e}");
                 }
             }
         }
@@ -150,7 +150,7 @@ impl HybridClusterer {
                     results.hierarchical_result = Some(clusters);
                 }
                 Err(e) => {
-                    eprintln!("Hierarchical clustering failed: {}", e);
+                    eprintln!("Hierarchical clustering failed: {e}");
                 }
             }
         }
@@ -163,7 +163,7 @@ impl HybridClusterer {
                     results.lda_result = Some(clusters);
                 }
                 Err(e) => {
-                    eprintln!("LDA clustering failed: {}", e);
+                    eprintln!("LDA clustering failed: {e}");
                 }
             }
         }
@@ -463,7 +463,7 @@ impl HybridClusterer {
         for topic in &lda_model.topics {
             // Simple coherence measure: entropy of word probabilities
             let mut entropy = 0.0;
-            for (_, &prob) in &topic.word_probabilities {
+            for &prob in topic.word_probabilities.values() {
                 if prob > 0.0 {
                     entropy -= prob * prob.ln();
                 }

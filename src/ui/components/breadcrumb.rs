@@ -84,13 +84,15 @@ pub fn generate_breadcrumbs(
             // Parse course_id string to UUID
             let course_uuid = match uuid::Uuid::parse_str(&course_id) {
                 Ok(uuid) => uuid,
-                Err(_) => return vec![BreadcrumbItem {
-                    label: "Invalid Course".to_string(),
-                    route: None,
-                    active: true,
-                }],
+                Err(_) => {
+                    return vec![BreadcrumbItem {
+                        label: "Invalid Course".to_string(),
+                        route: None,
+                        active: true,
+                    }];
+                }
             };
-            
+
             let course_name = courses
                 .iter()
                 .find(|c| c.id == course_uuid)

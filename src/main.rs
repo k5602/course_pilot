@@ -2,7 +2,6 @@ use course_pilot::ui::app_root::AppRoot;
 use dioxus_desktop::tao::dpi::LogicalSize;
 use dioxus_desktop::{Config, WindowBuilder};
 
-
 fn main() {
     let config = Config::new().with_window(
         WindowBuilder::new()

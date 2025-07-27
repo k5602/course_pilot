@@ -1,3 +1,4 @@
+use crate::state::{use_course_reactive, use_courses_reactive};
 use crate::types::{Course, Route};
 use crate::ui::components::toast::toast;
 use dioxus::prelude::*;
@@ -18,7 +19,9 @@ pub struct CourseManager {
 
 pub fn use_course_manager() -> CourseManager {
     let backend = crate::ui::hooks::use_backend_adapter();
-    let _app_state = crate::ui::hooks::use_app_state();
+
+    // Use reactive courses from modern state management
+    let courses = use_courses_reactive();
 
     // Load courses
     let backend_clone = backend.clone();
@@ -32,10 +35,6 @@ pub fn use_course_manager() -> CourseManager {
     let error = match &*courses_state {
         Some(Err(e)) => Some(e.to_string()),
         _ => None,
-    };
-    let courses = match &*courses_state {
-        Some(Ok(data)) => data.clone(),
-        _ => Vec::new(),
     };
 
     // Event handlers with state refresh
@@ -114,7 +113,9 @@ pub fn use_course_manager() -> CourseManager {
     let navigate_to_course = use_callback({
         let navigator = use_navigator();
         move |course_id: Uuid| {
-            navigator.push(Route::PlanView { course_id: course_id.to_string() });
+            navigator.push(Route::PlanView {
+                course_id: course_id.to_string(),
+            });
         }
     });
 
@@ -126,7 +127,7 @@ pub fn use_course_manager() -> CourseManager {
     });
 
     CourseManager {
-        courses,
+        courses: courses(),
         is_loading,
         error,
         create_course,
@@ -137,7 +138,7 @@ pub fn use_course_manager() -> CourseManager {
     }
 }
 
-/// Course progress hook
+/// Course progress hook using reactive patterns
 pub fn use_course_progress(course_id: Uuid) -> (f32, String, Option<String>) {
     let backend = crate::ui::hooks::use_backend_adapter();
 
@@ -169,4 +170,14 @@ pub fn use_course_progress(course_id: Uuid) -> (f32, String, Option<String>) {
         Some(Err(_)) => (0.0, "Error".to_string(), Some("error".to_string())),
         None => (0.0, "Loading...".to_string(), Some("neutral".to_string())),
     }
+}
+
+/// Hook for reactive access to a specific course
+pub fn use_course_reactive_hook(course_id: Uuid) -> Memo<Option<Course>> {
+    use_course_reactive(course_id)
+}
+
+/// Hook for reactive access to all courses
+pub fn use_courses_reactive_hook() -> Memo<Vec<Course>> {
+    use_courses_reactive()
 }

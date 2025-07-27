@@ -118,10 +118,7 @@ pub fn Sidebar(props: SidebarProps) -> Element {
 
 /// DaisyUI menu-based navigation component
 #[component]
-fn SidebarNav(
-    current_route: Route,
-    is_expanded: bool,
-) -> Element {
+fn SidebarNav(current_route: Route, is_expanded: bool) -> Element {
     rsx! {
         ul {
             class: "menu bg-base-200 w-full p-2",

@@ -1,3 +1,4 @@
+use crate::state::use_courses_reactive;
 use crate::types::{Course, Route};
 use dioxus::prelude::*;
 
@@ -8,7 +9,7 @@ pub struct BreadcrumbItem {
     pub active: bool,
 }
 
-/// Navigation manager hook
+/// Navigation manager hook using modern reactive patterns
 #[derive(Clone)]
 pub struct NavigationManager {
     pub current_route: Route,
@@ -18,25 +19,18 @@ pub struct NavigationManager {
 }
 
 pub fn use_navigation_manager() -> NavigationManager {
-    let app_state = crate::ui::hooks::use_app_state();
+    let courses = use_courses_reactive();
     let current_route = use_route::<Route>();
     let navigator = use_navigator();
-    let courses = app_state.read().courses.clone();
 
-    let breadcrumbs = generate_breadcrumbs(current_route.clone(), &courses);
+    let breadcrumbs = generate_breadcrumbs(current_route.clone(), &courses());
 
-    let navigate_to = use_callback({
-        let navigator = navigator.clone();
-        move |route: Route| {
-            navigator.push(route);
-        }
+    let navigate_to = use_callback(move |route: Route| {
+        navigator.push(route);
     });
 
-    let go_back = use_callback({
-        let navigator = navigator.clone();
-        move |_| {
-            navigator.go_back();
-        }
+    let go_back = use_callback(move |_| {
+        navigator.go_back();
     });
 
     NavigationManager {
@@ -64,13 +58,15 @@ fn generate_breadcrumbs(current_route: Route, courses: &[Course]) -> Vec<Breadcr
             // Parse course_id string to UUID
             let course_uuid = match uuid::Uuid::parse_str(&course_id) {
                 Ok(uuid) => uuid,
-                Err(_) => return vec![BreadcrumbItem {
-                    label: "Invalid Course".to_string(),
-                    route: None,
-                    active: true,
-                }],
+                Err(_) => {
+                    return vec![BreadcrumbItem {
+                        label: "Invalid Course".to_string(),
+                        route: None,
+                        active: true,
+                    }];
+                }
             };
-            
+
             let course_name = courses
                 .iter()
                 .find(|c| c.id == course_uuid)
