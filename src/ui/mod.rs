@@ -14,6 +14,7 @@ pub mod navigation;
 pub mod notes_panel;
 pub mod plan_view;
 pub mod routes;
+pub mod settings;
 pub mod state;
 pub mod state_management;
 pub mod theme_unified;
@@ -62,6 +63,9 @@ pub use courses::{AllCoursesView, CourseCard, CourseGrid, CourseActions};
 
 // Re-export plan view components
 pub use plan_view::{PlanView, PlanHeader, SessionControlPanel, SessionList, PlanChecklist};
+
+// Re-export settings components
+pub use settings::{SettingsView, GeneralSettings, APIKeysSettings, CourseDefaultSettings};
 
 // Re-export commonly used hooks
 pub use hooks::{

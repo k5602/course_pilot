@@ -168,11 +168,7 @@ pub fn AllCourses() -> Element {
 pub fn Settings() -> Element {
     rsx! {
         LayoutWrapper {
-            div {
-                class: "p-8",
-                h1 { class: "text-3xl font-bold mb-4", "Settings" }
-                p { class: "text-base-content/70", "Configure your Course Pilot preferences here." }
-            }
+            crate::ui::settings::SettingsView {}
         }
     }
 }

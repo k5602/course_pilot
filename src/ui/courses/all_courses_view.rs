@@ -80,11 +80,9 @@ pub fn AllCoursesView() -> Element {
     let error = course_manager.error.clone();
 
     // Filter and sort courses
-    let filtered_and_sorted_courses = use_memo({
-        let courses_for_memo = courses.clone();
-        move || {
-            let mut filtered_courses: Vec<Course> = courses_for_memo
-                .iter()
+    let filtered_and_sorted_courses = {
+        let mut filtered_courses: Vec<Course> = courses
+            .iter()
             .filter(|course| {
                 // Apply search filter
                 let search_query_text = debounced_search().to_lowercase();
@@ -105,16 +103,17 @@ pub fn AllCoursesView() -> Element {
                 match current_filter() {
                     CourseFilter::All => true,
                     CourseFilter::NotStarted => {
-                        // Check if course has no progress
-                        true // Placeholder - would need actual progress tracking
+                        // For now, consider courses without structure as not started
+                        course.structure.is_none()
                     },
                     CourseFilter::InProgress => {
-                        // Check if course has partial progress
-                        true // Placeholder - would need actual progress tracking
+                        // For now, consider structured courses as in progress
+                        course.structure.is_some()
                     },
                     CourseFilter::Completed => {
-                        // Check if course is completed
-                        false // Placeholder - would need actual progress tracking
+                        // For now, no courses are considered completed
+                        // This would need actual progress tracking
+                        false
                     },
                     CourseFilter::Structured => course.structure.is_some(),
                     CourseFilter::Unstructured => course.structure.is_none(),
@@ -144,10 +143,12 @@ pub fn AllCoursesView() -> Element {
                 });
             },
             CourseSortBy::Progress => {
-                // Placeholder sorting by progress
-                // Would need actual progress calculation
+                // Sort by structure status as a proxy for progress
+                // Structured courses are considered more progressed
                 filtered_courses.sort_by(|a, b| {
-                    let cmp = a.name.cmp(&b.name); // Fallback to name for now
+                    let a_progress = if a.structure.is_some() { 1 } else { 0 };
+                    let b_progress = if b.structure.is_some() { 1 } else { 0 };
+                    let cmp = a_progress.cmp(&b_progress);
                     match sort_order() {
                         SortOrder::Ascending => cmp,
                         SortOrder::Descending => cmp.reverse(),
@@ -155,10 +156,9 @@ pub fn AllCoursesView() -> Element {
                 });
             },
             CourseSortBy::LastAccessed => {
-                // Placeholder sorting by last accessed
-                // Would need actual last accessed tracking
+                // Sort by creation date as fallback for last accessed
                 filtered_courses.sort_by(|a, b| {
-                    let cmp = a.created_at.cmp(&b.created_at); // Fallback to created_at for now
+                    let cmp = a.created_at.cmp(&b.created_at);
                     match sort_order() {
                         SortOrder::Ascending => cmp,
                         SortOrder::Descending => cmp.reverse(),
@@ -168,8 +168,7 @@ pub fn AllCoursesView() -> Element {
         }
 
         filtered_courses
-        }
-    });
+    };
 
     // Handle import completion
     let handle_import_complete = {
@@ -262,25 +261,27 @@ pub fn AllCoursesView() -> Element {
                             ul { 
                                 tabindex: "0",
                                 class: "dropdown-content z-[1] menu p-2 shadow bg-base-100 rounded-box w-full",
-                                {[
+                                for filter in [
                                     CourseFilter::All,
                                     CourseFilter::NotStarted,
                                     CourseFilter::InProgress,
                                     CourseFilter::Completed,
                                     CourseFilter::Structured,
                                     CourseFilter::Unstructured,
-                                ].iter().map(|filter| {
-                                    let is_active = current_filter() == *filter;
-                                    rsx! {
-                                        li { key: "{filter:?}",
-                                            a {
-                                                class: if is_active { "active" } else { "" },
-                                                onclick: move |_| current_filter.set(*filter),
-                                                "{filter.as_str()}"
+                                ] {
+                                    {
+                                        let is_active = current_filter() == filter;
+                                        rsx! {
+                                            li { key: "{filter:?}",
+                                                a {
+                                                    class: if is_active { "active" } else { "" },
+                                                    onclick: move |_| current_filter.set(filter),
+                                                    "{filter.as_str()}"
+                                                }
                                             }
                                         }
                                     }
-                                })}
+                                }
                             }
                         }
                     }
@@ -305,23 +306,25 @@ pub fn AllCoursesView() -> Element {
                             ul { 
                                 tabindex: "0",
                                 class: "dropdown-content z-[1] menu p-2 shadow bg-base-100 rounded-box w-full",
-                                {[
+                                for sort_option in [
                                     CourseSortBy::Name,
                                     CourseSortBy::DateCreated,
                                     CourseSortBy::Progress,
                                     CourseSortBy::LastAccessed,
-                                ].iter().map(|sort_option| {
-                                    let is_active = sort_by() == *sort_option;
-                                    rsx! {
-                                        li { key: "{sort_option:?}",
-                                            a {
-                                                class: if is_active { "active" } else { "" },
-                                                onclick: move |_| handle_sort_change(*sort_option),
-                                                "{sort_option.as_str()}"
+                                ] {
+                                    {
+                                        let is_active = sort_by() == sort_option;
+                                        rsx! {
+                                            li { key: "{sort_option:?}",
+                                                a {
+                                                    class: if is_active { "active" } else { "" },
+                                                    onclick: move |_| handle_sort_change(sort_option),
+                                                    "{sort_option.as_str()}"
+                                                }
                                             }
                                         }
                                     }
-                                })}
+                                }
                             }
                         }
                     }
@@ -330,7 +333,7 @@ pub fn AllCoursesView() -> Element {
                 // Results summary
                 div { class: "flex items-center justify-between mt-4 pt-4 border-t border-base-300",
                     div { class: "text-sm text-base-content/70",
-                        "Showing {filtered_and_sorted_courses().len()} of {courses.len()} courses"
+                        "Showing {filtered_and_sorted_courses.len()} of {courses.len()} courses"
                     }
                     
                     if !search_query().is_empty() {
@@ -359,7 +362,7 @@ pub fn AllCoursesView() -> Element {
                         "Retry"
                     }
                 }
-            } else if filtered_and_sorted_courses().is_empty() {
+            } else if filtered_and_sorted_courses.is_empty() {
                 div { class: "text-center py-12",
                     {if courses.is_empty() {
                         // No courses at all
@@ -418,7 +421,7 @@ pub fn AllCoursesView() -> Element {
             } else {
                 // Course grid
                 CourseGrid {
-                    courses: filtered_and_sorted_courses(),
+                    courses: filtered_and_sorted_courses,
                 }
             }
 

@@ -442,19 +442,30 @@ fn YouTubeImportForm(
     on_import_error: Option<EventHandler<String>>,
 ) -> Element {
     let backend = crate::ui::hooks::use_backend();
+    let navigator = use_navigator();
 
     // Load settings and initialize API key from storage
     let settings =
-        use_resource(|| async { crate::storage::AppSettings::load().unwrap_or_default() });
+        use_resource(|| async { crate::storage::AppSettings::load() });
 
     // Form state
     let url = use_signal(String::new);
-    let api_key = use_signal(|| {
-        settings
-            .read()
-            .as_ref()
-            .and_then(|s| s.get_youtube_api_key().map(|k| k.to_string()))
-            .unwrap_or_default()
+    let mut api_key = use_signal(String::new);
+    let mut api_key_from_settings = use_signal(|| false);
+
+    // Initialize API key from settings when settings load
+    use_effect({
+        let mut api_key = api_key;
+        let mut api_key_from_settings = api_key_from_settings;
+        
+        move || {
+            if let Some(Ok(settings_data)) = settings.read().as_ref() {
+                if let Some(saved_key) = &settings_data.youtube_api_key {
+                    api_key.set(saved_key.clone());
+                    api_key_from_settings.set(true);
+                }
+            }
+        }
     });
 
     // Validation and preview state
@@ -585,29 +596,34 @@ fn YouTubeImportForm(
     // Handle API key changes
     let mut handle_api_key_change = {
         let mut api_key = api_key;
+        let mut api_key_from_settings = api_key_from_settings;
         let url = url;
         let mut handle_url_change = handle_url_change;
 
         move |new_api_key: String| {
             api_key.set(new_api_key.clone());
+            
+            // Mark that this is no longer from settings since user is typing
+            if api_key_from_settings() {
+                api_key_from_settings.set(false);
+            }
 
-            // Save API key to settings asynchronously
-            spawn(async move {
-                if let Ok(mut settings) = crate::storage::AppSettings::load() {
-                    let api_key_to_save = if new_api_key.trim().is_empty() {
-                        None
-                    } else {
-                        Some(new_api_key.trim().to_string())
-                    };
+            // Only auto-save if the user manually entered a key (not from settings)
+            if !api_key_from_settings() && !new_api_key.trim().is_empty() {
+                spawn(async move {
+                    if let Ok(mut settings) = crate::storage::AppSettings::load() {
+                        let api_key_to_save = Some(new_api_key.trim().to_string());
 
-                    if let Err(e) = settings.set_youtube_api_key(api_key_to_save) {
-                        log::error!("Failed to save API key: {e}");
-                        toast_helpers::error("Failed to save API key settings");
-                    } else {
-                        log::info!("YouTube API key saved to settings");
+                        if let Err(e) = settings.set_youtube_api_key(api_key_to_save) {
+                            log::error!("Failed to save API key: {e}");
+                            toast_helpers::error("Failed to save API key settings");
+                        } else {
+                            log::info!("YouTube API key saved to settings");
+                            toast_helpers::success("API key saved to settings");
+                        }
                     }
-                }
-            });
+                });
+            }
 
             // Re-validate URL if we have one
             if !url().trim().is_empty() {
@@ -794,43 +810,89 @@ fn YouTubeImportForm(
                 }
             }
 
-            // API Key input with enhanced styling
+            // API Key section with settings integration
             div { class: "form-control",
                 label { class: "label",
                     span { class: "label-text font-medium flex items-center gap-2",
                         Icon { icon: FaCircleInfo, class: "w-4 h-4 text-info" }
                         "YouTube Data API Key"
                     }
-                    span { class: "label-text-alt",
-                        a {
-                            href: "https://developers.google.com/youtube/v3/getting-started",
-                            target: "_blank",
-                            class: "link link-primary text-xs hover:link-hover",
-                            "Get API Key"
+                    span { class: "label-text-alt flex items-center gap-2",
+                        if api_key_from_settings() {
+                            button {
+                                class: "btn btn-xs btn-outline btn-primary",
+                                onclick: move |_| {
+                                    navigator.push(crate::types::Route::Settings {});
+                                },
+                                "Manage in Settings"
+                            }
+                        } else {
+                            a {
+                                href: "https://developers.google.com/youtube/v3/getting-started",
+                                target: "_blank",
+                                class: "link link-primary text-xs hover:link-hover",
+                                "Get API Key"
+                            }
                         }
                     }
                 }
-                div { class: "relative",
-                    input {
-                        r#type: "password",
-                        placeholder: "Enter your YouTube Data API v3 key",
-                        class: format!("input input-bordered w-full pr-10 {}",
-                            if api_key().trim().is_empty() { "input-warning" } else { "input-success" }
-                        ),
-                        value: api_key(),
-                        oninput: move |evt| handle_api_key_change(evt.value()),
-                        disabled: is_importing,
-                    }
-                    if !api_key().trim().is_empty() {
-                        div { class: "absolute right-3 top-1/2 transform -translate-y-1/2",
-                            Icon { icon: FaCheck, class: "w-4 h-4 text-success" }
+                
+                if api_key_from_settings() && !api_key().trim().is_empty() {
+                    // Show saved API key status
+                    div { class: "alert alert-success",
+                        Icon { icon: FaCheck, class: "w-4 h-4" }
+                        div {
+                            div { class: "font-medium", "Using saved API key" }
+                            div { class: "text-sm opacity-90", 
+                                "API key loaded from settings. You can manage it in the Settings page."
+                            }
+                        }
+                        button {
+                            class: "btn btn-sm btn-ghost",
+                            onclick: move |_| {
+                                api_key.set(String::new());
+                                api_key_from_settings.set(false);
+                            },
+                            "Enter Different Key"
                         }
                     }
-                }
-                label { class: "label",
-                    span { class: "label-text-alt text-base-content/70 flex items-center gap-1",
-                        Icon { icon: FaCircleInfo, class: "w-3 h-3" }
-                        "Required for accessing YouTube playlist data. Your key is stored locally and never shared."
+                } else {
+                    // Show API key input
+                    div { class: "relative",
+                        input {
+                            r#type: "password",
+                            placeholder: "Enter your YouTube Data API v3 key",
+                            class: format!("input input-bordered w-full pr-10 {}",
+                                if api_key().trim().is_empty() { "input-warning" } else { "input-success" }
+                            ),
+                            value: api_key(),
+                            oninput: move |evt| handle_api_key_change(evt.value()),
+                            disabled: is_importing,
+                        }
+                        if !api_key().trim().is_empty() {
+                            div { class: "absolute right-3 top-1/2 transform -translate-y-1/2",
+                                Icon { icon: FaCheck, class: "w-4 h-4 text-success" }
+                            }
+                        }
+                    }
+                    label { class: "label",
+                        span { class: "label-text-alt text-base-content/70 flex items-center gap-1",
+                            Icon { icon: FaCircleInfo, class: "w-3 h-3" }
+                            "Required for accessing YouTube playlist data. Your key is stored locally and never shared."
+                        }
+                    }
+                    
+                    // Show link to settings if no saved key
+                    if !api_key_from_settings() {
+                        div { class: "mt-2",
+                            button {
+                                class: "btn btn-xs btn-ghost btn-primary",
+                                onclick: move |_| {
+                                    navigator.push(crate::types::Route::Settings {});
+                                },
+                                "Configure API Keys in Settings"
+                            }
+                        }
                     }
                 }
             }

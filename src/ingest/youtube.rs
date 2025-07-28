@@ -343,6 +343,37 @@ pub async fn validate_playlist_url(url: &str, api_key: &str) -> Result<bool, Imp
     validate_playlist_real(url, api_key).await
 }
 
+/// Validate a YouTube API key by making a simple API request
+/// Returns true if the API key is valid and has the necessary permissions
+pub async fn validate_api_key(api_key: &str) -> Result<bool, ImportError> {
+    let client = create_http_client()?;
+    
+    // Make a simple request to the channels endpoint to test the API key
+    let api_url = format!(
+        "https://www.googleapis.com/youtube/v3/channels?part=id&mine=true&key={api_key}"
+    );
+    
+    let resp = client
+        .get(&api_url)
+        .send()
+        .await
+        .map_err(|e| ImportError::Network(format!("Failed to validate API key: {e}")))?;
+    
+    // Check if the response is successful
+    if resp.status().is_success() {
+        Ok(true)
+    } else if resp.status() == 403 {
+        // API key is invalid or doesn't have required permissions
+        Ok(false)
+    } else {
+        // Other error - treat as network error
+        Err(ImportError::Network(format!(
+            "API validation failed with status: {}",
+            resp.status()
+        )))
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
