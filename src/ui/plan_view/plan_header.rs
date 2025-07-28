@@ -1,5 +1,7 @@
 use crate::export::ExportFormat;
-use crate::ui::{ProgressRing, DropdownItem, DropdownTrigger, UnifiedDropdown, toast_helpers, use_backend};
+use crate::ui::{
+    DropdownItem, DropdownTrigger, ProgressRing, UnifiedDropdown, toast_helpers, use_backend,
+};
 use dioxus::prelude::*;
 use dioxus_free_icons::Icon;
 use dioxus_free_icons::icons::fa_solid_icons::{FaCheck, FaClock};

@@ -9,9 +9,9 @@ pub mod scheduler;
 
 // Re-export main planning function
 pub use scheduler::{
-    choose_distribution_strategy, generate_plan, generate_spaced_repetition_plan, optimize_plan,
-    pack_videos_into_session, analyze_plan_effectiveness, PlanAnalysis, LearningVelocityAnalysis,
-    LoadDistribution as SchedulerLoadDistribution, TemporalDistribution,
+    LearningVelocityAnalysis, LoadDistribution as SchedulerLoadDistribution, PlanAnalysis,
+    TemporalDistribution, analyze_plan_effectiveness, choose_distribution_strategy, generate_plan,
+    generate_spaced_repetition_plan, optimize_plan, pack_videos_into_session,
 };
 
 // Re-export clustering-aware planning functions

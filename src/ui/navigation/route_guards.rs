@@ -38,7 +38,9 @@ impl RouteGuard for CourseExistenceGuard {
                 // Parse course_id string to UUID
                 let course_uuid = match Uuid::parse_str(course_id) {
                     Ok(uuid) => uuid,
-                    Err(_) => return RouteGuardResult::Block("Invalid course ID format".to_string()),
+                    Err(_) => {
+                        return RouteGuardResult::Block("Invalid course ID format".to_string());
+                    }
                 };
 
                 // Check if course exists
@@ -57,11 +59,11 @@ impl RouteGuard for CourseExistenceGuard {
 pub fn use_route_guard() -> RouteGuardManager {
     let course_manager = use_course_manager();
     let navigator = use_navigator();
-    
+
     RouteGuardManager {
-        guards: vec![
-            Box::new(CourseExistenceGuard::new(course_manager.courses.clone()))
-        ],
+        guards: vec![Box::new(CourseExistenceGuard::new(
+            course_manager.courses.clone(),
+        ))],
         navigator,
     }
 }
@@ -91,13 +93,15 @@ impl RouteGuardManager {
                 self.navigator.push(route);
             }
             RouteGuardResult::Redirect(redirect_route) => {
-                log::warn!("Route guard redirected navigation from {:?} to {:?}", route, redirect_route);
+                log::warn!(
+                    "Route guard redirected navigation from {route:?} to {redirect_route:?}"
+                );
                 self.navigator.push(redirect_route);
             }
             RouteGuardResult::Block(reason) => {
-                log::error!("Route guard blocked navigation to {:?}: {}", route, reason);
+                log::error!("Route guard blocked navigation to {route:?}: {reason}");
                 // Could show a toast notification here
-                crate::ui::toast_helpers::error(format!("Navigation blocked: {}", reason));
+                crate::ui::toast_helpers::error(format!("Navigation blocked: {reason}"));
             }
         }
     }
@@ -108,7 +112,7 @@ impl RouteGuardManager {
 pub fn RouteGuardProvider(children: Element) -> Element {
     let route_guard = use_route_guard();
     let current_route = use_route::<Route>();
-    
+
     // Check if current route is allowed
     match route_guard.can_navigate_to(&current_route) {
         RouteGuardResult::Allow => {
@@ -116,13 +120,13 @@ pub fn RouteGuardProvider(children: Element) -> Element {
         }
         RouteGuardResult::Redirect(redirect_route) => {
             // Redirect to allowed route
-            let navigator = route_guard.navigator.clone();
+            let navigator = route_guard.navigator;
             let redirect_route = redirect_route.clone();
-            
+
             spawn(async move {
                 navigator.push(redirect_route);
             });
-            
+
             rsx! {
                 div { class: "p-8 text-center",
                     div { class: "loading loading-spinner loading-lg mb-4" }
@@ -140,7 +144,7 @@ pub fn RouteGuardProvider(children: Element) -> Element {
                         button {
                             class: "btn btn-primary",
                             onclick: {
-                                let navigator = route_guard.navigator.clone();
+                                let navigator = route_guard.navigator;
                                 move |_| {
                                     navigator.push(Route::Dashboard {});
                                 }

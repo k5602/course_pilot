@@ -1,13 +1,12 @@
 use crate::types::Course;
 use crate::ui::{
-    ImportModal, ImportSource, ImportSettings, toast_helpers,
-    use_course_manager, use_modal_manager, use_search_state,
-    use_debounced_state,
+    ImportModal, ImportSettings, ImportSource, toast_helpers, use_course_manager,
+    use_debounced_state, use_modal_manager, use_search_state,
 };
 use dioxus::prelude::*;
 use dioxus_free_icons::Icon;
 use dioxus_free_icons::icons::fa_solid_icons::{
-    FaPlus, FaMagnifyingGlass, FaFilter, FaSort, FaCircleExclamation,
+    FaCircleExclamation, FaFilter, FaMagnifyingGlass, FaPlus, FaSort,
 };
 
 use super::CourseGrid;
@@ -27,7 +26,7 @@ impl CourseFilter {
         match self {
             CourseFilter::All => "All Courses",
             CourseFilter::NotStarted => "Not Started",
-            CourseFilter::InProgress => "In Progress", 
+            CourseFilter::InProgress => "In Progress",
             CourseFilter::Completed => "Completed",
             CourseFilter::Structured => "Structured",
             CourseFilter::Unstructured => "Unstructured",
@@ -65,14 +64,13 @@ pub enum SortOrder {
 pub fn AllCoursesView() -> Element {
     let course_manager = use_course_manager();
     let import_modal = use_modal_manager(false);
-    
+
     // Search and filter state
     let (search_query, set_search_query) = use_search_state();
     let (_, debounced_search, _) = use_debounced_state(search_query(), 300);
     let mut current_filter = use_signal(|| CourseFilter::All);
     let sort_by = use_signal(|| CourseSortBy::Name);
     let sort_order = use_signal(|| SortOrder::Ascending);
-
 
     // Get courses from course manager
     let courses = course_manager.courses.clone();
@@ -90,9 +88,10 @@ pub fn AllCoursesView() -> Element {
                     true
                 } else {
                     course.name.to_lowercase().contains(&search_query_text)
-                        || course.raw_titles.iter().any(|title| 
-                            title.to_lowercase().contains(&search_query_text)
-                        )
+                        || course
+                            .raw_titles
+                            .iter()
+                            .any(|title| title.to_lowercase().contains(&search_query_text))
                 };
 
                 if !matches_search {
@@ -105,16 +104,16 @@ pub fn AllCoursesView() -> Element {
                     CourseFilter::NotStarted => {
                         // For now, consider courses without structure as not started
                         course.structure.is_none()
-                    },
+                    }
                     CourseFilter::InProgress => {
                         // For now, consider structured courses as in progress
                         course.structure.is_some()
-                    },
+                    }
                     CourseFilter::Completed => {
                         // For now, no courses are considered completed
                         // This would need actual progress tracking
                         false
-                    },
+                    }
                     CourseFilter::Structured => course.structure.is_some(),
                     CourseFilter::Unstructured => course.structure.is_none(),
                 }
@@ -132,7 +131,7 @@ pub fn AllCoursesView() -> Element {
                         SortOrder::Descending => cmp.reverse(),
                     }
                 });
-            },
+            }
             CourseSortBy::DateCreated => {
                 filtered_courses.sort_by(|a, b| {
                     let cmp = a.created_at.cmp(&b.created_at);
@@ -141,7 +140,7 @@ pub fn AllCoursesView() -> Element {
                         SortOrder::Descending => cmp.reverse(),
                     }
                 });
-            },
+            }
             CourseSortBy::Progress => {
                 // Sort by structure status as a proxy for progress
                 // Structured courses are considered more progressed
@@ -154,7 +153,7 @@ pub fn AllCoursesView() -> Element {
                         SortOrder::Descending => cmp.reverse(),
                     }
                 });
-            },
+            }
             CourseSortBy::LastAccessed => {
                 // Sort by creation date as fallback for last accessed
                 filtered_courses.sort_by(|a, b| {
@@ -164,7 +163,7 @@ pub fn AllCoursesView() -> Element {
                         SortOrder::Descending => cmp.reverse(),
                     }
                 });
-            },
+            }
         }
 
         filtered_courses
@@ -174,7 +173,7 @@ pub fn AllCoursesView() -> Element {
     let handle_import_complete = {
         let course_manager = course_manager.clone();
         let import_modal = import_modal.clone();
-        
+
         EventHandler::new(move |_| {
             course_manager.refresh.call(());
             import_modal.close.call(());
@@ -186,7 +185,7 @@ pub fn AllCoursesView() -> Element {
     let mut handle_sort_change = {
         let mut sort_by = sort_by;
         let mut sort_order = sort_order;
-        
+
         move |new_sort: CourseSortBy| {
             if sort_by() == new_sort {
                 // Toggle order if same sort option
@@ -212,7 +211,7 @@ pub fn AllCoursesView() -> Element {
                         "Manage your course collection with filtering, search, and sorting"
                     }
                 }
-                
+
                 button {
                     class: "btn btn-primary gap-2",
                     onclick: move |_| import_modal.open.call(()),
@@ -237,9 +236,9 @@ pub fn AllCoursesView() -> Element {
                                 value: search_query(),
                                 oninput: move |evt| set_search_query.call(evt.value()),
                             }
-                            Icon { 
-                                icon: FaMagnifyingGlass, 
-                                class: "absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-base-content/50" 
+                            Icon {
+                                icon: FaMagnifyingGlass,
+                                class: "absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-base-content/50"
                             }
                         }
                     }
@@ -250,7 +249,7 @@ pub fn AllCoursesView() -> Element {
                             span { class: "label-text font-medium", "Filter by Status" }
                         }
                         div { class: "dropdown dropdown-bottom w-full",
-                            div { 
+                            div {
                                 tabindex: "0",
                                 role: "button",
                                 class: "btn btn-outline w-full justify-between",
@@ -258,7 +257,7 @@ pub fn AllCoursesView() -> Element {
                                 span { "{current_filter().as_str()}" }
                                 span { class: "text-xs", "▼" }
                             }
-                            ul { 
+                            ul {
                                 tabindex: "0",
                                 class: "dropdown-content z-[1] menu p-2 shadow bg-base-100 rounded-box w-full",
                                 for filter in [
@@ -292,18 +291,18 @@ pub fn AllCoursesView() -> Element {
                             span { class: "label-text font-medium", "Sort by" }
                         }
                         div { class: "dropdown dropdown-bottom w-full",
-                            div { 
+                            div {
                                 tabindex: "0",
                                 role: "button",
                                 class: "btn btn-outline w-full justify-between",
                                 Icon { icon: FaSort, class: "w-4 h-4" }
-                                span { 
+                                span {
                                     "{sort_by().as_str()}"
                                     if sort_order() == SortOrder::Descending { " ↓" } else { " ↑" }
                                 }
                                 span { class: "text-xs", "▼" }
                             }
-                            ul { 
+                            ul {
                                 tabindex: "0",
                                 class: "dropdown-content z-[1] menu p-2 shadow bg-base-100 rounded-box w-full",
                                 for sort_option in [
@@ -335,7 +334,7 @@ pub fn AllCoursesView() -> Element {
                     div { class: "text-sm text-base-content/70",
                         "Showing {filtered_and_sorted_courses.len()} of {courses.len()} courses"
                     }
-                    
+
                     if !search_query().is_empty() {
                         button {
                             class: "btn btn-ghost btn-xs",

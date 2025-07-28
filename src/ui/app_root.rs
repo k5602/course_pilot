@@ -77,7 +77,10 @@ fn use_app_services() -> AppServices {
     let initial_state = load_initial_state(&db);
     let app_state = use_signal(|| initial_state);
 
-    AppServices { database: db, app_state }
+    AppServices {
+        database: db,
+        app_state,
+    }
 }
 
 /// Load initial application state from database

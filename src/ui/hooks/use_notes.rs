@@ -1,9 +1,9 @@
 use crate::storage::database::Database;
 use crate::types::Note;
-use dioxus::prelude::*;
-use uuid::Uuid;
 use anyhow::Result;
+use dioxus::prelude::*;
 use std::sync::Arc;
+use uuid::Uuid;
 
 /// Notes management hook
 #[derive(Clone)]
@@ -148,7 +148,7 @@ impl NotesManager {
 
 pub fn use_notes_manager() -> NotesManager {
     let db = use_context::<Arc<Database>>();
-    
+
     NotesManager { db }
 }
 
@@ -162,7 +162,9 @@ pub fn use_notes_with_video_index_resource(
     use_resource(move || {
         let notes_manager = notes_manager.clone();
         async move {
-            notes_manager.list_notes_by_course_and_video_index(course_id, video_index).await
+            notes_manager
+                .list_notes_by_course_and_video_index(course_id, video_index)
+                .await
         }
     })
 }
@@ -173,9 +175,7 @@ pub fn use_all_notes_resource() -> Resource<Result<Vec<Note>, anyhow::Error>> {
 
     use_resource(move || {
         let notes_manager = notes_manager.clone();
-        async move {
-            notes_manager.list_all_notes().await
-        }
+        async move { notes_manager.list_all_notes().await }
     })
 }
 
@@ -191,7 +191,7 @@ pub fn use_save_note_action() -> impl Fn(Note) {
                     // Note saved successfully
                 }
                 Err(e) => {
-                    eprintln!("Failed to save note: {}", e);
+                    eprintln!("Failed to save note: {e}");
                 }
             }
         });
@@ -210,7 +210,7 @@ pub fn use_delete_note_action() -> impl Fn(Uuid) {
                     // Note deleted successfully
                 }
                 Err(e) => {
-                    eprintln!("Failed to delete note: {}", e);
+                    eprintln!("Failed to delete note: {e}");
                 }
             }
         });

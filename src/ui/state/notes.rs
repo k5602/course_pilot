@@ -2,9 +2,9 @@
 //!
 //! Focused state management for notes using modern Dioxus signals
 
+use crate::types::Note;
 use dioxus::prelude::*;
 use uuid::Uuid;
-use crate::types::Note;
 
 /// Notes state context
 #[derive(Clone, Copy)]
@@ -34,7 +34,8 @@ pub fn use_notes() -> ReadOnlySignal<Vec<Note>> {
 pub fn use_course_notes(course_id: Uuid) -> Memo<Vec<Note>> {
     let notes = use_notes();
     use_memo(move || {
-        notes.read()
+        notes
+            .read()
             .iter()
             .filter(|note| note.course_id == course_id)
             .cloned()
@@ -59,19 +60,19 @@ pub fn use_tag_statistics() -> Memo<std::collections::HashMap<String, usize>> {
 /// Actions for notes
 pub mod actions {
     use super::*;
-    
+
     /// Add a note
     pub fn add_note(note: Note) {
         let mut state = use_notes_state();
         state.notes.write().push(note);
         log::info!("Note added successfully");
     }
-    
+
     /// Update a note
     pub fn update_note(id: Uuid, updated_note: Note) -> Result<(), String> {
         let mut state = use_notes_state();
         let mut notes = state.notes.write();
-        
+
         if let Some(index) = notes.iter().position(|n| n.id == id) {
             notes[index] = updated_note;
             log::info!("Note {id} updated successfully");
@@ -80,15 +81,15 @@ pub mod actions {
             Err(format!("Note {id} not found"))
         }
     }
-    
+
     /// Delete a note
     pub fn delete_note(id: Uuid) -> Result<(), String> {
         let mut state = use_notes_state();
         let mut notes = state.notes.write();
         let initial_len = notes.len();
-        
+
         notes.retain(|n| n.id != id);
-        
+
         if notes.len() == initial_len {
             Err(format!("Note {id} not found"))
         } else {

@@ -17,7 +17,7 @@ impl<T: Clone + PartialEq> BaseListItem<T> {
             disabled: false,
         }
     }
-    
+
     pub fn disabled(mut self) -> Self {
         self.disabled = true;
         self
@@ -29,30 +29,30 @@ impl<T: Clone + PartialEq> BaseListItem<T> {
 pub struct BaseListProps<T: Clone + PartialEq + 'static> {
     /// List items
     pub items: Vec<BaseListItem<T>>,
-    
+
     /// Item renderer function
     pub render_item: Box<dyn Fn(&BaseListItem<T>, usize) -> Element>,
-    
+
     /// List variant (menu, list, grid, etc.)
     #[props(default = "menu")]
     pub variant: &'static str,
-    
+
     /// Additional CSS classes
     #[props(default = "")]
     pub class: &'static str,
-    
+
     /// Enable animations
     #[props(default = true)]
     pub animated: bool,
-    
+
     /// Empty state content
     #[props(optional)]
     pub empty_state: Option<Element>,
-    
+
     /// Loading state
     #[props(default = false)]
     pub loading: bool,
-    
+
     /// Grid columns (for grid variant)
     #[props(optional)]
     pub grid_cols: Option<String>,
@@ -75,7 +75,10 @@ impl<T: Clone + PartialEq + 'static> PartialEq for BaseListProps<T> {
 pub fn BaseList<T: Clone + PartialEq + 'static>(props: BaseListProps<T>) -> Element {
     let list_classes = match props.variant {
         "grid" => {
-            let cols = props.grid_cols.as_deref().unwrap_or("grid-cols-1 md:grid-cols-2 lg:grid-cols-3");
+            let cols = props
+                .grid_cols
+                .as_deref()
+                .unwrap_or("grid-cols-1 md:grid-cols-2 lg:grid-cols-3");
             format!("grid {} gap-4 {}", cols, props.class)
         }
         "menu" => format!("menu w-full {}", props.class),
@@ -133,7 +136,7 @@ pub fn BaseList<T: Clone + PartialEq + 'static>(props: BaseListProps<T>) -> Elem
                 // Render items
                 {props.items.iter().enumerate().map(|(index, item)| {
                     let item_element = (props.render_item)(item, index);
-                    
+
                     if props.animated {
                         rsx! {
                             AnimatedListItem {
@@ -160,11 +163,7 @@ pub fn BaseList<T: Clone + PartialEq + 'static>(props: BaseListProps<T>) -> Elem
 
 /// Animated wrapper for list items
 #[component]
-fn AnimatedListItem(
-    index: usize,
-    disabled: bool,
-    children: Element,
-) -> Element {
+fn AnimatedListItem(index: usize, disabled: bool, children: Element) -> Element {
     let mut item_opacity = use_motion(0.0f32);
     let mut item_x = use_motion(-20.0f32);
 

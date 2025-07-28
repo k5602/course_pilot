@@ -3,8 +3,8 @@ use dioxus_motion::prelude::*;
 
 use super::{ContextualPanel, Sidebar};
 use crate::types::Route;
-use crate::ui::{TopBar, use_app_state};
 use crate::ui::{Breadcrumbs, DeepLinkingHandler};
+use crate::ui::{TopBar, use_app_state};
 
 /// Layout wrapper that can be used within Router context
 #[component]

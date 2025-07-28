@@ -1,11 +1,14 @@
+use crate::planner::scheduler::{
+    LearningVelocityAnalysis, LoadDistribution as SchedulerLoadDistribution, PlanAnalysis,
+    analyze_plan_effectiveness,
+};
 use crate::storage::database::Database;
-use crate::types::{Course, AdvancedSchedulerSettings, DifficultyLevel, DistributionStrategy};
+use crate::types::{AdvancedSchedulerSettings, Course, DifficultyLevel, DistributionStrategy};
 use crate::ui::toast_helpers;
-use crate::planner::scheduler::{analyze_plan_effectiveness, PlanAnalysis, LearningVelocityAnalysis, LoadDistribution as SchedulerLoadDistribution};
-use dioxus::prelude::*;
-use uuid::Uuid;
 use anyhow::Result;
+use dioxus::prelude::*;
 use std::sync::Arc;
+use uuid::Uuid;
 
 /// Analytics and AI recommendations hook
 #[derive(Clone)]
@@ -23,7 +26,10 @@ impl AnalyticsManager {
         Ok(DifficultyLevel::all())
     }
 
-    pub async fn validate_advanced_scheduler_settings(&self, settings: &AdvancedSchedulerSettings) -> Result<Vec<String>> {
+    pub async fn validate_advanced_scheduler_settings(
+        &self,
+        settings: &AdvancedSchedulerSettings,
+    ) -> Result<Vec<String>> {
         let settings = settings.clone();
         tokio::task::spawn_blocking(move || {
             let mut errors = Vec::new();
@@ -111,9 +117,7 @@ impl AnalyticsManager {
             // Determine recommended strategy based on course and user characteristics
             let recommended_strategy = match (user_experience, total_videos, has_structure) {
                 // Beginners benefit from spaced repetition
-                (DifficultyLevel::Beginner, _, _) => {
-                    DistributionStrategy::SpacedRepetition
-                }
+                (DifficultyLevel::Beginner, _, _) => DistributionStrategy::SpacedRepetition,
                 // Large courses need adaptive scheduling
                 (_, videos, _) if videos > 50 => DistributionStrategy::Adaptive,
                 // Well-structured courses can use module-based approach
@@ -123,10 +127,8 @@ impl AnalyticsManager {
             };
 
             // Create recommended settings
-            let spaced_repetition_enabled = matches!(
-                recommended_strategy,
-                DistributionStrategy::SpacedRepetition
-            );
+            let spaced_repetition_enabled =
+                matches!(recommended_strategy, DistributionStrategy::SpacedRepetition);
 
             let recommended_settings = AdvancedSchedulerSettings {
                 strategy: recommended_strategy,
@@ -220,12 +222,15 @@ impl AnalyticsManager {
     }
 
     /// Analyze learning velocity for a specific plan
-    pub async fn analyze_learning_velocity(&self, plan_id: Uuid) -> Result<LearningVelocityAnalysis> {
+    pub async fn analyze_learning_velocity(
+        &self,
+        plan_id: Uuid,
+    ) -> Result<LearningVelocityAnalysis> {
         let db = self.db.clone();
         tokio::task::spawn_blocking(move || {
             let plan = crate::storage::load_plan(&db, &plan_id)?
                 .ok_or_else(|| anyhow::anyhow!("Plan not found: {}", plan_id))?;
-            
+
             let analysis = analyze_plan_effectiveness(&plan);
             Ok(analysis.velocity_analysis)
         })
@@ -239,7 +244,7 @@ impl AnalyticsManager {
         tokio::task::spawn_blocking(move || {
             let plan = crate::storage::load_plan(&db, &plan_id)?
                 .ok_or_else(|| anyhow::anyhow!("Plan not found: {}", plan_id))?;
-            
+
             let analysis = analyze_plan_effectiveness(&plan);
             Ok(analysis.load_distribution)
         })
@@ -253,7 +258,7 @@ impl AnalyticsManager {
         tokio::task::spawn_blocking(move || {
             let plan = crate::storage::load_plan(&db, &plan_id)?
                 .ok_or_else(|| anyhow::anyhow!("Plan not found: {}", plan_id))?;
-            
+
             Ok(analyze_plan_effectiveness(&plan))
         })
         .await
@@ -266,14 +271,14 @@ impl AnalyticsManager {
         tokio::task::spawn_blocking(move || {
             let courses = crate::storage::load_courses(&db)?;
             let mut analyses = Vec::new();
-            
+
             for course in courses {
                 if let Ok(Some(plan)) = crate::storage::get_plan_by_course_id(&db, &course.id) {
                     let analysis = analyze_plan_effectiveness(&plan);
                     analyses.push(analysis);
                 }
             }
-            
+
             Ok(analyses)
         })
         .await
@@ -283,7 +288,7 @@ impl AnalyticsManager {
 
 pub fn use_analytics_manager() -> AnalyticsManager {
     let db = use_context::<Arc<Database>>();
-    
+
     let structure_course = use_callback({
         let db = db.clone();
         move |course_id: Uuid| {
@@ -310,35 +315,44 @@ pub fn use_analytics_manager() -> AnalyticsManager {
                     crate::storage::save_course(&db, &course)?;
 
                     Ok(course)
-                }).await;
+                })
+                .await;
 
                 match result {
                     Ok(Ok(_)) => {
                         toast_helpers::success("Course structured successfully");
                     }
                     Ok(Err(e)) => {
-                        toast_helpers::error(format!("Failed to structure course: {}", e));
+                        toast_helpers::error(format!("Failed to structure course: {e}"));
                     }
                     Err(e) => {
-                        toast_helpers::error(format!("Failed to structure course: {}", e));
+                        toast_helpers::error(format!("Failed to structure course: {e}"));
                     }
                 }
             });
             // Return () to match expected callback type
         }
     });
-    
-    AnalyticsManager { db, structure_course }
+
+    AnalyticsManager {
+        db,
+        structure_course,
+    }
 }
 
 /// Hook for reactive AI recommendations
-pub fn use_ai_recommendations(course_id: Uuid, user_experience: DifficultyLevel) -> Resource<Result<AdvancedSchedulerSettings, anyhow::Error>> {
+pub fn use_ai_recommendations(
+    course_id: Uuid,
+    user_experience: DifficultyLevel,
+) -> Resource<Result<AdvancedSchedulerSettings, anyhow::Error>> {
     let analytics_manager = use_analytics_manager();
 
     use_resource(move || {
         let analytics_manager = analytics_manager.clone();
         async move {
-            analytics_manager.get_recommended_advanced_settings(course_id, user_experience).await
+            analytics_manager
+                .get_recommended_advanced_settings(course_id, user_experience)
+                .await
         }
     })
 }

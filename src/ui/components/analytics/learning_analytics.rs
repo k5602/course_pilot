@@ -1,42 +1,47 @@
-use dioxus::prelude::*;
-use crate::storage::{get_clustering_analytics, ClusteringAnalytics, Database};
-use crate::ui::hooks::use_analytics_manager;
-use crate::planner::scheduler::{PlanAnalysis, VelocityCategory};
 use crate::DatabaseError;
+use crate::planner::scheduler::{PlanAnalysis, VelocityCategory};
+use crate::storage::{ClusteringAnalytics, Database, get_clustering_analytics};
+use crate::ui::hooks::use_analytics_manager;
+use dioxus::prelude::*;
 use std::sync::Arc;
 
 #[component]
 pub fn LearningAnalytics() -> Element {
     let analytics_manager = use_analytics_manager();
     let db = use_context::<Arc<Database>>();
-    
+
     let learning_analytics_resource = use_resource(move || {
         let analytics_manager = analytics_manager.clone();
-        async move {
-            analytics_manager.get_learning_analytics().await
-        }
+        async move { analytics_manager.get_learning_analytics().await }
     });
 
     let clustering_analytics_resource = use_resource(move || {
         let db_clone = db.clone();
         async move {
-            tokio::task::spawn_blocking(move || {
-                get_clustering_analytics(&db_clone)
-            }).await.unwrap_or_else(|_| Err(DatabaseError::NotFound("Failed to load analytics".to_string())))
+            tokio::task::spawn_blocking(move || get_clustering_analytics(&db_clone))
+                .await
+                .unwrap_or_else(|_| {
+                    Err(DatabaseError::NotFound(
+                        "Failed to load analytics".to_string(),
+                    ))
+                })
         }
     });
 
-    match (&*learning_analytics_resource.read_unchecked(), &*clustering_analytics_resource.read_unchecked()) {
+    match (
+        &*learning_analytics_resource.read_unchecked(),
+        &*clustering_analytics_resource.read_unchecked(),
+    ) {
         (Some(Ok(plan_analyses)), Some(Ok(clustering_analytics))) => rsx! {
             div { class: "space-y-6",
                 // Learning velocity trends across all plans
                 LearningVelocityChart { plan_analyses: plan_analyses.clone() }
-                
+
                 // Cognitive load distribution visualization
                 CognitiveLoadDistribution { plan_analyses: plan_analyses.clone() }
-                
+
                 // Difficulty progression tracker with recommendations
-                DifficultyProgressionTracker { 
+                DifficultyProgressionTracker {
                     plan_analyses: plan_analyses.clone(),
                     clustering_analytics: clustering_analytics.clone()
                 }
@@ -58,7 +63,7 @@ pub fn LearningAnalytics() -> Element {
                 div { class: "skeleton h-24 w-full" }
                 div { class: "skeleton h-20 w-full" }
             }
-        }
+        },
     }
 }
 
@@ -70,7 +75,7 @@ struct LearningVelocityChartProps {
 #[component]
 fn LearningVelocityChart(props: LearningVelocityChartProps) -> Element {
     let plan_analyses = &props.plan_analyses;
-    
+
     if plan_analyses.is_empty() {
         return rsx! {
             div { class: "card bg-base-100 shadow-sm border border-base-300",
@@ -85,15 +90,22 @@ fn LearningVelocityChart(props: LearningVelocityChartProps) -> Element {
     }
 
     // Calculate aggregate velocity metrics
-    let total_videos: usize = plan_analyses.iter()
-        .map(|analysis| (analysis.velocity_analysis.videos_per_day * analysis.velocity_analysis.total_duration_days as f32) as usize)
+    let total_videos: usize = plan_analyses
+        .iter()
+        .map(|analysis| {
+            (analysis.velocity_analysis.videos_per_day
+                * analysis.velocity_analysis.total_duration_days as f32) as usize
+        })
         .sum();
-    
-    let avg_videos_per_day: f32 = plan_analyses.iter()
+
+    let avg_videos_per_day: f32 = plan_analyses
+        .iter()
         .map(|analysis| analysis.velocity_analysis.videos_per_day)
-        .sum::<f32>() / plan_analyses.len() as f32;
-    
-    let total_study_days: i64 = plan_analyses.iter()
+        .sum::<f32>()
+        / plan_analyses.len() as f32;
+
+    let total_study_days: i64 = plan_analyses
+        .iter()
         .map(|analysis| analysis.velocity_analysis.total_duration_days)
         .sum();
 
@@ -115,7 +127,7 @@ fn LearningVelocityChart(props: LearningVelocityChartProps) -> Element {
                     span { "📈" }
                     "Learning Velocity Trends"
                 }
-                
+
                 div { class: "grid grid-cols-3 gap-4 mt-4",
                     div { class: "stat",
                         div { class: "stat-title", "Avg Videos/Day" }
@@ -138,27 +150,27 @@ fn LearningVelocityChart(props: LearningVelocityChartProps) -> Element {
                 div { class: "mt-6",
                     h4 { class: "font-semibold mb-3", "Velocity Distribution" }
                     div { class: "grid grid-cols-4 gap-2",
-                        VelocityCard { 
-                            label: "Slow", 
-                            count: velocity_counts[0], 
+                        VelocityCard {
+                            label: "Slow",
+                            count: velocity_counts[0],
                             color: "text-info",
                             description: "< 0.5 videos/day"
                         }
-                        VelocityCard { 
-                            label: "Moderate", 
-                            count: velocity_counts[1], 
+                        VelocityCard {
+                            label: "Moderate",
+                            count: velocity_counts[1],
                             color: "text-success",
                             description: "0.5-1.0 videos/day"
                         }
-                        VelocityCard { 
-                            label: "Fast", 
-                            count: velocity_counts[2], 
+                        VelocityCard {
+                            label: "Fast",
+                            count: velocity_counts[2],
                             color: "text-warning",
                             description: "1.0-2.0 videos/day"
                         }
-                        VelocityCard { 
-                            label: "Intensive", 
-                            count: velocity_counts[3], 
+                        VelocityCard {
+                            label: "Intensive",
+                            count: velocity_counts[3],
                             color: "text-error",
                             description: "> 2.0 videos/day"
                         }
@@ -196,7 +208,7 @@ struct CognitiveLoadDistributionProps {
 #[component]
 fn CognitiveLoadDistribution(props: CognitiveLoadDistributionProps) -> Element {
     let plan_analyses = &props.plan_analyses;
-    
+
     if plan_analyses.is_empty() {
         return rsx! {
             div { class: "card bg-base-100 shadow-sm border border-base-300",
@@ -211,25 +223,35 @@ fn CognitiveLoadDistribution(props: CognitiveLoadDistributionProps) -> Element {
     }
 
     // Calculate aggregate cognitive load metrics
-    let avg_load: f32 = plan_analyses.iter()
+    let avg_load: f32 = plan_analyses
+        .iter()
         .map(|analysis| analysis.load_distribution.average_load)
-        .sum::<f32>() / plan_analyses.len() as f32;
-    
-    let total_overloaded: usize = plan_analyses.iter()
+        .sum::<f32>()
+        / plan_analyses.len() as f32;
+
+    let total_overloaded: usize = plan_analyses
+        .iter()
         .map(|analysis| analysis.load_distribution.overloaded_sessions)
         .sum();
-    
-    let total_underloaded: usize = plan_analyses.iter()
+
+    let total_underloaded: usize = plan_analyses
+        .iter()
         .map(|analysis| analysis.load_distribution.underloaded_sessions)
         .sum();
-    
-    let total_sessions: usize = plan_analyses.iter()
-        .map(|analysis| analysis.load_distribution.overloaded_sessions + analysis.load_distribution.underloaded_sessions)
+
+    let total_sessions: usize = plan_analyses
+        .iter()
+        .map(|analysis| {
+            analysis.load_distribution.overloaded_sessions
+                + analysis.load_distribution.underloaded_sessions
+        })
         .sum();
 
-    let avg_variance: f32 = plan_analyses.iter()
+    let avg_variance: f32 = plan_analyses
+        .iter()
         .map(|analysis| analysis.load_distribution.load_variance)
-        .sum::<f32>() / plan_analyses.len() as f32;
+        .sum::<f32>()
+        / plan_analyses.len() as f32;
 
     // Categorize load balance quality
     let balance_quality = match avg_variance {
@@ -246,7 +268,7 @@ fn CognitiveLoadDistribution(props: CognitiveLoadDistributionProps) -> Element {
                     span { "⚖️" }
                     "Cognitive Load Distribution"
                 }
-                
+
                 div { class: "grid grid-cols-2 gap-4 mt-4",
                     div { class: "stat",
                         div { class: "stat-title", "Average Load" }
@@ -291,7 +313,7 @@ fn CognitiveLoadDistribution(props: CognitiveLoadDistributionProps) -> Element {
                         span { class: "font-medium", "Overall Balance Quality" }
                         span { class: "badge {balance_quality.1} badge-outline", "{balance_quality.0}" }
                     }
-                    progress { 
+                    progress {
                         class: "progress progress-accent w-full mt-2",
                         value: ((1.0 - avg_variance.min(1.0)) * 100.0) as i32,
                         max: 100
@@ -331,7 +353,7 @@ struct DifficultyProgressionTrackerProps {
 fn DifficultyProgressionTracker(props: DifficultyProgressionTrackerProps) -> Element {
     let plan_analyses = &props.plan_analyses;
     let clustering_analytics = &props.clustering_analytics;
-    
+
     if plan_analyses.is_empty() {
         return rsx! {
             div { class: "card bg-base-100 shadow-sm border border-base-300",
@@ -346,40 +368,52 @@ fn DifficultyProgressionTracker(props: DifficultyProgressionTrackerProps) -> Ele
     }
 
     // Calculate temporal distribution metrics
-    let avg_gap_days: f32 = plan_analyses.iter()
+    let avg_gap_days: f32 = plan_analyses
+        .iter()
         .map(|analysis| analysis.temporal_distribution.average_gap_days)
-        .sum::<f32>() / plan_analyses.len() as f32;
-    
-    let longest_gap: i64 = plan_analyses.iter()
+        .sum::<f32>()
+        / plan_analyses.len() as f32;
+
+    let longest_gap: i64 = plan_analyses
+        .iter()
         .map(|analysis| analysis.temporal_distribution.longest_gap_days)
         .max()
         .unwrap_or(0);
-    
-    let avg_consistency: f32 = plan_analyses.iter()
-        .map(|analysis| analysis.temporal_distribution.consistency_score)
-        .sum::<f32>() / plan_analyses.len() as f32;
 
-    let avg_weekend_utilization: f32 = plan_analyses.iter()
+    let avg_consistency: f32 = plan_analyses
+        .iter()
+        .map(|analysis| analysis.temporal_distribution.consistency_score)
+        .sum::<f32>()
+        / plan_analyses.len() as f32;
+
+    let avg_weekend_utilization: f32 = plan_analyses
+        .iter()
         .map(|analysis| analysis.temporal_distribution.weekend_utilization)
-        .sum::<f32>() / plan_analyses.len() as f32;
+        .sum::<f32>()
+        / plan_analyses.len() as f32;
 
     // Generate recommendations based on analysis
     let mut recommendations = Vec::new();
-    
+
     if avg_gap_days > 3.0 {
-        recommendations.push("Consider increasing session frequency to maintain momentum".to_string());
+        recommendations
+            .push("Consider increasing session frequency to maintain momentum".to_string());
     }
-    
+
     if avg_consistency < 0.7 {
         recommendations.push("Try to maintain more consistent study intervals".to_string());
     }
-    
+
     if avg_weekend_utilization < 0.3 {
-        recommendations.push("Consider utilizing weekends for additional study sessions".to_string());
+        recommendations
+            .push("Consider utilizing weekends for additional study sessions".to_string());
     }
-    
+
     if clustering_analytics.average_quality_score < 0.6 {
-        recommendations.push("Review course structure quality - some courses may benefit from re-clustering".to_string());
+        recommendations.push(
+            "Review course structure quality - some courses may benefit from re-clustering"
+                .to_string(),
+        );
     }
 
     if recommendations.is_empty() {
@@ -393,7 +427,7 @@ fn DifficultyProgressionTracker(props: DifficultyProgressionTrackerProps) -> Ele
                     span { "📈" }
                     "Difficulty Progression & Recommendations"
                 }
-                
+
                 div { class: "grid grid-cols-2 gap-4 mt-4",
                     div { class: "stat",
                         div { class: "stat-title", "Avg Session Gap" }
@@ -428,7 +462,7 @@ fn DifficultyProgressionTracker(props: DifficultyProgressionTrackerProps) -> Ele
                     }
                     div { class: "space-y-2",
                         {recommendations.iter().enumerate().map(|(index, rec)| rsx! {
-                            div { 
+                            div {
                                 key: "{index}",
                                 class: "flex items-start gap-2 p-3 bg-gradient-to-r from-primary/5 to-secondary/5 rounded-lg border border-primary/10",
                                 div { class: "text-primary font-bold text-sm", "{index + 1}." }

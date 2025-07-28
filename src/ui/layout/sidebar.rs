@@ -3,8 +3,8 @@ use dioxus_free_icons::Icon;
 use dioxus_free_icons::icons::fa_solid_icons::{FaBook, FaGauge, FaGear, FaPlus};
 
 use crate::types::Route;
-use crate::ui::use_app_state;
 use crate::ui::ThemeToggleButton;
+use crate::ui::use_app_state;
 
 // Navigation items configuration
 const NAV_ITEMS: &[NavItem] = if cfg!(debug_assertions) {
@@ -94,12 +94,12 @@ pub fn Sidebar(props: SidebarProps) -> Element {
                 ),
 
                 // Logo/Brand area
-                div { 
+                div {
                     class: "p-4 border-b border-base-300",
                     if props.is_hovered || props.is_mobile_open {
                         h1 { class: "text-xl font-bold text-primary", "Course Pilot" }
                     } else {
-                        div { 
+                        div {
                             class: "w-8 h-8 bg-primary rounded flex items-center justify-center",
                             span { class: "text-primary-content font-bold", "CP" }
                         }
@@ -113,7 +113,7 @@ pub fn Sidebar(props: SidebarProps) -> Element {
                 }
 
                 // Quick import button
-                div { 
+                div {
                     class: "p-4 border-t border-base-300",
                     Link {
                         to: Route::AddCourse {},
@@ -121,9 +121,9 @@ pub fn Sidebar(props: SidebarProps) -> Element {
                             "btn btn-primary w-full {}",
                             if props.is_hovered || props.is_mobile_open { "btn-block" } else { "btn-square" }
                         ),
-                        
+
                         Icon { icon: FaPlus, class: "w-4 h-4" }
-                        
+
                         if props.is_hovered || props.is_mobile_open {
                             span { class: "ml-2", "Import Course" }
                         }
@@ -174,10 +174,10 @@ fn SidebarNavItem(
     is_expanded: bool,
     route: Route,
 ) -> Element {
-    let active_class = if active { 
-        "bg-primary text-primary-content" 
-    } else { 
-        "hover:bg-base-300" 
+    let active_class = if active {
+        "bg-primary text-primary-content"
+    } else {
+        "hover:bg-base-300"
     };
     let tooltip_class = if !is_expanded {
         "tooltip tooltip-right"

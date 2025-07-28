@@ -20,11 +20,10 @@ pub mod ui;
 
 // Re-export commonly used types for convenience
 pub use types::{
-    AdvancedSchedulerSettings, AppState, Course, CourseStructure, DifficultyLevel,
-    DistributionStrategy, ImportJob, ImportStatus, Module, Plan, PlanItem, PlanSettings,
-    RegenerationStatus, Route, Section, StructureMetadata, Note, VideoContext,
-    ContextualPanelState, ContextualPanelTab, ClusteringMetadata, ClusteringAlgorithm,
-    ClusteringStrategy, PlanExt,
+    AdvancedSchedulerSettings, AppState, ClusteringAlgorithm, ClusteringMetadata,
+    ClusteringStrategy, ContextualPanelState, ContextualPanelTab, Course, CourseStructure,
+    DifficultyLevel, DistributionStrategy, ImportJob, ImportStatus, Module, Note, Plan, PlanExt,
+    PlanItem, PlanSettings, RegenerationStatus, Route, Section, StructureMetadata, VideoContext,
 };
 
 // Re-export core functionality
@@ -34,30 +33,27 @@ pub use planner::generate_plan;
 pub use storage::{init_db, load_courses, load_plan, save_course, save_plan};
 
 // Re-export enhanced integrated functions
-pub use ingest::{
-    ImportProgress, ImportStage, import_and_structure_local_folder, import_and_structure_youtube,
-};
+pub use ingest::{ImportProgress, import_and_structure_local_folder, import_and_structure_youtube};
 pub use storage::{
     ClusteringAnalytics, ClusteringPerformancePoint, ProcessingTimeStats, QualityDistribution,
     get_clustering_analytics, get_clustering_performance_history,
     get_courses_by_clustering_quality, get_similar_courses_by_clustering,
     update_clustering_metadata,
 };
+pub use types::ImportStage;
 
 // Re-export UI components for external use
 pub use ui::{
-    AppRoot, AppShell, Dashboard, PlanView, NotesPanel,
-    BaseButton, BaseCard, BaseList, BaseModal, BasePage,
-    ProgressBar, ProgressRing, Toast, ToastContainer,
-    CourseCard, CourseGrid, Breadcrumbs,
+    AppRoot, AppShell, BaseButton, BaseCard, BaseList, BaseModal, BasePage, Breadcrumbs,
+    CourseCard, CourseGrid, Dashboard, NotesPanel, PlanView, ProgressBar, ProgressRing, Toast,
+    ToastContainer,
 };
 
 // Re-export commonly used hooks
 pub use ui::{
-    use_app_state, use_backend, use_course_manager, use_courses_resource,
-    use_export_manager, use_import_manager, use_modal_manager,
-    use_navigation_manager, use_notes_manager, use_plan_manager,
-    use_settings_manager,
+    use_app_state, use_backend, use_course_manager, use_courses_resource, use_export_manager,
+    use_import_manager, use_modal_manager, use_navigation_manager, use_notes_manager,
+    use_plan_manager, use_settings_manager,
 };
 
 // Custom error types

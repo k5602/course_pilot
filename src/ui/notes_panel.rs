@@ -1,6 +1,6 @@
 use crate::ui::{
-    SearchHistory, TagInput, Badge, DropdownItem, DropdownTrigger, UnifiedDropdown, 
-    toast_helpers, Modal, confirmation_modal,
+    Badge, DropdownItem, DropdownTrigger, Modal, SearchHistory, TagInput, UnifiedDropdown,
+    confirmation_modal, toast_helpers,
 };
 use dioxus::prelude::*;
 use dioxus_free_icons::Icon;
@@ -600,7 +600,9 @@ fn NoteCard(props: NoteCardProps) -> Element {
         DropdownItem {
             label: "Export".to_string(),
             icon: Some("📤".to_string()),
-            on_select: Some(EventHandler::new(|_| toast_helpers::info("Exported note (stub)"))),
+            on_select: Some(EventHandler::new(|_| {
+                toast_helpers::info("Exported note (stub)")
+            })),
             disabled: false,
             divider: false,
         },

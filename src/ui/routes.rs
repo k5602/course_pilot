@@ -25,7 +25,7 @@ pub fn Home() -> Element {
 
 #[component]
 pub fn Dashboard() -> Element {
-    rsx! { 
+    rsx! {
         LayoutWrapper {
             crate::ui::dashboard::Dashboard {}
         }
@@ -37,7 +37,7 @@ pub fn PlanView(course_id: String) -> Element {
     // Enhanced route parameter handling with validation and fallbacks
     let navigator = use_navigator();
     let course_manager = crate::ui::hooks::use_course_manager();
-    
+
     // Convert string to UUID with better error handling
     let course_uuid = match Uuid::parse_str(&course_id) {
         Ok(uuid) => uuid,
@@ -48,12 +48,12 @@ pub fn PlanView(course_id: String) -> Element {
 
     // Validate that the course exists
     let course_exists = course_manager.courses.iter().any(|c| c.id == course_uuid);
-    
+
     if !course_exists {
         return render_course_not_found(&course_id, navigator);
     }
 
-    rsx! { 
+    rsx! {
         LayoutWrapper {
             crate::ui::plan_view::PlanView { course_id: course_uuid }
         }
@@ -65,7 +65,7 @@ fn render_invalid_course_id(course_id: &str, navigator: Navigator) -> Element {
     let handle_go_back = move |_| {
         navigator.go_back();
     };
-    
+
     let handle_go_dashboard = move |_| {
         navigator.push(Route::Dashboard {});
     };
@@ -77,14 +77,14 @@ fn render_invalid_course_id(course_id: &str, navigator: Navigator) -> Element {
                     div { class: "mb-6",
                         div { class: "text-6xl mb-4", "🔗" }
                         h1 { class: "text-3xl font-bold mb-2 text-error", "Invalid Course Link" }
-                        p { class: "text-base-content/70 mb-4", 
+                        p { class: "text-base-content/70 mb-4",
                             "The course ID '{course_id}' is not a valid format."
                         }
-                        p { class: "text-sm text-base-content/50", 
+                        p { class: "text-sm text-base-content/50",
                             "Course IDs should be in UUID format (e.g., 123e4567-e89b-12d3-a456-426614174000)"
                         }
                     }
-                    
+
                     div { class: "flex flex-col sm:flex-row gap-3 justify-center",
                         button {
                             class: "btn btn-primary",
@@ -108,11 +108,11 @@ fn render_course_not_found(course_id: &str, navigator: Navigator) -> Element {
     let handle_go_back = move |_| {
         navigator.go_back();
     };
-    
+
     let handle_go_dashboard = move |_| {
         navigator.push(Route::Dashboard {});
     };
-    
+
     let handle_go_courses = move |_| {
         navigator.push(Route::AllCourses {});
     };
@@ -124,14 +124,14 @@ fn render_course_not_found(course_id: &str, navigator: Navigator) -> Element {
                     div { class: "mb-6",
                         div { class: "text-6xl mb-4", "📚" }
                         h1 { class: "text-3xl font-bold mb-2 text-warning", "Course Not Found" }
-                        p { class: "text-base-content/70 mb-4", 
+                        p { class: "text-base-content/70 mb-4",
                             "The course with ID '{course_id}' could not be found."
                         }
-                        p { class: "text-sm text-base-content/50", 
+                        p { class: "text-sm text-base-content/50",
                             "It may have been deleted or you may not have access to it."
                         }
                     }
-                    
+
                     div { class: "flex flex-col sm:flex-row gap-3 justify-center",
                         button {
                             class: "btn btn-primary",
@@ -157,7 +157,7 @@ fn render_course_not_found(course_id: &str, navigator: Navigator) -> Element {
 
 #[component]
 pub fn AllCourses() -> Element {
-    rsx! { 
+    rsx! {
         LayoutWrapper {
             crate::ui::courses::AllCoursesView {}
         }

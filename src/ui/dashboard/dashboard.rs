@@ -1,8 +1,10 @@
 use dioxus::prelude::*;
 use dioxus_motion::prelude::*;
 
-use crate::ui::components::{LearningAnalytics, AIRecommendationsPanel, TodaysSessions, LastAccessedCourse, PomodoroTimer};
 use crate::ui::components::base::BaseCard;
+use crate::ui::components::{
+    AIRecommendationsPanel, LastAccessedCourse, LearningAnalytics, PomodoroTimer, TodaysSessions,
+};
 
 /// Analytics-focused dashboard component
 #[component]
@@ -54,7 +56,7 @@ pub fn Dashboard() -> Element {
                         LearningAnalytics {}
                     }
                 }
-                
+
                 // AI Recommendations
                 BaseCard {
                     title: "AI Recommendations",
@@ -62,7 +64,7 @@ pub fn Dashboard() -> Element {
                         AIRecommendationsPanel {}
                     }
                 }
-                
+
                 // Today's Sessions
                 BaseCard {
                     title: "Today's Sessions",
@@ -70,7 +72,7 @@ pub fn Dashboard() -> Element {
                         TodaysSessions {}
                     }
                 }
-                
+
                 // Continue Learning
                 BaseCard {
                     title: "Continue Learning",
@@ -78,7 +80,7 @@ pub fn Dashboard() -> Element {
                         LastAccessedCourse {}
                     }
                 }
-                
+
                 // Focus Timer
                 BaseCard {
                     title: "Focus Timer",
@@ -90,5 +92,3 @@ pub fn Dashboard() -> Element {
         }
     }
 }
-
-

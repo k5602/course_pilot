@@ -1,11 +1,13 @@
 use dioxus::prelude::*;
 use dioxus_free_icons::Icon;
-use dioxus_free_icons::icons::fa_solid_icons::{FaEye, FaEyeSlash, FaCheck, FaTriangleExclamation, FaArrowUpRightFromSquare, FaKey};
 use dioxus_free_icons::icons::fa_brands_icons::FaYoutube;
+use dioxus_free_icons::icons::fa_solid_icons::{
+    FaArrowUpRightFromSquare, FaCheck, FaEye, FaEyeSlash, FaKey, FaTriangleExclamation,
+};
 
 use crate::storage::AppSettings;
-use crate::ui::hooks::SettingsManager;
 use crate::ui::components::toast_helpers;
+use crate::ui::hooks::SettingsManager;
 
 #[derive(Props, Clone)]
 pub struct APIKeysSettingsProps {
@@ -46,7 +48,7 @@ pub fn APIKeysSettings(props: APIKeysSettingsProps) -> Element {
         let gemini_key = gemini_key();
         let mut youtube_status = youtube_status;
         let mut gemini_status = gemini_status;
-        
+
         move || {
             if !youtube_key.trim().is_empty() {
                 youtube_status.set(ApiKeyStatus::Valid);
@@ -61,7 +63,7 @@ pub fn APIKeysSettings(props: APIKeysSettingsProps) -> Element {
     let test_youtube_key = {
         let youtube_key = youtube_key();
         let mut youtube_status = youtube_status;
-        
+
         move |_| {
             let key = youtube_key.trim().to_string();
             if key.is_empty() {
@@ -70,7 +72,7 @@ pub fn APIKeysSettings(props: APIKeysSettingsProps) -> Element {
             }
 
             youtube_status.set(ApiKeyStatus::Testing);
-            
+
             spawn(async move {
                 // Test the API key by making a simple request
                 match crate::ingest::youtube::validate_api_key(&key).await {
@@ -79,11 +81,13 @@ pub fn APIKeysSettings(props: APIKeysSettingsProps) -> Element {
                         toast_helpers::success("YouTube API key is valid!");
                     }
                     Ok(false) => {
-                        youtube_status.set(ApiKeyStatus::Invalid("API key is invalid or has insufficient permissions".to_string()));
+                        youtube_status.set(ApiKeyStatus::Invalid(
+                            "API key is invalid or has insufficient permissions".to_string(),
+                        ));
                         toast_helpers::error("YouTube API key is invalid");
                     }
                     Err(e) => {
-                        youtube_status.set(ApiKeyStatus::Invalid(format!("Test failed: {}", e)));
+                        youtube_status.set(ApiKeyStatus::Invalid(format!("Test failed: {e}")));
                         toast_helpers::error("Failed to test YouTube API key");
                     }
                 }
@@ -95,7 +99,7 @@ pub fn APIKeysSettings(props: APIKeysSettingsProps) -> Element {
     let test_gemini_key = {
         let gemini_key = gemini_key();
         let mut gemini_status = gemini_status;
-        
+
         move |_| {
             let key = gemini_key.trim().to_string();
             if key.is_empty() {
@@ -104,7 +108,7 @@ pub fn APIKeysSettings(props: APIKeysSettingsProps) -> Element {
             }
 
             gemini_status.set(ApiKeyStatus::Testing);
-            
+
             spawn(async move {
                 // Test the API key by making a simple request
                 match test_gemini_api_key(&key).await {
@@ -113,11 +117,13 @@ pub fn APIKeysSettings(props: APIKeysSettingsProps) -> Element {
                         toast_helpers::success("Gemini API key is valid!");
                     }
                     Ok(false) => {
-                        gemini_status.set(ApiKeyStatus::Invalid("API key is invalid or has insufficient permissions".to_string()));
+                        gemini_status.set(ApiKeyStatus::Invalid(
+                            "API key is invalid or has insufficient permissions".to_string(),
+                        ));
                         toast_helpers::error("Gemini API key is invalid");
                     }
                     Err(e) => {
-                        gemini_status.set(ApiKeyStatus::Invalid(format!("Test failed: {}", e)));
+                        gemini_status.set(ApiKeyStatus::Invalid(format!("Test failed: {e}")));
                         toast_helpers::error("Failed to test Gemini API key");
                     }
                 }
@@ -138,31 +144,39 @@ pub fn APIKeysSettings(props: APIKeysSettingsProps) -> Element {
             let on_settings_updated = on_settings_updated;
             let youtube_key = youtube_key.trim().to_string();
             let gemini_key = gemini_key.trim().to_string();
-            
+
             spawn(async move {
                 is_saving.set(true);
-                
+
                 let mut success = true;
-                
+
                 // Save YouTube API key
-                let youtube_key_opt = if youtube_key.is_empty() { None } else { Some(youtube_key) };
+                let youtube_key_opt = if youtube_key.is_empty() {
+                    None
+                } else {
+                    Some(youtube_key)
+                };
                 if let Err(e) = settings_manager.set_youtube_api_key(youtube_key_opt).await {
-                    toast_helpers::error(format!("Failed to save YouTube API key: {}", e));
+                    toast_helpers::error(format!("Failed to save YouTube API key: {e}"));
                     success = false;
                 }
-                
+
                 // Save Gemini API key
-                let gemini_key_opt = if gemini_key.is_empty() { None } else { Some(gemini_key) };
+                let gemini_key_opt = if gemini_key.is_empty() {
+                    None
+                } else {
+                    Some(gemini_key)
+                };
                 if let Err(e) = settings_manager.set_gemini_api_key(gemini_key_opt).await {
-                    toast_helpers::error(format!("Failed to save Gemini API key: {}", e));
+                    toast_helpers::error(format!("Failed to save Gemini API key: {e}"));
                     success = false;
                 }
-                
+
                 if success {
                     toast_helpers::success("API keys saved successfully!");
                     on_settings_updated.call(());
                 }
-                
+
                 is_saving.set(false);
             });
         }
@@ -212,7 +226,7 @@ pub fn APIKeysSettings(props: APIKeysSettingsProps) -> Element {
                             },
                         }}
                     }
-                    
+
                     div { class: "space-y-4",
                         // API Key Input
                         div { class: "form-control",
@@ -248,7 +262,7 @@ pub fn APIKeysSettings(props: APIKeysSettingsProps) -> Element {
                                     }
                                 }
                             }
-                            
+
                             // Status message
                             if let ApiKeyStatus::Invalid(ref error) = youtube_status() {
                                 label { class: "label",
@@ -256,13 +270,13 @@ pub fn APIKeysSettings(props: APIKeysSettingsProps) -> Element {
                                 }
                             }
                         }
-                        
+
                         // Setup Instructions
                         div { class: "alert alert-info",
                             div {
                                 h4 { class: "font-semibold mb-2", "How to get your YouTube API key:" }
                                 ol { class: "list-decimal list-inside space-y-1 text-sm",
-                                    li { "Go to the " 
+                                    li { "Go to the "
                                         a {
                                             href: "https://console.developers.google.com/",
                                             target: "_blank",
@@ -314,7 +328,7 @@ pub fn APIKeysSettings(props: APIKeysSettingsProps) -> Element {
                             },
                         }}
                     }
-                    
+
                     div { class: "space-y-4",
                         // API Key Input
                         div { class: "form-control",
@@ -350,7 +364,7 @@ pub fn APIKeysSettings(props: APIKeysSettingsProps) -> Element {
                                     }
                                 }
                             }
-                            
+
                             // Status message
                             if let ApiKeyStatus::Invalid(ref error) = gemini_status() {
                                 label { class: "label",
@@ -358,13 +372,13 @@ pub fn APIKeysSettings(props: APIKeysSettingsProps) -> Element {
                                 }
                             }
                         }
-                        
+
                         // Setup Instructions
                         div { class: "alert alert-info",
                             div {
                                 h4 { class: "font-semibold mb-2", "How to get your Gemini API key:" }
                                 ol { class: "list-decimal list-inside space-y-1 text-sm",
-                                    li { "Go to " 
+                                    li { "Go to "
                                         a {
                                             href: "https://makersuite.google.com/app/apikey",
                                             target: "_blank",
@@ -392,7 +406,7 @@ pub fn APIKeysSettings(props: APIKeysSettingsProps) -> Element {
                     class: "btn btn-primary btn-lg",
                     disabled: is_saving(),
                     onclick: save_keys,
-                    
+
                     if is_saving() {
                         span { class: "loading loading-spinner loading-sm mr-2" }
                         "Saving API Keys..."

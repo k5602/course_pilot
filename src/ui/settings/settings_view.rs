@@ -1,19 +1,25 @@
 use dioxus::prelude::*;
 use dioxus_free_icons::Icon;
-use dioxus_free_icons::icons::fa_solid_icons::{FaGear, FaKey, FaBookOpen};
+use dioxus_free_icons::icons::fa_solid_icons::{FaBookOpen, FaDownload, FaGear, FaKey};
 
-use super::{GeneralSettings, APIKeysSettings, CourseDefaultSettings};
+use super::{APIKeysSettings, CourseDefaultSettings, GeneralSettings, ImportSettings};
 
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub enum SettingsTab {
     General,
     ApiKeys,
     CourseDefaults,
+    ImportSettings,
 }
 
 impl SettingsTab {
     pub fn all() -> Vec<Self> {
-        vec![Self::General, Self::ApiKeys, Self::CourseDefaults]
+        vec![
+            Self::General,
+            Self::ApiKeys,
+            Self::CourseDefaults,
+            Self::ImportSettings,
+        ]
     }
 
     pub fn label(&self) -> &'static str {
@@ -21,6 +27,7 @@ impl SettingsTab {
             Self::General => "General",
             Self::ApiKeys => "API Keys",
             Self::CourseDefaults => "Course Defaults",
+            Self::ImportSettings => "Import Settings",
         }
     }
 
@@ -29,6 +36,7 @@ impl SettingsTab {
             Self::General => || rsx! { Icon { icon: FaGear, class: "w-4 h-4" } },
             Self::ApiKeys => || rsx! { Icon { icon: FaKey, class: "w-4 h-4" } },
             Self::CourseDefaults => || rsx! { Icon { icon: FaBookOpen, class: "w-4 h-4" } },
+            Self::ImportSettings => || rsx! { Icon { icon: FaDownload, class: "w-4 h-4" } },
         }
     }
 
@@ -37,6 +45,7 @@ impl SettingsTab {
             Self::General => "Theme, notifications, and general preferences",
             Self::ApiKeys => "Manage YouTube and Gemini API keys",
             Self::CourseDefaults => "Default settings for new courses",
+            Self::ImportSettings => "Configure import behavior and preferences",
         }
     }
 }
@@ -51,7 +60,7 @@ pub fn SettingsView() -> Element {
     let settings_content = match settings_resource.read().as_ref() {
         Some(Ok(settings)) => {
             let tabs = SettingsTab::all();
-            
+
             rsx! {
                 div { class: "space-y-6",
                     // Header section
@@ -69,7 +78,7 @@ pub fn SettingsView() -> Element {
                                 {
                                     let is_selected = active_tab() == tab;
                                     let icon_fn = tab.icon();
-                                    
+
                                     rsx! {
                                         button {
                                             key: "{tab.label()}",
@@ -78,7 +87,7 @@ pub fn SettingsView() -> Element {
                                                 if is_selected { "tab-active" } else { "" }
                                             ),
                                             onclick: move |_| active_tab.set(tab),
-                                            
+
                                             {icon_fn()}
                                             span { "{tab.label()}" }
                                         }
@@ -86,7 +95,7 @@ pub fn SettingsView() -> Element {
                                 }
                             }
                         }
-                        
+
                         // Tab descriptions
                         div { class: "text-center mt-2 mb-4",
                             p { class: "text-sm text-base-content/60",
@@ -118,6 +127,15 @@ pub fn SettingsView() -> Element {
                             },
                             SettingsTab::CourseDefaults => rsx! {
                                 CourseDefaultSettings {
+                                    settings: settings.clone(),
+                                    settings_manager: settings_manager.clone(),
+                                    on_settings_updated: move |_| {
+                                        settings_resource.restart();
+                                    }
+                                }
+                            },
+                            SettingsTab::ImportSettings => rsx! {
+                                ImportSettings {
                                     settings: settings.clone(),
                                     settings_manager: settings_manager.clone(),
                                     on_settings_updated: move |_| {

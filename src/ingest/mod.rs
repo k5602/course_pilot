@@ -16,7 +16,7 @@ pub use crate::ImportError;
 // Enhanced import functions with clustering integration
 use crate::nlp::structure_course;
 use crate::storage::database::Database;
-use crate::types::{Course, ImportJob, ImportStatus};
+use crate::types::{Course, ImportJob, ImportStage};
 use std::path::Path;
 
 // Common validation utilities
@@ -55,6 +55,7 @@ pub fn clean_title(title: &str) -> String {
         .collect::<Vec<_>>()
         .join(" ")
 }
+
 /// Progress tracking for integrated import operations
 #[derive(Debug, Clone)]
 pub struct ImportProgress {
@@ -62,19 +63,6 @@ pub struct ImportProgress {
     pub progress: f32, // 0.0 to 1.0
     pub message: String,
     pub clustering_stage: Option<u8>, // 0-4 for clustering progress
-}
-
-/// Stages of the integrated import process
-#[derive(Debug, Clone, PartialEq)]
-pub enum ImportStage {
-    Starting,
-    Importing,
-    Structuring,
-    Clustering,
-    Optimizing,
-    Saving,
-    Complete,
-    Failed,
 }
 
 /// Enhanced YouTube import with automatic clustering
@@ -87,7 +75,7 @@ pub async fn import_and_structure_youtube(
 ) -> Result<Course, ImportError> {
     // Stage 1: Starting
     progress_callback(ImportProgress {
-        stage: ImportStage::Starting,
+        stage: ImportStage::Fetching,
         progress: 0.0,
         message: "Initializing YouTube import...".to_string(),
         clustering_stage: None,
@@ -95,7 +83,7 @@ pub async fn import_and_structure_youtube(
 
     // Stage 2: Import raw content
     progress_callback(ImportProgress {
-        stage: ImportStage::Importing,
+        stage: ImportStage::Fetching,
         progress: 0.1,
         message: "Fetching playlist data...".to_string(),
         clustering_stage: None,
@@ -106,7 +94,7 @@ pub async fn import_and_structure_youtube(
         .map_err(|e| ImportError::Network(format!("YouTube import failed: {e}")))?;
 
     progress_callback(ImportProgress {
-        stage: ImportStage::Importing,
+        stage: ImportStage::Processing,
         progress: 0.3,
         message: format!("Imported {} videos", sections.len()),
         clustering_stage: None,
@@ -119,7 +107,7 @@ pub async fn import_and_structure_youtube(
 
     // Stage 4: Structure using advanced clustering
     progress_callback(ImportProgress {
-        stage: ImportStage::Structuring,
+        stage: ImportStage::TfIdfAnalysis,
         progress: 0.4,
         message: "Analyzing content structure...".to_string(),
         clustering_stage: Some(0),
@@ -129,7 +117,7 @@ pub async fn import_and_structure_youtube(
     let clustering_progress = |stage: u8, message: String| {
         let progress = 0.4 + (stage as f32 / 4.0) * 0.4; // 0.4 to 0.8
         progress_callback(ImportProgress {
-            stage: ImportStage::Clustering,
+            stage: ImportStage::KMeansClustering,
             progress,
             message,
             clustering_stage: Some(stage),
@@ -153,7 +141,7 @@ pub async fn import_and_structure_youtube(
 
     // Stage 6: Complete
     progress_callback(ImportProgress {
-        stage: ImportStage::Complete,
+        stage: ImportStage::Saving, // Use Saving as final stage since we don't have Complete
         progress: 1.0,
         message: format!(
             "Successfully imported and structured course: {}",
@@ -174,7 +162,7 @@ pub async fn import_and_structure_local_folder(
 ) -> Result<Course, ImportError> {
     // Stage 1: Starting
     progress_callback(ImportProgress {
-        stage: ImportStage::Starting,
+        stage: ImportStage::Fetching,
         progress: 0.0,
         message: "Initializing folder import...".to_string(),
         clustering_stage: None,
@@ -182,7 +170,7 @@ pub async fn import_and_structure_local_folder(
 
     // Stage 2: Import raw content
     progress_callback(ImportProgress {
-        stage: ImportStage::Importing,
+        stage: ImportStage::Processing,
         progress: 0.1,
         message: "Scanning video files...".to_string(),
         clustering_stage: None,
@@ -192,7 +180,7 @@ pub async fn import_and_structure_local_folder(
         .map_err(|e| ImportError::FileSystem(format!("Folder import failed: {e}")))?;
 
     progress_callback(ImportProgress {
-        stage: ImportStage::Importing,
+        stage: ImportStage::Processing,
         progress: 0.3,
         message: format!("Found {} video files", sections.len()),
         clustering_stage: None,
@@ -204,7 +192,7 @@ pub async fn import_and_structure_local_folder(
 
     // Stage 4: Structure using advanced clustering
     progress_callback(ImportProgress {
-        stage: ImportStage::Structuring,
+        stage: ImportStage::TfIdfAnalysis,
         progress: 0.4,
         message: "Analyzing content structure...".to_string(),
         clustering_stage: Some(0),
@@ -214,7 +202,7 @@ pub async fn import_and_structure_local_folder(
     let clustering_progress = |stage: u8, message: String| {
         let progress = 0.4 + (stage as f32 / 4.0) * 0.4; // 0.4 to 0.8
         progress_callback(ImportProgress {
-            stage: ImportStage::Clustering,
+            stage: ImportStage::KMeansClustering,
             progress,
             message,
             clustering_stage: Some(stage),
@@ -238,7 +226,7 @@ pub async fn import_and_structure_local_folder(
 
     // Stage 6: Complete
     progress_callback(ImportProgress {
-        stage: ImportStage::Complete,
+        stage: ImportStage::Saving, // Use Saving as final stage since we don't have Complete
         progress: 1.0,
         message: format!(
             "Successfully imported and structured course: {}",
@@ -280,12 +268,14 @@ pub fn create_import_job(message: String) -> ImportJob {
 
 /// Update import job with progress
 pub fn update_import_job_progress(job: &mut ImportJob, progress: &ImportProgress) {
-    job.progress_percentage = progress.progress * 100.0;
-    job.message = progress.message.clone();
+    job.update_stage_progress(
+        progress.stage.clone(),
+        progress.progress * 100.0,
+        progress.message.clone(),
+    );
 
-    match progress.stage {
-        ImportStage::Complete => job.status = ImportStatus::Completed,
-        ImportStage::Failed => job.status = ImportStatus::Failed,
-        _ => job.status = ImportStatus::InProgress,
+    // Update status based on progress
+    if progress.progress >= 1.0 {
+        job.mark_completed();
     }
 }

@@ -7,34 +7,34 @@ pub struct BaseCardProps {
     /// Card title
     #[props(optional)]
     pub title: Option<String>,
-    
+
     /// Card subtitle
     #[props(optional)]
     pub subtitle: Option<String>,
-    
+
     /// Card content
     pub children: Element,
-    
+
     /// DaisyUI card variant classes
     #[props(default = "card")]
     pub variant: &'static str,
-    
+
     /// Additional CSS classes
     #[props(default = "")]
     pub class: &'static str,
-    
+
     /// Enable hover effects
     #[props(default = true)]
     pub hover_effect: bool,
-    
+
     /// Click handler
     #[props(optional)]
     pub on_click: Option<EventHandler<MouseEvent>>,
-    
+
     /// Action buttons in card footer
     #[props(optional)]
     pub actions: Option<Element>,
-    
+
     /// Header actions (e.g., dropdown menu)
     #[props(optional)]
     pub header_actions: Option<Element>,
@@ -44,8 +44,11 @@ pub struct BaseCardProps {
 /// Provides consistent card structure with configurable content
 #[component]
 pub fn BaseCard(props: BaseCardProps) -> Element {
-    let card_classes = format!("{} {} bg-base-100 shadow-xl border border-base-300", props.variant, props.class);
-    
+    let card_classes = format!(
+        "{} {} bg-base-100 shadow-xl border border-base-300",
+        props.variant, props.class
+    );
+
     // Animation setup for hover effects
     let mut scale = use_motion(1.0f32);
     let mut y = use_motion(0.0f32);
@@ -97,7 +100,7 @@ pub fn BaseCard(props: BaseCardProps) -> Element {
                 if props.title.is_some() || props.header_actions.is_some() {
                     div {
                         class: "flex justify-between items-start mb-2",
-                        
+
                         // Title section
                         if let Some(title) = &props.title {
                             div {
@@ -106,16 +109,16 @@ pub fn BaseCard(props: BaseCardProps) -> Element {
                                     class: "card-title text-lg",
                                     "{title}"
                                 }
-                                
+
                                 if let Some(subtitle) = &props.subtitle {
-                                    p { 
-                                        class: "text-base-content/70 text-sm mt-1", 
-                                        "{subtitle}" 
+                                    p {
+                                        class: "text-base-content/70 text-sm mt-1",
+                                        "{subtitle}"
                                     }
                                 }
                             }
                         }
-                        
+
                         // Header actions
                         if let Some(header_actions) = &props.header_actions {
                             div {

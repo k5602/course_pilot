@@ -3,8 +3,8 @@ use dioxus_motion::prelude::*;
 
 use super::{ContextualPanel, Sidebar};
 use crate::types::Route;
-use crate::ui::{TopBar, use_app_state};
 use crate::ui::{Breadcrumbs, DeepLinkingHandler};
+use crate::ui::{TopBar, use_app_state};
 
 // Route components are now in src/ui/routes.rs
 

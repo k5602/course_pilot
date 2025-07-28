@@ -26,7 +26,7 @@ pub fn use_navigation_manager() -> NavigationManager {
     let courses = use_courses_reactive();
     let current_route = use_route::<Route>();
     let navigator = use_navigator();
-    
+
     // Track navigation history for better back/forward support
     let navigation_history = use_signal(Vec::<Route>::new);
     let current_history_index = use_signal(|| 0usize);
@@ -37,30 +37,30 @@ pub fn use_navigation_manager() -> NavigationManager {
     let navigate_to = use_callback({
         let mut navigation_history = navigation_history;
         let mut current_history_index = current_history_index;
-        let navigator = navigator.clone();
-        
+        let navigator = navigator;
+
         move |route: Route| {
             // Add to history
             let mut history = navigation_history();
             let current_index = current_history_index();
-            
+
             // Remove any forward history if we're navigating from middle of history
             if current_index < history.len() - 1 {
                 history.truncate(current_index + 1);
             }
-            
+
             history.push(route.clone());
             navigation_history.set(history);
             current_history_index.set(current_history_index() + 1);
-            
+
             navigator.push(route);
         }
     });
 
     let go_back = use_callback({
         let mut current_history_index = current_history_index;
-        let navigator = navigator.clone();
-        
+        let navigator = navigator;
+
         move |_| {
             let current_index = current_history_index();
             if current_index > 0 {
@@ -72,8 +72,8 @@ pub fn use_navigation_manager() -> NavigationManager {
 
     let go_forward = use_callback({
         let mut current_history_index = current_history_index;
-        let navigator = navigator.clone();
-        
+        let navigator = navigator;
+
         move |_| {
             let history = navigation_history();
             let current_index = current_history_index();
@@ -85,8 +85,8 @@ pub fn use_navigation_manager() -> NavigationManager {
     });
 
     let replace_route = use_callback({
-        let navigator = navigator.clone();
-        
+        let navigator = navigator;
+
         move |route: Route| {
             navigator.replace(route);
         }
@@ -96,7 +96,7 @@ pub fn use_navigation_manager() -> NavigationManager {
     let history = navigation_history();
     let current_index = current_history_index();
     let can_go_back = current_index > 0;
-    let can_go_forward = history.len() > 0 && current_index < history.len() - 1;
+    let can_go_forward = !history.is_empty() && current_index < history.len() - 1;
 
     NavigationManager {
         current_route,
@@ -165,7 +165,7 @@ fn generate_breadcrumbs(current_route: Route, courses: &[Course]) -> Vec<Breadcr
             // Add course-specific breadcrumb
             if course.is_some() {
                 breadcrumbs.push(BreadcrumbItem {
-                    label: format!("{} - Study Plan", course_name),
+                    label: format!("{course_name} - Study Plan"),
                     route: None,
                     active: true,
                 });

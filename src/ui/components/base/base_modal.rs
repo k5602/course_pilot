@@ -6,33 +6,33 @@ use dioxus_motion::prelude::*;
 pub struct BaseModalProps {
     /// Whether the modal is open
     pub open: bool,
-    
+
     /// Modal title
     #[props(optional)]
     pub title: Option<String>,
-    
+
     /// Modal content
     pub children: Element,
-    
+
     /// Footer actions
     #[props(optional)]
     pub actions: Option<Element>,
-    
+
     /// Close handler
     pub on_close: EventHandler<()>,
-    
+
     /// Modal size variant
     #[props(default = "modal-box")]
     pub size: &'static str,
-    
+
     /// Additional CSS classes
     #[props(default = "")]
     pub class: &'static str,
-    
+
     /// Optional icon for the title
     #[props(optional)]
     pub icon: Option<Element>,
-    
+
     /// Whether clicking backdrop closes modal
     #[props(default = true)]
     pub close_on_backdrop: bool,
@@ -71,7 +71,10 @@ pub fn BaseModal(props: BaseModalProps) -> Element {
         opacity.get_value()
     );
 
-    let modal_box_class = format!("{} bg-base-100 shadow-xl relative {}", props.size, props.class);
+    let modal_box_class = format!(
+        "{} bg-base-100 shadow-xl relative {}",
+        props.size, props.class
+    );
 
     rsx! {
         // Modal overlay using DaisyUI classes
@@ -82,7 +85,7 @@ pub fn BaseModal(props: BaseModalProps) -> Element {
                     props.on_close.call(());
                 }
             },
-            
+
             // Modal content box
             div {
                 class: "{modal_box_class}",
@@ -93,17 +96,17 @@ pub fn BaseModal(props: BaseModalProps) -> Element {
                 if let Some(title) = &props.title {
                     div {
                         class: "flex justify-between items-center mb-4",
-                        
+
                         h3 {
                             class: "font-bold text-lg flex items-center gap-2",
-                            
+
                             if let Some(icon) = &props.icon {
                                 {icon.clone()}
                             }
-                            
+
                             "{title}"
                         }
-                        
+
                         button {
                             class: "btn btn-sm btn-circle btn-ghost",
                             onclick: move |_| props.on_close.call(()),

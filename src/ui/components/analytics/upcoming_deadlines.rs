@@ -1,13 +1,13 @@
-use dioxus::prelude::*;
-use crate::types::{Plan, PlanItem};
 use crate::storage::Database;
-use chrono::{DateTime, Local, Utc, Duration as ChronoDuration};
+use crate::types::{Plan, PlanItem};
+use chrono::{DateTime, Duration as ChronoDuration, Local, Utc};
+use dioxus::prelude::*;
 use std::sync::Arc;
 
 #[component]
 pub fn UpcomingDeadlines() -> Element {
     let db = use_context::<Arc<Database>>();
-    
+
     let upcoming_deadlines_resource = use_resource(move || {
         let db = db.clone();
         async move {
@@ -17,22 +17,29 @@ pub fn UpcomingDeadlines() -> Element {
                 let mut upcoming_sessions = Vec::new();
                 let now = Utc::now();
                 let next_week = now + ChronoDuration::days(7);
-                
+
                 for course in courses {
                     if let Ok(Some(plan)) = crate::storage::get_plan_by_course_id(&db, &course.id) {
                         for (index, item) in plan.items.iter().enumerate() {
                             // Only include future sessions within the next week
                             if item.date > now && item.date <= next_week && !item.completed {
-                                upcoming_sessions.push((plan.clone(), index, item.clone(), course.name.clone()));
+                                upcoming_sessions.push((
+                                    plan.clone(),
+                                    index,
+                                    item.clone(),
+                                    course.name.clone(),
+                                ));
                             }
                         }
                     }
                 }
-                
+
                 // Sort by date
                 upcoming_sessions.sort_by_key(|(_, _, item, _)| item.date);
                 Ok::<Vec<(Plan, usize, PlanItem, String)>, anyhow::Error>(upcoming_sessions)
-            }).await.unwrap_or_else(|_| Err(anyhow::anyhow!("Failed to load upcoming sessions")))
+            })
+            .await
+            .unwrap_or_else(|_| Err(anyhow::anyhow!("Failed to load upcoming sessions")))
         }
     });
 
@@ -59,11 +66,11 @@ pub fn UpcomingDeadlines() -> Element {
                             "Upcoming Deadlines"
                             span { class: "badge badge-primary badge-sm", "{upcoming_sessions.len()}" }
                         }
-                        
+
                         div { class: "space-y-2 mt-4",
                             {upcoming_sessions.iter().take(5).map(|(plan, index, item, course_name)| {
                                 let urgency = get_urgency_level(item.date);
-                                
+
                                 rsx! {
                                     UpcomingDeadlineCard {
                                         key: "{plan.id}-{index}",
@@ -76,10 +83,10 @@ pub fn UpcomingDeadlines() -> Element {
                                 }
                             })}
                         }
-                        
+
                         if upcoming_sessions.len() > 5 {
                             div { class: "text-center mt-3",
-                                p { class: "text-sm text-base-content/60", 
+                                p { class: "text-sm text-base-content/60",
                                     "And {upcoming_sessions.len() - 5} more sessions this week..."
                                 }
                             }
@@ -87,7 +94,7 @@ pub fn UpcomingDeadlines() -> Element {
                     }
                 }
             }
-        },
+        }
         Some(Err(e)) => rsx! {
             div { class: "alert alert-error",
                 "Failed to load upcoming deadlines: {e}"
@@ -95,7 +102,7 @@ pub fn UpcomingDeadlines() -> Element {
         },
         None => rsx! {
             div { class: "skeleton h-32 w-full" }
-        }
+        },
     }
 }
 
@@ -121,7 +128,7 @@ fn UpcomingDeadlineCard(props: UpcomingDeadlineCardProps) -> Element {
     let local_time = props.item.date.with_timezone(&Local);
     let time_str = local_time.format("%a %m/%d at %H:%M").to_string();
     let duration_str = crate::types::duration_utils::format_duration(props.item.total_duration);
-    
+
     let (urgency_color, urgency_icon, urgency_text) = match props.urgency {
         UrgencyLevel::Critical => ("border-l-error text-error", "🚨", "Due soon"),
         UrgencyLevel::High => ("border-l-warning text-warning", "⚠️", "Due tomorrow"),
@@ -146,7 +153,7 @@ fn UpcomingDeadlineCard(props: UpcomingDeadlineCardProps) -> Element {
                     span { "{props.item.video_indices.len()} videos" }
                 }
             }
-            
+
             div { class: "flex flex-col gap-1",
                 button {
                     class: "btn btn-primary btn-xs",
@@ -172,7 +179,7 @@ fn UpcomingDeadlineCard(props: UpcomingDeadlineCardProps) -> Element {
 fn get_urgency_level(deadline: DateTime<Utc>) -> UrgencyLevel {
     let now = Utc::now();
     let time_until = deadline.signed_duration_since(now);
-    
+
     if time_until <= ChronoDuration::days(1) {
         UrgencyLevel::Critical
     } else if time_until <= ChronoDuration::days(2) {

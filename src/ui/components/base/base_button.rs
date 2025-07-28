@@ -6,39 +6,39 @@ use dioxus_motion::prelude::*;
 pub struct BaseButtonProps {
     /// Button content
     pub children: Element,
-    
+
     /// Click handler
     #[props(optional)]
     pub onclick: Option<EventHandler<MouseEvent>>,
-    
+
     /// DaisyUI color (primary, secondary, accent, etc.)
     #[props(optional)]
     pub color: Option<String>,
-    
+
     /// DaisyUI size (sm, md, lg)
     #[props(optional)]
     pub size: Option<String>,
-    
+
     /// DaisyUI variant (outline, ghost, link, etc.)
     #[props(optional)]
     pub variant: Option<String>,
-    
+
     /// Additional CSS classes
     #[props(default = "")]
     pub class: &'static str,
-    
+
     /// Disabled state
     #[props(default = false)]
     pub disabled: bool,
-    
+
     /// Optional icon to display at the start of the button
     #[props(optional)]
     pub icon: Option<Element>,
-    
+
     /// Loading state
     #[props(default = false)]
     pub loading: bool,
-    
+
     /// Button type
     #[props(default = "button")]
     pub button_type: &'static str,
@@ -49,7 +49,7 @@ pub struct BaseButtonProps {
 #[component]
 pub fn BaseButton(props: BaseButtonProps) -> Element {
     let mut classes = vec!["btn".to_string()];
-    
+
     if let Some(color) = &props.color {
         classes.push(format!("btn-{color}"));
     }
@@ -70,7 +70,7 @@ pub fn BaseButton(props: BaseButtonProps) -> Element {
     }
 
     let mut scale = use_motion(0.95f32);
-    
+
     use_effect(move || {
         scale.animate_to(
             1.0,
@@ -82,7 +82,7 @@ pub fn BaseButton(props: BaseButtonProps) -> Element {
             })),
         );
     });
-    
+
     let style = format!(
         "transform: scale({}); transition: transform 0.2s;",
         scale.get_value()
@@ -99,13 +99,13 @@ pub fn BaseButton(props: BaseButtonProps) -> Element {
                     handler.call(evt);
                 }
             },
-            
+
             if props.loading {
                 span { class: "loading loading-spinner loading-sm mr-2" }
             } else if let Some(icon) = &props.icon {
                 span { class: "mr-2 flex items-center", {icon.clone()} }
             }
-            
+
             {props.children}
         }
     }

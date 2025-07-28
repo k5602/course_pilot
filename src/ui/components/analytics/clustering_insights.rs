@@ -1,48 +1,61 @@
-use dioxus::prelude::*;
-use crate::storage::{get_clustering_analytics, ClusteringAnalytics, Database, get_courses_by_clustering_quality};
+use crate::storage::{
+    ClusteringAnalytics, Database, get_clustering_analytics, get_courses_by_clustering_quality,
+};
 use crate::types::{ClusteringAlgorithm, ClusteringStrategy, Course, TopicInfo};
-use std::sync::Arc;
+use dioxus::prelude::*;
 use std::collections::HashMap;
+use std::sync::Arc;
 
 #[component]
 pub fn ClusteringInsights() -> Element {
     let db = use_context::<Arc<Database>>();
     let db_for_analytics = db.clone();
     let db_for_courses = db.clone();
-    
+
     let clustering_analytics_resource = use_resource(move || {
         let db_clone = db_for_analytics.clone();
         async move {
-            tokio::task::spawn_blocking(move || {
-                get_clustering_analytics(&db_clone)
-            }).await.unwrap_or_else(|_| Err(crate::DatabaseError::NotFound("Failed to load clustering analytics".to_string())))
+            tokio::task::spawn_blocking(move || get_clustering_analytics(&db_clone))
+                .await
+                .unwrap_or_else(|_| {
+                    Err(crate::DatabaseError::NotFound(
+                        "Failed to load clustering analytics".to_string(),
+                    ))
+                })
         }
     });
 
     let high_quality_courses_resource = use_resource(move || {
         let db_clone = db_for_courses.clone();
         async move {
-            tokio::task::spawn_blocking(move || {
-                get_courses_by_clustering_quality(&db_clone, 0.8)
-            }).await.unwrap_or_else(|_| Err(crate::DatabaseError::NotFound("Failed to load high quality courses".to_string())))
+            tokio::task::spawn_blocking(move || get_courses_by_clustering_quality(&db_clone, 0.8))
+                .await
+                .unwrap_or_else(|_| {
+                    Err(crate::DatabaseError::NotFound(
+                        "Failed to load high quality courses".to_string(),
+                    ))
+                })
         }
     });
 
-    match (&*clustering_analytics_resource.read_unchecked(), &*high_quality_courses_resource.read_unchecked()) {
+    match (
+        &*clustering_analytics_resource.read_unchecked(),
+        &*high_quality_courses_resource.read_unchecked(),
+    ) {
         (Some(Ok(analytics)), Some(Ok(high_quality_courses))) => rsx! {
             div { class: "space-y-6",
                 // Clustering quality overview
                 ClusteringQualityOverview { analytics: analytics.clone() }
-                
+
                 // Algorithm performance comparison
                 AlgorithmPerformanceComparison { analytics: analytics.clone() }
-                
+
                 // Interactive similarity matrix (simplified visualization)
                 SimilarityMatrixVisualization { high_quality_courses: high_quality_courses.clone() }
-                
+
                 // Topic analysis and keyword clouds
                 TopicAnalysisVisualization { high_quality_courses: high_quality_courses.clone() }
-                
+
                 // Performance metrics
                 ClusteringPerformanceMetrics { analytics: analytics.clone() }
             }
@@ -58,7 +71,7 @@ pub fn ClusteringInsights() -> Element {
                 div { class: "skeleton h-24 w-full" }
                 div { class: "skeleton h-20 w-full" }
             }
-        }
+        },
     }
 }
 
@@ -70,14 +83,15 @@ struct ClusteringQualityOverviewProps {
 #[component]
 fn ClusteringQualityOverview(props: ClusteringQualityOverviewProps) -> Element {
     let analytics = &props.analytics;
-    
+
     // Calculate overall clustering health
     let clustering_health = if analytics.total_courses == 0 {
         ("No Data", "text-base-content/50", 0.0)
     } else {
-        let structured_percentage = (analytics.clustered_courses as f32 / analytics.total_courses as f32) * 100.0;
+        let structured_percentage =
+            (analytics.clustered_courses as f32 / analytics.total_courses as f32) * 100.0;
         let quality_score = analytics.average_quality_score;
-        
+
         match (structured_percentage, quality_score) {
             (p, q) if p >= 80.0 && q >= 0.8 => ("Excellent", "text-success", q),
             (p, q) if p >= 60.0 && q >= 0.6 => ("Good", "text-info", q),
@@ -93,7 +107,7 @@ fn ClusteringQualityOverview(props: ClusteringQualityOverviewProps) -> Element {
                     span { "🎯" }
                     "Clustering Quality Overview"
                 }
-                
+
                 div { class: "grid grid-cols-3 gap-4 mt-4",
                     div { class: "stat",
                         div { class: "stat-title", "Overall Health" }
@@ -121,8 +135,8 @@ fn ClusteringQualityOverview(props: ClusteringQualityOverviewProps) -> Element {
                             count: analytics.quality_distribution.excellent,
                             color: "text-success",
                             range: "0.8 - 1.0",
-                            percentage: if analytics.clustered_courses > 0 { 
-                                (analytics.quality_distribution.excellent as f32 / analytics.clustered_courses as f32) * 100.0 
+                            percentage: if analytics.clustered_courses > 0 {
+                                (analytics.quality_distribution.excellent as f32 / analytics.clustered_courses as f32) * 100.0
                             } else { 0.0 }
                         }
                         QualityDistributionCard {
@@ -130,8 +144,8 @@ fn ClusteringQualityOverview(props: ClusteringQualityOverviewProps) -> Element {
                             count: analytics.quality_distribution.good,
                             color: "text-info",
                             range: "0.6 - 0.8",
-                            percentage: if analytics.clustered_courses > 0 { 
-                                (analytics.quality_distribution.good as f32 / analytics.clustered_courses as f32) * 100.0 
+                            percentage: if analytics.clustered_courses > 0 {
+                                (analytics.quality_distribution.good as f32 / analytics.clustered_courses as f32) * 100.0
                             } else { 0.0 }
                         }
                         QualityDistributionCard {
@@ -139,8 +153,8 @@ fn ClusteringQualityOverview(props: ClusteringQualityOverviewProps) -> Element {
                             count: analytics.quality_distribution.fair,
                             color: "text-warning",
                             range: "0.4 - 0.6",
-                            percentage: if analytics.clustered_courses > 0 { 
-                                (analytics.quality_distribution.fair as f32 / analytics.clustered_courses as f32) * 100.0 
+                            percentage: if analytics.clustered_courses > 0 {
+                                (analytics.quality_distribution.fair as f32 / analytics.clustered_courses as f32) * 100.0
                             } else { 0.0 }
                         }
                         QualityDistributionCard {
@@ -148,8 +162,8 @@ fn ClusteringQualityOverview(props: ClusteringQualityOverviewProps) -> Element {
                             count: analytics.quality_distribution.poor,
                             color: "text-error",
                             range: "< 0.4",
-                            percentage: if analytics.clustered_courses > 0 { 
-                                (analytics.quality_distribution.poor as f32 / analytics.clustered_courses as f32) * 100.0 
+                            percentage: if analytics.clustered_courses > 0 {
+                                (analytics.quality_distribution.poor as f32 / analytics.clustered_courses as f32) * 100.0
                             } else { 0.0 }
                         }
                     }
@@ -167,16 +181,18 @@ struct AlgorithmPerformanceComparisonProps {
 #[component]
 fn AlgorithmPerformanceComparison(props: AlgorithmPerformanceComparisonProps) -> Element {
     let analytics = &props.analytics;
-    
+
     // Convert algorithm distribution to sorted vector for display
-    let mut algorithm_stats: Vec<(ClusteringAlgorithm, usize)> = analytics.algorithm_distribution
+    let mut algorithm_stats: Vec<(ClusteringAlgorithm, usize)> = analytics
+        .algorithm_distribution
         .iter()
         .map(|(alg, count)| (alg.clone(), *count))
         .collect();
     algorithm_stats.sort_by(|a, b| b.1.cmp(&a.1)); // Sort by usage count descending
 
     // Convert strategy distribution to sorted vector
-    let mut strategy_stats: Vec<(ClusteringStrategy, usize)> = analytics.strategy_distribution
+    let mut strategy_stats: Vec<(ClusteringStrategy, usize)> = analytics
+        .strategy_distribution
         .iter()
         .map(|(strat, count)| (strat.clone(), *count))
         .collect();
@@ -189,7 +205,7 @@ fn AlgorithmPerformanceComparison(props: AlgorithmPerformanceComparisonProps) ->
                     span { "⚙️" }
                     "Algorithm Performance Comparison"
                 }
-                
+
                 div { class: "grid grid-cols-1 lg:grid-cols-2 gap-6 mt-4",
                     // Algorithm usage
                     div {
@@ -214,7 +230,7 @@ fn AlgorithmPerformanceComparison(props: AlgorithmPerformanceComparisonProps) ->
                             }
                         }
                     }
-                    
+
                     // Strategy selection
                     div {
                         h4 { class: "font-semibold mb-3", "Strategy Selection" }
@@ -264,7 +280,7 @@ struct SimilarityMatrixVisualizationProps {
 #[component]
 fn SimilarityMatrixVisualization(props: SimilarityMatrixVisualizationProps) -> Element {
     let courses = &props.high_quality_courses;
-    
+
     if courses.is_empty() {
         return rsx! {
             div { class: "card bg-base-100 shadow-sm border border-base-300",
@@ -288,7 +304,7 @@ fn SimilarityMatrixVisualization(props: SimilarityMatrixVisualizationProps) -> E
                     span { "🔗" }
                     "Interactive Similarity Matrix"
                 }
-                
+
                 if display_courses.len() < 2 {
                     div { class: "text-center py-6 text-base-content/60",
                         p { "Need at least 2 structured courses for similarity analysis" }
@@ -300,7 +316,7 @@ fn SimilarityMatrixVisualization(props: SimilarityMatrixVisualizationProps) -> E
                             h4 { class: "font-semibold mb-2", "Courses in Analysis:" }
                             div { class: "flex flex-wrap gap-2",
                                 {display_courses.iter().enumerate().map(|(index, course)| rsx! {
-                                    span { 
+                                    span {
                                         key: "{course.id}",
                                         class: "badge badge-outline badge-sm",
                                         "{index + 1}. {course.name}"
@@ -308,10 +324,10 @@ fn SimilarityMatrixVisualization(props: SimilarityMatrixVisualizationProps) -> E
                                 })}
                             }
                         }
-                        
+
                         // Simplified similarity grid
                         SimilarityGrid { courses: display_courses.clone() }
-                        
+
                         // Legend
                         div { class: "mt-4 flex items-center gap-4 text-xs",
                             span { class: "flex items-center gap-1",
@@ -346,7 +362,7 @@ struct TopicAnalysisVisualizationProps {
 #[component]
 fn TopicAnalysisVisualization(props: TopicAnalysisVisualizationProps) -> Element {
     let courses = &props.high_quality_courses;
-    
+
     // Extract all topics from courses
     let mut all_topics: Vec<TopicInfo> = Vec::new();
     for course in courses {
@@ -356,22 +372,24 @@ fn TopicAnalysisVisualization(props: TopicAnalysisVisualizationProps) -> Element
             }
         }
     }
-    
+
     // Aggregate topics by keyword
     let mut topic_aggregation: HashMap<String, (f32, usize)> = HashMap::new();
     for topic in &all_topics {
-        let entry = topic_aggregation.entry(topic.keyword.clone()).or_insert((0.0, 0));
+        let entry = topic_aggregation
+            .entry(topic.keyword.clone())
+            .or_insert((0.0, 0));
         entry.0 += topic.relevance_score;
         entry.1 += topic.video_count;
     }
-    
+
     // Convert to sorted vector
     let mut aggregated_topics: Vec<(String, f32, usize)> = topic_aggregation
         .into_iter()
         .map(|(keyword, (total_relevance, total_videos))| (keyword, total_relevance, total_videos))
         .collect();
     aggregated_topics.sort_by(|a, b| b.1.partial_cmp(&a.1).unwrap_or(std::cmp::Ordering::Equal));
-    
+
     // Take top 20 topics
     aggregated_topics.truncate(20);
 
@@ -382,7 +400,7 @@ fn TopicAnalysisVisualization(props: TopicAnalysisVisualizationProps) -> Element
                     span { "☁️" }
                     "Topic Analysis & Content Keywords"
                 }
-                
+
                 if aggregated_topics.is_empty() {
                     div { class: "text-center py-8 text-base-content/60",
                         div { class: "text-4xl mb-2", "📝" }
@@ -406,7 +424,7 @@ fn TopicAnalysisVisualization(props: TopicAnalysisVisualizationProps) -> Element
                                         r if *r >= 2.0 => "badge-secondary",
                                         _ => "badge-accent",
                                     };
-                                    
+
                                     rsx! {
                                         span {
                                             key: "{keyword}",
@@ -418,7 +436,7 @@ fn TopicAnalysisVisualization(props: TopicAnalysisVisualizationProps) -> Element
                                 })}
                             }
                         }
-                        
+
                         // Top topics table
                         div {
                             h4 { class: "font-semibold mb-3", "Top Content Topics" }
@@ -439,13 +457,13 @@ fn TopicAnalysisVisualization(props: TopicAnalysisVisualizationProps) -> Element
                                                 r if *r >= 2.0 => ("Medium", "text-info"),
                                                 _ => ("Low", "text-warning"),
                                             };
-                                            
+
                                             rsx! {
                                                 tr { key: "{keyword}",
                                                     td { class: "font-medium", "{keyword}" }
                                                     td { "{relevance:.2}" }
                                                     td { "{video_count}" }
-                                                    td { 
+                                                    td {
                                                         span { class: "badge badge-outline badge-xs {strength.1}", "{strength.0}" }
                                                     }
                                                 }
@@ -471,7 +489,7 @@ struct ClusteringPerformanceMetricsProps {
 fn ClusteringPerformanceMetrics(props: ClusteringPerformanceMetricsProps) -> Element {
     let analytics = &props.analytics;
     let stats = &analytics.processing_time_stats;
-    
+
     // Performance assessment
     let performance_assessment = match stats.average_ms {
         avg if avg < 1000.0 => ("Excellent", "text-success", "< 1s average"),
@@ -487,7 +505,7 @@ fn ClusteringPerformanceMetrics(props: ClusteringPerformanceMetricsProps) -> Ele
                     span { "⚡" }
                     "Clustering Performance Metrics"
                 }
-                
+
                 div { class: "grid grid-cols-2 lg:grid-cols-4 gap-4 mt-4",
                     div { class: "stat",
                         div { class: "stat-title", "Performance" }
@@ -522,13 +540,13 @@ fn ClusteringPerformanceMetrics(props: ClusteringPerformanceMetricsProps) -> Ele
                         } else {
                             p { "⚠️ Clustering may be slow for large courses - consider optimization" }
                         }
-                        
+
                         if (stats.max_ms as f64 - stats.min_ms as f64) > stats.average_ms * 2.0 {
                             p { "📊 High variance in processing times - performance depends on course complexity" }
                         } else {
                             p { "📊 Consistent processing times across different course sizes" }
                         }
-                        
+
                         p { "💡 Processing time scales with course size and content complexity" }
                     }
                 }
@@ -581,7 +599,7 @@ fn AlgorithmUsageBar(props: AlgorithmUsageBarProps) -> Element {
         div { class: "flex items-center gap-3",
             div { class: "w-20 text-sm font-medium", "{algorithm_name}" }
             div { class: "flex-1 bg-base-300 rounded-full h-2",
-                div { 
+                div {
                     class: "bg-primary h-2 rounded-full transition-all duration-300",
                     style: "width: {props.percentage}%"
                 }
@@ -613,7 +631,7 @@ fn StrategyUsageBar(props: StrategyUsageBarProps) -> Element {
         div { class: "flex items-center gap-3",
             div { class: "w-24 text-sm font-medium", "{strategy_name}" }
             div { class: "flex-1 bg-base-300 rounded-full h-2",
-                div { 
+                div {
                     class: "bg-secondary h-2 rounded-full transition-all duration-300",
                     style: "width: {props.percentage}%"
                 }
@@ -632,7 +650,7 @@ struct SimilarityGridProps {
 fn SimilarityGrid(props: SimilarityGridProps) -> Element {
     let courses = &props.courses;
     let course_count = courses.len();
-    
+
     // Pre-calculate all similarity values and elements
     let grid_data: Vec<(usize, usize, f32, String)> = (0..course_count)
         .flat_map(|i| {
@@ -640,7 +658,7 @@ fn SimilarityGrid(props: SimilarityGridProps) -> Element {
                 let similarity = calculate_course_similarity(&courses[i], &courses[j]);
                 let color_class = match similarity {
                     s if s >= 0.8 => "bg-success text-success-content".to_string(),
-                    s if s >= 0.6 => "bg-info text-info-content".to_string(), 
+                    s if s >= 0.6 => "bg-info text-info-content".to_string(),
                     s if s >= 0.4 => "bg-warning text-warning-content".to_string(),
                     _ => "bg-error text-error-content".to_string(),
                 };
@@ -648,7 +666,7 @@ fn SimilarityGrid(props: SimilarityGridProps) -> Element {
             })
         })
         .collect();
-    
+
     rsx! {
         div { class: "grid gap-2",
             style: "grid-template-columns: repeat({course_count}, 1fr);",
@@ -669,9 +687,10 @@ fn calculate_course_similarity(course1: &Course, course2: &Course) -> f32 {
     if course1.id == course2.id {
         return 1.0;
     }
-    
+
     // Simple similarity based on course name and video count
-    let name_similarity = crate::nlp::text_similarity(&course1.name.to_lowercase(), &course2.name.to_lowercase());
+    let name_similarity =
+        crate::nlp::text_similarity(&course1.name.to_lowercase(), &course2.name.to_lowercase());
     let video_count_similarity = {
         let count1 = course1.video_count() as f32;
         let count2 = course2.video_count() as f32;
@@ -681,7 +700,9 @@ fn calculate_course_similarity(course1: &Course, course2: &Course) -> f32 {
             1.0 - ((count1 - count2).abs() / (count1 + count2).max(1.0))
         }
     };
-    
+
     // Weighted average
-    (name_similarity * 0.7 + video_count_similarity * 0.3).max(0.0).min(1.0)
+    (name_similarity * 0.7 + video_count_similarity * 0.3)
+        .max(0.0)
+        .min(1.0)
 }

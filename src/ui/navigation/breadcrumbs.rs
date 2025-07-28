@@ -1,8 +1,8 @@
 use crate::types::Route;
-use crate::ui::hooks::{use_navigation_manager, BreadcrumbItem};
+use crate::ui::hooks::{BreadcrumbItem, use_navigation_manager};
 use dioxus::prelude::*;
 use dioxus_free_icons::Icon;
-use dioxus_free_icons::icons::fa_solid_icons::{FaChevronRight,FaHouse};
+use dioxus_free_icons::icons::fa_solid_icons::{FaChevronRight, FaHouse};
 
 /// Enhanced breadcrumb navigation component with router context integration
 #[component]
@@ -27,7 +27,7 @@ pub fn Breadcrumbs(current_route: Route) -> Element {
             "aria-label": "Breadcrumb navigation",
             ul {
                 class: "flex items-center space-x-2",
-                
+
                 // Home icon for first breadcrumb
                 li {
                     class: "flex items-center",
@@ -48,7 +48,7 @@ pub fn Breadcrumbs(current_route: Route) -> Element {
                             }
                         }
                     }
-                    
+
                     if breadcrumbs.len() > 1 {
                         Icon {
                             icon: FaChevronRight,
@@ -56,11 +56,11 @@ pub fn Breadcrumbs(current_route: Route) -> Element {
                         }
                     }
                 }
-                
+
                 // Remaining breadcrumbs
                 {breadcrumbs.iter().skip(1).enumerate().map(|(idx, item)| {
                     let is_last = idx == breadcrumbs.len() - 2; // -2 because we skipped first
-                    render_breadcrumb_item(item, idx + 1, breadcrumbs.len(), is_last, navigator.clone())
+                    render_breadcrumb_item(item, idx + 1, breadcrumbs.len(), is_last, navigator)
                 })}
             }
         }
@@ -68,7 +68,13 @@ pub fn Breadcrumbs(current_route: Route) -> Element {
 }
 
 /// Render individual breadcrumb item with enhanced accessibility and navigation
-fn render_breadcrumb_item(item: &BreadcrumbItem, idx: usize, _total: usize, is_last: bool, navigator: Navigator) -> Element {
+fn render_breadcrumb_item(
+    item: &BreadcrumbItem,
+    idx: usize,
+    _total: usize,
+    is_last: bool,
+    navigator: Navigator,
+) -> Element {
     rsx! {
         li {
             key: "{idx}",

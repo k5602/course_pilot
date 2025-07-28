@@ -1,8 +1,8 @@
 use crate::types::Course;
 use crate::ui::{
-    BadgeData, Card, CardVariant, DropdownTrigger, UnifiedDropdown, 
-    create_course_actions, ExportFormatDialog, toast_helpers,
-    use_course_manager, use_course_progress, use_modal_manager,
+    BadgeData, Card, CardVariant, DropdownTrigger, ExportFormatDialog, UnifiedDropdown,
+    create_course_actions, toast_helpers, use_course_manager, use_course_progress,
+    use_modal_manager,
 };
 use dioxus::prelude::*;
 
@@ -127,15 +127,13 @@ pub fn CourseCard(props: CourseCardProps) -> Element {
 
                 // Call the callback (which handles the async work and toast messages internally)
                 export_manager.export_course_with_progress.call((
-                    course_id, 
-                    format, 
+                    course_id,
+                    format,
                     Box::new(|progress, message| {
                         // Update toast with progress information
                         let progress_percent = (progress * 100.0).round() as u8;
-                        toast_helpers::info(format!(
-                            "{message} ({progress_percent}%)"
-                        ));
-                    })
+                        toast_helpers::info(format!("{message} ({progress_percent}%)"));
+                    }),
                 ));
             });
         }

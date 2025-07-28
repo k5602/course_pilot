@@ -1,26 +1,24 @@
 use crate::export::{ExportFormat, ExportResult};
 use crate::storage::settings::AppSettings;
-use crate::types::{Course, Plan, PlanSettings, Note, AdvancedSchedulerSettings, DifficultyLevel, DistributionStrategy};
-use uuid::Uuid;
+use crate::types::{
+    AdvancedSchedulerSettings, Course, DifficultyLevel, DistributionStrategy, Note, Plan,
+    PlanSettings,
+};
 use anyhow::Result;
 use std::path::PathBuf;
+use uuid::Uuid;
 
 use super::{
-    use_course_manager, 
-    use_plan_manager, ProgressInfo,
-    use_notes_manager,
-    use_analytics_manager,
-    use_import_manager, FolderValidation,
-    use_export_manager,
-    use_settings_manager,
+    FolderValidation, ProgressInfo, use_analytics_manager, use_course_manager, use_export_manager,
+    use_import_manager, use_notes_manager, use_plan_manager, use_settings_manager,
 };
 
-use super::use_courses::CourseManager;
-use super::use_plans::PlanManager;
-use super::use_notes::NotesManager;
 use super::use_analytics::AnalyticsManager;
-use super::use_import::ImportManager;
+use super::use_courses::CourseManager;
 use super::use_export::ExportManager;
+use super::use_import::ImportManager;
+use super::use_notes::NotesManager;
+use super::use_plans::PlanManager;
 use super::use_settings::SettingsManager;
 
 /// Unified backend interface that combines all the specialized hooks
@@ -77,7 +75,9 @@ impl Backend {
         item_index: usize,
         completed: bool,
     ) -> Result<()> {
-        self.plans.update_plan_item_completion(plan_id, item_index, completed).await
+        self.plans
+            .update_plan_item_completion(plan_id, item_index, completed)
+            .await
     }
 
     pub async fn get_plan_progress(&self, plan_id: Uuid) -> Result<ProgressInfo> {
@@ -110,15 +110,23 @@ impl Backend {
         course_id: Uuid,
         video_index: Option<usize>,
     ) -> Result<Vec<Note>> {
-        self.notes.list_notes_by_course_and_video_index(course_id, video_index).await
+        self.notes
+            .list_notes_by_course_and_video_index(course_id, video_index)
+            .await
     }
 
     pub async fn list_notes_by_video(&self, video_id: Uuid) -> Result<Vec<Note>> {
         self.notes.list_notes_by_video(video_id).await
     }
 
-    pub async fn list_notes_by_video_index(&self, course_id: Uuid, video_index: usize) -> Result<Vec<Note>> {
-        self.notes.list_notes_by_video_index(course_id, video_index).await
+    pub async fn list_notes_by_video_index(
+        &self,
+        course_id: Uuid,
+        video_index: usize,
+    ) -> Result<Vec<Note>> {
+        self.notes
+            .list_notes_by_video_index(course_id, video_index)
+            .await
     }
 
     pub async fn search_notes(&self, query: &str) -> Result<Vec<Note>> {
@@ -142,7 +150,11 @@ impl Backend {
     }
 
     // --- Export ---
-    pub async fn export_course(&self, course_id: Uuid, format: ExportFormat) -> Result<ExportResult> {
+    pub async fn export_course(
+        &self,
+        course_id: Uuid,
+        format: ExportFormat,
+    ) -> Result<ExportResult> {
         self.export.export_course(course_id, format).await
     }
 
@@ -150,7 +162,11 @@ impl Backend {
         self.export.export_plan(plan_id, format).await
     }
 
-    pub async fn export_notes(&self, course_id: Uuid, format: ExportFormat) -> Result<ExportResult> {
+    pub async fn export_notes(
+        &self,
+        course_id: Uuid,
+        format: ExportFormat,
+    ) -> Result<ExportResult> {
         self.export.export_notes(course_id, format).await
     }
 
@@ -163,7 +179,9 @@ impl Backend {
     where
         F: Fn(f32, String) + Send + Sync + 'static,
     {
-        self.export.export_course_with_progress(course_id, format, Box::new(progress_callback)).await
+        self.export
+            .export_course_with_progress(course_id, format, Box::new(progress_callback))
+            .await
     }
 
     // --- Analytics ---
@@ -175,8 +193,13 @@ impl Backend {
         self.analytics.get_available_difficulty_levels().await
     }
 
-    pub async fn validate_advanced_scheduler_settings(&self, settings: &AdvancedSchedulerSettings) -> Result<Vec<String>> {
-        self.analytics.validate_advanced_scheduler_settings(settings).await
+    pub async fn validate_advanced_scheduler_settings(
+        &self,
+        settings: &AdvancedSchedulerSettings,
+    ) -> Result<Vec<String>> {
+        self.analytics
+            .validate_advanced_scheduler_settings(settings)
+            .await
     }
 
     pub async fn get_recommended_advanced_settings(
@@ -184,7 +207,9 @@ impl Backend {
         course_id: Uuid,
         user_experience: DifficultyLevel,
     ) -> Result<AdvancedSchedulerSettings> {
-        self.analytics.get_recommended_advanced_settings(course_id, user_experience).await
+        self.analytics
+            .get_recommended_advanced_settings(course_id, user_experience)
+            .await
     }
 
     pub async fn structure_course(&self, course_id: Uuid) -> Result<Course> {
@@ -199,7 +224,9 @@ impl Backend {
     where
         F: Fn(f32, String) + Send + Sync + 'static,
     {
-        self.analytics.structure_course_with_progress(course_id, progress_callback).await
+        self.analytics
+            .structure_course_with_progress(course_id, progress_callback)
+            .await
     }
 
     // --- Import ---
@@ -211,8 +238,14 @@ impl Backend {
         self.import.validate_folder(path).await
     }
 
-    pub async fn import_from_local_folder(&self, folder_path: PathBuf, course_title: Option<String>) -> Result<Course> {
-        self.import.import_from_local_folder(folder_path, course_title).await
+    pub async fn import_from_local_folder(
+        &self,
+        folder_path: PathBuf,
+        course_title: Option<String>,
+    ) -> Result<Course> {
+        self.import
+            .import_from_local_folder(folder_path, course_title)
+            .await
     }
 
     // --- Settings ---

@@ -10,7 +10,6 @@ use uuid::Uuid;
 use crate::ui::routes::ToastTest;
 use crate::ui::routes::{AddCourse, AllCourses, Dashboard, Home, PlanView, Settings};
 
-
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub struct Course {
     pub id: Uuid,
@@ -427,6 +426,56 @@ pub struct ImportJob {
     pub progress_percentage: f32,
     pub message: String,
     pub created_at: DateTime<Utc>,
+    pub current_stage: ImportStage,
+    pub stages: Vec<ImportStageInfo>,
+    pub clustering_preview: Option<ClusteringPreview>,
+    pub can_cancel: bool,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+pub enum ImportStage {
+    Fetching,
+    Processing,
+    TfIdfAnalysis,
+    KMeansClustering,
+    Optimization,
+    Saving,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+pub struct ImportStageInfo {
+    pub stage: ImportStage,
+    pub name: String,
+    pub description: String,
+    pub progress: f32,
+    pub status: StageStatus,
+    pub duration_ms: Option<u64>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+pub enum StageStatus {
+    Pending,
+    InProgress,
+    Completed,
+    Failed(String),
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+pub struct ClusteringPreview {
+    pub quality_score: f32,
+    pub confidence_level: f32,
+    pub cluster_count: usize,
+    pub rationale: String,
+    pub key_topics: Vec<String>,
+    pub estimated_modules: Vec<EstimatedModule>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+pub struct EstimatedModule {
+    pub title: String,
+    pub video_count: usize,
+    pub confidence: f32,
+    pub key_topics: Vec<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
@@ -435,6 +484,181 @@ pub enum ImportStatus {
     InProgress,
     Completed,
     Failed,
+    Cancelled,
+}
+
+impl ImportJob {
+    pub fn new(message: String) -> Self {
+        let stages = vec![
+            ImportStageInfo {
+                stage: ImportStage::Fetching,
+                name: "Fetching Data".to_string(),
+                description: "Downloading playlist information and video metadata".to_string(),
+                progress: 0.0,
+                status: StageStatus::Pending,
+                duration_ms: None,
+            },
+            ImportStageInfo {
+                stage: ImportStage::Processing,
+                name: "Processing Content".to_string(),
+                description: "Analyzing video titles and extracting content features".to_string(),
+                progress: 0.0,
+                status: StageStatus::Pending,
+                duration_ms: None,
+            },
+            ImportStageInfo {
+                stage: ImportStage::TfIdfAnalysis,
+                name: "TF-IDF Analysis".to_string(),
+                description: "Computing term frequency and semantic similarity scores".to_string(),
+                progress: 0.0,
+                status: StageStatus::Pending,
+                duration_ms: None,
+            },
+            ImportStageInfo {
+                stage: ImportStage::KMeansClustering,
+                name: "K-Means Clustering".to_string(),
+                description: "Grouping videos into coherent learning modules".to_string(),
+                progress: 0.0,
+                status: StageStatus::Pending,
+                duration_ms: None,
+            },
+            ImportStageInfo {
+                stage: ImportStage::Optimization,
+                name: "Structure Optimization".to_string(),
+                description: "Refining module boundaries and optimizing learning flow".to_string(),
+                progress: 0.0,
+                status: StageStatus::Pending,
+                duration_ms: None,
+            },
+            ImportStageInfo {
+                stage: ImportStage::Saving,
+                name: "Saving Course".to_string(),
+                description: "Persisting course structure and metadata to database".to_string(),
+                progress: 0.0,
+                status: StageStatus::Pending,
+                duration_ms: None,
+            },
+        ];
+
+        Self {
+            id: Uuid::new_v4(),
+            status: ImportStatus::Starting,
+            progress_percentage: 0.0,
+            message,
+            created_at: Utc::now(),
+            current_stage: ImportStage::Fetching,
+            stages,
+            clustering_preview: None,
+            can_cancel: true,
+        }
+    }
+
+    pub fn update_stage_progress(&mut self, stage: ImportStage, progress: f32, message: String) {
+        self.current_stage = stage.clone();
+        self.message = message;
+
+        // Update the specific stage
+        if let Some(stage_info) = self.stages.iter_mut().find(|s| s.stage == stage) {
+            stage_info.progress = progress;
+            stage_info.status = StageStatus::InProgress;
+        }
+
+        // Calculate overall progress based on stage completion
+        let stage_weight = 100.0 / self.stages.len() as f32;
+        let mut total_progress = 0.0;
+
+        for stage_info in &self.stages {
+            match stage_info.status {
+                StageStatus::Completed => total_progress += stage_weight,
+                StageStatus::InProgress => {
+                    total_progress += stage_weight * (stage_info.progress / 100.0)
+                }
+                _ => {}
+            }
+        }
+
+        self.progress_percentage = total_progress;
+        self.status = ImportStatus::InProgress;
+    }
+
+    pub fn complete_stage(&mut self, stage: ImportStage, duration_ms: u64) {
+        if let Some(stage_info) = self.stages.iter_mut().find(|s| s.stage == stage) {
+            stage_info.status = StageStatus::Completed;
+            stage_info.progress = 100.0;
+            stage_info.duration_ms = Some(duration_ms);
+        }
+
+        // Recalculate overall progress
+        self.update_overall_progress();
+    }
+
+    pub fn fail_stage(&mut self, stage: ImportStage, error: String) {
+        if let Some(stage_info) = self.stages.iter_mut().find(|s| s.stage == stage) {
+            stage_info.status = StageStatus::Failed(error.clone());
+        }
+
+        self.status = ImportStatus::Failed;
+        self.message = error;
+        self.can_cancel = false;
+    }
+
+    pub fn set_clustering_preview(&mut self, preview: ClusteringPreview) {
+        self.clustering_preview = Some(preview);
+    }
+
+    pub fn mark_completed(&mut self) {
+        self.status = ImportStatus::Completed;
+        self.progress_percentage = 100.0;
+        self.can_cancel = false;
+
+        // Mark all stages as completed
+        for stage_info in &mut self.stages {
+            if stage_info.status != StageStatus::Completed {
+                stage_info.status = StageStatus::Completed;
+                stage_info.progress = 100.0;
+            }
+        }
+    }
+
+    pub fn mark_cancelled(&mut self) {
+        self.status = ImportStatus::Cancelled;
+        self.message = "Import cancelled by user".to_string();
+        self.can_cancel = false;
+    }
+
+    fn update_overall_progress(&mut self) {
+        let stage_weight = 100.0 / self.stages.len() as f32;
+        let mut total_progress = 0.0;
+
+        for stage_info in &self.stages {
+            match stage_info.status {
+                StageStatus::Completed => total_progress += stage_weight,
+                StageStatus::InProgress => {
+                    total_progress += stage_weight * (stage_info.progress / 100.0)
+                }
+                _ => {}
+            }
+        }
+
+        self.progress_percentage = total_progress;
+    }
+
+    // Legacy methods for backward compatibility
+    pub fn update_progress(&mut self, percentage: f32, message: String) {
+        self.progress_percentage = percentage.clamp(0.0, 100.0);
+        self.message = message;
+        if percentage >= 100.0 {
+            self.status = ImportStatus::Completed;
+        } else {
+            self.status = ImportStatus::InProgress;
+        }
+    }
+
+    pub fn mark_failed(&mut self, error_message: String) {
+        self.status = ImportStatus::Failed;
+        self.message = error_message;
+        self.can_cancel = false;
+    }
 }
 
 #[derive(Debug, Clone, Default)]
@@ -477,7 +701,6 @@ pub enum CourseStatus {
     Structured,
     Unstructured,
     Pending,
-
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -940,33 +1163,6 @@ impl PlanViewState {
     /// Get count of selected videos
     pub fn selected_video_count(&self) -> usize {
         self.selected_videos.len()
-    }
-}
-
-impl ImportJob {
-    pub fn new(message: String) -> Self {
-        Self {
-            id: Uuid::new_v4(),
-            status: ImportStatus::Starting,
-            progress_percentage: 0.0,
-            message,
-            created_at: Utc::now(),
-        }
-    }
-
-    pub fn update_progress(&mut self, percentage: f32, message: String) {
-        self.progress_percentage = percentage.clamp(0.0, 100.0);
-        self.message = message;
-        if percentage >= 100.0 {
-            self.status = ImportStatus::Completed;
-        } else {
-            self.status = ImportStatus::InProgress;
-        }
-    }
-
-    pub fn mark_failed(&mut self, error_message: String) {
-        self.status = ImportStatus::Failed;
-        self.message = error_message;
     }
 }
 

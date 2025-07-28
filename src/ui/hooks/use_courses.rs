@@ -1,10 +1,10 @@
 use crate::storage::database::Database;
 use crate::types::Course;
 use crate::ui::toast_helpers;
-use dioxus::prelude::*;
-use uuid::Uuid;
 use anyhow::Result;
+use dioxus::prelude::*;
 use std::sync::Arc;
+use uuid::Uuid;
 
 /// Course management hook with all course-related operations
 #[derive(Clone)]
@@ -22,11 +22,9 @@ pub struct CourseManager {
 impl CourseManager {
     pub async fn list_courses(&self) -> Result<Vec<Course>> {
         let db = self.db.clone();
-        tokio::task::spawn_blocking(move || {
-            crate::storage::load_courses(&db).map_err(Into::into)
-        })
-        .await
-        .unwrap_or_else(|e| Err(anyhow::anyhow!("Join error: {e}")))
+        tokio::task::spawn_blocking(move || crate::storage::load_courses(&db).map_err(Into::into))
+            .await
+            .unwrap_or_else(|e| Err(anyhow::anyhow!("Join error: {e}")))
     }
 
     pub async fn get_course(&self, id: Uuid) -> Result<Option<Course>> {
@@ -75,7 +73,7 @@ impl CourseManager {
 
 pub fn use_course_manager() -> CourseManager {
     let db = use_context::<Arc<Database>>();
-    
+
     // Load courses resource
     let courses_resource = use_resource({
         let db = db.clone();
@@ -84,7 +82,9 @@ pub fn use_course_manager() -> CourseManager {
             async move {
                 tokio::task::spawn_blocking(move || {
                     crate::storage::load_courses(&db).map_err(Into::into)
-                }).await.unwrap_or_else(|e| Err(anyhow::anyhow!("Join error: {}", e)))
+                })
+                .await
+                .unwrap_or_else(|e| Err(anyhow::anyhow!("Join error: {}", e)))
             }
         }
     });
@@ -128,17 +128,18 @@ pub fn use_course_manager() -> CourseManager {
                     } else {
                         Err(anyhow::anyhow!("Course not found"))
                     }
-                }).await;
+                })
+                .await;
 
                 match result {
                     Ok(Ok(_)) => {
                         toast_helpers::success("Course updated successfully");
                     }
                     Ok(Err(e)) => {
-                        toast_helpers::error(format!("Failed to update course: {}", e));
+                        toast_helpers::error(format!("Failed to update course: {e}"));
                     }
                     Err(e) => {
-                        toast_helpers::error(format!("Failed to update course: {}", e));
+                        toast_helpers::error(format!("Failed to update course: {e}"));
                     }
                 }
             });
@@ -153,25 +154,26 @@ pub fn use_course_manager() -> CourseManager {
             spawn(async move {
                 let result = tokio::task::spawn_blocking(move || {
                     crate::storage::delete_course(&db, &course_id)
-                }).await;
+                })
+                .await;
 
                 match result {
                     Ok(Ok(_)) => {
                         toast_helpers::success("Course deleted successfully");
                     }
                     Ok(Err(e)) => {
-                        toast_helpers::error(format!("Failed to delete course: {}", e));
+                        toast_helpers::error(format!("Failed to delete course: {e}"));
                     }
                     Err(e) => {
-                        toast_helpers::error(format!("Failed to delete course: {}", e));
+                        toast_helpers::error(format!("Failed to delete course: {e}"));
                     }
                 }
             });
             // Return () to match expected callback type
         }
     });
-    
-    CourseManager { 
+
+    CourseManager {
         db,
         courses,
         is_loading,
@@ -189,9 +191,7 @@ pub fn use_courses_resource() -> Resource<Result<Vec<Course>, anyhow::Error>> {
 
     use_resource(move || {
         let course_manager = course_manager.clone();
-        async move {
-            course_manager.list_courses().await
-        }
+        async move { course_manager.list_courses().await }
     })
 }
 
@@ -201,23 +201,19 @@ pub fn use_course_resource(course_id: Uuid) -> Resource<Result<Option<Course>, a
 
     use_resource(move || {
         let course_manager = course_manager.clone();
-        async move {
-            course_manager.get_course(course_id).await
-        }
+        async move { course_manager.get_course(course_id).await }
     })
 }
 
 /// Hook for course progress using plan manager
 pub fn use_course_progress(course_id: Uuid) -> (f32, String, Option<String>) {
     use super::use_plans::use_plan_manager;
-    
+
     let plan_manager = use_plan_manager();
-    
+
     let progress_resource = use_resource(move || {
         let plan_manager = plan_manager.clone();
-        async move {
-            plan_manager.get_course_progress(course_id).await
-        }
+        async move { plan_manager.get_course_progress(course_id).await }
     });
 
     match &*progress_resource.read_unchecked() {
@@ -248,12 +244,10 @@ pub fn use_course_progress(course_id: Uuid) -> (f32, String, Option<String>) {
 /// Hook for course management with reactive state
 pub fn use_course_management() -> (Vec<Course>, bool, Option<String>, impl Fn()) {
     let course_manager = use_course_manager();
-    
+
     let courses_resource: Resource<Result<Vec<Course>>> = use_resource(move || {
         let course_manager = course_manager.clone();
-        async move {
-            course_manager.list_courses().await
-        }
+        async move { course_manager.list_courses().await }
     });
 
     let courses_state = courses_resource.read_unchecked();

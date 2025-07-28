@@ -1,10 +1,10 @@
 use dioxus::prelude::*;
 use dioxus_free_icons::Icon;
-use dioxus_free_icons::icons::fa_solid_icons::{FaPalette, FaBell, FaChartLine, FaClock};
+use dioxus_free_icons::icons::fa_solid_icons::{FaBell, FaChartLine, FaClock, FaPalette};
 
 use crate::storage::AppSettings;
-use crate::ui::hooks::SettingsManager;
 use crate::ui::components::toast_helpers;
+use crate::ui::hooks::SettingsManager;
 
 #[derive(Props, Clone)]
 pub struct GeneralSettingsProps {
@@ -67,20 +67,20 @@ pub fn GeneralSettings(props: GeneralSettingsProps) -> Element {
             let settings_manager = settings_manager.clone();
             let on_settings_updated = on_settings_updated;
             let settings = local_settings();
-            
+
             spawn(async move {
                 is_saving.set(true);
-                
+
                 match settings_manager.save_settings(settings).await {
                     Ok(_) => {
                         toast_helpers::success("Settings saved successfully!");
                         on_settings_updated.call(());
                     }
                     Err(e) => {
-                        toast_helpers::error(format!("Failed to save settings: {}", e));
+                        toast_helpers::error(format!("Failed to save settings: {e}"));
                     }
                 }
-                
+
                 is_saving.set(false);
             });
         }
@@ -144,7 +144,7 @@ pub fn GeneralSettings(props: GeneralSettingsProps) -> Element {
                         Icon { icon: FaPalette, class: "w-5 h-5 text-primary" }
                         h3 { class: "text-lg font-semibold", "Theme & Appearance" }
                     }
-                    
+
                     div { class: "form-control",
                         label { class: "label",
                             span { class: "label-text font-medium", "Theme" }
@@ -155,7 +155,7 @@ pub fn GeneralSettings(props: GeneralSettingsProps) -> Element {
                             onchange: move |evt| {
                                 handle_theme_change(evt.value());
                             },
-                            
+
                             {themes.iter().map(|(value, label)| {
                                 rsx! {
                                     option {
@@ -182,7 +182,7 @@ pub fn GeneralSettings(props: GeneralSettingsProps) -> Element {
                         Icon { icon: FaBell, class: "w-5 h-5 text-primary" }
                         h3 { class: "text-lg font-semibold", "Notifications" }
                     }
-                    
+
                     div { class: "space-y-4",
                         div { class: "form-control",
                             label { class: "label cursor-pointer justify-start gap-3",
@@ -213,7 +213,7 @@ pub fn GeneralSettings(props: GeneralSettingsProps) -> Element {
                         Icon { icon: FaChartLine, class: "w-5 h-5 text-primary" }
                         h3 { class: "text-lg font-semibold", "Course Processing" }
                     }
-                    
+
                     div { class: "space-y-4",
                         div { class: "form-control",
                             label { class: "label cursor-pointer justify-start gap-3",
@@ -244,7 +244,7 @@ pub fn GeneralSettings(props: GeneralSettingsProps) -> Element {
                         Icon { icon: FaClock, class: "w-5 h-5 text-primary" }
                         h3 { class: "text-lg font-semibold", "Analytics & Tracking" }
                     }
-                    
+
                     div { class: "space-y-4",
                         div { class: "form-control",
                             label { class: "label cursor-pointer justify-start gap-3",
@@ -264,7 +264,7 @@ pub fn GeneralSettings(props: GeneralSettingsProps) -> Element {
                                 }
                             }
                         }
-                        
+
                         div { class: "form-control",
                             label { class: "label cursor-pointer justify-start gap-3",
                                 input {
@@ -293,7 +293,7 @@ pub fn GeneralSettings(props: GeneralSettingsProps) -> Element {
                     class: "btn btn-primary",
                     disabled: is_saving(),
                     onclick: save_settings,
-                    
+
                     if is_saving() {
                         span { class: "loading loading-spinner loading-sm mr-2" }
                         "Saving..."

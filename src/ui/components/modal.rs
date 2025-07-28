@@ -325,7 +325,6 @@ pub fn Badge(
 #[cfg(test)]
 mod badge_tests {
     use super::*;
-   
 
     #[test]
     fn badge_renders_with_label_and_color() {

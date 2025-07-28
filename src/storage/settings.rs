@@ -34,10 +34,43 @@ pub struct AppSettings {
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub struct ImportPreferences {
+    // Course naming
     pub default_course_prefix: Option<String>,
-    pub auto_create_plan: bool,
+    pub use_playlist_title: bool,
+    pub course_naming_pattern: CourseNamingPattern,
+
+    // Video filtering
     pub skip_short_videos: bool,
     pub min_video_duration_seconds: u64,
+    pub skip_long_videos: bool,
+    pub max_video_duration_seconds: u64,
+    pub quality_preference: VideoQualityPreference,
+
+    // Auto-processing
+    pub auto_create_plan: bool,
+    pub auto_structure_course: bool,
+    pub enable_ai_clustering: bool,
+
+    // Advanced options
+    pub preserve_playlist_order: bool,
+    pub extract_timestamps: bool,
+    pub download_thumbnails: bool,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+pub enum CourseNamingPattern {
+    PlaylistTitle,
+    PrefixPlusTitle,
+    CustomPattern(String),
+    DatePlusTitle,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+pub enum VideoQualityPreference {
+    Any,
+    PreferHD,
+    RequireHD,
+    PreferSD,
 }
 
 impl Default for AppSettings {
@@ -80,10 +113,27 @@ impl Default for AppSettings {
 impl Default for ImportPreferences {
     fn default() -> Self {
         Self {
+            // Course naming
             default_course_prefix: None,
-            auto_create_plan: false,
+            use_playlist_title: true,
+            course_naming_pattern: CourseNamingPattern::PlaylistTitle,
+
+            // Video filtering
             skip_short_videos: false,
             min_video_duration_seconds: 30,
+            skip_long_videos: false,
+            max_video_duration_seconds: 3600, // 1 hour
+            quality_preference: VideoQualityPreference::Any,
+
+            // Auto-processing
+            auto_create_plan: false,
+            auto_structure_course: true,
+            enable_ai_clustering: true,
+
+            // Advanced options
+            preserve_playlist_order: false,
+            extract_timestamps: true,
+            download_thumbnails: true,
         }
     }
 }
@@ -218,6 +268,17 @@ impl AppSettings {
     pub fn set_ab_testing_enabled(&mut self, enabled: bool) -> Result<()> {
         self.enable_ab_testing = enabled;
         self.save()
+    }
+
+    /// Update import preferences and save
+    pub fn set_import_preferences(&mut self, preferences: ImportPreferences) -> Result<()> {
+        self.import_preferences = preferences;
+        self.save()
+    }
+
+    /// Get import preferences
+    pub fn get_import_preferences(&self) -> &ImportPreferences {
+        &self.import_preferences
     }
 }
 

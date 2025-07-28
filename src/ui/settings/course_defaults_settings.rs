@@ -1,11 +1,13 @@
 use dioxus::prelude::*;
 use dioxus_free_icons::Icon;
-use dioxus_free_icons::icons::fa_solid_icons::{FaBookOpen, FaClock, FaCalendarWeek, FaBrain, FaGear};
+use dioxus_free_icons::icons::fa_solid_icons::{
+    FaBookOpen, FaBrain, FaCalendarWeek, FaClock, FaGear,
+};
 
 use crate::storage::AppSettings;
-use crate::ui::hooks::SettingsManager;
+use crate::types::{AdvancedSchedulerSettings, DifficultyLevel, DistributionStrategy};
 use crate::ui::components::toast_helpers;
-use crate::types::{AdvancedSchedulerSettings, DistributionStrategy, DifficultyLevel};
+use crate::ui::hooks::SettingsManager;
 
 #[derive(Props, Clone)]
 pub struct CourseDefaultSettingsProps {
@@ -39,20 +41,20 @@ pub fn CourseDefaultSettings(props: CourseDefaultSettingsProps) -> Element {
             let settings_manager = settings_manager.clone();
             let on_settings_updated = on_settings_updated;
             let settings = local_settings();
-            
+
             spawn(async move {
                 is_saving.set(true);
-                
+
                 match settings_manager.save_settings(settings).await {
                     Ok(_) => {
                         toast_helpers::success("Course defaults saved successfully!");
                         on_settings_updated.call(());
                     }
                     Err(e) => {
-                        toast_helpers::error(format!("Failed to save course defaults: {}", e));
+                        toast_helpers::error(format!("Failed to save course defaults: {e}"));
                     }
                 }
-                
+
                 is_saving.set(false);
             });
         }
@@ -116,9 +118,11 @@ pub fn CourseDefaultSettings(props: CourseDefaultSettingsProps) -> Element {
                 "Adaptive" => DistributionStrategy::Adaptive,
                 _ => DistributionStrategy::Hybrid,
             };
-            
+
             let mut settings = local_settings();
-            let mut advanced = settings.default_plan_settings.advanced_settings
+            let mut advanced = settings
+                .default_plan_settings
+                .advanced_settings
                 .unwrap_or_else(AdvancedSchedulerSettings::default);
             advanced.strategy = strategy;
             settings.default_plan_settings.advanced_settings = Some(advanced);
@@ -130,7 +134,9 @@ pub fn CourseDefaultSettings(props: CourseDefaultSettingsProps) -> Element {
         let mut local_settings = local_settings;
         move |enabled: bool| {
             let mut settings = local_settings();
-            let mut advanced = settings.default_plan_settings.advanced_settings
+            let mut advanced = settings
+                .default_plan_settings
+                .advanced_settings
                 .unwrap_or_else(AdvancedSchedulerSettings::default);
             advanced.difficulty_adaptation = enabled;
             settings.default_plan_settings.advanced_settings = Some(advanced);
@@ -148,9 +154,11 @@ pub fn CourseDefaultSettings(props: CourseDefaultSettingsProps) -> Element {
                 "Expert" => DifficultyLevel::Expert,
                 _ => DifficultyLevel::Intermediate,
             };
-            
+
             let mut settings = local_settings();
-            let mut advanced = settings.default_plan_settings.advanced_settings
+            let mut advanced = settings
+                .default_plan_settings
+                .advanced_settings
                 .unwrap_or_else(AdvancedSchedulerSettings::default);
             advanced.user_experience_level = level;
             settings.default_plan_settings.advanced_settings = Some(advanced);
@@ -170,7 +178,7 @@ pub fn CourseDefaultSettings(props: CourseDefaultSettingsProps) -> Element {
                 "Hybrid" => crate::types::ClusteringAlgorithm::Hybrid,
                 _ => crate::types::ClusteringAlgorithm::Hybrid,
             };
-            
+
             let mut settings = local_settings();
             settings.clustering_preferences.preferred_algorithm = algorithm;
             local_settings.set(settings);
@@ -192,7 +200,9 @@ pub fn CourseDefaultSettings(props: CourseDefaultSettingsProps) -> Element {
 
     let current_settings = local_settings();
     let default_advanced = AdvancedSchedulerSettings::default();
-    let advanced_settings = current_settings.default_plan_settings.advanced_settings
+    let advanced_settings = current_settings
+        .default_plan_settings
+        .advanced_settings
         .as_ref()
         .unwrap_or(&default_advanced);
 
@@ -217,7 +227,7 @@ pub fn CourseDefaultSettings(props: CourseDefaultSettingsProps) -> Element {
                         Icon { icon: FaClock, class: "w-5 h-5 text-primary" }
                         h3 { class: "text-lg font-semibold", "Default Plan Settings" }
                     }
-                    
+
                     div { class: "grid grid-cols-1 md:grid-cols-2 gap-6",
                         // Sessions per week
                         div { class: "form-control",
@@ -238,7 +248,7 @@ pub fn CourseDefaultSettings(props: CourseDefaultSettingsProps) -> Element {
                                 }
                             }
                         }
-                        
+
                         // Session length
                         div { class: "form-control",
                             label { class: "label",
@@ -260,7 +270,7 @@ pub fn CourseDefaultSettings(props: CourseDefaultSettingsProps) -> Element {
                             }
                         }
                     }
-                    
+
                     div { class: "space-y-4 mt-6",
                         // Include weekends
                         div { class: "form-control",
@@ -279,7 +289,7 @@ pub fn CourseDefaultSettings(props: CourseDefaultSettingsProps) -> Element {
                                 }
                             }
                         }
-                        
+
                         // Auto-create plan
                         div { class: "form-control",
                             label { class: "label cursor-pointer justify-start gap-3",
@@ -315,7 +325,7 @@ pub fn CourseDefaultSettings(props: CourseDefaultSettingsProps) -> Element {
                             if show_advanced() { "Hide Advanced" } else { "Show Advanced" }
                         }
                     }
-                    
+
                     if show_advanced() {
                         div { class: "space-y-6",
                             div { class: "grid grid-cols-1 md:grid-cols-2 gap-6",
@@ -328,7 +338,7 @@ pub fn CourseDefaultSettings(props: CourseDefaultSettingsProps) -> Element {
                                         class: "select select-bordered",
                                         value: format!("{:?}", advanced_settings.strategy),
                                         onchange: move |evt| handle_strategy_change(evt.value()),
-                                        
+
                                         for strategy in DistributionStrategy::all() {
                                             option {
                                                 key: "{strategy:?}",
@@ -343,7 +353,7 @@ pub fn CourseDefaultSettings(props: CourseDefaultSettingsProps) -> Element {
                                         }
                                     }
                                 }
-                                
+
                                 // User experience level
                                 div { class: "form-control",
                                     label { class: "label",
@@ -353,7 +363,7 @@ pub fn CourseDefaultSettings(props: CourseDefaultSettingsProps) -> Element {
                                         class: "select select-bordered",
                                         value: format!("{:?}", advanced_settings.user_experience_level),
                                         onchange: move |evt| handle_user_experience_change(evt.value()),
-                                        
+
                                         for level in DifficultyLevel::all() {
                                             option {
                                                 key: "{level:?}",
@@ -369,7 +379,7 @@ pub fn CourseDefaultSettings(props: CourseDefaultSettingsProps) -> Element {
                                     }
                                 }
                             }
-                            
+
                             // Advanced options
                             div { class: "form-control",
                                 label { class: "label cursor-pointer justify-start gap-3",
@@ -399,7 +409,7 @@ pub fn CourseDefaultSettings(props: CourseDefaultSettingsProps) -> Element {
                         Icon { icon: FaBrain, class: "w-5 h-5 text-primary" }
                         h3 { class: "text-lg font-semibold", "AI Clustering Preferences" }
                     }
-                    
+
                     div { class: "grid grid-cols-1 md:grid-cols-2 gap-6",
                         // Clustering algorithm
                         div { class: "form-control",
@@ -410,7 +420,7 @@ pub fn CourseDefaultSettings(props: CourseDefaultSettingsProps) -> Element {
                                 class: "select select-bordered",
                                 value: format!("{:?}", current_settings.clustering_preferences.preferred_algorithm),
                                 onchange: move |evt| handle_clustering_algorithm_change(evt.value()),
-                                
+
                                 option { value: "TfIdf", "TF-IDF (Content-based)" }
                                 option { value: "KMeans", "K-Means (Similarity-based)" }
                                 option { value: "Hierarchical", "Hierarchical (Tree-based)" }
@@ -423,7 +433,7 @@ pub fn CourseDefaultSettings(props: CourseDefaultSettingsProps) -> Element {
                                 }
                             }
                         }
-                        
+
                         // Similarity threshold
                         div { class: "form-control",
                             label { class: "label",
@@ -455,7 +465,7 @@ pub fn CourseDefaultSettings(props: CourseDefaultSettingsProps) -> Element {
                         Icon { icon: FaCalendarWeek, class: "w-5 h-5 text-primary" }
                         h3 { class: "text-lg font-semibold", "Import Preferences" }
                     }
-                    
+
                     div { class: "space-y-4",
                         // Course prefix
                         div { class: "form-control",
@@ -471,7 +481,7 @@ pub fn CourseDefaultSettings(props: CourseDefaultSettingsProps) -> Element {
                                     let mut settings = local_settings();
                                     let value = evt.value();
                                     let prefix = value.trim();
-                                    settings.import_preferences.default_course_prefix = 
+                                    settings.import_preferences.default_course_prefix =
                                         if prefix.is_empty() { None } else { Some(prefix.to_string()) };
                                     local_settings.set(settings);
                                 }
@@ -482,7 +492,7 @@ pub fn CourseDefaultSettings(props: CourseDefaultSettingsProps) -> Element {
                                 }
                             }
                         }
-                        
+
                         // Skip short videos
                         div { class: "form-control",
                             label { class: "label cursor-pointer justify-start gap-3",
@@ -504,7 +514,7 @@ pub fn CourseDefaultSettings(props: CourseDefaultSettingsProps) -> Element {
                                 }
                             }
                         }
-                        
+
                         // Minimum video duration
                         if current_settings.import_preferences.skip_short_videos {
                             div { class: "form-control ml-6",
@@ -537,7 +547,7 @@ pub fn CourseDefaultSettings(props: CourseDefaultSettingsProps) -> Element {
                     class: "btn btn-primary btn-lg",
                     disabled: is_saving(),
                     onclick: save_settings,
-                    
+
                     if is_saving() {
                         span { class: "loading loading-spinner loading-sm mr-2" }
                         "Saving Defaults..."

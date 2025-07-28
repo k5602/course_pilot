@@ -2,9 +2,9 @@
 //!
 //! Focused state management for courses using modern Dioxus signals
 
+use crate::types::Course;
 use dioxus::prelude::*;
 use uuid::Uuid;
-use crate::types::Course;
 
 /// Courses state context
 #[derive(Clone, Copy)]
@@ -33,9 +33,7 @@ pub fn use_courses() -> ReadOnlySignal<Vec<Course>> {
 /// Hook for reactive access to a specific course
 pub fn use_course(id: Uuid) -> Memo<Option<Course>> {
     let courses = use_courses();
-    use_memo(move || {
-        courses.read().iter().find(|c| c.id == id).cloned()
-    })
+    use_memo(move || courses.read().iter().find(|c| c.id == id).cloned())
 }
 
 /// Hook for course statistics
@@ -54,18 +52,18 @@ pub fn use_course_stats() -> Memo<(usize, usize, usize)> {
 pub mod actions {
     use super::*;
     use crate::state::StateError;
-    
+
     /// Add a course
     pub fn add_course(course: Course) -> Result<(), StateError> {
         let mut state = use_courses_state();
-        
+
         // Validation
         if course.name.trim().is_empty() {
             return Err(StateError::ValidationError(
                 "Course name cannot be empty".to_string(),
             ));
         }
-        
+
         // Check for duplicate names
         {
             let courses = state.courses.read();
@@ -75,30 +73,30 @@ pub mod actions {
                 ));
             }
         }
-        
+
         // Add course
         state.courses.write().push(course);
         log::info!("Course added successfully");
         Ok(())
     }
-    
+
     /// Update a course
     pub fn update_course(id: Uuid, updated_course: Course) -> Result<(), StateError> {
         let mut state = use_courses_state();
         let mut courses = state.courses.write();
-        
+
         let course_index = courses
             .iter()
             .position(|c| c.id == id)
             .ok_or(StateError::CourseNotFound(id))?;
-        
+
         // Validation
         if updated_course.name.trim().is_empty() {
             return Err(StateError::ValidationError(
                 "Course name cannot be empty".to_string(),
             ));
         }
-        
+
         // Check for duplicate names (excluding current course)
         if courses
             .iter()
@@ -108,24 +106,24 @@ pub mod actions {
                 "Course with this name already exists".to_string(),
             ));
         }
-        
+
         courses[course_index] = updated_course;
         log::info!("Course {id} updated successfully");
         Ok(())
     }
-    
+
     /// Delete a course
     pub fn delete_course(id: Uuid) -> Result<(), StateError> {
         let mut state = use_courses_state();
         let mut courses = state.courses.write();
         let initial_len = courses.len();
-        
+
         courses.retain(|c| c.id != id);
-        
+
         if courses.len() == initial_len {
             return Err(StateError::CourseNotFound(id));
         }
-        
+
         log::info!("Course {id} deleted successfully");
         Ok(())
     }

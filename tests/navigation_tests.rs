@@ -1,7 +1,7 @@
-use course_pilot::types::{Course, Route};
-use course_pilot::ui::navigation::{RouteGuard, RouteGuardResult, CourseExistenceGuard};
-use uuid::Uuid;
 use chrono::Utc;
+use course_pilot::types::{Course, Route};
+use course_pilot::ui::navigation::{CourseExistenceGuard, RouteGuard, RouteGuardResult};
+use uuid::Uuid;
 
 #[cfg(test)]
 mod navigation_tests {
@@ -12,7 +12,7 @@ mod navigation_tests {
     fn test_valid_course_id_parsing() {
         let course_id = Uuid::new_v4();
         let course_id_str = course_id.to_string();
-        
+
         // Test UUID parsing
         let parsed_uuid = Uuid::parse_str(&course_id_str);
         assert!(parsed_uuid.is_ok());
@@ -49,8 +49,8 @@ mod navigation_tests {
         };
 
         let guard = CourseExistenceGuard::new(vec![course]);
-        let route = Route::PlanView { 
-            course_id: course_id.to_string() 
+        let route = Route::PlanView {
+            course_id: course_id.to_string(),
         };
 
         let result = guard.can_navigate(&route);
@@ -62,7 +62,7 @@ mod navigation_tests {
     fn test_course_existence_guard_redirect() {
         let existing_course_id = Uuid::new_v4();
         let non_existing_course_id = Uuid::new_v4();
-        
+
         let course = Course {
             id: existing_course_id,
             name: "Test Course".to_string(),
@@ -72,8 +72,8 @@ mod navigation_tests {
         };
 
         let guard = CourseExistenceGuard::new(vec![course]);
-        let route = Route::PlanView { 
-            course_id: non_existing_course_id.to_string() 
+        let route = Route::PlanView {
+            course_id: non_existing_course_id.to_string(),
         };
 
         let result = guard.can_navigate(&route);
@@ -92,8 +92,8 @@ mod navigation_tests {
         };
 
         let guard = CourseExistenceGuard::new(vec![course]);
-        let route = Route::PlanView { 
-            course_id: "invalid-uuid".to_string() 
+        let route = Route::PlanView {
+            course_id: "invalid-uuid".to_string(),
         };
 
         let result = guard.can_navigate(&route);
@@ -104,7 +104,7 @@ mod navigation_tests {
     #[test]
     fn test_course_existence_guard_allows_other_routes() {
         let guard = CourseExistenceGuard::new(vec![]);
-        
+
         let routes = vec![
             Route::Dashboard {},
             Route::AllCourses {},
@@ -115,7 +115,12 @@ mod navigation_tests {
 
         for route in routes {
             let result = guard.can_navigate(&route);
-            assert_eq!(result, RouteGuardResult::Allow, "Route {:?} should be allowed", route);
+            assert_eq!(
+                result,
+                RouteGuardResult::Allow,
+                "Route {:?} should be allowed",
+                route
+            );
         }
     }
 
@@ -137,7 +142,9 @@ mod navigation_tests {
         let routes = vec![
             Route::Dashboard {},
             Route::AllCourses {},
-            Route::PlanView { course_id: course_id.to_string() },
+            Route::PlanView {
+                course_id: course_id.to_string(),
+            },
             Route::Settings {},
         ];
 
@@ -153,12 +160,14 @@ mod navigation_tests {
     fn test_deep_linking_routes() {
         // Test that all route variants can be constructed and are valid
         let course_id = Uuid::new_v4();
-        
+
         let routes = vec![
             Route::Home {},
             Route::Dashboard {},
             Route::AllCourses {},
-            Route::PlanView { course_id: course_id.to_string() },
+            Route::PlanView {
+                course_id: course_id.to_string(),
+            },
             Route::Settings {},
             Route::AddCourse {},
         ];
@@ -168,7 +177,7 @@ mod navigation_tests {
             // Routes should be cloneable and comparable
             let cloned_route = route.clone();
             assert_eq!(route, cloned_route);
-            
+
             // Routes should be debuggable
             let debug_str = format!("{:?}", route);
             assert!(!debug_str.is_empty());
@@ -195,10 +204,14 @@ mod navigation_tests {
 
         for case in edge_cases {
             let parse_result = Uuid::parse_str(case);
-            
+
             // Only the mixed case should succeed
             if case == "123E4567-E89B-12D3-A456-426614174000" {
-                assert!(parse_result.is_ok(), "Mixed case UUID should parse: {}", case);
+                assert!(
+                    parse_result.is_ok(),
+                    "Mixed case UUID should parse: {}",
+                    case
+                );
             } else {
                 assert!(parse_result.is_err(), "Should fail to parse: {}", case);
             }
@@ -213,7 +226,9 @@ mod navigation_tests {
         let routes = vec![
             Route::Dashboard {},
             Route::AllCourses {},
-            Route::PlanView { course_id: Uuid::new_v4().to_string() },
+            Route::PlanView {
+                course_id: Uuid::new_v4().to_string(),
+            },
             Route::Settings {},
         ];
 
@@ -221,10 +236,10 @@ mod navigation_tests {
         let mut history = Vec::new();
         for route in routes {
             history.push(route.clone());
-            
+
             // History should grow
             assert!(!history.is_empty());
-            
+
             // Last item should be current route
             assert_eq!(history.last().unwrap(), &route);
         }
@@ -258,15 +273,22 @@ mod integration_tests {
         let navigation_flow = vec![
             Route::Dashboard {},
             Route::AllCourses {},
-            Route::PlanView { course_id: course_id.to_string() },
+            Route::PlanView {
+                course_id: course_id.to_string(),
+            },
         ];
 
         // Test route guards for each step
         let guard = CourseExistenceGuard::new(vec![course]);
-        
+
         for route in navigation_flow {
             let result = guard.can_navigate(&route);
-            assert_eq!(result, RouteGuardResult::Allow, "Route {:?} should be allowed", route);
+            assert_eq!(
+                result,
+                RouteGuardResult::Allow,
+                "Route {:?} should be allowed",
+                route
+            );
         }
     }
 
@@ -274,14 +296,14 @@ mod integration_tests {
     #[test]
     fn test_error_recovery_navigation() {
         let guard = CourseExistenceGuard::new(vec![]);
-        
+
         // Try to navigate to non-existent course
-        let invalid_route = Route::PlanView { 
-            course_id: Uuid::new_v4().to_string() 
+        let invalid_route = Route::PlanView {
+            course_id: Uuid::new_v4().to_string(),
         };
-        
+
         let result = guard.can_navigate(&invalid_route);
-        
+
         // Should redirect to All Courses for recovery
         assert_eq!(result, RouteGuardResult::Redirect(Route::AllCourses {}));
     }
@@ -302,7 +324,9 @@ mod integration_tests {
         let routes_to_test = vec![
             Route::Dashboard {},
             Route::AllCourses {},
-            Route::PlanView { course_id: course_id.to_string() },
+            Route::PlanView {
+                course_id: course_id.to_string(),
+            },
             Route::Settings {},
             Route::AddCourse {},
         ];
@@ -311,9 +335,13 @@ mod integration_tests {
             // Routes should be cloneable and debuggable
             let cloned_route = route.clone();
             assert_eq!(route, cloned_route);
-            
+
             let debug_str = format!("{:?}", route);
-            assert!(!debug_str.is_empty(), "Route should have debug representation: {:?}", route);
+            assert!(
+                !debug_str.is_empty(),
+                "Route should have debug representation: {:?}",
+                route
+            );
         }
     }
 }

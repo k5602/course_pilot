@@ -1,10 +1,10 @@
 use crate::storage::database::Database;
 use crate::types::{Plan, PlanSettings};
 use crate::ui::toast_helpers;
-use dioxus::prelude::*;
-use uuid::Uuid;
 use anyhow::Result;
+use dioxus::prelude::*;
 use std::sync::Arc;
+use uuid::Uuid;
 
 /// Progress information for plans and courses
 #[derive(Debug, Clone)]
@@ -153,11 +153,7 @@ impl PlanManager {
         .unwrap_or_else(|e| Err(anyhow::anyhow!("Join error: {}", e)))
     }
 
-    pub async fn generate_plan(
-        &self,
-        course_id: Uuid,
-        settings: PlanSettings,
-    ) -> Result<Plan> {
+    pub async fn generate_plan(&self, course_id: Uuid, settings: PlanSettings) -> Result<Plan> {
         let db = self.db.clone();
         tokio::task::spawn_blocking(move || {
             // Load course data
@@ -177,11 +173,7 @@ impl PlanManager {
         .unwrap_or_else(|e| Err(anyhow::anyhow!("Join error: {}", e)))
     }
 
-    pub async fn regenerate_plan(
-        &self,
-        plan_id: Uuid,
-        new_settings: PlanSettings,
-    ) -> Result<Plan> {
+    pub async fn regenerate_plan(&self, plan_id: Uuid, new_settings: PlanSettings) -> Result<Plan> {
         let db = self.db.clone();
         tokio::task::spawn_blocking(move || {
             // Load existing plan
@@ -214,43 +206,46 @@ impl PlanManager {
 
 pub fn use_plan_manager() -> PlanManager {
     let db = use_context::<Arc<Database>>();
-    
+
     let generate_plan = use_callback({
         let db = db.clone();
         move |(course_id, settings): (Uuid, PlanSettings)| {
             let db = db.clone();
             spawn(async move {
-                let result: Result<Result<crate::types::Plan, anyhow::Error>, _> = tokio::task::spawn_blocking(move || {
-                    // Load course data
-                    let course = crate::storage::get_course_by_id(&db, &course_id)?
-                        .ok_or_else(|| anyhow::anyhow!("Course not found: {}", course_id))?;
+                let result: Result<Result<crate::types::Plan, anyhow::Error>, _> =
+                    tokio::task::spawn_blocking(move || {
+                        // Load course data
+                        let course = crate::storage::get_course_by_id(&db, &course_id)?
+                            .ok_or_else(|| anyhow::anyhow!("Course not found: {}", course_id))?;
 
-                    // Generate plan using planner module
-                    let plan = crate::planner::generate_plan(&course, &settings)
-                        .map_err(|e| anyhow::anyhow!("Plan generation failed: {}", e))?;
+                        // Generate plan using planner module
+                        let plan = crate::planner::generate_plan(&course, &settings)
+                            .map_err(|e| anyhow::anyhow!("Plan generation failed: {}", e))?;
 
-                    // Save plan to database
-                    crate::storage::save_plan(&db, &plan).map_err(|e| anyhow::anyhow!("Database error: {}", e))?;
+                        // Save plan to database
+                        crate::storage::save_plan(&db, &plan)
+                            .map_err(|e| anyhow::anyhow!("Database error: {}", e))?;
 
-                    Ok(plan)
-                }).await;
+                        Ok(plan)
+                    })
+                    .await;
 
                 match result {
                     Ok(Ok(_)) => {
                         toast_helpers::success("Study plan created successfully");
                     }
                     Ok(Err(e)) => {
-                        toast_helpers::error(format!("Failed to create plan: {}", e));
+                        toast_helpers::error(format!("Failed to create plan: {e}"));
                     }
                     Err(e) => {
-                        toast_helpers::error(format!("Failed to create plan: {}", e));
+                        toast_helpers::error(format!("Failed to create plan: {e}"));
                     }
                 }
             });
             // Return () to match expected callback type
         }
     });
-    
+
     PlanManager { db, generate_plan }
 }
 
@@ -260,9 +255,7 @@ pub fn use_plan_resource(course_id: Uuid) -> Resource<Result<Option<Plan>, anyho
 
     use_resource(move || {
         let plan_manager = plan_manager.clone();
-        async move {
-            plan_manager.get_plan_by_course(course_id).await
-        }
+        async move { plan_manager.get_plan_by_course(course_id).await }
     })
 }
 

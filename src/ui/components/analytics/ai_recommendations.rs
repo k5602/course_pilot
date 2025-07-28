@@ -1,10 +1,10 @@
-use dioxus::prelude::*;
-use crate::types::{AdvancedSchedulerSettings, DifficultyLevel, Course};
-use crate::ui::hooks::use_analytics_manager;
 use crate::planner::scheduler::PlanAnalysis;
 use crate::storage::Database;
-use uuid::Uuid;
+use crate::types::{AdvancedSchedulerSettings, Course, DifficultyLevel};
+use crate::ui::hooks::use_analytics_manager;
+use dioxus::prelude::*;
 use std::sync::Arc;
+use uuid::Uuid;
 
 #[derive(Props, PartialEq, Clone)]
 pub struct AIRecommendationsPanelProps {
@@ -18,13 +18,13 @@ pub struct AIRecommendationsPanelProps {
 pub fn AIRecommendationsPanel(props: AIRecommendationsPanelProps) -> Element {
     let analytics_manager = use_analytics_manager();
     let db = use_context::<Arc<Database>>();
-    
+
     let recommendations_resource = use_resource(move || {
         let analytics_manager = analytics_manager.clone();
         let db = db.clone();
         let course_id = props.course_id;
         let user_experience = props.user_experience;
-        
+
         async move {
             // Get comprehensive recommendations based on course analysis
             if let Some(course_id) = course_id {
@@ -32,10 +32,14 @@ pub fn AIRecommendationsPanel(props: AIRecommendationsPanelProps) -> Element {
                 let course_result = tokio::task::spawn_blocking({
                     let db = db.clone();
                     move || crate::storage::get_course_by_id(&db, &course_id)
-                }).await.unwrap_or(Ok(None));
+                })
+                .await
+                .unwrap_or(Ok(None));
 
                 let plan_analysis_result = analytics_manager.get_plan_analysis(course_id).await;
-                let settings_result = analytics_manager.get_recommended_advanced_settings(course_id, user_experience).await;
+                let settings_result = analytics_manager
+                    .get_recommended_advanced_settings(course_id, user_experience)
+                    .await;
 
                 match (course_result, plan_analysis_result, settings_result) {
                     (Ok(Some(course)), Ok(plan_analysis), Ok(settings)) => {
@@ -70,7 +74,7 @@ pub fn AIRecommendationsPanel(props: AIRecommendationsPanelProps) -> Element {
                 // General recommendations without specific course
                 let learning_analytics = analytics_manager.get_learning_analytics().await?;
                 let default_settings = AdvancedSchedulerSettings::default();
-                
+
                 Ok(AIRecommendationData {
                     course: None,
                     plan_analysis: learning_analytics.first().cloned(),
@@ -86,10 +90,10 @@ pub fn AIRecommendationsPanel(props: AIRecommendationsPanelProps) -> Element {
             div { class: "space-y-4",
                 // Strategy recommendations
                 StrategyRecommendations { data: data.clone() }
-                
+
                 // Study optimization suggestions
                 StudyOptimizationSuggestions { data: data.clone() }
-                
+
                 // Adaptive pacing recommendations
                 AdaptivePacingRecommendations { data: data.clone() }
             }
@@ -108,7 +112,7 @@ pub fn AIRecommendationsPanel(props: AIRecommendationsPanelProps) -> Element {
                 div { class: "skeleton h-16 w-full" }
                 div { class: "skeleton h-16 w-full" }
             }
-        }
+        },
     }
 }
 
@@ -129,12 +133,12 @@ struct StrategyRecommendationsProps {
 fn StrategyRecommendations(props: StrategyRecommendationsProps) -> Element {
     let data = &props.data;
     let settings = &data.settings;
-    
+
     // Generate strategy rationale based on course characteristics
     let strategy_rationale = if let Some(course) = &data.course {
         let video_count = course.video_count();
         let has_structure = course.structure.is_some();
-        
+
         match (&settings.strategy, video_count, has_structure) {
             (crate::types::DistributionStrategy::SpacedRepetition, _, _) => {
                 "Recommended for beginners to optimize long-term retention through spaced intervals"
@@ -148,7 +152,7 @@ fn StrategyRecommendations(props: StrategyRecommendationsProps) -> Element {
             (crate::types::DistributionStrategy::Hybrid, _, _) => {
                 "Balanced approach combining multiple strategies for optimal learning"
             }
-            _ => "Strategy selected based on course characteristics and user experience level"
+            _ => "Strategy selected based on course characteristics and user experience level",
         }
     } else {
         "General strategy recommendation based on user experience level"
@@ -161,7 +165,7 @@ fn StrategyRecommendations(props: StrategyRecommendationsProps) -> Element {
                     span { "🎯" }
                     "Recommended Strategy"
                 }
-                
+
                 div { class: "mt-3",
                     div { class: "flex items-center justify-between mb-2",
                         span { class: "font-semibold text-primary", "{settings.strategy.display_name()}" }
@@ -174,29 +178,29 @@ fn StrategyRecommendations(props: StrategyRecommendationsProps) -> Element {
                 // Strategy features
                 div { class: "mt-4 grid grid-cols-2 gap-2",
                     if settings.spaced_repetition_enabled {
-                        FeatureBadge { 
-                            label: "Spaced Repetition", 
+                        FeatureBadge {
+                            label: "Spaced Repetition",
                             enabled: true,
                             description: "Review sessions for retention"
                         }
                     }
                     if settings.cognitive_load_balancing {
-                        FeatureBadge { 
-                            label: "Load Balancing", 
+                        FeatureBadge {
+                            label: "Load Balancing",
                             enabled: true,
                             description: "Balanced difficulty distribution"
                         }
                     }
                     if settings.adaptive_pacing {
-                        FeatureBadge { 
-                            label: "Adaptive Pacing", 
+                        FeatureBadge {
+                            label: "Adaptive Pacing",
                             enabled: true,
                             description: "Dynamic session adjustment"
                         }
                     }
                     if settings.difficulty_adaptation {
-                        FeatureBadge { 
-                            label: "Difficulty Adaptation", 
+                        FeatureBadge {
+                            label: "Difficulty Adaptation",
                             enabled: true,
                             description: "Progressive difficulty increase"
                         }
@@ -215,48 +219,52 @@ struct StudyOptimizationSuggestionsProps {
 #[component]
 fn StudyOptimizationSuggestions(props: StudyOptimizationSuggestionsProps) -> Element {
     let data = &props.data;
-    
+
     // Generate optimization suggestions based on plan analysis
     let suggestions = if let Some(analysis) = &data.plan_analysis {
         let mut suggestions = Vec::new();
-        
+
         // Velocity-based suggestions
         if analysis.velocity_analysis.videos_per_day < 0.5 {
             suggestions.push(OptimizationSuggestion {
                 title: "Increase Study Frequency".to_string(),
-                description: "Consider adding more sessions per week to maintain momentum".to_string(),
+                description: "Consider adding more sessions per week to maintain momentum"
+                    .to_string(),
                 priority: "Medium".to_string(),
                 icon: "📈".to_string(),
             });
         } else if analysis.velocity_analysis.videos_per_day > 2.0 {
             suggestions.push(OptimizationSuggestion {
                 title: "Reduce Study Intensity".to_string(),
-                description: "High velocity detected - consider longer sessions with fewer videos".to_string(),
+                description: "High velocity detected - consider longer sessions with fewer videos"
+                    .to_string(),
                 priority: "Low".to_string(),
                 icon: "⚡".to_string(),
             });
         }
-        
+
         // Load distribution suggestions
         if analysis.load_distribution.load_variance > 0.3 {
             suggestions.push(OptimizationSuggestion {
                 title: "Improve Load Balance".to_string(),
-                description: "Cognitive load varies significantly - enable load balancing".to_string(),
+                description: "Cognitive load varies significantly - enable load balancing"
+                    .to_string(),
                 priority: "High".to_string(),
                 icon: "⚖️".to_string(),
             });
         }
-        
+
         // Temporal distribution suggestions
         if analysis.temporal_distribution.consistency_score < 0.7 {
             suggestions.push(OptimizationSuggestion {
                 title: "Maintain Consistency".to_string(),
-                description: "Try to keep more regular intervals between study sessions".to_string(),
+                description: "Try to keep more regular intervals between study sessions"
+                    .to_string(),
                 priority: "Medium".to_string(),
                 icon: "🎯".to_string(),
             });
         }
-        
+
         if analysis.temporal_distribution.weekend_utilization < 0.3 {
             suggestions.push(OptimizationSuggestion {
                 title: "Utilize Weekends".to_string(),
@@ -265,20 +273,22 @@ fn StudyOptimizationSuggestions(props: StudyOptimizationSuggestionsProps) -> Ele
                 icon: "📅".to_string(),
             });
         }
-        
+
         suggestions
     } else {
         // Default suggestions for new users
         vec![
             OptimizationSuggestion {
                 title: "Start with Structured Learning".to_string(),
-                description: "Create your first study plan to get personalized recommendations".to_string(),
+                description: "Create your first study plan to get personalized recommendations"
+                    .to_string(),
                 priority: "High".to_string(),
                 icon: "🚀".to_string(),
             },
             OptimizationSuggestion {
                 title: "Enable Analytics Tracking".to_string(),
-                description: "Complete a few sessions to unlock detailed performance insights".to_string(),
+                description: "Complete a few sessions to unlock detailed performance insights"
+                    .to_string(),
                 priority: "Medium".to_string(),
                 icon: "📊".to_string(),
             },
@@ -292,7 +302,7 @@ fn StudyOptimizationSuggestions(props: StudyOptimizationSuggestionsProps) -> Ele
                     span { "💡" }
                     "Study Optimization Suggestions"
                 }
-                
+
                 if suggestions.is_empty() {
                     div { class: "text-center py-6 text-base-content/60",
                         div { class: "text-3xl mb-2", "✨" }
@@ -302,7 +312,7 @@ fn StudyOptimizationSuggestions(props: StudyOptimizationSuggestionsProps) -> Ele
                 } else {
                     div { class: "space-y-3 mt-4",
                         {suggestions.iter().enumerate().map(|(index, suggestion)| rsx! {
-                            SuggestionCard { 
+                            SuggestionCard {
                                 key: "{index}",
                                 suggestion: suggestion.clone()
                             }
@@ -322,7 +332,7 @@ struct AdaptivePacingRecommendationsProps {
 #[component]
 fn AdaptivePacingRecommendations(props: AdaptivePacingRecommendationsProps) -> Element {
     let data = &props.data;
-    
+
     // Generate pacing recommendations based on user experience and course characteristics
     let pacing_recommendations = match data.user_experience {
         DifficultyLevel::Beginner => vec![
@@ -377,7 +387,8 @@ fn AdaptivePacingRecommendations(props: AdaptivePacingRecommendationsProps) -> E
             PacingRecommendation {
                 title: "Self-Directed Learning".to_string(),
                 description: "Adaptive pacing based on real-time comprehension".to_string(),
-                rationale: "Expert learners benefit from flexible, responsive scheduling".to_string(),
+                rationale: "Expert learners benefit from flexible, responsive scheduling"
+                    .to_string(),
                 icon: "🎛️".to_string(),
             },
         ],
@@ -390,10 +401,10 @@ fn AdaptivePacingRecommendations(props: AdaptivePacingRecommendationsProps) -> E
                     span { "📊" }
                     "Adaptive Pacing for {data.user_experience.display_name()}s"
                 }
-                
+
                 div { class: "space-y-3 mt-4",
                     {pacing_recommendations.iter().enumerate().map(|(index, rec)| rsx! {
-                        PacingCard { 
+                        PacingCard {
                             key: "{index}",
                             recommendation: rec.clone()
                         }
@@ -431,10 +442,10 @@ struct FeatureBadgeProps {
 #[component]
 fn FeatureBadge(props: FeatureBadgeProps) -> Element {
     rsx! {
-        div { 
+        div {
             class: "tooltip tooltip-top",
             "data-tip": "{props.description}",
-            span { 
+            span {
                 class: if props.enabled { "badge badge-success badge-sm" } else { "badge badge-ghost badge-sm" },
                 "{props.label}"
             }

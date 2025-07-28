@@ -1,9 +1,9 @@
 use crate::storage::database::Database;
 use crate::types::Course;
 use crate::ui::toast_helpers;
+use anyhow::Result;
 use dioxus::prelude::*;
 use std::path::{Path, PathBuf};
-use anyhow::Result;
 use std::sync::Arc;
 
 /// Folder validation result
@@ -49,11 +49,9 @@ impl ImportManager {
     }
 
     pub async fn validate_folder(&self, path: PathBuf) -> Result<FolderValidation> {
-        tokio::task::spawn_blocking(move || {
-            validate_folder_sync(&path)
-        })
-        .await
-        .unwrap_or_else(|e| Err(anyhow::anyhow!("Join error: {}", e)))
+        tokio::task::spawn_blocking(move || validate_folder_sync(&path))
+            .await
+            .unwrap_or_else(|e| Err(anyhow::anyhow!("Join error: {}", e)))
     }
 
     pub async fn import_from_local_folder(
@@ -103,7 +101,7 @@ impl ImportManager {
 
 pub fn use_import_manager() -> ImportManager {
     let db = use_context::<Arc<Database>>();
-    
+
     let import_from_local_folder = use_callback({
         let db = db.clone();
         move |(folder_path, course_title): (PathBuf, Option<String>)| {
@@ -113,32 +111,42 @@ pub fn use_import_manager() -> ImportManager {
                     // First validate the folder
                     let validation = validate_folder_sync(&folder_path)?;
                     if !validation.is_valid {
-                        return Err(anyhow::anyhow!("Invalid folder: {}",
-                            validation.error_message.unwrap_or_else(|| "Unknown error".to_string())));
+                        return Err(anyhow::anyhow!(
+                            "Invalid folder: {}",
+                            validation
+                                .error_message
+                                .unwrap_or_else(|| "Unknown error".to_string())
+                        ));
                     }
 
                     // Generate course title
                     let course_title = course_title.unwrap_or_else(|| {
-                        folder_path.file_name()
+                        folder_path
+                            .file_name()
                             .and_then(|name| name.to_str())
                             .unwrap_or("Imported Course")
                             .to_string()
                     });
 
                     // Use the ingest module to import from local folder
-                    crate::ingest::local_folder::import_from_folder(&db, &folder_path, &course_title)
-                        .map_err(|e| anyhow::anyhow!("Local folder import failed: {}", e))
-                }).await;
+                    crate::ingest::local_folder::import_from_folder(
+                        &db,
+                        &folder_path,
+                        &course_title,
+                    )
+                    .map_err(|e| anyhow::anyhow!("Local folder import failed: {}", e))
+                })
+                .await;
 
                 match result {
                     Ok(Ok(_)) => {
                         toast_helpers::success("Course imported successfully");
                     }
                     Ok(Err(e)) => {
-                        toast_helpers::error(format!("Failed to import course: {}", e));
+                        toast_helpers::error(format!("Failed to import course: {e}"));
                     }
                     Err(e) => {
-                        toast_helpers::error(format!("Failed to import course: {}", e));
+                        toast_helpers::error(format!("Failed to import course: {e}"));
                     }
                 }
             });
@@ -148,30 +156,34 @@ pub fn use_import_manager() -> ImportManager {
 
     let validate_folder = use_callback(move |path: PathBuf| {
         spawn(async move {
-            let result = tokio::task::spawn_blocking(move || {
-                validate_folder_sync(&path)
-            }).await;
+            let result = tokio::task::spawn_blocking(move || validate_folder_sync(&path)).await;
 
             match result {
                 Ok(Ok(_)) => {
                     // Validation successful - the UI will handle the result
                 }
                 Ok(Err(e)) => {
-                    toast_helpers::error(format!("Folder validation failed: {}", e));
+                    toast_helpers::error(format!("Folder validation failed: {e}"));
                 }
                 Err(e) => {
-                    toast_helpers::error(format!("Folder validation failed: {}", e));
+                    toast_helpers::error(format!("Folder validation failed: {e}"));
                 }
             }
         });
         // Return () to match expected callback type
     });
-    
-    ImportManager { db, import_from_local_folder, validate_folder }
+
+    ImportManager {
+        db,
+        import_from_local_folder,
+        validate_folder,
+    }
 }
 
 /// Hook for reactive folder validation
-pub fn use_folder_validation(folder_path: Option<PathBuf>) -> Resource<Result<Option<FolderValidation>, anyhow::Error>> {
+pub fn use_folder_validation(
+    folder_path: Option<PathBuf>,
+) -> Resource<Result<Option<FolderValidation>, anyhow::Error>> {
     let import_manager = use_import_manager();
 
     use_resource(move || {

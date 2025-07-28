@@ -10,9 +10,9 @@ pub mod settings;
 
 // Re-export main database functions
 pub use database::{
-    Database,
     ClusteringAnalytics,
     ClusteringPerformancePoint,
+    Database,
     ProcessingTimeStats,
     QualityDistribution,
     delete_course,
@@ -39,7 +39,10 @@ pub use crate::DatabaseError;
 pub use notes::{get_notes_by_course, init_notes_table};
 
 // Re-export settings functions for convenience
-pub use settings::{AppSettings, save_app_settings, use_app_settings};
+pub use settings::{
+    AppSettings, CourseNamingPattern, ImportPreferences, VideoQualityPreference, save_app_settings,
+    use_app_settings,
+};
 
 // Re-export preference storage functions for convenience
 pub use preference_storage::PreferenceStorage;

@@ -7,8 +7,8 @@ pub mod courses;
 pub mod imports;
 pub mod notes;
 
-use dioxus::prelude::*;
 use crate::types::AppState;
+use dioxus::prelude::*;
 
 /// Initialize all state contexts in the app root
 pub fn provide_app_contexts(initial_state: AppState) {
@@ -16,7 +16,7 @@ pub fn provide_app_contexts(initial_state: AppState) {
     courses::provide_courses_context(initial_state.courses);
     imports::provide_imports_context(initial_state.active_import);
     notes::provide_notes_context(initial_state.notes);
-    
+
     // Provide sidebar state
     use_context_provider(|| Signal::new(initial_state.sidebar_open_mobile));
 }

@@ -1,17 +1,17 @@
-use dioxus::prelude::*;
+use crate::storage::Database;
 use crate::types::{Plan, PlanItem};
+use crate::ui::components::ProgressRing;
 use crate::ui::hooks::use_toggle_plan_item_action;
 use chrono::Local;
-use crate::ui::components::ProgressRing;
-use crate::storage::Database;
-use uuid::Uuid;
+use dioxus::prelude::*;
 use std::sync::Arc;
+use uuid::Uuid;
 
 #[component]
 pub fn TodaysSessions() -> Element {
     let db = use_context::<Arc<Database>>();
     let today = Local::now().date_naive();
-    
+
     // Load all plans and filter today's sessions
     let todays_sessions_resource = use_resource(move || {
         let db = db.clone();
@@ -20,7 +20,7 @@ pub fn TodaysSessions() -> Element {
                 // Load all courses to get their plans
                 let courses = crate::storage::load_courses(&db)?;
                 let mut sessions = Vec::new();
-                
+
                 for course in courses {
                     if let Ok(Some(plan)) = crate::storage::get_plan_by_course_id(&db, &course.id) {
                         for (index, item) in plan.items.iter().enumerate() {
@@ -31,11 +31,13 @@ pub fn TodaysSessions() -> Element {
                         }
                     }
                 }
-                
+
                 // Sort by time
                 sessions.sort_by_key(|(_, _, item)| item.date);
                 Ok::<Vec<(Plan, usize, PlanItem)>, anyhow::Error>(sessions)
-            }).await.unwrap_or_else(|_| Err(anyhow::anyhow!("Failed to load sessions")))
+            })
+            .await
+            .unwrap_or_else(|_| Err(anyhow::anyhow!("Failed to load sessions")))
         }
     });
 
@@ -54,10 +56,10 @@ pub fn TodaysSessions() -> Element {
             rsx! {
                 div { class: "space-y-3",
                     h3 { class: "font-semibold text-lg mb-4", "Today's Sessions" }
-                    
+
                     {todays_sessions.iter().map(|(plan, index, item)| {
                         let progress_percentage = (plan.completed_sessions() as f32 / plan.total_sessions().max(1) as f32) * 100.0;
-                        
+
                         rsx! {
                             SessionCard {
                                 key: "{plan.id}-{index}",
@@ -70,7 +72,7 @@ pub fn TodaysSessions() -> Element {
                     })}
                 }
             }
-        },
+        }
         Some(Err(e)) => rsx! {
             div { class: "alert alert-error",
                 "Failed to load today's sessions: {e}"
@@ -82,10 +84,8 @@ pub fn TodaysSessions() -> Element {
                 div { class: "skeleton h-16 w-full" }
                 div { class: "skeleton h-16 w-full" }
             }
-        }
+        },
     }
-
-
 }
 
 #[derive(Props, PartialEq, Clone)]
@@ -99,20 +99,25 @@ struct SessionCardProps {
 #[component]
 fn SessionCard(props: SessionCardProps) -> Element {
     let toggle_completion = use_toggle_plan_item_action();
-    let time_str = props.item.date.with_timezone(&Local).format("%H:%M").to_string();
+    let time_str = props
+        .item
+        .date
+        .with_timezone(&Local)
+        .format("%H:%M")
+        .to_string();
     let duration_str = crate::types::duration_utils::format_duration(props.item.total_duration);
-    
+
     let handle_toggle_completion = {
         let plan_id = props.plan.id;
         let session_index = props.session_index;
-        
+
         move |_| {
             toggle_completion.call((plan_id, session_index));
         }
     };
 
     rsx! {
-        div { 
+        div {
             class: format!(
                 "card bg-base-100 border-l-4 {}",
                 if props.item.completed { "border-l-success bg-success/5" } else { "border-l-primary" }
@@ -140,7 +145,7 @@ fn SessionCard(props: SessionCardProps) -> Element {
                             }
                         }
                     }
-                    
+
                     div { class: "flex items-center gap-2",
                         if props.item.completed {
                             div { class: "badge badge-success badge-sm", "Completed" }
@@ -151,7 +156,7 @@ fn SessionCard(props: SessionCardProps) -> Element {
                                 item: props.item.clone()
                             }
                         }
-                        
+
                         input {
                             type: "checkbox",
                             class: "checkbox checkbox-sm",
@@ -175,11 +180,11 @@ struct SessionQuickStartProps {
 #[component]
 fn SessionQuickStart(props: SessionQuickStartProps) -> Element {
     let toggle_completion = use_toggle_plan_item_action();
-    
+
     let handle_start_session = {
         let plan_id = props.plan_id;
         let session_index = props.session_index;
-        
+
         move |_| {
             // Mark session as started/completed
             toggle_completion.call((plan_id, session_index));
