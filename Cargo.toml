@@ -11,7 +11,7 @@ dioxus-ssr = "0.6"
 
 [dependencies]
 # Core UI framework
-dioxus = { version = "0.6.3", features = ["desktop", "macro", "hooks"] }
+dioxus = { version = "0.6.3", features = ["desktop", "macro", "hooks", "router"] }
 dioxus-desktop = "0.6.3"
 dioxus-router = "0.6.3" 
 dioxus-signals = "0.6.3"

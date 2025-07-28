@@ -2421,7 +2421,7 @@ fn calculate_duration_quality_score(modules: &[Module]) -> f32 {
     let coefficient_of_variation = variance.sqrt() / mean;
 
     // Lower coefficient of variation means better balance
-    (1.0 - coefficient_of_variation.clamp(0.0, 1.0)).clamp(0.0, 1.0)
+    (1.0f32 - coefficient_of_variation.clamp(0.0, 1.0)).clamp(0.0, 1.0)
 }
 
 /// Calculate topic quality score for modules

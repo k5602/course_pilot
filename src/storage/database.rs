@@ -1003,7 +1003,7 @@ fn calculate_clustering_similarity(
     metadata1: &ClusteringMetadata,
     metadata2: &ClusteringMetadata,
 ) -> f32 {
-    let mut similarity = 0.0;
+    let mut similarity: f32 = 0.0;
 
     // Algorithm similarity (0.3 weight)
     if metadata1.algorithm_used == metadata2.algorithm_used {

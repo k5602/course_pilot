@@ -28,7 +28,7 @@ impl AnalyticsManager {
             let mut errors = Vec::new();
 
             // Validate custom intervals if provided
-            if let Some(ref intervals) = settings.custom_intervals {
+            if let Some(intervals) = &settings.custom_intervals {
                 if intervals.is_empty() {
                     errors.push("Custom intervals cannot be empty".to_string());
                 }

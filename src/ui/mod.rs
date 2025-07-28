@@ -46,7 +46,13 @@ pub use components::modal::{Modal, ModalVariant, confirmation_modal, form_modal,
 pub use layout::{AppShell, ContextualPanel, Sidebar};
 
 // Re-export navigation components
-pub use navigation::Breadcrumbs;
+pub use navigation::{
+    Breadcrumbs, RouteGuard, RouteGuardResult, RouteGuardManager, RouteGuardProvider, use_route_guard,
+    DeepLinkingHandler, DeepLinkingManager, use_deep_linking
+};
+
+#[cfg(debug_assertions)]
+pub use navigation::DeepLinkingTester;
 
 // Re-export dashboard components
 pub use dashboard::Dashboard;

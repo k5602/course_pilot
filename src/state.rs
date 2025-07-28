@@ -536,16 +536,18 @@ pub fn initialize_global_state(app_state: Signal<AppState>) {
     let mut panel_context = use_context::<ContextualPanelContext>();
     let mut sidebar_context = use_context::<MobileSidebarContext>();
 
-    // Sync initial state
-    let state = app_state.read();
-    course_context.courses.set(state.courses.clone());
-    notes_context.notes.set(state.notes.clone());
-    plan_context.plans.set(state.plans.clone());
-    import_context
-        .active_import
-        .set(state.active_import.clone());
-    panel_context.state.set(state.contextual_panel.clone());
-    sidebar_context.is_open.set(state.sidebar_open_mobile);
+    // Sync initial state in an effect to avoid render-time signal writes
+    use_effect(move || {
+        let state = app_state.read();
+        course_context.courses.set(state.courses.clone());
+        notes_context.notes.set(state.notes.clone());
+        plan_context.plans.set(state.plans.clone());
+        import_context
+            .active_import
+            .set(state.active_import.clone());
+        panel_context.state.set(state.contextual_panel.clone());
+        sidebar_context.is_open.set(state.sidebar_open_mobile);
+    });
 }
 
 // ============================================================================

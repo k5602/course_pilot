@@ -1752,7 +1752,7 @@ fn analyze_temporal_distribution(plan: &Plan) -> TemporalDistribution {
         .map(|&gap| (gap as f32 - average_gap).powi(2))
         .sum::<f32>()
         / gaps.len() as f32;
-    let consistency = (1.0 / (1.0 + gap_variance)).max(0.0).min(1.0);
+    let consistency = (1.0f32 / (1.0 + gap_variance)).max(0.0).min(1.0);
 
     TemporalDistribution {
         average_gap_days: average_gap,

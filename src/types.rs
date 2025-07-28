@@ -10,6 +10,7 @@ use uuid::Uuid;
 use crate::ui::routes::ToastTest;
 use crate::ui::routes::{AddCourse, AllCourses, Dashboard, Home, PlanView, Settings};
 
+
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub struct Course {
     pub id: Uuid,
@@ -476,6 +477,7 @@ pub enum CourseStatus {
     Structured,
     Unstructured,
     Pending,
+
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]

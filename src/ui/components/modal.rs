@@ -325,8 +325,7 @@ pub fn Badge(
 #[cfg(test)]
 mod badge_tests {
     use super::*;
-    use dioxus::prelude::*;
-    use dioxus_ssr::render;
+   
 
     #[test]
     fn badge_renders_with_label_and_color() {

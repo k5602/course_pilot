@@ -481,7 +481,7 @@ impl MultiFactorOptimizer {
         };
 
         // Lower coefficient of variation = better balance = higher score
-        Ok((1.0 - coefficient_of_variation.min(1.0)).max(0.0))
+        Ok((1.0f32 - coefficient_of_variation.min(1.0)).max(0.0))
     }
 
     /// Calculate difficulty progression score

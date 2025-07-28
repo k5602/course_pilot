@@ -6,11 +6,9 @@ use crate::types::Route;
 use crate::ui::{TopBar, use_app_state};
 use crate::ui::{Breadcrumbs, DeepLinkingHandler};
 
-// Route components are now in src/ui/routes.rs
-
-/// Clean app shell with integrated layout management - serves as router layout
+/// Layout wrapper that can be used within Router context
 #[component]
-pub fn AppShell() -> Element {
+pub fn LayoutWrapper(children: Element) -> Element {
     let app_state = use_app_state();
     let current_route = use_route::<Route>();
     let sidebar_open_mobile = app_state.read().sidebar_open_mobile;
@@ -69,7 +67,7 @@ pub fn AppShell() -> Element {
                     },
                 }
 
-                // Main content area (previously MainContent component)
+                // Main content area
                 main {
                     class: "{main_class} bg-base-100",
                     style: "{main_content_style}",
@@ -82,7 +80,7 @@ pub fn AppShell() -> Element {
 
                     div {
                         class: "flex-1 overflow-y-auto",
-                        Outlet::<Route> {}
+                        {children}
                     }
                 }
 

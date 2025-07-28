@@ -249,7 +249,7 @@ pub fn use_course_progress(course_id: Uuid) -> (f32, String, Option<String>) {
 pub fn use_course_management() -> (Vec<Course>, bool, Option<String>, impl Fn()) {
     let course_manager = use_course_manager();
     
-    let courses_resource = use_resource(move || {
+    let courses_resource: Resource<Result<Vec<Course>>> = use_resource(move || {
         let course_manager = course_manager.clone();
         async move {
             course_manager.list_courses().await
