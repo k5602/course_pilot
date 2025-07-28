@@ -4,7 +4,6 @@ use crate::ui::hooks::use_course_manager;
 use crate::ui::components::ProgressRing;
 use std::sync::Arc;
 
-
 #[component]
 pub fn LastAccessedCourse() -> Element {
     let course_manager = use_course_manager();

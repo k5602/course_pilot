@@ -19,7 +19,7 @@ pub mod toast;
 pub mod top_bar;
 
 // exports for convenience
-pub use analytics::{LearningAnalytics, AIRecommendationsPanel, TodaysSessions, LastAccessedCourse, PomodoroTimer};
+pub use analytics::{LearningAnalytics, AIRecommendationsPanel, TodaysSessions, LastAccessedCourse, UpcomingDeadlines, PomodoroTimer, ClusteringInsights};
 pub use base::{BaseCard, BaseModal, BaseButton, BaseList, BasePage, BaseListItem};
 pub use breadcrumb::{Breadcrumb, BreadcrumbItem};
 pub use card::{Card, CardVariant, ActionItem, BadgeData};

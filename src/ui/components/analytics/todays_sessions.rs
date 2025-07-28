@@ -4,6 +4,7 @@ use crate::ui::hooks::use_toggle_plan_item_action;
 use chrono::Local;
 use crate::ui::components::ProgressRing;
 use crate::storage::Database;
+use uuid::Uuid;
 use std::sync::Arc;
 
 #[component]
@@ -144,10 +145,10 @@ fn SessionCard(props: SessionCardProps) -> Element {
                         if props.item.completed {
                             div { class: "badge badge-success badge-sm", "Completed" }
                         } else {
-                            button {
-                                class: "btn btn-primary btn-sm",
-                                onclick: handle_toggle_completion,
-                                "Start Session"
+                            SessionQuickStart {
+                                plan_id: props.plan.id,
+                                session_index: props.session_index,
+                                item: props.item.clone()
                             }
                         }
                         
@@ -160,6 +161,36 @@ fn SessionCard(props: SessionCardProps) -> Element {
                     }
                 }
             }
+        }
+    }
+}
+
+#[derive(Props, PartialEq, Clone)]
+struct SessionQuickStartProps {
+    plan_id: Uuid,
+    session_index: usize,
+    item: PlanItem,
+}
+
+#[component]
+fn SessionQuickStart(props: SessionQuickStartProps) -> Element {
+    let toggle_completion = use_toggle_plan_item_action();
+    
+    let handle_start_session = {
+        let plan_id = props.plan_id;
+        let session_index = props.session_index;
+        
+        move |_| {
+            // Mark session as started/completed
+            toggle_completion.call((plan_id, session_index));
+        }
+    };
+
+    rsx! {
+        button {
+            class: "btn btn-primary btn-sm",
+            onclick: handle_start_session,
+            "▶️ Start Session"
         }
     }
 }

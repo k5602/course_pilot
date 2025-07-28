@@ -706,19 +706,16 @@ fn analyze_learning_velocity(plan: &Plan) -> LearningVelocityAnalysis {
 }
 
 /// Learning velocity analysis structure
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct LearningVelocityAnalysis {
-    #[allow(dead_code)]
-    videos_per_day: f32,
-    velocity_category: VelocityCategory,
-    #[allow(dead_code)]
-    total_duration_days: i64,
-    #[allow(dead_code)]
-    recommended_adjustments: Vec<String>,
+    pub videos_per_day: f32,
+    pub velocity_category: VelocityCategory,
+    pub total_duration_days: i64,
+    pub recommended_adjustments: Vec<String>,
 }
 
 #[derive(Debug, Clone, PartialEq)]
-enum VelocityCategory {
+pub enum VelocityCategory {
     Slow,
     Moderate,
     Fast,
@@ -1659,7 +1656,7 @@ pub fn analyze_plan_effectiveness(plan: &Plan) -> PlanAnalysis {
     }
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct PlanAnalysis {
     pub velocity_analysis: LearningVelocityAnalysis,
     pub load_distribution: LoadDistribution,
@@ -1668,7 +1665,7 @@ pub struct PlanAnalysis {
     pub improvement_suggestions: Vec<String>,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct LoadDistribution {
     pub average_load: f32,
     pub load_variance: f32,
@@ -1676,7 +1673,7 @@ pub struct LoadDistribution {
     pub underloaded_sessions: usize,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct TemporalDistribution {
     pub average_gap_days: f32,
     pub longest_gap_days: i64,

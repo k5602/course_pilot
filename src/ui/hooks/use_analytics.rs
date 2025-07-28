@@ -1,6 +1,7 @@
 use crate::storage::database::Database;
 use crate::types::{Course, AdvancedSchedulerSettings, DifficultyLevel, DistributionStrategy};
 use crate::ui::toast_helpers;
+use crate::planner::scheduler::{analyze_plan_effectiveness, PlanAnalysis, LearningVelocityAnalysis, LoadDistribution as SchedulerLoadDistribution};
 use dioxus::prelude::*;
 use uuid::Uuid;
 use anyhow::Result;
@@ -213,6 +214,67 @@ impl AnalyticsManager {
             progress_callback(100.0, "Course structuring completed!".to_string());
 
             Ok(course)
+        })
+        .await
+        .unwrap_or_else(|e| Err(anyhow::anyhow!("Join error: {}", e)))
+    }
+
+    /// Analyze learning velocity for a specific plan
+    pub async fn analyze_learning_velocity(&self, plan_id: Uuid) -> Result<LearningVelocityAnalysis> {
+        let db = self.db.clone();
+        tokio::task::spawn_blocking(move || {
+            let plan = crate::storage::load_plan(&db, &plan_id)?
+                .ok_or_else(|| anyhow::anyhow!("Plan not found: {}", plan_id))?;
+            
+            let analysis = analyze_plan_effectiveness(&plan);
+            Ok(analysis.velocity_analysis)
+        })
+        .await
+        .unwrap_or_else(|e| Err(anyhow::anyhow!("Join error: {}", e)))
+    }
+
+    /// Analyze cognitive load distribution for a specific plan
+    pub async fn analyze_cognitive_load(&self, plan_id: Uuid) -> Result<SchedulerLoadDistribution> {
+        let db = self.db.clone();
+        tokio::task::spawn_blocking(move || {
+            let plan = crate::storage::load_plan(&db, &plan_id)?
+                .ok_or_else(|| anyhow::anyhow!("Plan not found: {}", plan_id))?;
+            
+            let analysis = analyze_plan_effectiveness(&plan);
+            Ok(analysis.load_distribution)
+        })
+        .await
+        .unwrap_or_else(|e| Err(anyhow::anyhow!("Join error: {}", e)))
+    }
+
+    /// Get comprehensive plan analysis
+    pub async fn get_plan_analysis(&self, plan_id: Uuid) -> Result<PlanAnalysis> {
+        let db = self.db.clone();
+        tokio::task::spawn_blocking(move || {
+            let plan = crate::storage::load_plan(&db, &plan_id)?
+                .ok_or_else(|| anyhow::anyhow!("Plan not found: {}", plan_id))?;
+            
+            Ok(analyze_plan_effectiveness(&plan))
+        })
+        .await
+        .unwrap_or_else(|e| Err(anyhow::anyhow!("Join error: {}", e)))
+    }
+
+    /// Get learning analytics across all user plans
+    pub async fn get_learning_analytics(&self) -> Result<Vec<PlanAnalysis>> {
+        let db = self.db.clone();
+        tokio::task::spawn_blocking(move || {
+            let courses = crate::storage::load_courses(&db)?;
+            let mut analyses = Vec::new();
+            
+            for course in courses {
+                if let Ok(Some(plan)) = crate::storage::get_plan_by_course_id(&db, &course.id) {
+                    let analysis = analyze_plan_effectiveness(&plan);
+                    analyses.push(analysis);
+                }
+            }
+            
+            Ok(analyses)
         })
         .await
         .unwrap_or_else(|e| Err(anyhow::anyhow!("Join error: {}", e)))
