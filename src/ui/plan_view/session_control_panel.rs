@@ -9,8 +9,8 @@ use crate::types::{
     AdvancedSchedulerSettings, DifficultyLevel, DistributionStrategy, Plan, PlanSettings,
     RegenerationStatus,
 };
-use crate::ui::components::toast::toast;
-use crate::ui::hooks::use_backend;
+use crate::ui::toast_helpers;
+use crate::ui::use_backend;
 
 #[derive(Props, PartialEq, Clone)]
 pub struct SessionControlPanelProps {
@@ -129,7 +129,7 @@ pub fn SessionControlPanel(props: SessionControlPanelProps) -> Element {
 
         if !errors.is_empty() {
             spawn(async move {
-                toast::error("Please fix validation errors before applying settings");
+                toast_helpers::error("Please fix validation errors before applying settings");
             });
             return;
         }
@@ -173,7 +173,7 @@ pub fn SessionControlPanel(props: SessionControlPanelProps) -> Element {
                 Ok(new_plan) => {
                     regeneration_status.set(RegenerationStatus::Completed);
                     on_plan_regenerated.call(new_plan);
-                    toast::success("Plan regenerated successfully!");
+                    toast_helpers::success("Plan regenerated successfully!");
 
                     // Reset status after a delay
                     tokio::time::sleep(tokio::time::Duration::from_secs(2)).await;
@@ -183,7 +183,7 @@ pub fn SessionControlPanel(props: SessionControlPanelProps) -> Element {
                     regeneration_status.set(RegenerationStatus::Failed {
                         error: e.to_string(),
                     });
-                    toast::error(format!("Failed to regenerate plan: {e}"));
+                    toast_helpers::error(format!("Failed to regenerate plan: {e}"));
                 }
             }
         });
@@ -211,7 +211,7 @@ pub fn SessionControlPanel(props: SessionControlPanelProps) -> Element {
         form_errors.set(Vec::new());
 
         spawn(async move {
-            toast::info("Settings reset to current plan values");
+            toast_helpers::info("Settings reset to current plan values");
         });
     };
 

@@ -1,5 +1,5 @@
 use crate::types::Route;
-use crate::ui::hooks::{BreadcrumbItem, use_navigation_manager};
+use crate::ui::hooks::{use_navigation_manager, BreadcrumbItem};
 use dioxus::prelude::*;
 use dioxus_free_icons::Icon;
 use dioxus_free_icons::icons::fa_solid_icons::FaChevronRight;

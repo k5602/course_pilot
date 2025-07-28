@@ -37,14 +37,14 @@ pub mod actions {
     
     /// Start an import job
     pub fn start_import(job: ImportJob) {
-        let state = use_import_state();
+        let mut state = use_import_state();
         *state.active_import.write() = Some(job);
         log::info!("Import started");
     }
     
     /// Update import progress
     pub fn update_import(id: Uuid, progress: f32, message: String) -> Result<(), StateError> {
-        let state = use_import_state();
+        let mut state = use_import_state();
         let mut import_opt = state.active_import.write();
         
         if let Some(ref mut import) = *import_opt {
@@ -61,7 +61,7 @@ pub mod actions {
     
     /// Complete an import job
     pub fn complete_import(id: Uuid) -> Result<(), StateError> {
-        let state = use_import_state();
+        let mut state = use_import_state();
         let mut import_opt = state.active_import.write();
         
         if let Some(ref mut import) = *import_opt {
@@ -78,7 +78,7 @@ pub mod actions {
     
     /// Fail an import job
     pub fn fail_import(id: Uuid, error: String) -> Result<(), StateError> {
-        let state = use_import_state();
+        let mut state = use_import_state();
         let mut import_opt = state.active_import.write();
         
         if let Some(ref mut import) = *import_opt {
@@ -95,7 +95,7 @@ pub mod actions {
     
     /// Clear the active import
     pub fn clear_import() {
-        let state = use_import_state();
+        let mut state = use_import_state();
         *state.active_import.write() = None;
         log::info!("Import cleared");
     }

@@ -62,14 +62,14 @@ pub mod actions {
     
     /// Add a note
     pub fn add_note(note: Note) {
-        let state = use_notes_state();
+        let mut state = use_notes_state();
         state.notes.write().push(note);
         log::info!("Note added successfully");
     }
     
     /// Update a note
     pub fn update_note(id: Uuid, updated_note: Note) -> Result<(), String> {
-        let state = use_notes_state();
+        let mut state = use_notes_state();
         let mut notes = state.notes.write();
         
         if let Some(index) = notes.iter().position(|n| n.id == id) {
@@ -83,7 +83,7 @@ pub mod actions {
     
     /// Delete a note
     pub fn delete_note(id: Uuid) -> Result<(), String> {
-        let state = use_notes_state();
+        let mut state = use_notes_state();
         let mut notes = state.notes.write();
         let initial_len = notes.len();
         

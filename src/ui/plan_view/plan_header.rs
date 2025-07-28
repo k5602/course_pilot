@@ -1,8 +1,5 @@
 use crate::export::ExportFormat;
-use crate::ui::components::progress::ProgressRing;
-use crate::ui::components::toast::toast;
-use crate::ui::components::{DropdownItem, DropdownTrigger, UnifiedDropdown};
-use crate::ui::hooks::use_backend;
+use crate::ui::{ProgressRing, DropdownItem, DropdownTrigger, UnifiedDropdown, toast_helpers, use_backend};
 use dioxus::prelude::*;
 use dioxus_free_icons::Icon;
 use dioxus_free_icons::icons::fa_solid_icons::{FaCheck, FaClock};
@@ -27,21 +24,21 @@ pub fn PlanHeader(props: PlanHeaderProps) -> Element {
         let format_name = format_name.to_string();
 
         spawn(async move {
-            toast::info(format!("Exporting plan as {format_name}..."));
+            toast_helpers::info(format!("Exporting plan as {format_name}..."));
             match backend.export_plan(plan_id, format).await {
                 Ok(export_result) => match backend.export.save_export_data(export_result).await {
                     Ok(file_path) => {
-                        toast::success(format!(
+                        toast_helpers::success(format!(
                             "Plan exported successfully to {}",
                             file_path.display()
                         ));
                     }
                     Err(e) => {
-                        toast::error(format!("Failed to save export: {e}"));
+                        toast_helpers::error(format!("Failed to save export: {e}"));
                     }
                 },
                 Err(e) => {
-                    toast::error(format!("Export failed: {e}"));
+                    toast_helpers::error(format!("Export failed: {e}"));
                 }
             }
         });
@@ -73,7 +70,7 @@ pub fn PlanHeader(props: PlanHeaderProps) -> Element {
             label: "Export as PDF".to_string(),
             icon: Some("📋".to_string()),
             on_select: Some(EventHandler::new(move |_| {
-                toast::info("PDF export will be implemented in a future update");
+                toast_helpers::info("PDF export will be implemented in a future update");
             })),
             disabled: false,
             divider: true,

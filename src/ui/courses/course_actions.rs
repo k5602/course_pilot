@@ -1,6 +1,5 @@
 use crate::types::Course;
-use crate::ui::components::modal::{Modal, confirmation_modal};
-use crate::ui::hooks::{use_course_manager, use_form_manager};
+use crate::ui::{Modal, confirmation_modal, toast_helpers, use_course_manager, use_form_manager};
 use dioxus::prelude::*;
 
 #[derive(Props, PartialEq, Clone)]
@@ -29,7 +28,7 @@ pub fn CourseActions(props: CourseActionsProps) -> Element {
         move |_| {
             let new_name = course_name_form.value.trim().to_string();
             if new_name.is_empty() {
-                crate::ui::components::toast::toast::error("Course name cannot be empty");
+                toast_helpers::error("Course name cannot be empty");
                 return;
             }
 

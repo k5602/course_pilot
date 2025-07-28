@@ -1,6 +1,4 @@
-use crate::ui::components::modal::Badge;
-use crate::ui::components::progress::ProgressRing;
-use crate::ui::components::{DropdownItem, DropdownTrigger, UnifiedDropdown};
+use crate::ui::{Badge, ProgressRing, DropdownItem, DropdownTrigger, UnifiedDropdown};
 use dioxus::prelude::*;
 use dioxus_motion::prelude::*;
 

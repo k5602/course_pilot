@@ -13,9 +13,9 @@ use crate::state::{
 };
 use crate::storage::database::Database;
 use crate::types::{AppState, Route};
-use crate::ui::components::{ToastContainer, toast};
+use crate::ui::{ToastContainer, provide_toast_manager, toast_helpers};
 // Backend hooks are accessed through individual components
-use crate::ui::theme_unified::{AppTheme, ThemeContext};
+use crate::ui::{AppTheme, ThemeContext};
 
 #[component]
 pub fn AppRoot() -> Element {
@@ -24,7 +24,7 @@ pub fn AppRoot() -> Element {
 
     // Provide all contexts
     use_context_provider(|| Signal::new(ThemeContext::new()));
-    toast::provide_toast_manager();
+    provide_toast_manager();
     provide_context(services.database);
     provide_context(services.app_state);
 
@@ -122,7 +122,7 @@ fn use_theme_sync() {
             "document.documentElement.setAttribute('data-theme', '{theme_name}');"
         ));
 
-        toast::toast::info(format!("Theme set to: {theme_name}"));
+        toast_helpers::info(format!("Theme set to: {theme_name}"));
     });
 }
 

@@ -10,6 +10,7 @@ pub mod settings;
 
 // Re-export main database functions
 pub use database::{
+    Database,
     ClusteringAnalytics,
     ClusteringPerformancePoint,
     ProcessingTimeStats,

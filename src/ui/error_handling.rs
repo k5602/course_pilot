@@ -1,7 +1,7 @@
 //! Error handling utilities for the UI layer
 
 use crate::Phase3Error;
-use crate::ui::components::toast::toast;
+use crate::ui::toast_helpers;
 
 /// Handle async errors in UI components
 pub fn handle_ui_error(error: anyhow::Error, operation: &str) {
@@ -19,7 +19,7 @@ pub fn handle_ui_error(error: anyhow::Error, operation: &str) {
         _ => "An unexpected error occurred. Please try again.",
     };
 
-    toast::error(user_message);
+    toast_helpers::error(user_message);
 }
 
 /// Hook to get the error handler function

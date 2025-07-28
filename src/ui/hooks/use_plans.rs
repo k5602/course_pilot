@@ -1,5 +1,6 @@
 use crate::storage::database::Database;
 use crate::types::{Plan, PlanSettings};
+use crate::ui::toast_helpers;
 use dioxus::prelude::*;
 use uuid::Uuid;
 use anyhow::Result;
@@ -236,13 +237,13 @@ pub fn use_plan_manager() -> PlanManager {
 
                 match result {
                     Ok(Ok(_)) => {
-                        crate::ui::components::toast::toast::success("Study plan created successfully");
+                        toast_helpers::success("Study plan created successfully");
                     }
                     Ok(Err(e)) => {
-                        crate::ui::components::toast::toast::error(format!("Failed to create plan: {}", e));
+                        toast_helpers::error(format!("Failed to create plan: {}", e));
                     }
                     Err(e) => {
-                        crate::ui::components::toast::toast::error(format!("Failed to create plan: {}", e));
+                        toast_helpers::error(format!("Failed to create plan: {}", e));
                     }
                 }
             });

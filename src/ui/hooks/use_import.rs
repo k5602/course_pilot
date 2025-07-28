@@ -1,5 +1,6 @@
 use crate::storage::database::Database;
 use crate::types::Course;
+use crate::ui::toast_helpers;
 use dioxus::prelude::*;
 use std::path::{Path, PathBuf};
 use anyhow::Result;
@@ -131,13 +132,13 @@ pub fn use_import_manager() -> ImportManager {
 
                 match result {
                     Ok(Ok(_)) => {
-                        crate::ui::components::toast::toast::success("Course imported successfully");
+                        toast_helpers::success("Course imported successfully");
                     }
                     Ok(Err(e)) => {
-                        crate::ui::components::toast::toast::error(format!("Failed to import course: {}", e));
+                        toast_helpers::error(format!("Failed to import course: {}", e));
                     }
                     Err(e) => {
-                        crate::ui::components::toast::toast::error(format!("Failed to import course: {}", e));
+                        toast_helpers::error(format!("Failed to import course: {}", e));
                     }
                 }
             });
@@ -156,10 +157,10 @@ pub fn use_import_manager() -> ImportManager {
                     // Validation successful - the UI will handle the result
                 }
                 Ok(Err(e)) => {
-                    crate::ui::components::toast::toast::error(format!("Folder validation failed: {}", e));
+                    toast_helpers::error(format!("Folder validation failed: {}", e));
                 }
                 Err(e) => {
-                    crate::ui::components::toast::toast::error(format!("Folder validation failed: {}", e));
+                    toast_helpers::error(format!("Folder validation failed: {}", e));
                 }
             }
         });

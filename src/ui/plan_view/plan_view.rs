@@ -5,8 +5,8 @@ use uuid::Uuid;
 
 use super::{PlanHeader, SessionControlPanel, SessionList, group_items_by_session};
 use crate::types::{PlanExt, PlanSettings};
-use crate::ui::components::toast::toast;
-use crate::ui::hooks::use_plan_resource;
+use crate::ui::toast_helpers;
+use crate::ui::use_plan_resource;
 
 #[derive(Props, PartialEq, Clone)]
 pub struct PlanViewProps {
@@ -23,7 +23,7 @@ pub fn PlanView(props: PlanViewProps) -> Element {
     use_effect(use_reactive!(|plan_resource| {
         if plan_resource.read().is_none() {
             spawn(async move {
-                toast::info("Loading study plan...");
+                toast_helpers::info("Loading study plan...");
             });
         }
     }));
@@ -68,7 +68,7 @@ fn render_loading_state() -> Element {
 fn render_error_state(err: &anyhow::Error) -> Element {
     let error_msg = format!("Failed to load study plan: {err}");
     spawn(async move {
-        toast::error(error_msg);
+        toast_helpers::error(error_msg);
     });
 
     rsx! {
@@ -78,7 +78,7 @@ fn render_error_state(err: &anyhow::Error) -> Element {
             button {
                 class: "btn btn-outline btn-sm mt-4",
                 onclick: move |_| {
-                    toast::info("Please refresh the page to retry loading the plan");
+                    toast_helpers::info("Please refresh the page to retry loading the plan");
                 },
                 "Retry"
             }
@@ -126,15 +126,15 @@ fn render_enhanced_plan_content(
             let backend = backend.clone();
 
             spawn(async move {
-                toast::info("Regenerating plan with new settings...");
+                toast_helpers::info("Regenerating plan with new settings...");
 
                 match backend.regenerate_plan(plan_id, new_settings).await {
                     Ok(_updated_plan) => {
-                        toast::success("Study plan updated successfully!");
+                        toast_helpers::success("Study plan updated successfully!");
                         // The plan resource will automatically refresh and show the updated plan
                     }
                     Err(e) => {
-                        toast::error(format!("Failed to update study plan: {e}"));
+                        toast_helpers::error(format!("Failed to update study plan: {e}"));
                     }
                 }
             });
@@ -144,7 +144,7 @@ fn render_enhanced_plan_content(
     let handle_plan_regenerated = move |_updated_plan: crate::types::Plan| {
         // The plan resource will automatically refresh and show the updated plan
         // This handler is called after successful regeneration
-        toast::success("Plan regenerated successfully!");
+        toast_helpers::success("Plan regenerated successfully!");
     };
 
     // Group plan items by session for better organization
@@ -200,7 +200,7 @@ fn render_no_plan_state(course_id: Uuid) -> Element {
 
             spawn(async move {
                 is_creating.set(true);
-                toast::info("Creating study plan...");
+                toast_helpers::info("Creating study plan...");
 
                 // Create default plan settings
                 let settings = PlanSettings {
@@ -213,11 +213,11 @@ fn render_no_plan_state(course_id: Uuid) -> Element {
 
                 match backend.generate_plan(course_id, settings).await {
                     Ok(_plan) => {
-                        toast::success("Study plan created successfully!");
+                        toast_helpers::success("Study plan created successfully!");
                         // The plan resource will automatically refresh and show the new plan
                     }
                     Err(e) => {
-                        toast::error(format!("Failed to create study plan: {e}"));
+                        toast_helpers::error(format!("Failed to create study plan: {e}"));
                     }
                 }
 

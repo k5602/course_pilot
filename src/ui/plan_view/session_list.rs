@@ -7,10 +7,7 @@ use uuid::Uuid;
 
 use crate::state::set_video_context_and_open_notes_reactive;
 use crate::types::{Plan, PlanItem, VideoContext};
-use crate::ui::components::Badge;
-use crate::ui::components::toast::toast;
-use crate::ui::hooks::use_app_state;
-use crate::ui::hooks::use_toggle_plan_item_action;
+use crate::ui::{Badge, toast_helpers, use_app_state, use_toggle_plan_item_action};
 
 /// Session group data structure for organizing plan items by date
 #[derive(Debug, Clone, PartialEq)]
@@ -413,7 +410,7 @@ fn VideoItem(props: VideoItemProps) -> Element {
 
     // Play button handler (placeholder for future implementation)
     let play_handler = move |_| {
-        toast::info("Video player will be implemented in a future phase");
+        toast_helpers::info("Video player will be implemented in a future phase");
     };
 
     // Notes button handler with video context
@@ -431,9 +428,9 @@ fn VideoItem(props: VideoItemProps) -> Element {
             };
 
             if let Err(e) = set_video_context_and_open_notes_reactive(video_context) {
-                toast::error(format!("Failed to open notes: {e}"));
+                toast_helpers::error(format!("Failed to open notes: {e}"));
             } else {
-                toast::success("Notes panel opened for this video");
+                toast_helpers::success("Notes panel opened for this video");
             }
         }
     };

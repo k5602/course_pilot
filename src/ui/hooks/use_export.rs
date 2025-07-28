@@ -1,4 +1,5 @@
 use crate::export::{ExportFormat, ExportResult};
+use crate::ui::toast_helpers;
 use dioxus::prelude::*;
 use uuid::Uuid;
 use anyhow::Result;
@@ -176,13 +177,13 @@ pub fn use_export_manager() -> ExportManager {
 
                 match result {
                     Ok(Ok(_)) => {
-                        crate::ui::components::toast::toast::success("Course exported successfully");
+                        toast_helpers::success("Course exported successfully");
                     }
                     Ok(Err(e)) => {
-                        crate::ui::components::toast::toast::error(format!("Failed to export course: {}", e));
+                        toast_helpers::error(format!("Failed to export course: {}", e));
                     }
                     Err(e) => {
-                        crate::ui::components::toast::toast::error(format!("Failed to export course: {}", e));
+                        toast_helpers::error(format!("Failed to export course: {}", e));
                     }
                 }
             });
@@ -198,10 +199,10 @@ pub fn use_export_manager() -> ExportManager {
             
             match result {
                 Ok(_) => {
-                    crate::ui::components::toast::toast::success(format!("Export saved to: {}", file_path.display()));
+                    toast_helpers::success(format!("Export saved to: {}", file_path.display()));
                 }
                 Err(e) => {
-                    crate::ui::components::toast::toast::error(format!("Failed to save export: {}", e));
+                    toast_helpers::error(format!("Failed to save export: {}", e));
                 }
             }
         });

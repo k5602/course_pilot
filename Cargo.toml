@@ -22,8 +22,6 @@ dioxus-sdk = "0.6.0"
 manganis = "0.6.2"
 
 # UI Components & Styling
-dioxus-daisyui = { version = "0.8.0" }
-dioxus-tailwindcss = { version = "=0.8.0" }
 dioxus-free-icons = { version = "0.9", features = [
     "material-design-icons-action",
     "material-design-icons-content",

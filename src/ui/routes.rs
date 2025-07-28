@@ -45,13 +45,7 @@ pub fn PlanView(course_id: String) -> Element {
 
 #[component]
 pub fn AllCourses() -> Element {
-    rsx! {
-        div {
-            class: "p-8",
-            h1 { class: "text-3xl font-bold mb-4", "All Courses" }
-            p { class: "text-base-content/70", "Manage all your courses here." }
-        }
-    }
+    rsx! { crate::ui::courses::AllCoursesView {} }
 }
 
 #[component]

@@ -1,5 +1,6 @@
 use crate::storage::database::Database;
 use crate::types::Course;
+use crate::ui::toast_helpers;
 use dioxus::prelude::*;
 use uuid::Uuid;
 use anyhow::Result;
@@ -131,13 +132,13 @@ pub fn use_course_manager() -> CourseManager {
 
                 match result {
                     Ok(Ok(_)) => {
-                        crate::ui::components::toast::toast::success("Course updated successfully");
+                        toast_helpers::success("Course updated successfully");
                     }
                     Ok(Err(e)) => {
-                        crate::ui::components::toast::toast::error(format!("Failed to update course: {}", e));
+                        toast_helpers::error(format!("Failed to update course: {}", e));
                     }
                     Err(e) => {
-                        crate::ui::components::toast::toast::error(format!("Failed to update course: {}", e));
+                        toast_helpers::error(format!("Failed to update course: {}", e));
                     }
                 }
             });
@@ -156,13 +157,13 @@ pub fn use_course_manager() -> CourseManager {
 
                 match result {
                     Ok(Ok(_)) => {
-                        crate::ui::components::toast::toast::success("Course deleted successfully");
+                        toast_helpers::success("Course deleted successfully");
                     }
                     Ok(Err(e)) => {
-                        crate::ui::components::toast::toast::error(format!("Failed to delete course: {}", e));
+                        toast_helpers::error(format!("Failed to delete course: {}", e));
                     }
                     Err(e) => {
-                        crate::ui::components::toast::toast::error(format!("Failed to delete course: {}", e));
+                        toast_helpers::error(format!("Failed to delete course: {}", e));
                     }
                 }
             });

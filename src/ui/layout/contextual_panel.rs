@@ -1,6 +1,6 @@
 use crate::types::{ContextualPanelTab, Route, VideoContext};
-use crate::ui::hooks::use_app_state;
-use crate::ui::notes_panel::{NotesPanel, NotesPanelMode};
+use crate::ui::use_app_state;
+use crate::ui::{NotesPanel, NotesPanelMode};
 use dioxus::prelude::*;
 use dioxus_motion::prelude::*;
 

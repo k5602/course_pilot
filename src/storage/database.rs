@@ -643,7 +643,7 @@ mod tests {
 use crate::types::{ClusteringAlgorithm, ClusteringMetadata, ClusteringStrategy};
 
 /// Clustering analytics for dashboard insights
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct ClusteringAnalytics {
     pub total_courses: usize,
     pub clustered_courses: usize,
@@ -655,7 +655,7 @@ pub struct ClusteringAnalytics {
 }
 
 /// Quality score distribution
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct QualityDistribution {
     pub excellent: usize, // 0.8+
     pub good: usize,      // 0.6-0.8
@@ -664,7 +664,7 @@ pub struct QualityDistribution {
 }
 
 /// Processing time statistics
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct ProcessingTimeStats {
     pub average_ms: f64,
     pub median_ms: f64,

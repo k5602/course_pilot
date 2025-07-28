@@ -22,7 +22,9 @@ pub mod ui;
 pub use types::{
     AdvancedSchedulerSettings, AppState, Course, CourseStructure, DifficultyLevel,
     DistributionStrategy, ImportJob, ImportStatus, Module, Plan, PlanItem, PlanSettings,
-    RegenerationStatus, Route, Section, StructureMetadata,
+    RegenerationStatus, Route, Section, StructureMetadata, Note, VideoContext,
+    ContextualPanelState, ContextualPanelTab, ClusteringMetadata, ClusteringAlgorithm,
+    ClusteringStrategy, PlanExt,
 };
 
 // Re-export core functionality
@@ -40,6 +42,22 @@ pub use storage::{
     get_clustering_analytics, get_clustering_performance_history,
     get_courses_by_clustering_quality, get_similar_courses_by_clustering,
     update_clustering_metadata,
+};
+
+// Re-export UI components for external use
+pub use ui::{
+    AppRoot, AppShell, Dashboard, PlanView, NotesPanel,
+    BaseButton, BaseCard, BaseList, BaseModal, BasePage,
+    ProgressBar, ProgressRing, Toast, ToastContainer,
+    CourseCard, CourseGrid, Breadcrumbs,
+};
+
+// Re-export commonly used hooks
+pub use ui::{
+    use_app_state, use_backend, use_course_manager, use_courses_resource,
+    use_export_manager, use_import_manager, use_modal_manager,
+    use_navigation_manager, use_notes_manager, use_plan_manager,
+    use_settings_manager,
 };
 
 // Custom error types

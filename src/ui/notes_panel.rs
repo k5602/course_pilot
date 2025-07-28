@@ -1,9 +1,7 @@
-use crate::ui::components::SearchHistory;
-use crate::ui::components::TagInput;
-use crate::ui::components::modal::{Modal, confirmation_modal};
-use crate::ui::components::{Badge, DropdownItem, DropdownTrigger, UnifiedDropdown};
-
-use crate::ui::components::toast::toast;
+use crate::ui::{
+    SearchHistory, TagInput, Badge, DropdownItem, DropdownTrigger, UnifiedDropdown, 
+    toast_helpers, Modal, confirmation_modal,
+};
 use dioxus::prelude::*;
 use dioxus_free_icons::Icon;
 use dioxus_free_icons::icons::fa_solid_icons::{
@@ -143,7 +141,7 @@ fn NotesTab(
         move |_| {
             let content = note_content();
             if content.trim().is_empty() {
-                toast::warning("Note content cannot be empty");
+                toast_helpers::warning("Note content cannot be empty");
                 return;
             }
 
@@ -162,11 +160,11 @@ fn NotesTab(
                             }
                             updated_note
                         } else {
-                            toast::error("Failed to find note to update");
+                            toast_helpers::error("Failed to find note to update");
                             return;
                         }
                     } else {
-                        toast::error("Failed to load notes");
+                        toast_helpers::error("Failed to load notes");
                         return;
                     }
                 }
@@ -257,7 +255,7 @@ fn NotesTab(
         if !searches.contains(&query) {
             searches.push(query);
             saved_searches.set(searches);
-            toast::success("Search saved");
+            toast_helpers::success("Search saved");
         }
     };
 
@@ -277,7 +275,7 @@ fn NotesTab(
     // Handle clear all searches
     let handle_clear_all_searches = move |_| {
         recent_searches.set(Vec::new());
-        toast::info("Search history cleared");
+        toast_helpers::info("Search history cleared");
     };
 
     match &*notes_resource.read_unchecked() {
@@ -602,7 +600,7 @@ fn NoteCard(props: NoteCardProps) -> Element {
         DropdownItem {
             label: "Export".to_string(),
             icon: Some("📤".to_string()),
-            on_select: Some(EventHandler::new(|_| toast::info("Exported note (stub)"))),
+            on_select: Some(EventHandler::new(|_| toast_helpers::info("Exported note (stub)"))),
             disabled: false,
             divider: false,
         },
@@ -673,7 +671,7 @@ fn NoteCard(props: NoteCardProps) -> Element {
                         show_delete_modal.set(false);
                         // We would need the actual note ID here to delete it
                         // For now, just show a success message
-                        toast::success("Note deleted");
+                        toast_helpers::success("Note deleted");
                     })),
                     Some(Callback::new(move |_| show_delete_modal.set(false)))
                 ),
@@ -774,7 +772,7 @@ fn AllNotesTab() -> Element {
 
     // In a future implementation, this could navigate to the specific course or open an edit modal
     let handle_edit_note = move |note: crate::types::Note| {
-        crate::ui::components::toast::toast::info(format!(
+        toast_helpers::info(format!(
             "Note editing from All Notes view will be implemented in a future update. Note: '{}'",
             if note.content.len() > 50 {
                 format!("{}...", &note.content[..50])

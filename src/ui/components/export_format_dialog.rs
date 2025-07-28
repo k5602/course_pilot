@@ -1,5 +1,5 @@
 use crate::export::ExportFormat;
-use crate::ui::components::BaseModal;
+use crate::ui::BaseModal;
 use dioxus::prelude::*;
 
 #[derive(Props, PartialEq, Clone)]

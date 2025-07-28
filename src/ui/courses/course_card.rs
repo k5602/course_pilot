@@ -1,10 +1,12 @@
 use crate::types::Course;
-use crate::ui::components::card::{BadgeData, Card, CardVariant};
-use crate::ui::components::dropdown::{DropdownTrigger, UnifiedDropdown, create_course_actions};
-use crate::ui::components::export_format_dialog::ExportFormatDialog;
-use crate::ui::dashboard::course_actions::CourseActions;
-use crate::ui::hooks::{use_course_manager, use_course_progress, use_modal_manager};
+use crate::ui::{
+    BadgeData, Card, CardVariant, DropdownTrigger, UnifiedDropdown, 
+    create_course_actions, ExportFormatDialog, toast_helpers,
+    use_course_manager, use_course_progress, use_modal_manager,
+};
 use dioxus::prelude::*;
+
+use super::CourseActions;
 
 #[derive(Props, PartialEq, Clone)]
 pub struct CourseCardProps {
@@ -53,7 +55,7 @@ pub fn CourseCard(props: CourseCardProps) -> Element {
                 let plan_manager = plan_manager.clone();
                 let course_manager = course_manager.clone();
                 spawn(async move {
-                    crate::ui::components::toast::toast::info("Creating study plan...");
+                    toast_helpers::info("Creating study plan...");
 
                     // Create default plan settings
                     let settings = crate::types::PlanSettings {
@@ -83,7 +85,7 @@ pub fn CourseCard(props: CourseCardProps) -> Element {
                 let analytics_manager = analytics_manager.clone();
                 let course_manager = course_manager.clone();
                 spawn(async move {
-                    crate::ui::components::toast::toast::info("Structuring course content...");
+                    toast_helpers::info("Structuring course content...");
 
                     // Call the callback (which handles the async work and toast messages internally)
                     analytics_manager.structure_course.call(props.course.id);
@@ -121,7 +123,7 @@ pub fn CourseCard(props: CourseCardProps) -> Element {
             let course_id = course_id;
 
             spawn(async move {
-                crate::ui::components::toast::toast::info(format!("Preparing {format} export..."));
+                toast_helpers::info(format!("Preparing {format} export..."));
 
                 // Call the callback (which handles the async work and toast messages internally)
                 export_manager.export_course_with_progress.call((
@@ -130,7 +132,7 @@ pub fn CourseCard(props: CourseCardProps) -> Element {
                     Box::new(|progress, message| {
                         // Update toast with progress information
                         let progress_percent = (progress * 100.0).round() as u8;
-                        crate::ui::components::toast::toast::info(format!(
+                        toast_helpers::info(format!(
                             "{message} ({progress_percent}%)"
                         ));
                     })

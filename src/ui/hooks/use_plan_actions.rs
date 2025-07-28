@@ -1,6 +1,6 @@
 use crate::storage::database::Database;
 use crate::types::Plan;
-use crate::ui::components::toast::toast;
+use crate::ui::toast_helpers;
 use dioxus::prelude::*;
 use uuid::Uuid;
 use anyhow::Result;
@@ -36,13 +36,13 @@ pub fn use_toggle_plan_item_action() -> Callback<(Uuid, usize)> {
 
             match result {
                 Ok(Ok(_)) => {
-                    toast::success("Item status updated");
+                    toast_helpers::success("Item status updated");
                 }
                 Ok(Err(e)) => {
-                    toast::error(format!("Failed to update item: {e}"));
+                    toast_helpers::error(format!("Failed to update item: {e}"));
                 }
                 Err(e) => {
-                    toast::error(format!("Failed to update item: {e}"));
+                    toast_helpers::error(format!("Failed to update item: {e}"));
                 }
             }
         });

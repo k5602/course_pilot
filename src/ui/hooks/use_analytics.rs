@@ -1,5 +1,6 @@
 use crate::storage::database::Database;
 use crate::types::{Course, AdvancedSchedulerSettings, DifficultyLevel, DistributionStrategy};
+use crate::ui::toast_helpers;
 use dioxus::prelude::*;
 use uuid::Uuid;
 use anyhow::Result;
@@ -251,13 +252,13 @@ pub fn use_analytics_manager() -> AnalyticsManager {
 
                 match result {
                     Ok(Ok(_)) => {
-                        crate::ui::components::toast::toast::success("Course structured successfully");
+                        toast_helpers::success("Course structured successfully");
                     }
                     Ok(Err(e)) => {
-                        crate::ui::components::toast::toast::error(format!("Failed to structure course: {}", e));
+                        toast_helpers::error(format!("Failed to structure course: {}", e));
                     }
                     Err(e) => {
-                        crate::ui::components::toast::toast::error(format!("Failed to structure course: {}", e));
+                        toast_helpers::error(format!("Failed to structure course: {}", e));
                     }
                 }
             });

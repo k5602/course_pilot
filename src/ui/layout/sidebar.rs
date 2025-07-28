@@ -1,10 +1,10 @@
 use dioxus::prelude::*;
 use dioxus_free_icons::Icon;
-use dioxus_free_icons::icons::fa_solid_icons::{FaBook, FaGauge, FaGear};
+use dioxus_free_icons::icons::fa_solid_icons::{FaBook, FaGauge, FaGear, FaPlus};
 
 use crate::types::Route;
-use crate::ui::hooks::use_app_state;
-use crate::ui::theme_unified::ThemeToggleButton;
+use crate::ui::use_app_state;
+use crate::ui::ThemeToggleButton;
 
 // Navigation items configuration
 const NAV_ITEMS: &[NavItem] = if cfg!(debug_assertions) {
@@ -65,8 +65,6 @@ pub fn Sidebar(props: SidebarProps) -> Element {
         "-translate-x-full"
     };
 
-    // No longer need manual route change handler - router handles this
-
     rsx! {
         // Mobile backdrop overlay (DaisyUI drawer-overlay)
         if props.is_mobile_open {
@@ -95,14 +93,42 @@ pub fn Sidebar(props: SidebarProps) -> Element {
                     mobile_translate
                 ),
 
+                // Logo/Brand area
+                div { 
+                    class: "p-4 border-b border-base-300",
+                    if props.is_hovered || props.is_mobile_open {
+                        h1 { class: "text-xl font-bold text-primary", "Course Pilot" }
+                    } else {
+                        div { 
+                            class: "w-8 h-8 bg-primary rounded flex items-center justify-center",
+                            span { class: "text-primary-content font-bold", "CP" }
+                        }
+                    }
+                }
+
                 // Navigation menu using DaisyUI menu component
                 SidebarNav {
                     current_route: props.current_route,
                     is_expanded: props.is_hovered || props.is_mobile_open
                 }
 
-                // Spacer to push theme toggle to bottom
-                div { class: "flex-1" }
+                // Quick import button
+                div { 
+                    class: "p-4 border-t border-base-300",
+                    Link {
+                        to: Route::AddCourse {},
+                        class: format!(
+                            "btn btn-primary w-full {}",
+                            if props.is_hovered || props.is_mobile_open { "btn-block" } else { "btn-square" }
+                        ),
+                        
+                        Icon { icon: FaPlus, class: "w-4 h-4" }
+                        
+                        if props.is_hovered || props.is_mobile_open {
+                            span { class: "ml-2", "Import Course" }
+                        }
+                    }
+                }
 
                 // Theme toggle at bottom
                 div {
@@ -148,7 +174,11 @@ fn SidebarNavItem(
     is_expanded: bool,
     route: Route,
 ) -> Element {
-    let active_class = if active { "menu-active" } else { "" };
+    let active_class = if active { 
+        "bg-primary text-primary-content" 
+    } else { 
+        "hover:bg-base-300" 
+    };
     let tooltip_class = if !is_expanded {
         "tooltip tooltip-right"
     } else {
@@ -160,7 +190,7 @@ fn SidebarNavItem(
             class: "w-full",
             Link {
                 to: route,
-                class: "flex items-center gap-3 {active_class} {tooltip_class}",
+                class: "flex items-center gap-3 p-3 rounded-lg transition-colors {active_class} {tooltip_class}",
                 "data-tip": if !is_expanded { label } else { "" },
 
                 {icon}

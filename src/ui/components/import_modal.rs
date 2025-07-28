@@ -1,4 +1,4 @@
-use crate::ui::components::{BaseModal, modal::Badge, toast};
+use crate::ui::{BaseModal, Badge, toast_helpers};
 use dioxus::prelude::*;
 use dioxus_free_icons::Icon;
 use dioxus_free_icons::icons::fa_brands_icons::FaYoutube;
@@ -147,7 +147,7 @@ pub fn ImportModal(props: ImportModalProps) -> Element {
                                 let on_close = on_close;
                                 let path = path.clone();
                                 spawn(async move {
-                                    toast::toast::info("Starting local folder import...");
+                                    toast_helpers::info("Starting local folder import...");
 
                                     // Call the callback (which handles the async work internally)
                                     import_manager.import_from_local_folder.call((
@@ -166,7 +166,7 @@ pub fn ImportModal(props: ImportModalProps) -> Element {
 
                                     match result {
                                         Ok(Ok(course)) => {
-                                            toast::toast::success(format!(
+                                            toast_helpers::success(format!(
                                                 "Course '{}' imported successfully!",
                                                 course.name
                                             ));
@@ -180,23 +180,23 @@ pub fn ImportModal(props: ImportModalProps) -> Element {
                                             }
                                         }
                                         Ok(Err(e)) => {
-                                            toast::toast::error(format!("Import failed: {e}"));
+                                            toast_helpers::error(format!("Import failed: {e}"));
                                         }
                                         Err(e) => {
-                                            toast::toast::error(format!("Import failed: {e}"));
+                                            toast_helpers::error(format!("Import failed: {e}"));
                                         }
                                     }
                                 });
                             } else {
-                                toast::toast::error(
+                                toast_helpers::error(
                                     "Please select a valid folder with video files",
                                 );
                             }
                         } else {
-                            toast::toast::error("Please validate the folder first");
+                            toast_helpers::error("Please validate the folder first");
                         }
                     } else {
-                        toast::toast::error("Please select a folder");
+                        toast_helpers::error("Please select a folder");
                     }
                 }
                 ImportSource::YouTube => {
@@ -204,11 +204,11 @@ pub fn ImportModal(props: ImportModalProps) -> Element {
                     if !input.is_empty() {
                         on_import.call((source, input, import_settings()));
                     } else {
-                        toast::toast::error("Please provide a valid YouTube URL");
+                        toast_helpers::error("Please provide a valid YouTube URL");
                     }
                 }
                 ImportSource::OtherResources => {
-                    toast::toast::info("Other resources import coming soon!");
+                    toast_helpers::info("Other resources import coming soon!");
                 }
             }
         }
@@ -602,7 +602,7 @@ fn YouTubeImportForm(
 
                     if let Err(e) = settings.set_youtube_api_key(api_key_to_save) {
                         log::error!("Failed to save API key: {e}");
-                        toast::toast::error("Failed to save API key settings");
+                        toast_helpers::error("Failed to save API key settings");
                     } else {
                         log::info!("YouTube API key saved to settings");
                     }
@@ -631,7 +631,7 @@ fn YouTubeImportForm(
             let api_key_val = api_key().trim().to_string();
 
             if url_val.is_empty() || api_key_val.is_empty() {
-                toast::toast::error("Please provide both URL and API key");
+                toast_helpers::error("Please provide both URL and API key");
                 return;
             }
 
@@ -699,7 +699,7 @@ fn YouTubeImportForm(
                                     100.0,
                                     "Import completed successfully!".to_string(),
                                 );
-                                toast::toast::success("Course imported successfully!");
+                                toast_helpers::success("Course imported successfully!");
                                 on_import_complete.call(course_for_callback);
                             }
                             Err(e) => {
@@ -708,7 +708,7 @@ fn YouTubeImportForm(
                                     job.mark_failed(error_msg.clone());
                                     import_job.set(Some(job));
                                 }
-                                toast::toast::error("Failed to structure course");
+                                toast_helpers::error("Failed to structure course");
                                 if let Some(on_error) = on_import_error {
                                     on_error.call(error_msg);
                                 }
@@ -721,7 +721,7 @@ fn YouTubeImportForm(
                             job.mark_failed(error_msg.clone());
                             import_job.set(Some(job));
                         }
-                        toast::toast::error(
+                        toast_helpers::error(
                             "Network error occurred. Please check your connection and try again.",
                         );
                         if let Some(on_error) = on_import_error {
@@ -734,7 +734,7 @@ fn YouTubeImportForm(
                             job.mark_failed(error_msg.clone());
                             import_job.set(Some(job));
                         }
-                        toast::toast::error(
+                        toast_helpers::error(
                             "Invalid playlist URL. Please check the URL and try again.",
                         );
                         if let Some(on_error) = on_import_error {
@@ -747,7 +747,7 @@ fn YouTubeImportForm(
                             job.mark_failed(error_msg.clone());
                             import_job.set(Some(job));
                         }
-                        toast::toast::error("Playlist is empty or contains no accessible videos.");
+                        toast_helpers::error("Playlist is empty or contains no accessible videos.");
                         if let Some(on_error) = on_import_error {
                             on_error.call(error_msg);
                         }
@@ -758,7 +758,7 @@ fn YouTubeImportForm(
                             job.mark_failed(error_msg.clone());
                             import_job.set(Some(job));
                         }
-                        toast::toast::error(format!("Import failed: {e}"));
+                        toast_helpers::error(format!("Import failed: {e}"));
                         if let Some(on_error) = on_import_error {
                             on_error.call(error_msg);
                         }
@@ -1252,16 +1252,16 @@ fn LocalFolderImportForm(
                                         Ok(Some(folder_path)) => {
                                             if let Some(path_str) = folder_path.to_str() {
                                                 on_path_change.call(path_str.to_string());
-                                                toast::toast::success("Folder selected successfully!");
+                                                toast_helpers::success("Folder selected successfully!");
                                             } else {
-                                                toast::toast::error("Invalid folder path selected");
+                                                toast_helpers::error("Invalid folder path selected");
                                             }
                                         },
                                         Ok(None) => {
                                             // User cancelled the dialog - no action needed
                                         },
                                         Err(e) => {
-                                            toast::toast::error(format!("Failed to open folder dialog: {e}"));
+                                            toast_helpers::error(format!("Failed to open folder dialog: {e}"));
                                         }
                                     }
                                 });

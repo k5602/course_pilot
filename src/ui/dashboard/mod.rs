@@ -1,9 +1,9 @@
-pub mod course_actions;
-pub mod course_card;
-pub mod course_grid;
+//! Dashboard Module for Course Pilot
+//!
+//! This module provides dashboard-specific components for course management
+//! and overview functionality.
+
 pub mod dashboard;
 
-pub use course_actions::CourseActions;
-pub use course_card::CourseCard;
-pub use course_grid::CourseGrid;
+// Re-export dashboard components
 pub use dashboard::Dashboard;

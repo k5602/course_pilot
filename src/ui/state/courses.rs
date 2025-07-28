@@ -57,7 +57,7 @@ pub mod actions {
     
     /// Add a course
     pub fn add_course(course: Course) -> Result<(), StateError> {
-        let state = use_courses_state();
+        let mut state = use_courses_state();
         
         // Validation
         if course.name.trim().is_empty() {
@@ -84,7 +84,7 @@ pub mod actions {
     
     /// Update a course
     pub fn update_course(id: Uuid, updated_course: Course) -> Result<(), StateError> {
-        let state = use_courses_state();
+        let mut state = use_courses_state();
         let mut courses = state.courses.write();
         
         let course_index = courses
@@ -116,7 +116,7 @@ pub mod actions {
     
     /// Delete a course
     pub fn delete_course(id: Uuid) -> Result<(), StateError> {
-        let state = use_courses_state();
+        let mut state = use_courses_state();
         let mut courses = state.courses.write();
         let initial_len = courses.len();
         
