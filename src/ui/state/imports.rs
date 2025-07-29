@@ -93,6 +93,23 @@ pub mod actions {
         ))
     }
 
+    /// Cancel an import job
+    pub fn cancel_import(id: Uuid) -> Result<(), StateError> {
+        let mut state = use_import_state();
+        let mut import_opt = state.active_import.write();
+
+        if let Some(ref mut import) = *import_opt {
+            if import.id == id {
+                import.mark_cancelled();
+                return Ok(());
+            }
+        }
+
+        Err(StateError::InvalidOperation(
+            "No active import found".to_string(),
+        ))
+    }
+
     /// Clear the active import
     pub fn clear_import() {
         let mut state = use_import_state();

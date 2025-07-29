@@ -1,7 +1,7 @@
 use dioxus::prelude::*;
 use dioxus_desktop::use_window;
 use dioxus_signals::Signal;
-use log::info;
+use log::{error, info};
 use std::fmt;
 use std::path::PathBuf;
 use std::sync::Arc;
@@ -71,7 +71,30 @@ struct AppServices {
 
 fn use_app_services() -> AppServices {
     let db_path = PathBuf::from("course_pilot.db");
-    let db = Arc::new(Database::new(&db_path).expect("Failed to initialize database"));
+
+    let db = match Database::new(&db_path) {
+        Ok(database) => Arc::new(database),
+        Err(e) => {
+            error!("Failed to initialize database at {db_path:?}: {e}");
+            toast_helpers::error(
+                "Failed to initialize database. Please check file permissions and try again."
+                    .to_string(),
+            );
+            // Create a fallback in-memory database to prevent app crash
+            match Database::new(std::path::Path::new(":memory:")) {
+                Ok(fallback_db) => {
+                    toast_helpers::warning(
+                        "Using temporary in-memory database. Data will not be saved.".to_string(),
+                    );
+                    Arc::new(fallback_db)
+                }
+                Err(fallback_err) => {
+                    error!("Failed to create fallback database: {fallback_err}");
+                    panic!("Cannot initialize any database. Application cannot continue.");
+                }
+            }
+        }
+    };
 
     // Load initial data
     let initial_state = load_initial_state(&db);
@@ -85,20 +108,46 @@ fn use_app_services() -> AppServices {
 
 /// Load initial application state from database
 fn load_initial_state(db: &Arc<Database>) -> AppState {
-    let courses = crate::storage::load_courses(db).unwrap_or_default();
+    let courses = match crate::storage::load_courses(db) {
+        Ok(courses) => courses,
+        Err(e) => {
+            error!("Failed to load courses from database: {e}");
+            toast_helpers::error(
+                "Failed to load courses. Starting with empty course list.".to_string(),
+            );
+            Vec::new()
+        }
+    };
+
     let mut plans = Vec::new();
     let mut notes = Vec::new();
 
-    // Seed data functionality removed - no automatic sample notes
-
     // Load related data for each course
     for course in &courses {
-        if let Ok(Some(plan)) = crate::storage::get_plan_by_course_id(db, &course.id) {
-            plans.push(plan);
+        // Load plans with error handling
+        match crate::storage::get_plan_by_course_id(db, &course.id) {
+            Ok(Some(plan)) => plans.push(plan),
+            Ok(None) => {} // No plan exists for this course, which is fine
+            Err(e) => {
+                error!("Failed to load plan for course {}: {}", course.name, e);
+                // Continue loading other data instead of failing completely
+            }
         }
-        if let Ok(conn) = db.get_conn() {
-            if let Ok(mut course_notes) = crate::storage::get_notes_by_course(&conn, course.id) {
-                notes.append(&mut course_notes);
+
+        // Load notes with error handling
+        match db.get_conn() {
+            Ok(conn) => {
+                match crate::storage::get_notes_by_course(&conn, course.id) {
+                    Ok(mut course_notes) => notes.append(&mut course_notes),
+                    Err(e) => {
+                        error!("Failed to load notes for course {}: {}", course.name, e);
+                        // Continue loading other data instead of failing completely
+                    }
+                }
+            }
+            Err(e) => {
+                error!("Failed to get database connection for loading notes: {e}");
+                // Continue without loading notes for this course
             }
         }
     }

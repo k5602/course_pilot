@@ -7,6 +7,7 @@
 use crate::DatabaseError;
 use crate::types::{Course, Plan};
 use chrono::{DateTime, Utc};
+use log::{error, info, warn};
 use r2d2::Pool;
 use r2d2_sqlite::SqliteConnectionManager;
 use rusqlite::{Connection, OptionalExtension, params};
@@ -41,15 +42,28 @@ pub struct Database {
 impl Database {
     /// Initialize a new database connection pool
     pub fn new(db_path: &Path) -> Result<Self, DatabaseError> {
+        info!("Initializing database at: {}", db_path.display());
+
         // Ensure the parent directory exists
         if let Some(parent) = db_path.parent() {
             if !parent.exists() {
-                std::fs::create_dir_all(parent)?;
+                info!("Creating database directory: {}", parent.display());
+                std::fs::create_dir_all(parent).map_err(|e| {
+                    error!(
+                        "Failed to create database directory {}: {}",
+                        parent.display(),
+                        e
+                    );
+                    DatabaseError::Io(e)
+                })?;
             }
         }
 
         // Clean up any existing WAL/SHM files from previous runs
-        Self::cleanup_wal_files(db_path)?;
+        if let Err(e) = Self::cleanup_wal_files(db_path) {
+            warn!("Failed to cleanup WAL files: {e}");
+            // Continue anyway as this is not critical
+        }
 
         // Create SQLite connection manager
         let manager = SqliteConnectionManager::file(db_path).with_init(|conn| {
@@ -220,14 +234,36 @@ pub fn init_db(db_path: &Path) -> Result<Database, DatabaseError> {
 
 /// Save a course to the database
 pub fn save_course(db: &Database, course: &Course) -> Result<(), DatabaseError> {
-    let raw_titles_json = serde_json::to_string(&course.raw_titles)?;
+    info!("Saving course: {} (ID: {})", course.name, course.id);
+
+    let raw_titles_json = serde_json::to_string(&course.raw_titles).map_err(|e| {
+        error!(
+            "Failed to serialize raw_titles for course {}: {}",
+            course.name, e
+        );
+        DatabaseError::Serialization(e)
+    })?;
+
     let structure_json = course
         .structure
         .as_ref()
         .map(serde_json::to_string)
-        .transpose()?;
+        .transpose()
+        .map_err(|e| {
+            error!(
+                "Failed to serialize structure for course {}: {}",
+                course.name, e
+            );
+            DatabaseError::Serialization(e)
+        })?;
 
-    let conn = db.get_conn()?;
+    let conn = db.get_conn().map_err(|e| {
+        error!(
+            "Failed to get database connection for saving course {}: {}",
+            course.name, e
+        );
+        e
+    })?;
 
     conn.execute(
         r#"
@@ -241,21 +277,40 @@ pub fn save_course(db: &Database, course: &Course) -> Result<(), DatabaseError> 
             raw_titles_json,
             structure_json
         ],
-    )?;
+    )
+    .map_err(|e| {
+        error!(
+            "Failed to execute SQL for saving course {}: {}",
+            course.name, e
+        );
+        DatabaseError::Sqlite(e)
+    })?;
 
+    info!("Successfully saved course: {}", course.name);
     Ok(())
 }
 
 /// Load all courses from the database
 pub fn load_courses(db: &Database) -> Result<Vec<Course>, DatabaseError> {
-    let conn = db.get_conn()?;
-    let mut stmt = conn.prepare(
-        r#"
+    info!("Loading all courses from database");
+
+    let conn = db.get_conn().map_err(|e| {
+        error!("Failed to get database connection for loading courses: {e}");
+        e
+    })?;
+
+    let mut stmt = conn
+        .prepare(
+            r#"
         SELECT id, name, created_at, raw_titles, structure
         FROM courses
         ORDER BY created_at DESC
         "#,
-    )?;
+        )
+        .map_err(|e| {
+            error!("Failed to prepare SQL statement for loading courses: {e}");
+            DatabaseError::Sqlite(e)
+        })?;
 
     let courses = stmt
         .query_map([], |row| {

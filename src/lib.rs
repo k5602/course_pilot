@@ -9,6 +9,7 @@
 
 // Main modules
 pub mod app;
+pub mod error_handling;
 pub mod export;
 pub mod ingest;
 pub mod nlp;
@@ -134,7 +135,6 @@ pub enum DatabaseError {
     NotFound(String),
 }
 
-// Phase 3 specific error types for backend integration and progress tracking
 #[derive(Error, Debug)]
 pub enum Phase3Error {
     #[error("Backend operation failed: {0}")]

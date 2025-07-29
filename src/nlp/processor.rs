@@ -15,6 +15,7 @@ use crate::types::{
     ClusteringMetadata, ClusteringStrategy, CourseStructure, DifficultyLevel, Module, PlanSettings,
     Section, StructureMetadata, TopicInfo,
 };
+use log::error;
 use regex::Regex;
 use std::collections::HashMap;
 use std::time::{Duration, Instant};
@@ -219,7 +220,15 @@ fn analyze_title_patterns(titles: &[String]) -> Result<TitleAnalysis, NlpError> 
 /// Find common naming patterns in titles
 fn find_naming_patterns(titles: &[String]) -> HashMap<String, usize> {
     let mut patterns = HashMap::new();
-    let pattern_regex = Regex::new(r"^([a-zA-Z\s]+)\s*\d+").unwrap();
+
+    let pattern_regex = match Regex::new(r"^([a-zA-Z\s]+)\s*\d+") {
+        Ok(regex) => regex,
+        Err(e) => {
+            error!("Failed to compile naming pattern regex: {e}");
+            // Return empty patterns if regex compilation fails
+            return patterns;
+        }
+    };
 
     for title in titles {
         if let Some(captures) = pattern_regex.captures(title) {

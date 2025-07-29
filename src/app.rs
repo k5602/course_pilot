@@ -4,11 +4,28 @@
 
 /// Initialize the application with any required setup
 pub fn initialize_app() -> Result<(), Box<dyn std::error::Error>> {
+    // Initialize structured logging
     #[cfg(debug_assertions)]
     {
-        env_logger::init();
-        log::info!("Course Pilot application starting in debug mode");
+        env_logger::Builder::from_default_env()
+            .filter_level(log::LevelFilter::Debug)
+            .format_timestamp_secs()
+            .init();
+        log::info!("Course Pilot application starting in debug mode with enhanced logging");
     }
+
+    #[cfg(not(debug_assertions))]
+    {
+        env_logger::Builder::from_default_env()
+            .filter_level(log::LevelFilter::Info)
+            .format_timestamp_secs()
+            .init();
+        log::info!("Course Pilot application starting in release mode");
+    }
+
+    // Log system information
+    log::info!("Application initialized successfully");
+    log::debug!("Debug logging enabled");
 
     Ok(())
 }

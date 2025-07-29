@@ -1,8 +1,10 @@
+use crate::error_handling::{ErrorLogger, ErrorMessageMapper};
 use crate::storage::database::Database;
 use crate::types::{Plan, PlanSettings};
 use crate::ui::toast_helpers;
 use anyhow::Result;
 use dioxus::prelude::*;
+use log::info;
 use std::sync::Arc;
 use uuid::Uuid;
 
@@ -25,20 +27,76 @@ pub struct PlanManager {
 impl PlanManager {
     pub async fn get_plan_by_course(&self, course_id: Uuid) -> Result<Option<Plan>> {
         let db = self.db.clone();
-        tokio::task::spawn_blocking(move || {
+
+        let result = tokio::task::spawn_blocking(move || {
+            info!("Loading plan for course: {course_id}");
             crate::storage::get_plan_by_course_id(&db, &course_id).map_err(Into::into)
         })
-        .await
-        .unwrap_or_else(|e| Err(anyhow::anyhow!("Join error: {e}")))
+        .await;
+
+        match result {
+            Ok(plan_result) => {
+                match &plan_result {
+                    Ok(Some(_)) => info!("Successfully loaded plan for course: {course_id}"),
+                    Ok(None) => info!("No plan found for course: {course_id}"),
+                    Err(e) => {
+                        ErrorLogger::log_error(
+                            e,
+                            "get_plan_by_course",
+                            Some(&format!("course_id: {course_id}")),
+                        );
+                        let user_message = ErrorMessageMapper::map_error(e);
+                        toast_helpers::error(user_message);
+                    }
+                }
+                plan_result
+            }
+            Err(join_error) => {
+                let error = anyhow::anyhow!("Task join error: {}", join_error);
+                ErrorLogger::log_error(&error, "get_plan_by_course", Some("Task execution failed"));
+                toast_helpers::error("Failed to load study plan. Please try again.".to_string());
+                Err(error)
+            }
+        }
     }
 
     pub async fn save_plan(&self, plan: Plan) -> Result<()> {
         let db = self.db.clone();
-        tokio::task::spawn_blocking(move || {
+        let plan_id = plan.id;
+
+        info!("Saving plan (ID: {plan_id})");
+
+        let result = tokio::task::spawn_blocking(move || {
             crate::storage::save_plan(&db, &plan).map_err(Into::into)
         })
-        .await
-        .unwrap_or_else(|e| Err(anyhow::anyhow!("Join error: {e}")))
+        .await;
+
+        match result {
+            Ok(save_result) => {
+                match &save_result {
+                    Ok(_) => {
+                        info!("Successfully saved plan (ID: {plan_id})");
+                        toast_helpers::success("Study plan saved successfully".to_string());
+                    }
+                    Err(e) => {
+                        ErrorLogger::log_error(
+                            e,
+                            "save_plan",
+                            Some(&format!("plan ID: {plan_id}")),
+                        );
+                        let user_message = ErrorMessageMapper::map_error(e);
+                        toast_helpers::error(format!("Failed to save study plan: {user_message}"));
+                    }
+                }
+                save_result
+            }
+            Err(join_error) => {
+                let error = anyhow::anyhow!("Task join error: {}", join_error);
+                ErrorLogger::log_error(&error, "save_plan", Some("Task execution failed"));
+                toast_helpers::error("Failed to save study plan. Please try again.".to_string());
+                Err(error)
+            }
+        }
     }
 
     pub async fn delete_plan(&self, plan_id: Uuid) -> Result<()> {

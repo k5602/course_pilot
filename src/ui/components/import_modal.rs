@@ -208,7 +208,9 @@ pub fn ImportModal(props: ImportModalProps) -> Element {
                     }
                 }
                 ImportSource::OtherResources => {
-                    toast_helpers::info("Other resources import coming soon!");
+                    toast_helpers::info(
+                        "Additional import sources are not yet available. Please use Local Course or YouTube import options.",
+                    );
                 }
             }
         }
@@ -1382,8 +1384,9 @@ fn YouTubeImportProgressPanel(job: crate::types::ImportJob) -> Element {
                             button {
                                 class: "btn btn-sm btn-outline btn-error",
                                 onclick: move |_| {
-                                    // TODO: Implement cancel functionality
-                                    toast_helpers::info("Cancel functionality coming soon");
+                                    // NOTE: Cancel functionality will be implemented in task 16
+                                    // See .kiro/specs/production-ready-mvp/tasks.md task 16
+                                    toast_helpers::info("Import cancellation will be available in a future update");
                                 },
                                 "Cancel"
                             }
@@ -2231,16 +2234,16 @@ fn OtherResourcesForm() -> Element {
                 }
                 div {
                     h3 { class: "text-lg font-semibold text-base-content", "Other Resources" }
-                    p { class: "text-sm text-base-content/70", "Additional import sources coming soon" }
+                    p { class: "text-sm text-base-content/70", "Additional import sources are planned for future releases" }
                 }
             }
 
-            // Enhanced coming soon message
+            // Future features information
             div { class: "alert alert-info shadow-sm",
                 Icon { icon: FaCircleInfo, class: "w-5 h-5" }
                 div {
-                    div { class: "font-medium", "Coming Soon!" }
-                    div { class: "text-sm opacity-90", "Support for additional course sources will be added in future updates." }
+                    div { class: "font-medium", "Future Features" }
+                    div { class: "text-sm opacity-90", "Additional import sources like web URLs, cloud storage, and other platforms are planned for future releases." }
                 }
             }
 

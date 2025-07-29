@@ -16,6 +16,7 @@ pub use preference_service::{AutoTuningService, PreferenceService};
 // Re-export error types
 pub use crate::NlpError;
 
+use log::error;
 use regex::Regex;
 use std::sync::OnceLock;
 
@@ -29,52 +30,82 @@ pub struct StructurePatterns {
 impl StructurePatterns {
     pub fn default() -> &'static Self {
         static PATTERNS: OnceLock<StructurePatterns> = OnceLock::new();
-        PATTERNS.get_or_init(|| StructurePatterns {
-            module_keywords: vec![
-                "module",
-                "chapter",
-                "part",
-                "unit",
-                "section",
-                "week",
-                "day",
-                "lesson",
-                "tutorial",
-                "course",
-                "introduction",
-                "conclusion",
-                "overview",
-                "summary",
-                "review",
-                "project",
-                "assignment",
-            ],
-            section_keywords: vec![
-                "lecture",
-                "video",
-                "demo",
-                "example",
-                "exercise",
-                "practice",
-                "lab",
-                "workshop",
-                "seminar",
-                "discussion",
-                "quiz",
-                "test",
-                "exam",
-                "homework",
-                "reading",
-                "study",
-                "guide",
-            ],
-            numeric_patterns: vec![
-                Regex::new(r"\b(\d+)\b").unwrap(),
-                Regex::new(r"\b(part|chapter|lesson|module|section)\s*(\d+)").unwrap(),
-                Regex::new(r"\b(\d+)[:\.\-]\s*").unwrap(),
-                Regex::new(r"\((\d+)\)").unwrap(),
-            ],
+        PATTERNS.get_or_init(|| {
+            // Create regex patterns with proper error handling
+            let numeric_patterns = Self::create_numeric_patterns();
+
+            StructurePatterns {
+                module_keywords: vec![
+                    "module",
+                    "chapter",
+                    "part",
+                    "unit",
+                    "section",
+                    "week",
+                    "day",
+                    "lesson",
+                    "tutorial",
+                    "course",
+                    "introduction",
+                    "conclusion",
+                    "overview",
+                    "summary",
+                    "review",
+                    "project",
+                    "assignment",
+                ],
+                section_keywords: vec![
+                    "lecture",
+                    "video",
+                    "demo",
+                    "example",
+                    "exercise",
+                    "practice",
+                    "lab",
+                    "workshop",
+                    "seminar",
+                    "discussion",
+                    "quiz",
+                    "test",
+                    "exam",
+                    "homework",
+                    "reading",
+                    "study",
+                    "guide",
+                ],
+                numeric_patterns,
+            }
         })
+    }
+
+    fn create_numeric_patterns() -> Vec<Regex> {
+        let pattern_strings = vec![
+            r"\b(\d+)\b",
+            r"\b(part|chapter|lesson|module|section)\s*(\d+)",
+            r"\b(\d+)[:\.\-]\s*",
+            r"\((\d+)\)",
+        ];
+
+        let mut patterns = Vec::new();
+        for pattern_str in pattern_strings {
+            match Regex::new(pattern_str) {
+                Ok(regex) => patterns.push(regex),
+                Err(e) => {
+                    error!("Failed to compile regex pattern '{pattern_str}': {e}");
+                    // Continue with other patterns instead of panicking
+                }
+            }
+        }
+
+        // If no patterns compiled successfully, provide a basic fallback
+        if patterns.is_empty() {
+            error!("No regex patterns compiled successfully, using basic fallback");
+            if let Ok(fallback) = Regex::new(r"\d+") {
+                patterns.push(fallback);
+            }
+        }
+
+        patterns
     }
 }
 
