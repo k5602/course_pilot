@@ -150,15 +150,12 @@ struct TitleAnalysis {
 #[derive(Debug)]
 struct AdvancedContentAnalysis {
     content_analysis: ContentAnalysis,
-    // TODO: Integrate later - Could be used for topic-based session grouping
     #[allow(dead_code)]
     extracted_topics: Vec<TopicInfo>,
     content_diversity_score: f32,
-    // TODO: Integrate later - Could be used for similarity-based optimization
     #[allow(dead_code)]
     title_similarity_score: f32,
     has_clear_topics: bool,
-    // TODO: Integrate later - Could be used for dynamic cluster count selection
     #[allow(dead_code)]
     estimated_optimal_clusters: usize,
     content_complexity: f32,
@@ -878,9 +875,6 @@ fn apply_advanced_duration_clustering(
     Ok((modules, clustering_metadata))
 }
 
-// REMOVED: apply_advanced_hybrid_clustering - superseded by apply_advanced_hybrid_clustering_v2
-
-// TODO: Integrate later - This function could be used for post-processing module optimization
 /// Balance modules by duration constraints
 #[allow(dead_code)]
 fn balance_modules_by_duration(modules: &mut Vec<Module>) {
@@ -906,7 +900,6 @@ fn balance_modules_by_duration(modules: &mut Vec<Module>) {
     }
 }
 
-// TODO: Integrate later - This function could be used for dynamic module splitting
 /// Split a module into smaller duration-balanced modules
 #[allow(dead_code)]
 fn split_module_by_duration(module: Module, target_duration: Duration) -> Vec<Module> {
@@ -989,7 +982,6 @@ fn calculate_clustering_quality_score(clusters: &[crate::nlp::clustering::VideoC
     avg_similarity.clamp(0.0, 1.0)
 }
 
-// TODO: Integrate later - This function could be used for quality assessment
 /// Calculate content coherence score for modules
 #[allow(dead_code)]
 fn calculate_content_coherence_score(modules: &[Module]) -> f32 {
@@ -2627,14 +2619,12 @@ fn estimate_content_complexity_from_titles(titles: &[String]) -> f32 {
 #[derive(Debug)]
 struct QualityMetrics {
     overall_quality: f32,
-    // TODO: Integrate later - Could be used for clustering algorithm selection
     #[allow(dead_code)]
     clustering_quality: f32,
     #[allow(dead_code)]
     content_quality: f32,
     #[allow(dead_code)]
     duration_quality: f32,
-    // TODO: Integrate later - Could be used for topic coherence assessment
     #[allow(dead_code)]
     topic_quality: f32,
 }

@@ -96,7 +96,7 @@ impl ExportManager {
             let options = crate::export::ExportOptions {
                 format,
                 include_metadata: true,
-                include_progress: false, // Notes don't have progress
+                include_progress: false,
                 include_timestamps: true,
                 progress_callback: None,
             };

@@ -6,25 +6,25 @@
 use crate::nlp::clustering::{
     ABTestConfig, ABTestResult, ClusteringFeedback, ClusteringPreferences, PreferenceLearningEngine,
 };
+use crate::storage::Database;
 use anyhow::Result;
-use rusqlite::{Connection, params};
-use std::path::PathBuf;
+use rusqlite::params;
 use uuid::Uuid;
 
 /// Storage manager for clustering preferences and feedback
 pub struct PreferenceStorage {
-    db_path: PathBuf,
+    db: Database,
 }
 
 impl PreferenceStorage {
     /// Create a new preference storage instance
-    pub fn new(db_path: PathBuf) -> Self {
-        Self { db_path }
+    pub fn new(db: Database) -> Self {
+        Self { db }
     }
 
     /// Initialize the preference storage database tables
     pub fn initialize(&self) -> Result<()> {
-        let conn = Connection::open(&self.db_path)?;
+        let conn = self.db.get_conn()?;
 
         // Create clustering_preferences table
         conn.execute(
@@ -98,12 +98,38 @@ impl PreferenceStorage {
             [],
         )?;
 
+        // Create performance indexes for preference storage
+        conn.execute(
+            "CREATE INDEX IF NOT EXISTS idx_clustering_feedback_course_id ON clustering_feedback(course_id);",
+            [],
+        )?;
+
+        conn.execute(
+            "CREATE INDEX IF NOT EXISTS idx_clustering_feedback_created_at ON clustering_feedback(created_at);",
+            [],
+        )?;
+
+        conn.execute(
+            "CREATE INDEX IF NOT EXISTS idx_ab_test_configs_active ON ab_test_configs(is_active);",
+            [],
+        )?;
+
+        conn.execute(
+            "CREATE INDEX IF NOT EXISTS idx_ab_test_results_test_id ON ab_test_results(test_id);",
+            [],
+        )?;
+
+        conn.execute(
+            "CREATE INDEX IF NOT EXISTS idx_ab_test_results_timestamp ON ab_test_results(timestamp);",
+            [],
+        )?;
+
         Ok(())
     }
 
     /// Save clustering preferences to database
     pub fn save_preferences(&self, preferences: &ClusteringPreferences) -> Result<()> {
-        let conn = Connection::open(&self.db_path)?;
+        let conn = self.db.get_conn()?;
 
         // Delete existing preferences (we only store one set)
         conn.execute("DELETE FROM clustering_preferences", [])?;
@@ -136,7 +162,7 @@ impl PreferenceStorage {
 
     /// Load clustering preferences from database
     pub fn load_preferences(&self) -> Result<Option<ClusteringPreferences>> {
-        let conn = Connection::open(&self.db_path)?;
+        let conn = self.db.get_conn()?;
 
         let mut stmt = conn.prepare(
             "SELECT similarity_threshold, preferred_algorithm, preferred_strategy,
@@ -204,7 +230,7 @@ impl PreferenceStorage {
 
     /// Save clustering feedback to database
     pub fn save_feedback(&self, feedback: &ClusteringFeedback) -> Result<()> {
-        let conn = Connection::open(&self.db_path)?;
+        let conn = self.db.get_conn()?;
 
         conn.execute(
             "INSERT INTO clustering_feedback (
@@ -228,7 +254,7 @@ impl PreferenceStorage {
 
     /// Load all clustering feedback from database
     pub fn load_feedback_history(&self) -> Result<Vec<ClusteringFeedback>> {
-        let conn = Connection::open(&self.db_path)?;
+        let conn = self.db.get_conn()?;
 
         let mut stmt = conn.prepare(
             "SELECT id, course_id, clustering_parameters, feedback_type,
@@ -302,7 +328,7 @@ impl PreferenceStorage {
 
     /// Save A/B test configuration
     pub fn save_ab_test_config(&self, config: &ABTestConfig) -> Result<()> {
-        let conn = Connection::open(&self.db_path)?;
+        let conn = self.db.get_conn()?;
 
         conn.execute(
             "INSERT OR REPLACE INTO ab_test_configs (
@@ -331,7 +357,7 @@ impl PreferenceStorage {
 
     /// Load all A/B test configurations
     pub fn load_ab_test_configs(&self) -> Result<Vec<ABTestConfig>> {
-        let conn = Connection::open(&self.db_path)?;
+        let conn = self.db.get_conn()?;
 
         let mut stmt = conn.prepare(
             "SELECT id, name, description, algorithm_a, algorithm_b,
@@ -417,7 +443,7 @@ impl PreferenceStorage {
 
     /// Save A/B test result
     pub fn save_ab_test_result(&self, result: &ABTestResult) -> Result<()> {
-        let conn = Connection::open(&self.db_path)?;
+        let conn = self.db.get_conn()?;
 
         conn.execute(
             "INSERT INTO ab_test_results (
@@ -444,7 +470,7 @@ impl PreferenceStorage {
 
     /// Load A/B test results for a specific test
     pub fn load_ab_test_results(&self, test_id: Uuid) -> Result<Vec<ABTestResult>> {
-        let conn = Connection::open(&self.db_path)?;
+        let conn = self.db.get_conn()?;
 
         let mut stmt = conn.prepare(
             "SELECT test_id, course_id, variant, parameters_used,
@@ -545,7 +571,7 @@ impl PreferenceStorage {
 
     /// Update A/B test sample size
     pub fn update_ab_test_sample_size(&self, test_id: Uuid, new_size: usize) -> Result<()> {
-        let conn = Connection::open(&self.db_path)?;
+        let conn = self.db.get_conn()?;
 
         conn.execute(
             "UPDATE ab_test_configs SET current_sample_size = ?1 WHERE id = ?2",
@@ -557,7 +583,7 @@ impl PreferenceStorage {
 
     /// Mark A/B test as completed
     pub fn complete_ab_test(&self, test_id: Uuid) -> Result<()> {
-        let conn = Connection::open(&self.db_path)?;
+        let conn = self.db.get_conn()?;
 
         conn.execute(
             "UPDATE ab_test_configs SET is_active = FALSE, end_date = ?1 WHERE id = ?2",
@@ -577,7 +603,8 @@ mod tests {
     fn test_preference_storage_initialization() {
         let temp_dir = tempdir().unwrap();
         let db_path = temp_dir.path().join("test.db");
-        let storage = PreferenceStorage::new(db_path);
+        let db = crate::storage::Database::new(&db_path).unwrap();
+        let storage = PreferenceStorage::new(db);
 
         storage.initialize().unwrap();
 
@@ -590,7 +617,8 @@ mod tests {
     fn test_preferences_save_load() {
         let temp_dir = tempdir().unwrap();
         let db_path = temp_dir.path().join("test.db");
-        let storage = PreferenceStorage::new(db_path);
+        let db = crate::storage::Database::new(&db_path).unwrap();
+        let storage = PreferenceStorage::new(db);
         storage.initialize().unwrap();
 
         let mut preferences = ClusteringPreferences::default();

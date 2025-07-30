@@ -22,7 +22,6 @@ use super::use_plans::PlanManager;
 use super::use_settings::SettingsManager;
 
 /// Unified backend interface that combines all the specialized hooks
-/// This provides the same interface as the old BackendAdapter but using the new hook architecture
 #[derive(Clone)]
 pub struct Backend {
     pub courses: CourseManager,

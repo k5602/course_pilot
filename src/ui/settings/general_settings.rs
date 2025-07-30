@@ -16,8 +16,7 @@ pub struct GeneralSettingsProps {
 impl PartialEq for GeneralSettingsProps {
     fn eq(&self, other: &Self) -> bool {
         self.settings == other.settings
-        // Note: SettingsManager and EventHandler don't implement PartialEq,
-        // so we only compare the settings data
+
     }
 }
 

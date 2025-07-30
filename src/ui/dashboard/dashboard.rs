@@ -57,7 +57,6 @@ pub fn Dashboard() -> Element {
                     }
                 }
 
-                // AI Recommendations
                 BaseCard {
                     title: "AI Recommendations",
                     children: rsx! {

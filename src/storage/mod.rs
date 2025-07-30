@@ -3,8 +3,11 @@
 //! This module provides database operations and persistence functionality
 //! using SQLite for reliable data storage.
 
+pub mod connection_manager;
 pub mod database;
+pub mod maintenance;
 pub mod notes;
+pub mod optimized_queries;
 pub mod preference_storage;
 pub mod settings;
 
@@ -13,6 +16,7 @@ pub use database::{
     ClusteringAnalytics,
     ClusteringPerformancePoint,
     Database,
+    DatabasePerformanceMetrics,
     ProcessingTimeStats,
     QualityDistribution,
     delete_course,
@@ -22,11 +26,13 @@ pub use database::{
     get_course_by_id,
     // Enhanced clustering functions
     get_courses_by_clustering_quality,
+    get_database_performance_metrics,
     get_plan_by_course_id,
     get_similar_courses_by_clustering,
     init_db,
     load_courses,
     load_plan,
+    optimize_database,
     save_course,
     save_plan,
     update_clustering_metadata,
@@ -46,6 +52,19 @@ pub use settings::{
 
 // Re-export preference storage functions for convenience
 pub use preference_storage::PreferenceStorage;
+
+// Re-export optimized queries for convenience
+pub use optimized_queries::{
+    ActivityItem, ActivityType, CourseStatistics, OptimizedQueries, SearchResult, SearchResultType,
+};
+
+// Re-export connection manager for convenience
+pub use connection_manager::{ConnectionManager, DatabaseStats, IndexUsage, QueryAnalysis};
+
+// Re-export maintenance utilities for convenience
+pub use maintenance::{
+    DatabaseMaintenance, HealthReport, HealthStatus, MaintenanceReport, MaintenanceSchedule,
+};
 
 // Seed data functionality removed
 

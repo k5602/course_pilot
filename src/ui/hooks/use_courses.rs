@@ -22,52 +22,44 @@ pub struct CourseManager {
 impl CourseManager {
     pub async fn list_courses(&self) -> Result<Vec<Course>> {
         let db = self.db.clone();
-        tokio::task::spawn_blocking(move || crate::storage::load_courses(&db).map_err(Into::into))
-            .await
-            .unwrap_or_else(|e| Err(anyhow::anyhow!("Join error: {e}")))
+        tokio::task::spawn_blocking(move || {
+            crate::storage::load_courses(&db).map_err(|e| anyhow::anyhow!("Database error: {}", e))
+        }).await.unwrap_or_else(|e| Err(anyhow::anyhow!("Join error: {}", e)))
     }
 
     pub async fn get_course(&self, id: Uuid) -> Result<Option<Course>> {
         let db = self.db.clone();
         tokio::task::spawn_blocking(move || {
-            crate::storage::get_course_by_id(&db, &id).map_err(Into::into)
-        })
-        .await
-        .unwrap_or_else(|e| Err(anyhow::anyhow!("Join error: {e}")))
+            crate::storage::get_course_by_id(&db, &id).map_err(|e| anyhow::anyhow!("Database error: {}", e))
+        }).await.unwrap_or_else(|e| Err(anyhow::anyhow!("Join error: {}", e)))
     }
 
     pub async fn create_course(&self, course: Course) -> Result<()> {
         let db = self.db.clone();
         tokio::task::spawn_blocking(move || {
-            crate::storage::save_course(&db, &course).map_err(Into::into)
-        })
-        .await
-        .unwrap_or_else(|e| Err(anyhow::anyhow!("Join error: {}", e)))
+            crate::storage::save_course(&db, &course).map_err(|e| anyhow::anyhow!("Database error: {}", e))
+        }).await.unwrap_or_else(|e| Err(anyhow::anyhow!("Join error: {}", e)))
     }
 
     pub async fn update_course(&self, course: Course) -> Result<()> {
+        // Verify course exists first
+        let existing = self.get_course(course.id).await?;
+        if existing.is_none() {
+            return Err(anyhow::anyhow!("Course with id {} not found", course.id));
+        }
+
+        // Update the course
         let db = self.db.clone();
         tokio::task::spawn_blocking(move || {
-            // Verify course exists first
-            let existing = crate::storage::get_course_by_id(&db, &course.id)?;
-            if existing.is_none() {
-                return Err(anyhow::anyhow!("Course with id {} not found", course.id));
-            }
-
-            // Update the course
-            crate::storage::save_course(&db, &course).map_err(Into::into)
-        })
-        .await
-        .unwrap_or_else(|e| Err(anyhow::anyhow!("Join error: {}", e)))
+            crate::storage::save_course(&db, &course).map_err(|e| anyhow::anyhow!("Database error: {}", e))
+        }).await.unwrap_or_else(|e| Err(anyhow::anyhow!("Join error: {}", e)))
     }
 
     pub async fn delete_course(&self, course_id: Uuid) -> Result<()> {
         let db = self.db.clone();
         tokio::task::spawn_blocking(move || {
-            crate::storage::delete_course(&db, &course_id).map_err(Into::into)
-        })
-        .await
-        .unwrap_or_else(|e| Err(anyhow::anyhow!("Join error: {}", e)))
+            crate::storage::delete_course(&db, &course_id).map_err(|e| anyhow::anyhow!("Database error: {}", e))
+        }).await.unwrap_or_else(|e| Err(anyhow::anyhow!("Join error: {}", e)))
     }
 }
 
@@ -75,16 +67,14 @@ pub fn use_course_manager() -> CourseManager {
     let db = use_context::<Arc<Database>>();
 
     // Load courses resource
-    let courses_resource = use_resource({
+    let courses_resource: Resource<Result<Vec<Course>, anyhow::Error>> = use_resource({
         let db = db.clone();
         move || {
             let db = db.clone();
             async move {
                 tokio::task::spawn_blocking(move || {
-                    crate::storage::load_courses(&db).map_err(Into::into)
-                })
-                .await
-                .unwrap_or_else(|e| Err(anyhow::anyhow!("Join error: {}", e)))
+                    crate::storage::load_courses(&db).map_err(|e| anyhow::anyhow!("Database error: {}", e))
+                }).await.unwrap_or_else(|e| Err(anyhow::anyhow!("Join error: {}", e)))
             }
         }
     });
@@ -120,30 +110,33 @@ pub fn use_course_manager() -> CourseManager {
             let db = db.clone();
             spawn(async move {
                 // Get current course and update it
-                let result = tokio::task::spawn_blocking(move || {
-                    if let Some(mut course) = crate::storage::get_course_by_id(&db, &course_id)? {
-                        course.name = new_name;
-                        crate::storage::save_course(&db, &course)?;
-                        Ok(())
-                    } else {
-                        Err(anyhow::anyhow!("Course not found"))
+                let result = async move {
+                    let course_result = tokio::task::spawn_blocking({
+                        let db = db.clone();
+                        move || crate::storage::get_course_by_id(&db, &course_id).map_err(|e| anyhow::anyhow!("Database error: {}", e))
+                    }).await.unwrap_or_else(|e| Err(anyhow::anyhow!("Join error: {}", e)))?;
+
+                    match course_result {
+                        Some(mut course) => {
+                            course.name = new_name;
+                            tokio::task::spawn_blocking(move || {
+                                crate::storage::save_course(&db, &course).map_err(|e| anyhow::anyhow!("Database error: {}", e))
+                            }).await.unwrap_or_else(|e| Err(anyhow::anyhow!("Join error: {}", e)))?;
+                            Ok(())
+                        }
+                        None => Err(anyhow::anyhow!("Course not found"))
                     }
-                })
-                .await;
+                }.await;
 
                 match result {
-                    Ok(Ok(_)) => {
+                    Ok(_) => {
                         toast_helpers::success("Course updated successfully");
-                    }
-                    Ok(Err(e)) => {
-                        toast_helpers::error(format!("Failed to update course: {e}"));
                     }
                     Err(e) => {
                         toast_helpers::error(format!("Failed to update course: {e}"));
                     }
                 }
             });
-            // Return () to match expected callback type
         }
     });
 
@@ -153,23 +146,18 @@ pub fn use_course_manager() -> CourseManager {
             let db = db.clone();
             spawn(async move {
                 let result = tokio::task::spawn_blocking(move || {
-                    crate::storage::delete_course(&db, &course_id)
-                })
-                .await;
+                    crate::storage::delete_course(&db, &course_id).map_err(|e| anyhow::anyhow!("Database error: {}", e))
+                }).await.unwrap_or_else(|e| Err(anyhow::anyhow!("Join error: {}", e)));
 
                 match result {
-                    Ok(Ok(_)) => {
+                    Ok(_) => {
                         toast_helpers::success("Course deleted successfully");
-                    }
-                    Ok(Err(e)) => {
-                        toast_helpers::error(format!("Failed to delete course: {e}"));
                     }
                     Err(e) => {
                         toast_helpers::error(format!("Failed to delete course: {e}"));
                     }
                 }
             });
-            // Return () to match expected callback type
         }
     });
 

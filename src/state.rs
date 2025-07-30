@@ -1,7 +1,4 @@
-//! Modern State Management System
-//!
-//! This module provides reactive state management using dioxus-signals patterns.
-//! It replaces the old manual state management with modern reactive patterns.
+//! Reactive state management for Course Pilot using dioxus-signals.
 
 use crate::types::{
     AppState, ContextualPanelState, ContextualPanelTab, Course, CourseStructure, ImportJob,
@@ -35,9 +32,7 @@ impl std::fmt::Display for StateError {
 
 impl std::error::Error for StateError {}
 
-// ============================================================================
-// MODERN STATE MANAGEMENT WITH FOCUSED CONTEXTS
-// ============================================================================
+
 
 /// Course management context
 #[derive(Clone, Copy)]
@@ -159,9 +154,7 @@ impl MobileSidebarContext {
     }
 }
 
-// ============================================================================
-// CONTEXT PROVIDERS
-// ============================================================================
+
 
 #[component]
 pub fn CourseContextProvider(children: Element) -> Element {
@@ -199,9 +192,7 @@ pub fn MobileSidebarContextProvider(children: Element) -> Element {
     rsx! { {children} }
 }
 
-// ============================================================================
-// REACTIVE HOOKS
-// ============================================================================
+
 
 /// Hook for reactive access to courses
 pub fn use_courses_reactive() -> Memo<Vec<Course>> {

@@ -199,8 +199,110 @@ fn init_tables(conn: &mut Connection) -> Result<(), DatabaseError> {
         [],
     )?;
 
+    // Additional performance indexes
+    tx.execute(
+        "CREATE INDEX IF NOT EXISTS idx_courses_name ON courses(name);",
+        [],
+    )?;
+
+    tx.execute(
+        "CREATE INDEX IF NOT EXISTS idx_plans_created_at ON plans(created_at);",
+        [],
+    )?;
+
+    // Composite index for common query patterns
+    tx.execute(
+        "CREATE INDEX IF NOT EXISTS idx_plans_course_created ON plans(course_id, created_at);",
+        [],
+    )?;
+
     tx.commit()?;
     Ok(())
+}
+
+/// Optimize database performance by running maintenance operations
+pub fn optimize_database(db: &Database) -> Result<(), DatabaseError> {
+    info!("Running database optimization");
+
+    let conn = db.get_conn()?;
+
+    // Update table statistics for query optimizer
+    conn.execute("ANALYZE", [])?;
+    info!("Updated table statistics");
+
+    // Rebuild indexes if needed (only if database is large)
+    let page_count: i64 = conn.query_row("PRAGMA page_count", [], |row| row.get(0))?;
+    if page_count > 1000 {
+        info!("Database is large ({} pages), rebuilding indexes", page_count);
+        conn.execute("REINDEX", [])?;
+    }
+
+    // Optimize database file structure
+    conn.execute("PRAGMA optimize", [])?;
+    info!("Optimized database file structure");
+
+    // Check for integrity issues
+    let integrity_check: String = conn.query_row("PRAGMA integrity_check", [], |row| row.get(0))?;
+    if integrity_check != "ok" {
+        warn!("Database integrity check failed: {}", integrity_check);
+        return Err(DatabaseError::Io(std::io::Error::new(
+            std::io::ErrorKind::InvalidData,
+            format!("Database integrity check failed: {}", integrity_check),
+        )));
+    }
+
+    info!("Database optimization completed successfully");
+    Ok(())
+}
+
+/// Get database performance metrics
+pub fn get_database_performance_metrics(db: &Database) -> Result<DatabasePerformanceMetrics, DatabaseError> {
+    let conn = db.get_conn()?;
+
+    // Get basic database info
+    let page_count: i64 = conn.query_row("PRAGMA page_count", [], |row| row.get(0))?;
+    let page_size: i64 = conn.query_row("PRAGMA page_size", [], |row| row.get(0))?;
+    let freelist_count: i64 = conn.query_row("PRAGMA freelist_count", [], |row| row.get(0))?;
+
+    // Get table row counts
+    let courses_count: i64 = conn.query_row("SELECT COUNT(*) FROM courses", [], |row| row.get(0))?;
+    let plans_count: i64 = conn.query_row("SELECT COUNT(*) FROM plans", [], |row| row.get(0))?;
+    let notes_count: i64 = conn.query_row("SELECT COUNT(*) FROM notes", [], |row| row.get(0))?;
+
+    // Calculate fragmentation
+    let fragmentation_ratio = if page_count > 0 {
+        freelist_count as f64 / page_count as f64
+    } else {
+        0.0
+    };
+
+    Ok(DatabasePerformanceMetrics {
+        total_size_bytes: (page_count * page_size) as usize,
+        page_count: page_count as usize,
+        page_size: page_size as usize,
+        free_pages: freelist_count as usize,
+        fragmentation_ratio,
+        courses_count: courses_count as usize,
+        plans_count: plans_count as usize,
+        notes_count: notes_count as usize,
+        connection_pool_active: db.pool().state().connections,
+        connection_pool_idle: db.pool().state().idle_connections,
+    })
+}
+
+/// Database performance metrics
+#[derive(Debug, Clone)]
+pub struct DatabasePerformanceMetrics {
+    pub total_size_bytes: usize,
+    pub page_count: usize,
+    pub page_size: usize,
+    pub free_pages: usize,
+    pub fragmentation_ratio: f64,
+    pub courses_count: usize,
+    pub plans_count: usize,
+    pub notes_count: usize,
+    pub connection_pool_active: u32,
+    pub connection_pool_idle: u32,
 }
 
 /// Initialize the database and create necessary tables
@@ -228,6 +330,12 @@ pub fn init_db(db_path: &Path) -> Result<Database, DatabaseError> {
 
     // Initialize tables using the mutable connection
     init_tables(&mut conn)?;
+
+    // Run initial optimization
+    if let Err(e) = optimize_database(&db) {
+        warn!("Initial database optimization failed: {}", e);
+        // Continue anyway as this is not critical for basic functionality
+    }
 
     Ok(db)
 }
@@ -290,7 +398,7 @@ pub fn save_course(db: &Database, course: &Course) -> Result<(), DatabaseError> 
     Ok(())
 }
 
-/// Load all courses from the database
+/// Load all courses from the database with optimized query
 pub fn load_courses(db: &Database) -> Result<Vec<Course>, DatabaseError> {
     info!("Loading all courses from database");
 
@@ -299,6 +407,7 @@ pub fn load_courses(db: &Database) -> Result<Vec<Course>, DatabaseError> {
         e
     })?;
 
+    // Use index on created_at for efficient ordering
     let mut stmt = conn
         .prepare(
             r#"

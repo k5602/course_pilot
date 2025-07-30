@@ -24,7 +24,7 @@ pub enum NotesPanelMode {
     VideoNotes(Uuid, usize, String, String), // course_id, video_index, video_title, module_title
 }
 
-/// NotesPanel: Contextual panel that directly shows notes content
+/// Contextual panel that shows notes content
 #[component]
 pub fn NotesPanel(mode: NotesPanelMode) -> Element {
     match mode {
@@ -51,7 +51,7 @@ pub fn NotesPanel(mode: NotesPanelMode) -> Element {
     }
 }
 
-/// NotesTab: List of notes and markdown editor (wired to backend)
+/// List of notes and markdown editor
 #[component]
 fn NotesTab(
     course_id: uuid::Uuid,
@@ -524,7 +524,7 @@ fn NotesTab(
     }
 }
 
-/// NoteCard: Single note display
+/// Single note display
 #[derive(Props, PartialEq, Clone)]
 struct NoteCardProps {
     content: String,
@@ -547,7 +547,6 @@ fn NoteCard(props: NoteCardProps) -> Element {
 
     let note_for_render = crate::types::Note {
         content: props.content.to_string(),
-        // The rest are dummy fields, only content is used for rendering
         id: uuid::Uuid::nil(),
         course_id: uuid::Uuid::nil(),
         video_id: None,
@@ -632,7 +631,6 @@ fn NoteCard(props: NoteCardProps) -> Element {
         div {
             class: "card bg-base-200 shadow-sm p-4 relative",
             style: "{card_style}",
-            // Note actions dropdown
             div {
                 class: "absolute top-2 right-2 z-10",
                 UnifiedDropdown {
@@ -815,7 +813,6 @@ fn AllNotesTab() -> Element {
                 }
             }
 
-            // Notes list
             div {
                 class: "flex-1 overflow-y-auto space-y-3",
                 if filtered_notes().is_empty() {

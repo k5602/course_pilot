@@ -413,7 +413,6 @@ fn VideoItem(props: VideoItemProps) -> Element {
         toast_helpers::info("Video player will be implemented in a future phase");
     };
 
-    // Notes button handler with video context
     let notes_handler = {
         let course_id = props.course_id;
         let item = props.item.clone();
@@ -588,7 +587,6 @@ fn VideoItem(props: VideoItemProps) -> Element {
                     }
                 }
 
-                // Notes button
                 button {
                     class: "btn btn-ghost btn-sm btn-square hover:btn-accent hover:text-accent-content transition-all duration-200",
                     onclick: notes_handler,

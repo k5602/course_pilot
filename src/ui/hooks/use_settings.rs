@@ -1,22 +1,27 @@
-use crate::storage::settings::{AppSettings, save_app_settings, use_app_settings};
+use crate::storage::settings::AppSettings;
 use anyhow::Result;
 use dioxus::prelude::*;
 
-/// Settings management hook
+/// Settings management hook with improved async patterns
 #[derive(Clone)]
 pub struct SettingsManager;
 
 impl SettingsManager {
+    pub fn new() -> Self {
+        Self
+    }
+
     pub async fn load_settings(&self) -> Result<AppSettings> {
-        tokio::task::spawn_blocking(move || Ok(use_app_settings()))
-            .await
-            .unwrap_or_else(|e| Err(anyhow::anyhow!("Join error: {}", e)))
+        tokio::task::spawn_blocking(|| {
+            Ok(crate::storage::settings::use_app_settings())
+        }).await.unwrap_or_else(|e| Err(anyhow::anyhow!("Join error: {}", e)))
     }
 
     pub async fn save_settings(&self, settings: AppSettings) -> Result<()> {
-        tokio::task::spawn_blocking(move || save_app_settings(&settings))
-            .await
-            .unwrap_or_else(|e| Err(anyhow::anyhow!("Join error: {}", e)))
+        tokio::task::spawn_blocking(move || {
+            crate::storage::settings::save_app_settings(&settings)
+                .map_err(|e| anyhow::anyhow!("Settings error: {}", e))
+        }).await.unwrap_or_else(|e| Err(anyhow::anyhow!("Join error: {}", e)))
     }
 
     pub async fn get_youtube_api_key(&self) -> Result<Option<String>> {
@@ -48,21 +53,49 @@ impl SettingsManager {
 
     pub async fn set_import_preferences(
         &self,
-        preferences: crate::storage::ImportPreferences,
+        preferences: crate::storage::settings::ImportPreferences,
     ) -> Result<()> {
         let mut settings = self.load_settings().await?;
         settings.import_preferences = preferences;
         self.save_settings(settings).await
     }
 
-    pub async fn get_import_preferences(&self) -> Result<crate::storage::ImportPreferences> {
+    pub async fn get_import_preferences(&self) -> Result<crate::storage::settings::ImportPreferences> {
         let settings = self.load_settings().await?;
         Ok(settings.import_preferences)
+    }
+
+    pub async fn set_theme(&self, theme: String) -> Result<()> {
+        let mut settings = self.load_settings().await?;
+        settings.theme = Some(theme);
+        self.save_settings(settings).await
+    }
+
+    pub async fn set_analytics_enabled(&self, enabled: bool) -> Result<()> {
+        let mut settings = self.load_settings().await?;
+        settings.analytics_enabled = enabled;
+        self.save_settings(settings).await
+    }
+
+    pub async fn set_notifications_enabled(&self, enabled: bool) -> Result<()> {
+        let mut settings = self.load_settings().await?;
+        settings.notifications_enabled = enabled;
+        self.save_settings(settings).await
+    }
+
+    /// Batch update multiple settings efficiently
+    pub async fn update_settings<F>(&self, updater: F) -> Result<()>
+    where
+        F: FnOnce(&mut AppSettings) -> Result<()> + Send + 'static,
+    {
+        let mut settings = self.load_settings().await?;
+        updater(&mut settings)?;
+        self.save_settings(settings).await
     }
 }
 
 pub fn use_settings_manager() -> SettingsManager {
-    SettingsManager
+    SettingsManager::new()
 }
 
 /// Hook for reactive settings loading

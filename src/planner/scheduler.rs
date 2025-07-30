@@ -2837,8 +2837,6 @@ mod tests {
 
 use crate::types::ClusteringMetadata;
 
-// TODO: Task 3.3 - Advanced clustering algorithms
-// This function will be used when implementing hierarchical clustering and LDA topic modeling
 /// Choose distribution strategy based on clustering insights
 #[allow(dead_code)]
 fn choose_clustering_aware_strategy(
@@ -2878,10 +2876,8 @@ fn choose_clustering_aware_strategy(
     Ok(enhanced_strategy)
 }
 
-// TODO: Task 3.3 - Advanced clustering algorithms
-// This function will be used for topic modeling using LDA (Latent Dirichlet Allocation)
 /// Generate topic-aware module-based plan
-#[allow(dead_code)] // TODO: Task 3.3 - Advanced clustering integration
+#[allow(dead_code)]
 fn generate_topic_aware_module_plan(
     course: &Course,
     settings: &PlanSettings,
@@ -2917,10 +2913,8 @@ fn generate_topic_aware_module_plan(
     Ok(plan_items)
 }
 
-// TODO: Task 3.3 - Advanced clustering algorithms
-// This function will be used for hybrid clustering combining multiple algorithms
 /// Generate duration-optimized plan using clustering duration insights
-#[allow(dead_code)] // TODO: Task 3.3 - Advanced clustering integration
+#[allow(dead_code)]
 fn generate_duration_optimized_plan(
     course: &Course,
     settings: &PlanSettings,
@@ -2949,7 +2943,7 @@ fn generate_duration_optimized_plan(
 }
 
 /// Generate clustering-enhanced hybrid plan
-#[allow(dead_code)] // TODO: Task 3.3 - Advanced clustering integration
+#[allow(dead_code)]
 fn generate_clustering_hybrid_plan(
     course: &Course,
     settings: &PlanSettings,
@@ -2978,7 +2972,7 @@ fn generate_clustering_hybrid_plan(
 }
 
 /// Generate difficulty-based plan using clustering difficulty insights
-#[allow(dead_code)] // TODO: Task 3.3 - Advanced clustering integration
+#[allow(dead_code)]
 fn generate_clustering_difficulty_plan(
     course: &Course,
     settings: &PlanSettings,
@@ -3011,7 +3005,7 @@ fn generate_clustering_difficulty_plan(
 }
 
 /// Generate topic-based spaced repetition plan
-#[allow(dead_code)] // TODO: Task 3.3 - Advanced clustering integration
+#[allow(dead_code)]
 fn generate_topic_spaced_repetition_plan(
     course: &Course,
     settings: &PlanSettings,
@@ -3026,10 +3020,8 @@ fn generate_topic_spaced_repetition_plan(
     Ok(plan_items)
 }
 
-// TODO: Task 3.4 - User preference learning
-// This function will be used for clustering parameter auto-tuning based on user feedback
 /// Generate adaptive plan using clustering insights
-#[allow(dead_code)] // TODO: Task 3.3 - Advanced clustering integration
+#[allow(dead_code)]
 fn generate_clustering_adaptive_plan(
     course: &Course,
     settings: &PlanSettings,
@@ -3051,7 +3043,7 @@ fn generate_clustering_adaptive_plan(
 }
 
 /// Apply clustering-aware optimization to plan
-#[allow(dead_code)] // TODO: Task 3.3 - Advanced clustering integration
+#[allow(dead_code)]
 fn optimize_clustering_aware_plan(
     plan: &mut Plan,
     clustering_metadata: &ClusteringMetadata,
@@ -3069,7 +3061,7 @@ fn optimize_clustering_aware_plan(
 // Helper functions for clustering-aware planning
 
 /// Group modules by topic similarity
-#[allow(dead_code)] // TODO: Task 3.3 - Advanced clustering integration
+#[allow(dead_code)]
 fn group_modules_by_topic_similarity<'a>(
     modules: &'a [crate::types::Module],
     clustering_metadata: &'a ClusteringMetadata,
@@ -3105,7 +3097,7 @@ fn group_modules_by_topic_similarity<'a>(
 }
 
 /// Check if two modules have similar topics
-#[allow(dead_code)] // TODO: Task 3.3 - Advanced clustering integration
+#[allow(dead_code)]
 fn modules_have_similar_topics(
     module1: &crate::types::Module,
     module2: &crate::types::Module,
@@ -3126,7 +3118,7 @@ fn modules_have_similar_topics(
 }
 
 /// Create topic-aware sessions within a module
-#[allow(dead_code)] // TODO: Task 3.3 - Advanced clustering integration
+#[allow(dead_code)]
 fn create_topic_aware_sessions(
     module: &crate::types::Module,
     settings: &PlanSettings,
@@ -3167,7 +3159,7 @@ fn create_topic_aware_sessions(
 }
 
 /// Create duration-balanced sessions using clustering insights
-#[allow(dead_code)] // TODO: Task 3.3 - Advanced clustering integration
+#[allow(dead_code)]
 fn create_duration_balanced_sessions(
     modules: &[crate::types::Module],
     settings: &PlanSettings,
@@ -3208,7 +3200,7 @@ fn create_duration_balanced_sessions(
 }
 
 /// Create hybrid sessions balancing topics and duration
-#[allow(dead_code)] // TODO: Task 3.3 - Advanced clustering integration
+#[allow(dead_code)]
 fn create_hybrid_clustering_sessions(
     modules: &[crate::types::Module],
     settings: &PlanSettings,
@@ -3234,7 +3226,7 @@ fn create_hybrid_clustering_sessions(
 }
 
 /// Order modules by difficulty using clustering insights
-#[allow(dead_code)] // TODO: Task 3.3 - Advanced clustering integration
+#[allow(dead_code)]
 fn order_modules_by_clustering_difficulty(
     modules: &[crate::types::Module],
 ) -> Vec<&crate::types::Module> {
@@ -3253,7 +3245,7 @@ fn order_modules_by_clustering_difficulty(
 }
 
 /// Create difficulty-aware sessions
-#[allow(dead_code)] // TODO: Task 3.3 - Advanced clustering integration
+#[allow(dead_code)]
 fn create_difficulty_aware_sessions(
     module: &crate::types::Module,
     settings: &PlanSettings,
@@ -3283,7 +3275,7 @@ fn create_difficulty_aware_sessions(
 }
 
 /// Enhance plan with topic-based spacing
-#[allow(dead_code)] // TODO: Task 3.3 - Advanced clustering integration
+#[allow(dead_code)]
 fn enhance_plan_with_topic_spacing(
     plan_items: &mut Vec<PlanItem>,
     clustering_metadata: &ClusteringMetadata,
@@ -3318,7 +3310,7 @@ fn enhance_plan_with_topic_spacing(
 }
 
 /// Optimize topic flow in plan
-#[allow(dead_code)] // TODO: Task 3.3 - Advanced clustering integration
+#[allow(dead_code)]
 fn optimize_topic_flow(
     plan: &mut Plan,
     clustering_metadata: &ClusteringMetadata,
@@ -3356,7 +3348,7 @@ fn optimize_topic_flow(
 }
 
 /// Optimize difficulty progression with clustering insights
-#[allow(dead_code)] // TODO: Task 3.3 - Advanced clustering integration
+#[allow(dead_code)]
 fn optimize_difficulty_progression_with_clustering(
     plan: &mut Plan,
     clustering_metadata: &ClusteringMetadata,

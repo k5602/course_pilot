@@ -23,6 +23,10 @@ pub fn init_notes_table(conn: &Connection) -> Result<()> {
         CREATE INDEX IF NOT EXISTS idx_notes_course_id ON notes(course_id);
         CREATE INDEX IF NOT EXISTS idx_notes_video_id ON notes(video_id);
         CREATE INDEX IF NOT EXISTS idx_notes_course_video_index ON notes(course_id, video_index);
+        CREATE INDEX IF NOT EXISTS idx_notes_created_at ON notes(created_at);
+        CREATE INDEX IF NOT EXISTS idx_notes_updated_at ON notes(updated_at);
+        CREATE INDEX IF NOT EXISTS idx_notes_timestamp ON notes(timestamp);
+        CREATE INDEX IF NOT EXISTS idx_notes_content_search ON notes(content);
         "#,
     )
     .context("Failed to create notes table")?;

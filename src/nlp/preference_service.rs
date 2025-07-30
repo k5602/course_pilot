@@ -10,7 +10,7 @@ use crate::nlp::clustering::{
 use crate::storage::{AppSettings, PreferenceStorage};
 use crate::types::{Course, DifficultyLevel};
 use anyhow::Result;
-use std::path::PathBuf;
+
 use std::sync::{Arc, Mutex};
 use uuid::Uuid;
 
@@ -23,8 +23,8 @@ pub struct PreferenceService {
 
 impl PreferenceService {
     /// Create a new preference service
-    pub fn new(db_path: PathBuf, settings: AppSettings) -> Result<Self> {
-        let storage = PreferenceStorage::new(db_path);
+    pub fn new(db: crate::storage::Database, settings: AppSettings) -> Result<Self> {
+        let storage = PreferenceStorage::new(db);
         storage.initialize()?;
 
         let engine = Arc::new(Mutex::new(storage.create_preference_engine()?));
@@ -499,9 +499,10 @@ mod tests {
     fn test_preference_service_creation() {
         let temp_dir = tempdir().unwrap();
         let db_path = temp_dir.path().join("test.db");
+        let db = crate::storage::Database::new(&db_path).unwrap();
         let settings = AppSettings::default();
 
-        let service = PreferenceService::new(db_path, settings).unwrap();
+        let service = PreferenceService::new(db, settings).unwrap();
         let preferences = service.get_preferences().unwrap();
 
         assert_eq!(preferences.similarity_threshold, 0.6);
@@ -511,8 +512,9 @@ mod tests {
     fn test_course_complexity_estimation() {
         let temp_dir = tempdir().unwrap();
         let db_path = temp_dir.path().join("test.db");
+        let db = crate::storage::Database::new(&db_path).unwrap();
         let settings = AppSettings::default();
-        let service = PreferenceService::new(db_path, settings).unwrap();
+        let service = PreferenceService::new(db, settings).unwrap();
 
         // Beginner course
         let beginner_course = Course::new(

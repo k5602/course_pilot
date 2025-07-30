@@ -187,9 +187,7 @@ pub fn use_save_note_action() -> impl Fn(Note) {
         let notes_manager = notes_manager.clone();
         spawn(async move {
             match notes_manager.save_note(note).await {
-                Ok(_) => {
-                    // Note saved successfully
-                }
+                Ok(_) => {}
                 Err(e) => {
                     eprintln!("Failed to save note: {e}");
                 }
@@ -206,9 +204,7 @@ pub fn use_delete_note_action() -> impl Fn(Uuid) {
         let notes_manager = notes_manager.clone();
         spawn(async move {
             match notes_manager.delete_note(note_id).await {
-                Ok(_) => {
-                    // Note deleted successfully
-                }
+                Ok(_) => {}
                 Err(e) => {
                     eprintln!("Failed to delete note: {e}");
                 }

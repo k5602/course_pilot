@@ -23,7 +23,7 @@ const SUPPORTED_VIDEO_EXTENSIONS: &[&str] = &[
     "mts", "m2ts",
 ];
 
-/// Import operations hook
+/// Import operations hook with improved async patterns
 #[derive(Clone)]
 pub struct ImportManager {
     db: Arc<Database>,
@@ -49,9 +49,9 @@ impl ImportManager {
     }
 
     pub async fn validate_folder(&self, path: PathBuf) -> Result<FolderValidation> {
-        tokio::task::spawn_blocking(move || validate_folder_sync(&path))
-            .await
-            .unwrap_or_else(|e| Err(anyhow::anyhow!("Join error: {}", e)))
+        tokio::task::spawn_blocking(move || {
+            validate_folder_sync(&path)
+        }).await.unwrap_or_else(|e| Err(anyhow::anyhow!("Join error: {}", e)))
     }
 
     pub async fn import_from_local_folder(
@@ -59,43 +59,40 @@ impl ImportManager {
         folder_path: PathBuf,
         course_title: Option<String>,
     ) -> Result<Course> {
+        // Generate course title
+        let course_title = course_title.unwrap_or_else(|| {
+            folder_path.file_name()
+                .and_then(|name| name.to_str())
+                .unwrap_or("Imported Course")
+                .to_string()
+        });
+
         let db = self.db.clone();
         tokio::task::spawn_blocking(move || {
-            // First validate the folder
-            let validation = validate_folder_sync(&folder_path)?;
-            if !validation.is_valid {
-                return Err(anyhow::anyhow!("Invalid folder: {}",
-                    validation.error_message.unwrap_or_else(|| "Unknown error".to_string())));
-            }
-
-            // Generate course title
-            let course_title = course_title.unwrap_or_else(|| {
-                folder_path.file_name()
-                    .and_then(|name| name.to_str())
-                    .unwrap_or("Imported Course")
-                    .to_string()
-            });
-
-            // Check if a course with the same title and similar content already exists
-            let existing_courses = crate::storage::load_courses(&db)?;
-            for existing_course in &existing_courses {
-                if existing_course.name == course_title {
-                    // Check if it's the same folder by comparing video counts
-                    if existing_course.raw_titles.len() == validation.video_count {
-                        return Err(anyhow::anyhow!(
-                            "A course with the title '{}' and similar content already exists. Please choose a different folder or rename the existing course.",
-                            course_title
-                        ));
-                    }
-                }
-            }
-
-            // Use the ingest module to import from local folder
             crate::ingest::local_folder::import_from_folder(&db, &folder_path, &course_title)
-                .map_err(|e| anyhow::anyhow!("Local folder import failed: {}", e))
-        })
-        .await
-        .unwrap_or_else(|e| Err(anyhow::anyhow!("Join error: {}", e)))
+                .map_err(|e| anyhow::anyhow!("Import error: {}", e))
+        }).await.unwrap_or_else(|e| Err(anyhow::anyhow!("Join error: {}", e)))
+    }
+
+    pub async fn import_from_youtube(
+        &self,
+        _playlist_url: String,
+        _api_key: String,
+        _course_title: Option<String>,
+    ) -> Result<Course> {
+        let _db = self.db.clone();
+        tokio::task::spawn_blocking(move || {
+            // This would need to be implemented in the youtube module
+            Err(anyhow::anyhow!("YouTube import not yet implemented"))
+        }).await.unwrap_or_else(|e| Err(anyhow::anyhow!("Join error: {}", e)))
+    }
+
+    pub async fn validate_youtube_playlist(&self, url: &str, _api_key: &str) -> Result<bool> {
+        let url = url.to_string();
+        tokio::task::spawn_blocking(move || {
+            // This would need to be implemented
+            Ok(crate::ingest::is_valid_youtube_url(&url))
+        }).await.unwrap_or_else(|e| Err(anyhow::anyhow!("Join error: {}", e)))
     }
 }
 
