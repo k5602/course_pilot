@@ -3,8 +3,8 @@
 //! This module provides a connection manager that caches frequently used
 //! prepared statements for better performance.
 
-use crate::storage::Database;
 use crate::DatabaseError;
+use crate::storage::Database;
 use rusqlite::Connection;
 use std::collections::HashMap;
 use std::sync::{Arc, Mutex};
@@ -25,7 +25,12 @@ impl ConnectionManager {
     }
 
     /// Execute a query with caching support
-    pub fn execute_cached<F, R>(&self, query_key: &str, query: &str, f: F) -> Result<R, DatabaseError>
+    pub fn execute_cached<F, R>(
+        &self,
+        query_key: &str,
+        query: &str,
+        f: F,
+    ) -> Result<R, DatabaseError>
     where
         F: FnOnce(&Connection, &str) -> Result<R, DatabaseError>,
     {
@@ -55,10 +60,10 @@ impl ConnectionManager {
     {
         let mut conn = self.db.get_conn()?;
         let tx = conn.transaction()?;
-        
+
         // Execute the batch operation within the transaction
         let result = f(&tx)?;
-        
+
         tx.commit()?;
         Ok(result)
     }
@@ -77,7 +82,9 @@ impl ConnectionManager {
 
         // Check for missing ORDER BY with LIMIT
         if query.to_lowercase().contains("limit") && !query.to_lowercase().contains("order by") {
-            suggestions.push("Consider adding ORDER BY clause with LIMIT for consistent results".to_string());
+            suggestions.push(
+                "Consider adding ORDER BY clause with LIMIT for consistent results".to_string(),
+            );
         }
 
         // Check for potential N+1 queries
@@ -96,7 +103,8 @@ impl ConnectionManager {
             query: query.to_string(),
             estimated_cost,
             suggestions,
-            uses_index: query.to_lowercase().contains("where") && !query.to_lowercase().contains("like '%"),
+            uses_index: query.to_lowercase().contains("where")
+                && !query.to_lowercase().contains("like '%"),
         }
     }
 
@@ -106,14 +114,20 @@ impl ConnectionManager {
 
         // Get table sizes
         let mut table_stats = HashMap::new();
-        
-        let tables = vec!["courses", "plans", "notes", "clustering_preferences", "clustering_feedback"];
+
+        let tables = vec![
+            "courses",
+            "plans",
+            "notes",
+            "clustering_preferences",
+            "clustering_feedback",
+        ];
         for table in tables {
-            let count: i64 = conn.query_row(
-                &format!("SELECT COUNT(*) FROM {}", table),
-                [],
-                |row| row.get(0),
-            ).unwrap_or(0);
+            let count: i64 = conn
+                .query_row(&format!("SELECT COUNT(*) FROM {table}"), [], |row| {
+                    row.get(0)
+                })
+                .unwrap_or(0);
             table_stats.insert(table.to_string(), count as usize);
         }
 
@@ -135,29 +149,36 @@ impl ConnectionManager {
     }
 
     /// Get index usage statistics
-    fn get_index_usage_stats(&self, conn: &Connection) -> Result<HashMap<String, IndexUsage>, DatabaseError> {
+    fn get_index_usage_stats(
+        &self,
+        conn: &Connection,
+    ) -> Result<HashMap<String, IndexUsage>, DatabaseError> {
         let mut index_stats = HashMap::new();
 
         // Get all indexes
-        let mut stmt = conn.prepare("SELECT name, tbl_name FROM sqlite_master WHERE type = 'index'")?;
+        let mut stmt =
+            conn.prepare("SELECT name, tbl_name FROM sqlite_master WHERE type = 'index'")?;
         let index_rows = stmt.query_map([], |row| {
             Ok((row.get::<_, String>(0)?, row.get::<_, String>(1)?))
         })?;
 
         for index_row in index_rows {
             let (index_name, table_name) = index_row?;
-            
+
             // Skip auto-generated indexes
             if index_name.starts_with("sqlite_") {
                 continue;
             }
 
-            index_stats.insert(index_name.clone(), IndexUsage {
-                index_name: index_name.clone(),
-                table_name,
-                is_used: true, // Simplified - in a real implementation, you'd track actual usage
-                selectivity: 0.5, // Simplified - would calculate actual selectivity
-            });
+            index_stats.insert(
+                index_name.clone(),
+                IndexUsage {
+                    index_name: index_name.clone(),
+                    table_name,
+                    is_used: true, // Simplified - in a real implementation, you'd track actual usage
+                    selectivity: 0.5, // Simplified - would calculate actual selectivity
+                },
+            );
         }
 
         Ok(index_stats)

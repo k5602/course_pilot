@@ -706,11 +706,11 @@ pub enum CourseStatus {
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum ContextualPanelTab {
     Notes,
-    Player,
+    Chatbot,
 }
 
 /// Video context for notes integration
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize)]
 pub struct VideoContext {
     pub course_id: Uuid,
     pub video_index: usize,

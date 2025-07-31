@@ -3,9 +3,9 @@
 //! This module contains performance-optimized queries that use prepared statements,
 //! proper indexing, and efficient query patterns for common database operations.
 
-use crate::storage::Database;
-use crate::types::{Course, Plan, Note};
 use crate::DatabaseError;
+use crate::storage::Database;
+use crate::types::{Course, Note, Plan};
 use anyhow::Result;
 use chrono::{DateTime, Utc};
 use rusqlite::params;
@@ -24,7 +24,9 @@ impl OptimizedQueries {
     }
 
     /// Get courses with their latest plans in a single optimized query
-    pub fn get_courses_with_latest_plans(&self) -> Result<Vec<(Course, Option<Plan>)>, DatabaseError> {
+    pub fn get_courses_with_latest_plans(
+        &self,
+    ) -> Result<Vec<(Course, Option<Plan>)>, DatabaseError> {
         let conn = self.db.get_conn()?;
 
         // Use a LEFT JOIN to get courses with their most recent plans
@@ -125,7 +127,8 @@ impl OptimizedQueries {
                     course_id,
                     settings,
                     items,
-                    created_at: DateTime::from_timestamp(plan_created_at, 0).unwrap_or_else(Utc::now),
+                    created_at: DateTime::from_timestamp(plan_created_at, 0)
+                        .unwrap_or_else(Utc::now),
                 })
             } else {
                 None
@@ -175,9 +178,8 @@ impl OptimizedQueries {
     pub fn get_notes_count_by_course(&self) -> Result<HashMap<Uuid, usize>, DatabaseError> {
         let conn = self.db.get_conn()?;
 
-        let mut stmt = conn.prepare(
-            "SELECT course_id, COUNT(*) as note_count FROM notes GROUP BY course_id",
-        )?;
+        let mut stmt =
+            conn.prepare("SELECT course_id, COUNT(*) as note_count FROM notes GROUP BY course_id")?;
 
         let results = stmt.query_map([], |row| {
             let course_id_str: String = row.get(0)?;
@@ -229,9 +231,8 @@ impl OptimizedQueries {
                     note.timestamp.map(|t| t as i64),
                     note.created_at.to_rfc3339(),
                     note.updated_at.to_rfc3339(),
-                    serde_json::to_string(&note.tags).map_err(|e| {
-                        rusqlite::Error::ToSqlConversionFailure(Box::new(e))
-                    })?,
+                    serde_json::to_string(&note.tags)
+                        .map_err(|e| { rusqlite::Error::ToSqlConversionFailure(Box::new(e)) })?,
                 ])?;
             }
         } // stmt is dropped here
@@ -280,8 +281,9 @@ impl OptimizedQueries {
                     )
                 })?
                 .with_timezone(&Utc);
-            
-            let course_id = row.get::<_, Option<String>>(4)?
+
+            let course_id = row
+                .get::<_, Option<String>>(4)?
                 .map(|s| Uuid::parse_str(&s))
                 .transpose()
                 .map_err(|e| {
@@ -315,9 +317,13 @@ impl OptimizedQueries {
     }
 
     /// Optimized search across all content types
-    pub fn search_all_content(&self, query: &str, limit: usize) -> Result<Vec<SearchResult>, DatabaseError> {
+    pub fn search_all_content(
+        &self,
+        query: &str,
+        limit: usize,
+    ) -> Result<Vec<SearchResult>, DatabaseError> {
         let conn = self.db.get_conn()?;
-        let search_pattern = format!("%{}%", query);
+        let search_pattern = format!("%{query}%");
 
         let mut stmt = conn.prepare(
             r#"
@@ -355,8 +361,9 @@ impl OptimizedQueries {
                     )
                 })?
                 .with_timezone(&Utc);
-            
-            let course_id = row.get::<_, Option<String>>(5)?
+
+            let course_id = row
+                .get::<_, Option<String>>(5)?
                 .map(|s| Uuid::parse_str(&s))
                 .transpose()
                 .map_err(|e| {

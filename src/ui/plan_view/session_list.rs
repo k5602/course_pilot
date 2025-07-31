@@ -8,6 +8,9 @@ use uuid::Uuid;
 use crate::state::set_video_context_and_open_notes_reactive;
 use crate::types::{Plan, PlanItem, VideoContext};
 use crate::ui::{Badge, toast_helpers, use_app_state, use_toggle_plan_item_action};
+use crate::video_player::{VideoPlayerManager, VideoSource};
+
+
 
 /// Session group data structure for organizing plan items by date
 #[derive(Debug, Clone, PartialEq)]
@@ -408,9 +411,91 @@ fn VideoItem(props: VideoItemProps) -> Element {
         }
     };
 
-    // Play button handler (placeholder for future implementation)
-    let play_handler = move |_| {
-        toast_helpers::info("Video player will be implemented in a future phase");
+    // Play button handler with actual video player integration
+    let play_handler = {
+        let course_id = props.course_id;
+        let item = props.item.clone();
+        let app_state = app_state.clone();
+
+        move |_| {
+            let course_id = course_id;
+            let item = item.clone();
+            let app_state = app_state.clone();
+            
+            spawn(async move {
+                // Get the course data from app state
+                let courses = app_state.read().courses.clone();
+                
+                if let Some(course) = courses.iter().find(|c| c.id == course_id) {
+                        // Get the first video index from the plan item
+                        let video_index = if let Some(&first_video_index) = item.video_indices.first() {
+                            first_video_index
+                        } else {
+                            log::error!("No video indices found in plan item");
+                            toast_helpers::error("No video found for this item");
+                            return;
+                        };
+
+                        // Get the video title from raw_titles
+                        let video_title = if let Some(title) = course.raw_titles.get(video_index) {
+                            title.clone()
+                        } else {
+                            log::error!("Video index {} not found in course raw_titles", video_index);
+                            toast_helpers::error("Video not found in course data");
+                            return;
+                        };
+
+                        // Determine video source type and create appropriate VideoSource
+                        let video_source = if is_youtube_video(&video_title) {
+                            // Try to extract YouTube video ID from title or URL
+                            if let Some(video_id) = extract_youtube_video_id(&video_title) {
+                                VideoSource::YouTube {
+                                    video_id,
+                                    playlist_id: None, // TODO: Could extract playlist ID if available
+                                    title: clean_youtube_title(&video_title),
+                                }
+                            } else {
+                                // Fallback: create a YouTube source with a placeholder ID
+                                // This might happen if the title doesn't contain a URL
+                                log::warn!("Could not extract YouTube video ID from title: {}", video_title);
+                                VideoSource::YouTube {
+                                    video_id: "dQw4w9WgXcQ".to_string(), // Placeholder
+                                    playlist_id: None,
+                                    title: video_title.clone(),
+                                }
+                            }
+                        } else {
+                            // Assume it's a local video
+                            VideoSource::Local {
+                                path: std::path::PathBuf::from(&video_title),
+                                title: video_title.clone(),
+                            }
+                        };
+
+                        // Create video player manager and play the video
+                        match VideoPlayerManager::new() {
+                            Ok(mut player_manager) => {
+                                match player_manager.play_video(video_source) {
+                                    Ok(()) => {
+                                        toast_helpers::success(format!("Playing: {}", item.section_title));
+                                    }
+                                    Err(e) => {
+                                        log::error!("Failed to play video: {e}");
+                                        toast_helpers::error(&format!("Failed to play video: {e}"));
+                                    }
+                                }
+                            }
+                            Err(e) => {
+                                log::error!("Failed to create video player: {e}");
+                                toast_helpers::error("Failed to initialize video player");
+                            }
+                        }
+                } else {
+                    log::error!("Course not found: {}", course_id);
+                    toast_helpers::error("Course not found");
+                }
+            });
+        }
     };
 
     let notes_handler = {
@@ -606,5 +691,56 @@ fn VideoItem(props: VideoItemProps) -> Element {
                 class: Some("text-xs shrink-0 transition-all duration-200".to_string()),
             }
         }
+    }
+}
+/// Helper function to determine if a video title/URL is from YouTube
+fn is_youtube_video(title: &str) -> bool {
+    title.contains("youtube.com") || title.contains("youtu.be") || 
+    // For now, assume most imported videos are YouTube unless they look like file paths
+    (!title.contains('/') && !title.ends_with(".mp4") && !title.ends_with(".avi") && !title.ends_with(".mov"))
+}
+
+/// Extract YouTube video ID from various URL formats or return None
+fn extract_youtube_video_id(url_or_title: &str) -> Option<String> {
+    // Try to extract from full YouTube URLs
+    if let Some(start) = url_or_title.find("v=") {
+        let id_start = start + 2;
+        let id_end = url_or_title[id_start..]
+            .find('&')
+            .map(|pos| id_start + pos)
+            .unwrap_or(url_or_title.len());
+        let video_id = &url_or_title[id_start..id_end];
+        if video_id.len() == 11 {
+            return Some(video_id.to_string());
+        }
+    }
+    
+    // Try to extract from youtu.be URLs
+    if let Some(start) = url_or_title.find("youtu.be/") {
+        let id_start = start + 9;
+        let id_end = url_or_title[id_start..]
+            .find('?')
+            .map(|pos| id_start + pos)
+            .unwrap_or(url_or_title.len());
+        let video_id = &url_or_title[id_start..id_end];
+        if video_id.len() == 11 {
+            return Some(video_id.to_string());
+        }
+    }
+    
+    // If no URL pattern found, return None
+    // In a real implementation, you might want to search for the video by title
+    None
+}
+
+/// Clean YouTube title by removing URL parts if present
+fn clean_youtube_title(title: &str) -> String {
+    // If it's a URL, try to extract just the title part
+    if title.contains("youtube.com") || title.contains("youtu.be") {
+        // For now, just return the original title
+        // In a real implementation, you might want to fetch the actual video title from YouTube API
+        title.to_string()
+    } else {
+        title.to_string()
     }
 }

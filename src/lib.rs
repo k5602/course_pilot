@@ -11,6 +11,7 @@
 pub mod app;
 pub mod error_handling;
 pub mod export;
+pub mod gemini;
 pub mod ingest;
 pub mod nlp;
 pub mod planner;
@@ -18,6 +19,7 @@ pub mod state;
 pub mod storage;
 pub mod types;
 pub mod ui;
+pub mod video_player;
 
 // Re-export commonly used types for convenience
 pub use types::{

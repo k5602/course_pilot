@@ -6,22 +6,30 @@ use dioxus::prelude::*;
 #[derive(Clone)]
 pub struct SettingsManager;
 
+impl Default for SettingsManager {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl SettingsManager {
     pub fn new() -> Self {
         Self
     }
 
     pub async fn load_settings(&self) -> Result<AppSettings> {
-        tokio::task::spawn_blocking(|| {
-            Ok(crate::storage::settings::use_app_settings())
-        }).await.unwrap_or_else(|e| Err(anyhow::anyhow!("Join error: {}", e)))
+        tokio::task::spawn_blocking(|| Ok(crate::storage::settings::use_app_settings()))
+            .await
+            .unwrap_or_else(|e| Err(anyhow::anyhow!("Join error: {}", e)))
     }
 
     pub async fn save_settings(&self, settings: AppSettings) -> Result<()> {
         tokio::task::spawn_blocking(move || {
             crate::storage::settings::save_app_settings(&settings)
                 .map_err(|e| anyhow::anyhow!("Settings error: {}", e))
-        }).await.unwrap_or_else(|e| Err(anyhow::anyhow!("Join error: {}", e)))
+        })
+        .await
+        .unwrap_or_else(|e| Err(anyhow::anyhow!("Join error: {}", e)))
     }
 
     pub async fn get_youtube_api_key(&self) -> Result<Option<String>> {
@@ -60,7 +68,9 @@ impl SettingsManager {
         self.save_settings(settings).await
     }
 
-    pub async fn get_import_preferences(&self) -> Result<crate::storage::settings::ImportPreferences> {
+    pub async fn get_import_preferences(
+        &self,
+    ) -> Result<crate::storage::settings::ImportPreferences> {
         let settings = self.load_settings().await?;
         Ok(settings.import_preferences)
     }

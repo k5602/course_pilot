@@ -3,8 +3,8 @@
 //! This module provides utilities for maintaining database performance,
 //! including cleanup, optimization, and monitoring functions.
 
-use crate::storage::{Database, DatabasePerformanceMetrics};
 use crate::DatabaseError;
+use crate::storage::{Database, DatabasePerformanceMetrics};
 use anyhow::Result;
 use chrono::{DateTime, Duration, Utc};
 use log::info;
@@ -38,52 +38,69 @@ impl DatabaseMaintenance {
         // Get performance metrics before maintenance
         match crate::storage::get_database_performance_metrics(&self.db) {
             Ok(metrics) => report.performance_before = Some(metrics),
-            Err(e) => report.errors.push(format!("Failed to get initial metrics: {}", e)),
+            Err(e) => report
+                .errors
+                .push(format!("Failed to get initial metrics: {e}")),
         }
 
         // 1. Clean up old data
         if let Err(e) = self.cleanup_old_data() {
-            report.errors.push(format!("Cleanup failed: {}", e));
+            report.errors.push(format!("Cleanup failed: {e}"));
         } else {
-            report.operations_performed.push("Cleaned up old data".to_string());
+            report
+                .operations_performed
+                .push("Cleaned up old data".to_string());
         }
 
         // 2. Optimize database structure
         if let Err(e) = crate::storage::optimize_database(&self.db) {
-            report.errors.push(format!("Optimization failed: {}", e));
+            report.errors.push(format!("Optimization failed: {e}"));
         } else {
-            report.operations_performed.push("Optimized database structure".to_string());
+            report
+                .operations_performed
+                .push("Optimized database structure".to_string());
         }
 
         // 3. Rebuild indexes if needed
         if let Err(e) = self.rebuild_indexes_if_needed() {
-            report.errors.push(format!("Index rebuild failed: {}", e));
+            report.errors.push(format!("Index rebuild failed: {e}"));
         } else {
-            report.operations_performed.push("Checked and rebuilt indexes".to_string());
+            report
+                .operations_performed
+                .push("Checked and rebuilt indexes".to_string());
         }
 
         // 4. Vacuum database if fragmented
         if let Err(e) = self.vacuum_if_needed() {
-            report.errors.push(format!("Vacuum failed: {}", e));
+            report.errors.push(format!("Vacuum failed: {e}"));
         } else {
-            report.operations_performed.push("Checked database fragmentation".to_string());
+            report
+                .operations_performed
+                .push("Checked database fragmentation".to_string());
         }
 
         // 5. Update statistics
         if let Err(e) = self.update_statistics() {
-            report.errors.push(format!("Statistics update failed: {}", e));
+            report.errors.push(format!("Statistics update failed: {e}"));
         } else {
-            report.operations_performed.push("Updated query statistics".to_string());
+            report
+                .operations_performed
+                .push("Updated query statistics".to_string());
         }
 
         // Get performance metrics after maintenance
         match crate::storage::get_database_performance_metrics(&self.db) {
             Ok(metrics) => report.performance_after = Some(metrics),
-            Err(e) => report.errors.push(format!("Failed to get final metrics: {}", e)),
+            Err(e) => report
+                .errors
+                .push(format!("Failed to get final metrics: {e}")),
         }
 
         report.end_time = Utc::now();
-        info!("Database maintenance completed in {:?}", report.end_time - report.start_time);
+        info!(
+            "Database maintenance completed in {:?}",
+            report.end_time - report.start_time
+        );
 
         Ok(report)
     }
@@ -120,16 +137,17 @@ impl DatabaseMaintenance {
     /// Rebuild indexes if database is large enough to benefit
     fn rebuild_indexes_if_needed(&self) -> Result<(), DatabaseError> {
         let conn = self.db.get_conn()?;
-        
+
         // Check database size
         let page_count: i64 = conn.query_row("PRAGMA page_count", [], |row| row.get(0))?;
-        
-        if page_count > 5000 { // Only rebuild for larger databases
-            info!("Database is large ({} pages), rebuilding indexes", page_count);
+
+        if page_count > 5000 {
+            // Only rebuild for larger databases
+            info!("Database is large ({page_count} pages), rebuilding indexes");
             conn.execute("REINDEX", [])?;
             info!("Indexes rebuilt successfully");
         } else {
-            info!("Database is small ({} pages), skipping index rebuild", page_count);
+            info!("Database is small ({page_count} pages), skipping index rebuild");
         }
 
         Ok(())
@@ -138,22 +156,29 @@ impl DatabaseMaintenance {
     /// Vacuum database if fragmentation is high
     fn vacuum_if_needed(&self) -> Result<(), DatabaseError> {
         let conn = self.db.get_conn()?;
-        
+
         let page_count: i64 = conn.query_row("PRAGMA page_count", [], |row| row.get(0))?;
         let freelist_count: i64 = conn.query_row("PRAGMA freelist_count", [], |row| row.get(0))?;
-        
+
         let fragmentation_ratio = if page_count > 0 {
             freelist_count as f64 / page_count as f64
         } else {
             0.0
         };
 
-        if fragmentation_ratio > 0.1 { // More than 10% fragmentation
-            info!("High fragmentation detected ({:.1}%), running VACUUM", fragmentation_ratio * 100.0);
+        if fragmentation_ratio > 0.1 {
+            // More than 10% fragmentation
+            info!(
+                "High fragmentation detected ({:.1}%), running VACUUM",
+                fragmentation_ratio * 100.0
+            );
             conn.execute("VACUUM", [])?;
             info!("Database vacuumed successfully");
         } else {
-            info!("Low fragmentation ({:.1}%), skipping VACUUM", fragmentation_ratio * 100.0);
+            info!(
+                "Low fragmentation ({:.1}%), skipping VACUUM",
+                fragmentation_ratio * 100.0
+            );
         }
 
         Ok(())
@@ -175,29 +200,35 @@ impl DatabaseMaintenance {
 
         // Check database size
         let metrics = crate::storage::get_database_performance_metrics(&self.db)?;
-        
-        if metrics.total_size_bytes > 100_000_000 { // 100MB
+
+        if metrics.total_size_bytes > 100_000_000 {
+            // 100MB
             recommendations.push("Consider archiving old data to reduce database size".to_string());
         }
 
         if metrics.fragmentation_ratio > 0.15 {
-            recommendations.push("High fragmentation detected, consider running VACUUM".to_string());
+            recommendations
+                .push("High fragmentation detected, consider running VACUUM".to_string());
         }
 
         // Check connection pool usage
         let pool_utilization = if metrics.connection_pool_active > 0 {
-            (metrics.connection_pool_active - metrics.connection_pool_idle) as f64 / metrics.connection_pool_active as f64
+            (metrics.connection_pool_active - metrics.connection_pool_idle) as f64
+                / metrics.connection_pool_active as f64
         } else {
             0.0
         };
 
         if pool_utilization > 0.8 {
-            warnings.push("High connection pool utilization, consider increasing pool size".to_string());
+            warnings.push(
+                "High connection pool utilization, consider increasing pool size".to_string(),
+            );
         }
 
         // Check table sizes
         if metrics.notes_count > 10000 {
-            recommendations.push("Large number of notes, consider implementing note archiving".to_string());
+            recommendations
+                .push("Large number of notes, consider implementing note archiving".to_string());
         }
 
         // Check for missing indexes (simplified check)
@@ -208,7 +239,8 @@ impl DatabaseMaintenance {
         )?;
 
         if index_count < 5 {
-            warnings.push("Few custom indexes found, query performance may be suboptimal".to_string());
+            warnings
+                .push("Few custom indexes found, query performance may be suboptimal".to_string());
         }
 
         Ok(HealthReport {
@@ -229,38 +261,53 @@ impl DatabaseMaintenance {
     /// Get maintenance schedule recommendations
     pub fn get_maintenance_schedule(&self) -> Result<MaintenanceSchedule, DatabaseError> {
         let metrics = crate::storage::get_database_performance_metrics(&self.db)?;
-        
+
         // Base schedule on database size and activity
         let total_records = metrics.courses_count + metrics.plans_count + metrics.notes_count;
-        
+
         let (frequency, operations) = if total_records < 1000 {
             // Small database - monthly maintenance
-            (Duration::days(30), vec![
-                "Update statistics".to_string(),
-                "Check integrity".to_string(),
-            ])
+            (
+                Duration::days(30),
+                vec![
+                    "Update statistics".to_string(),
+                    "Check integrity".to_string(),
+                ],
+            )
         } else if total_records < 10000 {
             // Medium database - bi-weekly maintenance
-            (Duration::days(14), vec![
-                "Update statistics".to_string(),
-                "Clean up old data".to_string(),
-                "Check fragmentation".to_string(),
-            ])
+            (
+                Duration::days(14),
+                vec![
+                    "Update statistics".to_string(),
+                    "Clean up old data".to_string(),
+                    "Check fragmentation".to_string(),
+                ],
+            )
         } else {
             // Large database - weekly maintenance
-            (Duration::days(7), vec![
-                "Update statistics".to_string(),
-                "Clean up old data".to_string(),
-                "Rebuild indexes".to_string(),
-                "Vacuum if needed".to_string(),
-            ])
+            (
+                Duration::days(7),
+                vec![
+                    "Update statistics".to_string(),
+                    "Clean up old data".to_string(),
+                    "Rebuild indexes".to_string(),
+                    "Vacuum if needed".to_string(),
+                ],
+            )
         };
 
         Ok(MaintenanceSchedule {
             recommended_frequency: frequency,
             next_maintenance: Utc::now() + frequency,
             operations,
-            estimated_duration_minutes: if total_records < 1000 { 1 } else if total_records < 10000 { 5 } else { 15 },
+            estimated_duration_minutes: if total_records < 1000 {
+                1
+            } else if total_records < 10000 {
+                5
+            } else {
+                15
+            },
         })
     }
 }

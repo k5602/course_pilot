@@ -1993,13 +1993,23 @@ mod tests {
 
         let (modules, metadata) = result.unwrap();
         assert!(!modules.is_empty(), "Should produce modules");
-        assert_eq!(metadata.algorithm_used, crate::types::ClusteringAlgorithm::Lda);
+        assert_eq!(
+            metadata.algorithm_used,
+            crate::types::ClusteringAlgorithm::Lda
+        );
         assert!(metadata.quality_score > 0.0, "Should have quality score");
-        assert_eq!(metadata.performance_metrics.input_metrics.video_count, titles.len());
+        assert_eq!(
+            metadata.performance_metrics.input_metrics.video_count,
+            titles.len()
+        );
 
         // Validate modules structure
         let total_sections: usize = modules.iter().map(|m| m.sections.len()).sum();
-        assert_eq!(total_sections, titles.len(), "All videos should be assigned");
+        assert_eq!(
+            total_sections,
+            titles.len(),
+            "All videos should be assigned"
+        );
 
         for module in &modules {
             assert!(!module.title.is_empty(), "Module should have title");
@@ -2023,13 +2033,23 @@ mod tests {
 
         let (modules, metadata) = result.unwrap();
         assert!(!modules.is_empty(), "Should produce modules");
-        assert_eq!(metadata.algorithm_used, crate::types::ClusteringAlgorithm::Hierarchical);
+        assert_eq!(
+            metadata.algorithm_used,
+            crate::types::ClusteringAlgorithm::Hierarchical
+        );
         assert!(metadata.quality_score > 0.0, "Should have quality score");
-        assert_eq!(metadata.performance_metrics.input_metrics.video_count, titles.len());
+        assert_eq!(
+            metadata.performance_metrics.input_metrics.video_count,
+            titles.len()
+        );
 
         // Validate modules structure
         let total_sections: usize = modules.iter().map(|m| m.sections.len()).sum();
-        assert_eq!(total_sections, titles.len(), "All videos should be assigned");
+        assert_eq!(
+            total_sections,
+            titles.len(),
+            "All videos should be assigned"
+        );
 
         for module in &modules {
             assert!(!module.title.is_empty(), "Module should have title");
@@ -2054,7 +2074,10 @@ mod tests {
 
         // Test Hierarchical strategy
         let hierarchical_result = apply_hierarchical_clustering(&titles);
-        assert!(hierarchical_result.is_ok(), "Hierarchical strategy should work");
+        assert!(
+            hierarchical_result.is_ok(),
+            "Hierarchical strategy should work"
+        );
 
         // Compare results
         let (lda_modules, lda_metadata) = lda_result.unwrap();
@@ -2096,12 +2119,22 @@ mod tests {
         // Validate that clustering metadata is present
         if let Some(clustering_metadata) = &course_structure.clustering_metadata {
             assert!(clustering_metadata.quality_score > 0.0);
-            assert_eq!(clustering_metadata.performance_metrics.input_metrics.video_count, titles.len());
+            assert_eq!(
+                clustering_metadata
+                    .performance_metrics
+                    .input_metrics
+                    .video_count,
+                titles.len()
+            );
         }
         assert_eq!(course_structure.metadata.total_videos, titles.len());
 
         // Check that all videos are assigned
-        let total_sections: usize = course_structure.modules.iter().map(|m| m.sections.len()).sum();
+        let total_sections: usize = course_structure
+            .modules
+            .iter()
+            .map(|m| m.sections.len())
+            .sum();
         assert_eq!(total_sections, titles.len());
     }
 
@@ -2123,7 +2156,10 @@ mod tests {
         assert!(lda_result.is_ok());
 
         let (_, lda_metadata) = lda_result.unwrap();
-        assert!(lda_metadata.processing_time_ms > 0, "Should have processing time");
+        assert!(
+            lda_metadata.processing_time_ms > 0,
+            "Should have processing time"
+        );
         assert!(lda_metadata.performance_metrics.total_processing_time_ms > 0);
         assert!(lda_metadata.performance_metrics.clustering_time_ms > 0);
 
@@ -2132,8 +2168,16 @@ mod tests {
         assert!(hierarchical_result.is_ok());
 
         let (_, hierarchical_metadata) = hierarchical_result.unwrap();
-        assert!(hierarchical_metadata.processing_time_ms > 0, "Should have processing time");
-        assert!(hierarchical_metadata.performance_metrics.total_processing_time_ms > 0);
+        assert!(
+            hierarchical_metadata.processing_time_ms > 0,
+            "Should have processing time"
+        );
+        assert!(
+            hierarchical_metadata
+                .performance_metrics
+                .total_processing_time_ms
+                > 0
+        );
         assert!(hierarchical_metadata.performance_metrics.clustering_time_ms > 0);
     }
 }

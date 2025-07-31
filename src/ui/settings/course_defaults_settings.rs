@@ -19,7 +19,6 @@ pub struct CourseDefaultSettingsProps {
 impl PartialEq for CourseDefaultSettingsProps {
     fn eq(&self, other: &Self) -> bool {
         self.settings == other.settings
-
     }
 }
 

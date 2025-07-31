@@ -49,9 +49,9 @@ impl ImportManager {
     }
 
     pub async fn validate_folder(&self, path: PathBuf) -> Result<FolderValidation> {
-        tokio::task::spawn_blocking(move || {
-            validate_folder_sync(&path)
-        }).await.unwrap_or_else(|e| Err(anyhow::anyhow!("Join error: {}", e)))
+        tokio::task::spawn_blocking(move || validate_folder_sync(&path))
+            .await
+            .unwrap_or_else(|e| Err(anyhow::anyhow!("Join error: {}", e)))
     }
 
     pub async fn import_from_local_folder(
@@ -61,7 +61,8 @@ impl ImportManager {
     ) -> Result<Course> {
         // Generate course title
         let course_title = course_title.unwrap_or_else(|| {
-            folder_path.file_name()
+            folder_path
+                .file_name()
                 .and_then(|name| name.to_str())
                 .unwrap_or("Imported Course")
                 .to_string()
@@ -71,7 +72,9 @@ impl ImportManager {
         tokio::task::spawn_blocking(move || {
             crate::ingest::local_folder::import_from_folder(&db, &folder_path, &course_title)
                 .map_err(|e| anyhow::anyhow!("Import error: {}", e))
-        }).await.unwrap_or_else(|e| Err(anyhow::anyhow!("Join error: {}", e)))
+        })
+        .await
+        .unwrap_or_else(|e| Err(anyhow::anyhow!("Join error: {}", e)))
     }
 
     pub async fn import_from_youtube(
@@ -84,7 +87,9 @@ impl ImportManager {
         tokio::task::spawn_blocking(move || {
             // This would need to be implemented in the youtube module
             Err(anyhow::anyhow!("YouTube import not yet implemented"))
-        }).await.unwrap_or_else(|e| Err(anyhow::anyhow!("Join error: {}", e)))
+        })
+        .await
+        .unwrap_or_else(|e| Err(anyhow::anyhow!("Join error: {}", e)))
     }
 
     pub async fn validate_youtube_playlist(&self, url: &str, _api_key: &str) -> Result<bool> {
@@ -92,7 +97,9 @@ impl ImportManager {
         tokio::task::spawn_blocking(move || {
             // This would need to be implemented
             Ok(crate::ingest::is_valid_youtube_url(&url))
-        }).await.unwrap_or_else(|e| Err(anyhow::anyhow!("Join error: {}", e)))
+        })
+        .await
+        .unwrap_or_else(|e| Err(anyhow::anyhow!("Join error: {}", e)))
     }
 }
 

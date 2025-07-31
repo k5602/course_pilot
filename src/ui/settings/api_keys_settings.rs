@@ -19,7 +19,6 @@ pub struct APIKeysSettingsProps {
 impl PartialEq for APIKeysSettingsProps {
     fn eq(&self, other: &Self) -> bool {
         self.settings == other.settings
-
     }
 }
 

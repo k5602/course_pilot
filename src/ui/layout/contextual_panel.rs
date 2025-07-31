@@ -1,4 +1,5 @@
 use crate::types::{ContextualPanelTab, Route, VideoContext};
+use crate::ui::components::GeminiChatbot;
 use crate::ui::use_app_state;
 use crate::ui::{NotesPanel, NotesPanelMode};
 use dioxus::prelude::*;
@@ -77,13 +78,13 @@ pub fn ContextualPanel() -> Element {
 
                 a {
                     role: "tab",
-                    class: if active_tab == ContextualPanelTab::Player {
+                    class: if active_tab == ContextualPanelTab::Chatbot {
                         "tab tab-active tab-bordered"
                     } else {
                         "tab hover:tab-active"
                     },
-                    onclick: move |_| app_state.write().contextual_panel.active_tab = ContextualPanelTab::Player,
-                    "Player"
+                    onclick: move |_| app_state.write().contextual_panel.active_tab = ContextualPanelTab::Chatbot,
+                    "Assistant"
                 }
             }
 
@@ -118,21 +119,8 @@ fn render_tab_content(
             };
             rsx!(NotesPanel { mode: mode })
         }
-        ContextualPanelTab::Player => rsx! {
-            div {
-                class: "p-4",
-                h2 { class: "text-lg font-semibold", "Video Player" }
-                p { class: "text-base-content/70", "Player will be implemented in a future phase." }
-                if let Some(ctx) = video_context {
-                    div {
-                        class: "mt-4 p-3 bg-base-200 rounded-lg",
-                        h3 { class: "font-medium text-sm", "Video Context:" }
-                        p { class: "text-xs text-base-content/70", "Module: {ctx.module_title}" }
-                        p { class: "text-xs text-base-content/70", "Video: {ctx.video_title}" }
-                        p { class: "text-xs text-base-content/70", "Index: {ctx.video_index}" }
-                    }
-                }
-            }
+        ContextualPanelTab::Chatbot => rsx! {
+            GeminiChatbot {}
         },
     }
 }

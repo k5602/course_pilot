@@ -9,7 +9,9 @@ pub mod clustering_settings;
 pub mod command_palette;
 pub mod dropdown;
 pub mod export_format_dialog;
+pub mod gemini_chatbot;
 pub mod import_modal;
+pub mod markdown_renderer;
 pub mod modal;
 pub mod progress;
 pub mod search_history;
@@ -18,6 +20,8 @@ pub mod tag_input;
 pub mod timer;
 pub mod toast;
 pub mod top_bar;
+pub mod video_player;
+pub mod youtube_player;
 
 // exports for convenience
 pub use analytics::{
@@ -30,9 +34,11 @@ pub use card::{ActionItem, BadgeData, Card, CardVariant};
 pub use clustering_settings::{ABTestResults, ClusteringSettings, ManualAdjustmentInterface};
 pub use dropdown::{DropdownItem, DropdownTrigger, UnifiedDropdown, create_course_actions};
 pub use export_format_dialog::ExportFormatDialog;
+pub use gemini_chatbot::GeminiChatbot;
 pub use import_modal::{
     ImportModal, ImportModalProps, ImportPreview, ImportSettings, ImportSource, ImportVideoPreview,
 };
+pub use markdown_renderer::{ChatMarkdownRenderer, MarkdownRenderer};
 pub use modal::{Badge, Modal, ModalVariant, alert_modal, confirmation_modal, form_modal};
 pub use progress::{ProgressBar, ProgressRing};
 pub use search_history::SearchHistory;
@@ -44,3 +50,5 @@ pub use toast::{
     use_toast_manager,
 };
 pub use top_bar::TopBar;
+pub use video_player::VideoPlayer;
+pub use youtube_player::YouTubePlayer;

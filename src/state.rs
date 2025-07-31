@@ -32,8 +32,6 @@ impl std::fmt::Display for StateError {
 
 impl std::error::Error for StateError {}
 
-
-
 /// Course management context
 #[derive(Clone, Copy)]
 pub struct CourseContext {
@@ -154,8 +152,6 @@ impl MobileSidebarContext {
     }
 }
 
-
-
 #[component]
 pub fn CourseContextProvider(children: Element) -> Element {
     use_context_provider(CourseContext::new);
@@ -191,8 +187,6 @@ pub fn MobileSidebarContextProvider(children: Element) -> Element {
     use_context_provider(MobileSidebarContext::new);
     rsx! { {children} }
 }
-
-
 
 /// Hook for reactive access to courses
 pub fn use_courses_reactive() -> Memo<Vec<Course>> {

@@ -753,11 +753,45 @@ fn YouTubeImportForm(
                             "Processing video data and extracting features...".to_string(),
                         );
 
-                        // Convert to course
+                        // Convert to course with proper structure
                         let raw_titles: Vec<String> =
                             sections.iter().map(|s| s.title.clone()).collect();
                         let course_name = metadata.title;
                         let mut course = crate::types::Course::new(course_name, raw_titles);
+
+                        // Create course structure with durations
+                        let course_sections: Vec<crate::types::Section> = sections
+                            .iter()
+                            .enumerate()
+                            .map(|(index, section)| crate::types::Section {
+                                title: section.title.clone(),
+                                video_index: index,
+                                duration: section.duration,
+                            })
+                            .collect();
+
+                        // Create a single module containing all videos (basic structure)
+                        let total_duration: std::time::Duration = sections.iter().map(|s| s.duration).sum();
+                        let module = crate::types::Module::new_basic(
+                            "All Videos".to_string(),
+                            course_sections,
+                        );
+
+                        // Create course structure metadata
+                        let structure_metadata = crate::types::StructureMetadata {
+                            total_videos: sections.len(),
+                            total_duration,
+                            estimated_duration_hours: Some(total_duration.as_secs_f32() / 3600.0),
+                            difficulty_level: None,
+                            structure_quality_score: None,
+                            content_coherence_score: None,
+                        };
+
+                        // Set the basic course structure
+                        course.structure = Some(crate::types::CourseStructure::new_basic(
+                            vec![module],
+                            structure_metadata,
+                        ));
 
                         update_job_progress(
                             crate::types::ImportStage::Processing,
@@ -866,31 +900,45 @@ fn YouTubeImportForm(
                                 // Clone course before using it in async block
                                 let course_for_callback = course.clone();
 
-                                // Use the backend's create functionality
-                                spawn(async move {
-                                    let _ = backend.create_course(course).await;
-                                });
+                                // Use the backend's create functionality and wait for completion
+                                match backend.create_course(course).await {
+                                    Ok(()) => {
+                                        update_job_progress(
+                                            crate::types::ImportStage::Saving,
+                                            100.0,
+                                            "Course saved successfully!".to_string(),
+                                        );
+                                        complete_stage(
+                                            crate::types::ImportStage::Saving,
+                                            save_start.elapsed().as_millis() as u64,
+                                        );
 
-                                update_job_progress(
-                                    crate::types::ImportStage::Saving,
-                                    100.0,
-                                    "Course saved successfully!".to_string(),
-                                );
-                                complete_stage(
-                                    crate::types::ImportStage::Saving,
-                                    save_start.elapsed().as_millis() as u64,
-                                );
+                                        // Mark job as completed
+                                        if let Some(mut job) = import_job() {
+                                            job.mark_completed();
+                                            import_job.set(Some(job));
+                                        }
 
-                                // Mark job as completed
-                                if let Some(mut job) = import_job() {
-                                    job.mark_completed();
-                                    import_job.set(Some(job));
+                                        toast_helpers::success(
+                                            "Course imported and structured successfully!",
+                                        );
+                                        on_import_complete.call(course_for_callback);
+                                    }
+                                    Err(e) => {
+                                        let error_msg = format!("Failed to save course: {e}");
+                                        log::error!("{}", error_msg);
+                                        
+                                        if let Some(mut job) = import_job() {
+                                            job.fail_stage(
+                                                crate::types::ImportStage::Saving,
+                                                error_msg.clone(),
+                                            );
+                                            import_job.set(Some(job));
+                                        }
+
+                                        toast_helpers::error(&error_msg);
+                                    }
                                 }
-
-                                toast_helpers::success(
-                                    "Course imported and structured successfully!",
-                                );
-                                on_import_complete.call(course_for_callback);
                             }
                             Err(e) => {
                                 let error_msg = format!("Failed to structure course: {e}");

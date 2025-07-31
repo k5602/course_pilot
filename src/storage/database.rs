@@ -233,7 +233,7 @@ pub fn optimize_database(db: &Database) -> Result<(), DatabaseError> {
     // Rebuild indexes if needed (only if database is large)
     let page_count: i64 = conn.query_row("PRAGMA page_count", [], |row| row.get(0))?;
     if page_count > 1000 {
-        info!("Database is large ({} pages), rebuilding indexes", page_count);
+        info!("Database is large ({page_count} pages), rebuilding indexes");
         conn.execute("REINDEX", [])?;
     }
 
@@ -244,10 +244,10 @@ pub fn optimize_database(db: &Database) -> Result<(), DatabaseError> {
     // Check for integrity issues
     let integrity_check: String = conn.query_row("PRAGMA integrity_check", [], |row| row.get(0))?;
     if integrity_check != "ok" {
-        warn!("Database integrity check failed: {}", integrity_check);
+        warn!("Database integrity check failed: {integrity_check}");
         return Err(DatabaseError::Io(std::io::Error::new(
             std::io::ErrorKind::InvalidData,
-            format!("Database integrity check failed: {}", integrity_check),
+            format!("Database integrity check failed: {integrity_check}"),
         )));
     }
 
@@ -256,7 +256,9 @@ pub fn optimize_database(db: &Database) -> Result<(), DatabaseError> {
 }
 
 /// Get database performance metrics
-pub fn get_database_performance_metrics(db: &Database) -> Result<DatabasePerformanceMetrics, DatabaseError> {
+pub fn get_database_performance_metrics(
+    db: &Database,
+) -> Result<DatabasePerformanceMetrics, DatabaseError> {
     let conn = db.get_conn()?;
 
     // Get basic database info
@@ -265,7 +267,8 @@ pub fn get_database_performance_metrics(db: &Database) -> Result<DatabasePerform
     let freelist_count: i64 = conn.query_row("PRAGMA freelist_count", [], |row| row.get(0))?;
 
     // Get table row counts
-    let courses_count: i64 = conn.query_row("SELECT COUNT(*) FROM courses", [], |row| row.get(0))?;
+    let courses_count: i64 =
+        conn.query_row("SELECT COUNT(*) FROM courses", [], |row| row.get(0))?;
     let plans_count: i64 = conn.query_row("SELECT COUNT(*) FROM plans", [], |row| row.get(0))?;
     let notes_count: i64 = conn.query_row("SELECT COUNT(*) FROM notes", [], |row| row.get(0))?;
 
@@ -333,7 +336,7 @@ pub fn init_db(db_path: &Path) -> Result<Database, DatabaseError> {
 
     // Run initial optimization
     if let Err(e) = optimize_database(&db) {
-        warn!("Initial database optimization failed: {}", e);
+        warn!("Initial database optimization failed: {e}");
         // Continue anyway as this is not critical for basic functionality
     }
 

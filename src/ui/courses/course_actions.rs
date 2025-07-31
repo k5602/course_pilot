@@ -48,6 +48,7 @@ pub fn CourseActions(props: CourseActionsProps) -> Element {
 
         Callback::new(move |_| {
             course_manager.delete_course.call(course_id);
+            course_manager.refresh.call(());
             on_delete_close.call(());
         })
     };

@@ -142,12 +142,7 @@ impl HierarchicalClusterer {
             let cluster_i = active_clusters.remove(std::cmp::max(min_i, min_j));
             let cluster_j = active_clusters.remove(std::cmp::min(min_i, min_j));
 
-            let merged_cluster = self.merge_clusters(
-                cluster_i,
-                cluster_j,
-                min_distance,
-                features,
-            );
+            let merged_cluster = self.merge_clusters(cluster_i, cluster_j, min_distance, features);
 
             // Update distance matrix
             self.update_distance_matrix(

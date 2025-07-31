@@ -410,8 +410,8 @@ fn probe_video_duration(path: &std::path::Path) -> Option<std::time::Duration> {
                 if let Some(stream) = ictx.streams().best(ffmpeg_next::media::Type::Video) {
                     let duration = stream.duration();
                     let time_base = stream.time_base();
-                    if let Some(dur) = duration {
-                        let secs = dur as f64 * f64::from(time_base);
+                    if duration >= 0 {
+                        let secs = duration as f64 * f64::from(time_base);
                         return Some(std::time::Duration::from_secs_f64(secs));
                     }
                 }
