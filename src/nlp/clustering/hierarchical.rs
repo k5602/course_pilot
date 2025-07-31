@@ -36,8 +36,6 @@ pub enum LinkageMethod {
 /// Internal cluster node for hierarchical clustering
 #[derive(Debug, Clone)]
 struct ClusterNode {
-    #[allow(dead_code)] // Used for debugging and future tree operations
-    id: usize,
     points: Vec<usize>,
     centroid: FeatureVector,
     height: f32,
@@ -48,7 +46,6 @@ struct ClusterNode {
 /// Distance matrix for hierarchical clustering
 struct DistanceMatrix {
     distances: Vec<Vec<f32>>,
-    #[allow(dead_code)] // Used for validation and debugging
     size: usize,
 }
 
@@ -127,7 +124,6 @@ impl HierarchicalClusterer {
             .iter()
             .enumerate()
             .map(|(i, feature)| ClusterNode {
-                id: i,
                 points: vec![i],
                 centroid: feature.clone(),
                 height: 0.0,
@@ -137,7 +133,6 @@ impl HierarchicalClusterer {
             .collect();
 
         let mut cluster_distances = distance_matrix.distances.clone();
-        let mut next_cluster_id = features.len();
 
         while active_clusters.len() > 1 {
             // Find the pair of clusters with minimum distance
@@ -151,7 +146,6 @@ impl HierarchicalClusterer {
                 cluster_i,
                 cluster_j,
                 min_distance,
-                next_cluster_id,
                 features,
             );
 
@@ -166,7 +160,6 @@ impl HierarchicalClusterer {
             );
 
             active_clusters.push(merged_cluster);
-            next_cluster_id += 1;
 
             // Stop if we've reached the maximum number of clusters
             if active_clusters.len() <= self.max_clusters {
@@ -195,7 +188,6 @@ impl HierarchicalClusterer {
             }
 
             Ok(ClusterNode {
-                id: next_cluster_id,
                 points: root_points,
                 centroid: FeatureVector::new(root_centroid_features),
                 height: 1.0,
@@ -239,7 +231,6 @@ impl HierarchicalClusterer {
         cluster_i: ClusterNode,
         cluster_j: ClusterNode,
         distance: f32,
-        new_id: usize,
         features: &[FeatureVector],
     ) -> ClusterNode {
         let mut merged_points = cluster_i.points.clone();
@@ -249,7 +240,6 @@ impl HierarchicalClusterer {
         let merged_centroid = self.calculate_merged_centroid(&cluster_i, &cluster_j, features);
 
         ClusterNode {
-            id: new_id,
             points: merged_points,
             centroid: merged_centroid,
             height: distance,
@@ -529,8 +519,7 @@ impl ContentClusterer for HierarchicalClusterer {
         analysis: &ContentAnalysis,
         _target_clusters: usize,
     ) -> Result<Vec<VideoCluster>, ClusteringError> {
-        // Hierarchical clustering doesn't use target_clusters directly
-        // Instead, it uses distance_threshold to determine clusters
+        //  uses distance_threshold to determine clusters
         self.cluster_hierarchical(&analysis.feature_vectors)
     }
 

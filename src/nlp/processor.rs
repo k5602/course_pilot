@@ -1881,8 +1881,12 @@ fn convert_balanced_clusters_to_modules_with_topics(
         let total_duration = sections.iter().map(|s| s.duration).sum();
 
         // Generate module title from topics or use default
-        let module_title = if let Some(topic) = topics.get(i % topics.len()) {
-            format!("Module {}: {}", i + 1, topic.keyword)
+        let module_title = if !topics.is_empty() {
+            if let Some(topic) = topics.get(i % topics.len()) {
+                format!("Module {}: {}", i + 1, topic.keyword)
+            } else {
+                format!("Module {}", i + 1)
+            }
         } else {
             format!("Module {}", i + 1)
         };
@@ -1968,6 +1972,169 @@ mod tests {
         assert_eq!(calculate_optimal_chunk_size(10), 3);
         assert_eq!(calculate_optimal_chunk_size(30), 6);
         assert_eq!(calculate_optimal_chunk_size(100), 14);
+    }
+
+    #[test]
+    fn test_lda_clustering_integration() {
+        let titles = vec![
+            "Introduction to Programming Basics".to_string(),
+            "Programming Fundamentals Overview".to_string(),
+            "Advanced Programming Techniques".to_string(),
+            "Database Design Principles".to_string(),
+            "SQL Database Fundamentals".to_string(),
+            "Database Optimization Strategies".to_string(),
+            "Web Development Introduction".to_string(),
+            "Frontend Web Development".to_string(),
+            "Backend Web Development".to_string(),
+        ];
+
+        let result = apply_lda_clustering(&titles);
+        assert!(result.is_ok(), "LDA clustering should succeed");
+
+        let (modules, metadata) = result.unwrap();
+        assert!(!modules.is_empty(), "Should produce modules");
+        assert_eq!(metadata.algorithm_used, crate::types::ClusteringAlgorithm::Lda);
+        assert!(metadata.quality_score > 0.0, "Should have quality score");
+        assert_eq!(metadata.performance_metrics.input_metrics.video_count, titles.len());
+
+        // Validate modules structure
+        let total_sections: usize = modules.iter().map(|m| m.sections.len()).sum();
+        assert_eq!(total_sections, titles.len(), "All videos should be assigned");
+
+        for module in &modules {
+            assert!(!module.title.is_empty(), "Module should have title");
+            assert!(!module.sections.is_empty(), "Module should have sections");
+        }
+    }
+
+    #[test]
+    fn test_hierarchical_clustering_integration() {
+        let titles = vec![
+            "Programming Basics Part 1".to_string(),
+            "Programming Basics Part 2".to_string(),
+            "Database Design Part 1".to_string(),
+            "Database Design Part 2".to_string(),
+            "Web Development Part 1".to_string(),
+            "Web Development Part 2".to_string(),
+        ];
+
+        let result = apply_hierarchical_clustering(&titles);
+        assert!(result.is_ok(), "Hierarchical clustering should succeed");
+
+        let (modules, metadata) = result.unwrap();
+        assert!(!modules.is_empty(), "Should produce modules");
+        assert_eq!(metadata.algorithm_used, crate::types::ClusteringAlgorithm::Hierarchical);
+        assert!(metadata.quality_score > 0.0, "Should have quality score");
+        assert_eq!(metadata.performance_metrics.input_metrics.video_count, titles.len());
+
+        // Validate modules structure
+        let total_sections: usize = modules.iter().map(|m| m.sections.len()).sum();
+        assert_eq!(total_sections, titles.len(), "All videos should be assigned");
+
+        for module in &modules {
+            assert!(!module.title.is_empty(), "Module should have title");
+            assert!(!module.sections.is_empty(), "Module should have sections");
+        }
+    }
+
+    #[test]
+    fn test_clustering_strategy_selection() {
+        let titles = vec![
+            "Introduction to Machine Learning".to_string(),
+            "Linear Regression Basics".to_string(),
+            "Neural Networks Introduction".to_string(),
+            "Deep Learning Fundamentals".to_string(),
+            "Computer Vision Basics".to_string(),
+            "Natural Language Processing".to_string(),
+        ];
+
+        // Test LDA strategy
+        let lda_result = apply_lda_clustering(&titles);
+        assert!(lda_result.is_ok(), "LDA strategy should work");
+
+        // Test Hierarchical strategy
+        let hierarchical_result = apply_hierarchical_clustering(&titles);
+        assert!(hierarchical_result.is_ok(), "Hierarchical strategy should work");
+
+        // Compare results
+        let (lda_modules, lda_metadata) = lda_result.unwrap();
+        let (hierarchical_modules, hierarchical_metadata) = hierarchical_result.unwrap();
+
+        // Both should produce valid results
+        assert!(!lda_modules.is_empty());
+        assert!(!hierarchical_modules.is_empty());
+        assert!(lda_metadata.quality_score > 0.0);
+        assert!(hierarchical_metadata.quality_score > 0.0);
+
+        // Both should assign all videos
+        let lda_total: usize = lda_modules.iter().map(|m| m.sections.len()).sum();
+        let hierarchical_total: usize = hierarchical_modules.iter().map(|m| m.sections.len()).sum();
+        assert_eq!(lda_total, titles.len());
+        assert_eq!(hierarchical_total, titles.len());
+    }
+
+    #[test]
+    fn test_clustering_with_structure_course() {
+        let titles = vec![
+            "Module 1: Programming Fundamentals".to_string(),
+            "Lesson 1.1: Variables and Types".to_string(),
+            "Lesson 1.2: Control Structures".to_string(),
+            "Module 2: Data Structures".to_string(),
+            "Lesson 2.1: Arrays and Lists".to_string(),
+            "Lesson 2.2: Trees and Graphs".to_string(),
+            "Module 3: Algorithms".to_string(),
+            "Lesson 3.1: Sorting Algorithms".to_string(),
+            "Lesson 3.2: Search Algorithms".to_string(),
+        ];
+
+        let result = structure_course(titles.clone());
+        assert!(result.is_ok(), "Structure course should succeed");
+
+        let course_structure = result.unwrap();
+        assert!(!course_structure.modules.is_empty(), "Should have modules");
+
+        // Validate that clustering metadata is present
+        if let Some(clustering_metadata) = &course_structure.clustering_metadata {
+            assert!(clustering_metadata.quality_score > 0.0);
+            assert_eq!(clustering_metadata.performance_metrics.input_metrics.video_count, titles.len());
+        }
+        assert_eq!(course_structure.metadata.total_videos, titles.len());
+
+        // Check that all videos are assigned
+        let total_sections: usize = course_structure.modules.iter().map(|m| m.sections.len()).sum();
+        assert_eq!(total_sections, titles.len());
+    }
+
+    #[test]
+    fn test_clustering_performance_metrics() {
+        let titles = vec![
+            "Introduction to Data Science".to_string(),
+            "Statistics Fundamentals".to_string(),
+            "Python for Data Science".to_string(),
+            "Data Visualization".to_string(),
+            "Machine Learning Basics".to_string(),
+            "Supervised Learning".to_string(),
+            "Unsupervised Learning".to_string(),
+            "Deep Learning Introduction".to_string(),
+        ];
+
+        // Test LDA performance
+        let lda_result = apply_lda_clustering(&titles);
+        assert!(lda_result.is_ok());
+
+        let (_, lda_metadata) = lda_result.unwrap();
+        assert!(lda_metadata.processing_time_ms > 0, "Should have processing time");
+        assert!(lda_metadata.performance_metrics.total_processing_time_ms > 0);
+        assert!(lda_metadata.performance_metrics.clustering_time_ms > 0);
+
+        // Test Hierarchical performance
+        let hierarchical_result = apply_hierarchical_clustering(&titles);
+        assert!(hierarchical_result.is_ok());
+
+        let (_, hierarchical_metadata) = hierarchical_result.unwrap();
+        assert!(hierarchical_metadata.processing_time_ms > 0, "Should have processing time");
+        assert!(hierarchical_metadata.performance_metrics.total_processing_time_ms > 0);
+        assert!(hierarchical_metadata.performance_metrics.clustering_time_ms > 0);
     }
 }
 // ============================================================================
