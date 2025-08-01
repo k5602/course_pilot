@@ -142,6 +142,83 @@ impl Database {
 /// Type alias for a pooled connection
 type PooledConnection = r2d2::PooledConnection<SqliteConnectionManager>;
 
+/// Helper function to detect if a title looks like a YouTube video
+fn is_youtube_video_title(title: &str) -> bool {
+    // Simple heuristics to detect YouTube videos
+    title.contains("youtube.com") || title.contains("youtu.be") || 
+    title.contains("watch?v=") || title.len() > 50 // YouTube titles are often longer
+}
+
+/// Helper function to extract YouTube video ID from title if present
+fn extract_youtube_video_id_from_title(title: &str) -> Option<String> {
+    // Try to extract video ID from URL patterns in title
+    if let Some(start) = title.find("watch?v=") {
+        let id_start = start + 8; // length of "watch?v="
+        if let Some(end) = title[id_start..].find('&') {
+            Some(title[id_start..id_start + end].to_string())
+        } else if let Some(end) = title[id_start..].find(' ') {
+            Some(title[id_start..id_start + end].to_string())
+        } else {
+            let remaining = &title[id_start..];
+            if remaining.len() == 11 { // YouTube video IDs are 11 characters
+                Some(remaining.to_string())
+            } else {
+                None
+            }
+        }
+    } else if let Some(start) = title.find("youtu.be/") {
+        let id_start = start + 9; // length of "youtu.be/"
+        if let Some(end) = title[id_start..].find('?') {
+            Some(title[id_start..id_start + end].to_string())
+        } else if let Some(end) = title[id_start..].find(' ') {
+            Some(title[id_start..id_start + end].to_string())
+        } else {
+            let remaining = &title[id_start..];
+            if remaining.len() == 11 {
+                Some(remaining.to_string())
+            } else {
+                None
+            }
+        }
+    } else {
+        None
+    }
+}
+
+/// Create fallback video metadata from raw titles with intelligent detection
+fn create_fallback_video_metadata(raw_titles: &[String]) -> Vec<crate::types::VideoMetadata> {
+    raw_titles.iter().map(|title| {
+        // Try to detect if this is a YouTube video based on title patterns
+        if is_youtube_video_title(title) {
+            if let Some(video_id) = extract_youtube_video_id_from_title(title) {
+                crate::types::VideoMetadata::new_youtube(
+                    title.clone(),
+                    video_id.clone(),
+                    format!("https://www.youtube.com/watch?v={}", video_id)
+                )
+            } else {
+                // YouTube video but can't extract ID - create basic YouTube metadata
+                crate::types::VideoMetadata {
+                    title: title.clone(),
+                    source_url: None,
+                    video_id: None,
+                    duration_seconds: None,
+                    thumbnail_url: None,
+                    description: None,
+                    upload_date: None,
+                    author: None,
+                    view_count: None,
+                    tags: Vec::new(),
+                    is_local: false,
+                }
+            }
+        } else {
+            // Assume local video
+            crate::types::VideoMetadata::new_local(title.clone(), title.clone())
+        }
+    }).collect()
+}
+
 /// Initialize database tables
 fn init_tables(conn: &mut Connection) -> Result<(), DatabaseError> {
     let tx = conn.transaction()?;
@@ -461,37 +538,13 @@ pub fn load_courses(db: &Database) -> Result<Vec<Course>, DatabaseError> {
 
             // Load videos with fallback to raw_titles for backward compatibility
             let videos: Vec<crate::types::VideoMetadata> = if let Some(videos_json) = videos_json {
-                serde_json::from_str(&videos_json).unwrap_or_else(|_| {
-                    // Fallback: create basic video metadata from raw_titles
-                    raw_titles.iter().map(|title| crate::types::VideoMetadata {
-                        title: title.clone(),
-                        source_url: None,
-                        video_id: None,
-                        duration_seconds: None,
-                        thumbnail_url: None,
-                        description: None,
-                        upload_date: None,
-                        author: None,
-                        view_count: None,
-                        tags: Vec::new(),
-                        is_local: false,
-                    }).collect()
+                serde_json::from_str(&videos_json).unwrap_or_else(|e| {
+                    log::warn!("Failed to deserialize video metadata, using intelligent fallback: {}", e);
+                    create_fallback_video_metadata(&raw_titles)
                 })
             } else {
-                // Fallback: create basic video metadata from raw_titles
-                raw_titles.iter().map(|title| crate::types::VideoMetadata {
-                    title: title.clone(),
-                    source_url: None,
-                    video_id: None,
-                    duration_seconds: None,
-                    thumbnail_url: None,
-                    description: None,
-                    upload_date: None,
-                    author: None,
-                    view_count: None,
-                    tags: Vec::new(),
-                    is_local: false,
-                }).collect()
+                log::info!("No video metadata found, creating from raw_titles");
+                create_fallback_video_metadata(&raw_titles)
             };
 
             let structure = structure_json
@@ -558,37 +611,13 @@ pub fn get_course_by_id(db: &Database, course_id: &Uuid) -> Result<Option<Course
 
             // Load videos with fallback to raw_titles for backward compatibility
             let videos: Vec<crate::types::VideoMetadata> = if let Some(videos_json) = videos_json {
-                serde_json::from_str(&videos_json).unwrap_or_else(|_| {
-                    // Fallback: create basic video metadata from raw_titles
-                    raw_titles.iter().map(|title| crate::types::VideoMetadata {
-                        title: title.clone(),
-                        source_url: None,
-                        video_id: None,
-                        duration_seconds: None,
-                        thumbnail_url: None,
-                        description: None,
-                        upload_date: None,
-                        author: None,
-                        view_count: None,
-                        tags: Vec::new(),
-                        is_local: false,
-                    }).collect()
+                serde_json::from_str(&videos_json).unwrap_or_else(|e| {
+                    log::warn!("Failed to deserialize video metadata for course {}, using intelligent fallback: {}", id, e);
+                    create_fallback_video_metadata(&raw_titles)
                 })
             } else {
-                // Fallback: create basic video metadata from raw_titles
-                raw_titles.iter().map(|title| crate::types::VideoMetadata {
-                    title: title.clone(),
-                    source_url: None,
-                    video_id: None,
-                    duration_seconds: None,
-                    thumbnail_url: None,
-                    description: None,
-                    upload_date: None,
-                    author: None,
-                    view_count: None,
-                    tags: Vec::new(),
-                    is_local: false,
-                }).collect()
+                log::info!("No video metadata found for course {}, creating from raw_titles", id);
+                create_fallback_video_metadata(&raw_titles)
             };
 
             let structure = structure_json
