@@ -23,6 +23,8 @@ fn create_http_client() -> Result<reqwest::Client, ImportError> {
 pub struct YoutubeSection {
     pub title: String,
     pub duration: Duration,
+    pub video_id: Option<String>,
+    pub url: Option<String>,
 }
 
 /// YouTube playlist metadata
@@ -149,11 +151,17 @@ pub async fn import_from_youtube(
         let videos_resp: VideosResponse = resp.json().await.map_err(|e| {
             ImportError::Network(format!("Failed to parse video details response: {e}"))
         })?;
-        for item in videos_resp.items {
+        for (item, video_id) in videos_resp.items.iter().zip(chunk.iter()) {
             let title = clean_video_title(&item.snippet.title);
             let duration = parse_iso8601_duration(&item.content_details.duration)
                 .unwrap_or_else(|| Duration::from_secs(0));
-            sections.push(YoutubeSection { title, duration });
+            let url = format!("https://www.youtube.com/watch?v={}", video_id);
+            sections.push(YoutubeSection { 
+                title, 
+                duration, 
+                video_id: Some(video_id.to_string()),
+                url: Some(url),
+            });
         }
     }
 

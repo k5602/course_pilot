@@ -426,8 +426,9 @@ fn VideoContentItem(props: VideoContentItemProps) -> Element {
     let video_title = use_memo(move || {
         let courses = app_state.read().courses.clone();
         if let Some(course) = courses.iter().find(|c| c.id == props.course_id) {
-            course.raw_titles.get(props.video_index).cloned()
-                .unwrap_or_else(|| format!("Video {}", props.video_index + 1))
+            course.get_video_title(props.video_index)
+                .unwrap_or(&format!("Video {}", props.video_index + 1))
+                .to_string()
         } else {
             format!("Video {}", props.video_index + 1)
         }
@@ -437,9 +438,9 @@ fn VideoContentItem(props: VideoContentItemProps) -> Element {
     let toggle_video_completion = {
         let mut video_completed = video_completed;
         let mut is_updating = is_updating;
-        let plan_id = props.plan_id;
-        let video_index = props.video_index;
-        let session_item_index = props.session_item_index;
+        let _plan_id = props.plan_id;
+        let _video_index = props.video_index;
+        let _session_item_index = props.session_item_index;
 
         move |_| {
             let new_state = !video_completed();
@@ -474,52 +475,56 @@ fn VideoContentItem(props: VideoContentItemProps) -> Element {
         let course_id = props.course_id;
         let video_index = props.video_index;
         let video_title = video_title.clone();
-        let app_state = app_state.clone();
+        let db = use_context::<std::sync::Arc<crate::storage::Database>>();
 
         move |_| {
             let course_id = course_id;
             let video_index = video_index;
             let video_title = video_title();
-            let app_state = app_state.clone();
+            let db = db.clone();
             
             spawn(async move {
-                // Get the course data from app state
-                let courses = app_state.read().courses.clone();
-                
-                if let Some(course) = courses.iter().find(|c| c.id == course_id) {
-                    // Get the video title from raw_titles
-                    let actual_video_title = if let Some(title) = course.raw_titles.get(video_index) {
-                        title.clone()
-                    } else {
-                        log::error!("Video index {} not found in course raw_titles", video_index);
-                        toast_helpers::error("Video not found in course data");
-                        return;
-                    };
-
-                    // Determine video source type and create appropriate VideoSource
-                    let video_source = if is_youtube_video(&actual_video_title) {
-                        // Try to extract YouTube video ID from title or URL
-                        if let Some(video_id) = extract_youtube_video_id(&actual_video_title) {
-                            VideoSource::YouTube {
-                                video_id,
-                                playlist_id: None, // TODO: Could extract playlist ID if available
-                                title: clean_youtube_title(&actual_video_title),
+                // Get the course data directly from database to ensure consistency
+                match tokio::task::spawn_blocking({
+                    let db = db.clone();
+                    move || crate::storage::get_course_by_id(&db, &course_id)
+                }).await {
+                    Ok(Ok(Some(course))) => {
+                    // Try to get video metadata first, fallback to raw_titles
+                    let video_source = if let Some(video_metadata) = course.get_video_metadata(video_index) {
+                        // Use structured video metadata
+                        if let Some(source) = video_metadata.get_video_source() {
+                            source
+                        } else {
+                            log::error!("Could not create video source from metadata for video index {}", video_index);
+                            toast_helpers::error("Invalid video metadata");
+                            return;
+                        }
+                    } else if let Some(title) = course.get_video_title(video_index) {
+                        // Fallback to raw title analysis
+                        if is_youtube_video(title) {
+                            if let Some(video_id) = extract_youtube_video_id(title) {
+                                VideoSource::YouTube {
+                                    video_id,
+                                    playlist_id: None,
+                                    title: clean_youtube_title(title),
+                                }
+                            } else {
+                                log::warn!("Could not extract YouTube video ID from title: {}", title);
+                                toast_helpers::error("Could not extract YouTube video ID");
+                                return;
                             }
                         } else {
-                            // Fallback: create a YouTube source with a placeholder ID
-                            log::warn!("Could not extract YouTube video ID from title: {}", actual_video_title);
-                            VideoSource::YouTube {
-                                video_id: "dQw4w9WgXcQ".to_string(), // Placeholder
-                                playlist_id: None,
-                                title: actual_video_title.clone(),
+                            // Assume it's a local video
+                            VideoSource::Local {
+                                path: std::path::PathBuf::from(title),
+                                title: title.to_string(),
                             }
                         }
                     } else {
-                        // Assume it's a local video
-                        VideoSource::Local {
-                            path: std::path::PathBuf::from(&actual_video_title),
-                            title: actual_video_title.clone(),
-                        }
+                        log::error!("Video index {} not found in course", video_index);
+                        toast_helpers::error("Video not found in course data");
+                        return;
                     };
 
                     // Create video player manager and play the video
@@ -540,9 +545,19 @@ fn VideoContentItem(props: VideoContentItemProps) -> Element {
                             toast_helpers::error("Failed to initialize video player");
                         }
                     }
-                } else {
-                    log::error!("Course not found: {}", course_id);
-                    toast_helpers::error("Course not found");
+                    }
+                    Ok(Ok(None)) => {
+                        log::error!("Course not found in database: {}", course_id);
+                        toast_helpers::error("Course not found");
+                    }
+                    Ok(Err(e)) => {
+                        log::error!("Database error loading course {}: {}", course_id, e);
+                        toast_helpers::error("Failed to load course data");
+                    }
+                    Err(e) => {
+                        log::error!("Task error loading course {}: {}", course_id, e);
+                        toast_helpers::error("Failed to load course data");
+                    }
                 }
             });
         }
@@ -628,7 +643,7 @@ fn VideoContentItem(props: VideoContentItemProps) -> Element {
     });
 
     // Dynamic icons and styling based on completion state
-    let check_icon = if video_completed() {
+    let _check_icon = if video_completed() {
         rsx! {
             Icon {
                 icon: FaCheckDouble,

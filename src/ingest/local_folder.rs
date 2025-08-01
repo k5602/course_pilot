@@ -20,6 +20,7 @@ use walkdir::WalkDir;
 pub struct LocalVideoSection {
     pub title: String,
     pub duration: std::time::Duration,
+    pub file_path: Option<String>,
 }
 
 /// Enhanced local ingest with nested folder support
@@ -383,7 +384,11 @@ pub fn import_from_local_folder(path: &Path) -> Result<Vec<LocalVideoSection>, I
         });
         let duration = probe_video_duration(&file_info.path)
             .unwrap_or_else(|| std::time::Duration::from_secs(0));
-        sections.push(LocalVideoSection { title, duration });
+        sections.push(LocalVideoSection { 
+            title, 
+            duration,
+            file_path: Some(file_info.path.to_string_lossy().to_string()),
+        });
     }
 
     if sections.is_empty() {
@@ -406,7 +411,7 @@ fn probe_video_duration(path: &std::path::Path) -> Option<std::time::Duration> {
     #[cfg(feature = "ffmpeg")]
     {
         if let Ok(_) = ffmpeg_next::init() {
-            if let Ok(mut ictx) = ffmpeg_next::format::input(&path) {
+            if let Ok(ictx) = ffmpeg_next::format::input(&path) {
                 if let Some(stream) = ictx.streams().best(ffmpeg_next::media::Type::Video) {
                     let duration = stream.duration();
                     let time_base = stream.time_base();
@@ -697,12 +702,23 @@ pub fn import_from_folder(
         clustering_metadata: None,
     };
 
+    // Create video metadata from video files
+    let videos: Vec<crate::types::VideoMetadata> = video_files
+        .iter()
+        .map(|video_file| {
+            let title = extract_title_from_path(&video_file.path)
+                .unwrap_or_else(|| video_file.name.clone());
+            crate::types::VideoMetadata::new_local(title, video_file.path.to_string_lossy().to_string())
+        })
+        .collect();
+
     // Create course
     let course = Course {
         id: Uuid::new_v4(),
         name: course_title.to_string(),
         created_at: Utc::now(),
         raw_titles,
+        videos,
         structure: Some(structure),
     };
 

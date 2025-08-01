@@ -154,6 +154,7 @@ fn init_tables(conn: &mut Connection) -> Result<(), DatabaseError> {
             name TEXT NOT NULL,
             created_at INTEGER NOT NULL,
             raw_titles TEXT NOT NULL,
+            videos TEXT,
             structure TEXT
         );
         "#,
@@ -355,6 +356,14 @@ pub fn save_course(db: &Database, course: &Course) -> Result<(), DatabaseError> 
         DatabaseError::Serialization(e)
     })?;
 
+    let videos_json = serde_json::to_string(&course.videos).map_err(|e| {
+        error!(
+            "Failed to serialize videos for course {}: {}",
+            course.name, e
+        );
+        DatabaseError::Serialization(e)
+    })?;
+
     let structure_json = course
         .structure
         .as_ref()
@@ -378,14 +387,15 @@ pub fn save_course(db: &Database, course: &Course) -> Result<(), DatabaseError> 
 
     conn.execute(
         r#"
-        INSERT OR REPLACE INTO courses (id, name, created_at, raw_titles, structure)
-        VALUES (?1, ?2, ?3, ?4, ?5)
+        INSERT OR REPLACE INTO courses (id, name, created_at, raw_titles, videos, structure)
+        VALUES (?1, ?2, ?3, ?4, ?5, ?6)
         "#,
         params![
             course.id.to_string(),
             course.name,
             course.created_at.timestamp(),
             raw_titles_json,
+            videos_json,
             structure_json
         ],
     )
@@ -414,7 +424,7 @@ pub fn load_courses(db: &Database) -> Result<Vec<Course>, DatabaseError> {
     let mut stmt = conn
         .prepare(
             r#"
-        SELECT id, name, created_at, raw_titles, structure
+        SELECT id, name, created_at, raw_titles, videos, structure
         FROM courses
         ORDER BY created_at DESC
         "#,
@@ -438,7 +448,8 @@ pub fn load_courses(db: &Database) -> Result<Vec<Course>, DatabaseError> {
             let name: String = row.get(1)?;
             let created_at: i64 = row.get(2)?;
             let raw_titles_json: String = row.get(3)?;
-            let structure_json: Option<String> = row.get(4)?;
+            let videos_json: Option<String> = row.get(4)?;
+            let structure_json: Option<String> = row.get(5)?;
 
             let raw_titles: Vec<String> = serde_json::from_str(&raw_titles_json).map_err(|e| {
                 rusqlite::Error::FromSqlConversionFailure(
@@ -448,11 +459,46 @@ pub fn load_courses(db: &Database) -> Result<Vec<Course>, DatabaseError> {
                 )
             })?;
 
+            // Load videos with fallback to raw_titles for backward compatibility
+            let videos: Vec<crate::types::VideoMetadata> = if let Some(videos_json) = videos_json {
+                serde_json::from_str(&videos_json).unwrap_or_else(|_| {
+                    // Fallback: create basic video metadata from raw_titles
+                    raw_titles.iter().map(|title| crate::types::VideoMetadata {
+                        title: title.clone(),
+                        source_url: None,
+                        video_id: None,
+                        duration_seconds: None,
+                        thumbnail_url: None,
+                        description: None,
+                        upload_date: None,
+                        author: None,
+                        view_count: None,
+                        tags: Vec::new(),
+                        is_local: false,
+                    }).collect()
+                })
+            } else {
+                // Fallback: create basic video metadata from raw_titles
+                raw_titles.iter().map(|title| crate::types::VideoMetadata {
+                    title: title.clone(),
+                    source_url: None,
+                    video_id: None,
+                    duration_seconds: None,
+                    thumbnail_url: None,
+                    description: None,
+                    upload_date: None,
+                    author: None,
+                    view_count: None,
+                    tags: Vec::new(),
+                    is_local: false,
+                }).collect()
+            };
+
             let structure = structure_json
                 .map(|json| {
                     serde_json::from_str(&json).map_err(|e| {
                         rusqlite::Error::FromSqlConversionFailure(
-                            4,
+                            5,
                             rusqlite::types::Type::Text,
                             Box::new(e),
                         )
@@ -465,6 +511,7 @@ pub fn load_courses(db: &Database) -> Result<Vec<Course>, DatabaseError> {
                 name,
                 created_at: DateTime::from_timestamp(created_at, 0).unwrap_or_else(Utc::now),
                 raw_titles,
+                videos,
                 structure,
             })
         })?
@@ -478,7 +525,7 @@ pub fn get_course_by_id(db: &Database, course_id: &Uuid) -> Result<Option<Course
     let conn = db.get_conn()?;
     let mut stmt = conn.prepare(
         r#"
-        SELECT id, name, created_at, raw_titles, structure
+        SELECT id, name, created_at, raw_titles, videos, structure
         FROM courses
         WHERE id = ?1
         "#,
@@ -498,9 +545,10 @@ pub fn get_course_by_id(db: &Database, course_id: &Uuid) -> Result<Option<Course
             let name: String = row.get(1)?;
             let created_at: i64 = row.get(2)?;
             let raw_titles_json: String = row.get(3)?;
-            let structure_json: Option<String> = row.get(4)?;
+            let videos_json: Option<String> = row.get(4)?;
+            let structure_json: Option<String> = row.get(5)?;
 
-            let raw_titles = serde_json::from_str(&raw_titles_json).map_err(|e| {
+            let raw_titles: Vec<String> = serde_json::from_str(&raw_titles_json).map_err(|e| {
                 rusqlite::Error::FromSqlConversionFailure(
                     3,
                     rusqlite::types::Type::Text,
@@ -508,12 +556,47 @@ pub fn get_course_by_id(db: &Database, course_id: &Uuid) -> Result<Option<Course
                 )
             })?;
 
+            // Load videos with fallback to raw_titles for backward compatibility
+            let videos: Vec<crate::types::VideoMetadata> = if let Some(videos_json) = videos_json {
+                serde_json::from_str(&videos_json).unwrap_or_else(|_| {
+                    // Fallback: create basic video metadata from raw_titles
+                    raw_titles.iter().map(|title| crate::types::VideoMetadata {
+                        title: title.clone(),
+                        source_url: None,
+                        video_id: None,
+                        duration_seconds: None,
+                        thumbnail_url: None,
+                        description: None,
+                        upload_date: None,
+                        author: None,
+                        view_count: None,
+                        tags: Vec::new(),
+                        is_local: false,
+                    }).collect()
+                })
+            } else {
+                // Fallback: create basic video metadata from raw_titles
+                raw_titles.iter().map(|title| crate::types::VideoMetadata {
+                    title: title.clone(),
+                    source_url: None,
+                    video_id: None,
+                    duration_seconds: None,
+                    thumbnail_url: None,
+                    description: None,
+                    upload_date: None,
+                    author: None,
+                    view_count: None,
+                    tags: Vec::new(),
+                    is_local: false,
+                }).collect()
+            };
+
             let structure = structure_json
                 .map(|json| serde_json::from_str(&json))
                 .transpose()
                 .map_err(|e| {
                     rusqlite::Error::FromSqlConversionFailure(
-                        4,
+                        5,
                         rusqlite::types::Type::Text,
                         Box::new(e),
                     )
@@ -524,6 +607,7 @@ pub fn get_course_by_id(db: &Database, course_id: &Uuid) -> Result<Option<Course
                 name,
                 created_at: DateTime::from_timestamp(created_at, 0).unwrap_or_else(Utc::now),
                 raw_titles,
+                videos,
                 structure,
             })
         })
@@ -859,6 +943,8 @@ pub fn get_courses_by_clustering_quality(
         // Check if clustering quality meets threshold
         if let Some(clustering_metadata) = &structure.clustering_metadata {
             if clustering_metadata.quality_score >= min_quality {
+                let raw_titles: Vec<String> = parse_json_sqlite(&row.get::<_, String>(3)?)?;
+                let videos = raw_titles.iter().map(|title| crate::types::VideoMetadata::new_local(title.clone(), "".to_string())).collect();
                 return Ok(Some(Course {
                     id: parse_uuid_sqlite(&row.get::<_, String>(0)?, 0)?,
                     name: row.get(1)?,
@@ -871,7 +957,8 @@ pub fn get_courses_by_clustering_quality(
                             )
                         })?
                         .with_timezone(&Utc),
-                    raw_titles: parse_json_sqlite(&row.get::<_, String>(3)?)?,
+                    raw_titles,
+                    videos,
                     structure: Some(structure),
                 }));
             }
@@ -1021,6 +1108,8 @@ pub fn get_similar_courses_by_clustering(
                 calculate_clustering_similarity(&reference_metadata, clustering_metadata);
 
             if similarity >= similarity_threshold {
+                let raw_titles: Vec<String> = parse_json_sqlite(&row.get::<_, String>(3)?)?;
+                let videos = raw_titles.iter().map(|title| crate::types::VideoMetadata::new_local(title.clone(), "".to_string())).collect();
                 return Ok(Some(Course {
                     id: parse_uuid_sqlite(&row.get::<_, String>(0)?, 0)?,
                     name: row.get(1)?,
@@ -1033,7 +1122,8 @@ pub fn get_similar_courses_by_clustering(
                             )
                         })?
                         .with_timezone(&Utc),
-                    raw_titles: parse_json_sqlite(&row.get::<_, String>(3)?)?,
+                    raw_titles,
+                    videos,
                     structure: Some(structure),
                 }));
             }

@@ -15,8 +15,25 @@ pub struct Course {
     pub id: Uuid,
     pub name: String,
     pub created_at: DateTime<Utc>,
-    pub raw_titles: Vec<String>,
+    pub raw_titles: Vec<String>, // Keep for backward compatibility
+    pub videos: Vec<VideoMetadata>, // New structured video data
     pub structure: Option<CourseStructure>,
+}
+
+/// Video metadata for courses
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+pub struct VideoMetadata {
+    pub title: String,
+    pub source_url: Option<String>, // YouTube URL or local file path
+    pub video_id: Option<String>, // YouTube video ID
+    pub duration_seconds: Option<f64>,
+    pub thumbnail_url: Option<String>,
+    pub description: Option<String>,
+    pub upload_date: Option<DateTime<Utc>>,
+    pub author: Option<String>,
+    pub view_count: Option<u64>,
+    pub tags: Vec<String>,
+    pub is_local: bool, // true for local files, false for YouTube
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
@@ -751,21 +768,118 @@ pub struct Note {
 
 impl Course {
     pub fn new(name: String, raw_titles: Vec<String>) -> Self {
+        // Create basic video metadata from raw titles for backward compatibility
+        let videos = raw_titles.iter().map(|title| VideoMetadata {
+            title: title.clone(),
+            source_url: None,
+            video_id: None,
+            duration_seconds: None,
+            thumbnail_url: None,
+            description: None,
+            upload_date: None,
+            author: None,
+            view_count: None,
+            tags: Vec::new(),
+            is_local: false,
+        }).collect();
+
         Self {
             id: Uuid::new_v4(),
             name,
             created_at: Utc::now(),
             raw_titles,
+            videos,
+            structure: None,
+        }
+    }
+
+    pub fn new_with_videos(name: String, videos: Vec<VideoMetadata>) -> Self {
+        let raw_titles = videos.iter().map(|v| v.title.clone()).collect();
+        Self {
+            id: Uuid::new_v4(),
+            name,
+            created_at: Utc::now(),
+            raw_titles,
+            videos,
             structure: None,
         }
     }
 
     pub fn video_count(&self) -> usize {
-        self.raw_titles.len()
+        self.videos.len().max(self.raw_titles.len())
     }
 
     pub fn is_structured(&self) -> bool {
         self.structure.is_some()
+    }
+
+    pub fn get_video_metadata(&self, index: usize) -> Option<&VideoMetadata> {
+        self.videos.get(index)
+    }
+
+    pub fn get_video_title(&self, index: usize) -> Option<&str> {
+        self.videos.get(index)
+            .map(|v| v.title.as_str())
+            .or_else(|| self.raw_titles.get(index).map(|s| s.as_str()))
+    }
+}
+
+impl VideoMetadata {
+    pub fn new_youtube(title: String, video_id: String, url: String) -> Self {
+        Self {
+            title,
+            source_url: Some(url),
+            video_id: Some(video_id),
+            duration_seconds: None,
+            thumbnail_url: None,
+            description: None,
+            upload_date: None,
+            author: None,
+            view_count: None,
+            tags: Vec::new(),
+            is_local: false,
+        }
+    }
+
+    pub fn new_local(title: String, file_path: String) -> Self {
+        Self {
+            title,
+            source_url: Some(file_path),
+            video_id: None,
+            duration_seconds: None,
+            thumbnail_url: None,
+            description: None,
+            upload_date: None,
+            author: None,
+            view_count: None,
+            tags: Vec::new(),
+            is_local: true,
+        }
+    }
+
+    pub fn is_youtube(&self) -> bool {
+        !self.is_local && self.video_id.is_some()
+    }
+
+    pub fn get_video_source(&self) -> Option<crate::video_player::VideoSource> {
+        if self.is_local {
+            if let Some(path) = &self.source_url {
+                Some(crate::video_player::VideoSource::Local {
+                    path: std::path::PathBuf::from(path),
+                    title: self.title.clone(),
+                })
+            } else {
+                None
+            }
+        } else if let Some(video_id) = &self.video_id {
+            Some(crate::video_player::VideoSource::YouTube {
+                video_id: video_id.clone(),
+                playlist_id: None, // TODO: Extract from URL if available
+                title: self.title.clone(),
+            })
+        } else {
+            None
+        }
     }
 }
 

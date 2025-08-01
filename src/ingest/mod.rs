@@ -100,10 +100,17 @@ pub async fn import_and_structure_youtube(
         clustering_stage: None,
     });
 
-    // Stage 3: Create course with raw titles
+    // Stage 3: Create course with structured video metadata
     let course_name = course_title.unwrap_or_else(|| metadata.title.clone());
     let raw_titles: Vec<String> = sections.iter().map(|s| s.title.clone()).collect();
-    let mut course = Course::new(course_name, raw_titles.clone());
+    let videos: Vec<crate::types::VideoMetadata> = sections.iter().map(|s| {
+        crate::types::VideoMetadata::new_youtube(
+            s.title.clone(),
+            s.video_id.clone().unwrap_or_default(),
+            s.url.clone().unwrap_or_default(),
+        )
+    }).collect();
+    let mut course = Course::new_with_videos(course_name, videos);
 
     // Stage 4: Structure using advanced clustering
     progress_callback(ImportProgress {
@@ -186,9 +193,15 @@ pub async fn import_and_structure_local_folder(
         clustering_stage: None,
     });
 
-    // Stage 3: Create course with raw titles
+    // Stage 3: Create course with structured video metadata
     let raw_titles: Vec<String> = sections.iter().map(|s| s.title.clone()).collect();
-    let mut course = Course::new(course_title, raw_titles.clone());
+    let videos: Vec<crate::types::VideoMetadata> = sections.iter().map(|s| {
+        crate::types::VideoMetadata::new_local(
+            s.title.clone(),
+            s.file_path.clone().unwrap_or_default(),
+        )
+    }).collect();
+    let mut course = Course::new_with_videos(course_title, videos);
 
     // Stage 4: Structure using advanced clustering
     progress_callback(ImportProgress {

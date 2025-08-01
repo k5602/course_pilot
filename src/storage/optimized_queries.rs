@@ -84,11 +84,13 @@ impl OptimizedQueries {
                 })
                 .transpose()?;
 
+            let videos = raw_titles.iter().map(|title| crate::types::VideoMetadata::new_local(title.clone(), "".to_string())).collect();
             let course = Course {
                 id: course_id,
                 name: course_name,
                 created_at: DateTime::from_timestamp(course_created_at, 0).unwrap_or_else(Utc::now),
                 raw_titles,
+                videos,
                 structure,
             };
 

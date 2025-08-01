@@ -75,14 +75,8 @@ impl LocalVideoPlayer {
             };
 
             let codec_params = video_stream.parameters();
-            let width = match codec_params {
-                ffmpeg::codec::Parameters::Video(ref video_params) => video_params.width(),
-                _ => 0,
-            };
-            let height = match codec_params {
-                ffmpeg::codec::Parameters::Video(ref video_params) => video_params.height(),
-                _ => 0,
-            };
+            let width = codec_params.width();
+            let height = codec_params.height();
 
             Ok((duration_seconds, width, height))
         }
@@ -204,10 +198,45 @@ impl LocalVideoPlayer {
             *info = Some(video_info);
         }
 
-        // Start playback thread
+        // Open the video file with the system's default video player
+        self.open_with_system_player(path)?;
+
+        // Start playback thread for state tracking
         self.start_playback_thread(path.to_path_buf())?;
 
         log::info!("Loaded video file: {title} ({width}x{height}, {duration:.2}s)");
+        Ok(())
+    }
+
+    /// Open video file with the system's default video player
+    fn open_with_system_player<P: AsRef<Path>>(&self, path: P) -> Result<()> {
+        let path = path.as_ref();
+        
+        #[cfg(target_os = "windows")]
+        {
+            std::process::Command::new("cmd")
+                .args(["/C", "start", "", &path.to_string_lossy()])
+                .spawn()
+                .map_err(|e| anyhow!("Failed to open video with system player: {}", e))?;
+        }
+
+        #[cfg(target_os = "macos")]
+        {
+            std::process::Command::new("open")
+                .arg(path)
+                .spawn()
+                .map_err(|e| anyhow!("Failed to open video with system player: {}", e))?;
+        }
+
+        #[cfg(target_os = "linux")]
+        {
+            std::process::Command::new("xdg-open")
+                .arg(path)
+                .spawn()
+                .map_err(|e| anyhow!("Failed to open video with system player: {}", e))?;
+        }
+
+        log::info!("Opened video file with system player: {}", path.display());
         Ok(())
     }
 
