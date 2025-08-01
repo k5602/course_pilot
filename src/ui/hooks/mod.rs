@@ -24,7 +24,7 @@ pub use use_export::{
     ExportManager, use_export_course_action, use_export_manager, use_export_notes_action,
     use_export_plan_action,
 };
-pub use use_import::{FolderValidation, ImportManager, use_folder_validation, use_import_manager};
+pub use use_import::{FolderValidation, ImportManager, LocalFolderPreview, use_folder_preview, use_folder_validation, use_import_manager};
 pub use use_modals::{use_form_manager, use_modal_manager};
 pub use use_navigation::{BreadcrumbItem, use_navigation_manager};
 pub use use_notes::{

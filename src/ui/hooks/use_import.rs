@@ -17,6 +17,25 @@ pub struct FolderValidation {
     pub error_message: Option<String>,
 }
 
+/// Import preview data for local folders
+#[derive(Debug, Clone, PartialEq)]
+pub struct LocalFolderPreview {
+    pub title: String,
+    pub video_count: usize,
+    pub total_duration: Option<std::time::Duration>,
+    pub videos: Vec<LocalVideoPreview>,
+    pub total_size: u64,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct LocalVideoPreview {
+    pub title: String,
+    pub duration: Option<std::time::Duration>,
+    pub index: usize,
+    pub file_size: u64,
+    pub format: String,
+}
+
 /// Supported video file extensions
 const SUPPORTED_VIDEO_EXTENSIONS: &[&str] = &[
     "mp4", "avi", "mkv", "mov", "wmv", "flv", "webm", "m4v", "mpg", "mpeg", "3gp", "ogv", "ts",
@@ -29,6 +48,7 @@ pub struct ImportManager {
     db: Arc<Database>,
     pub import_from_local_folder: Callback<(PathBuf, Option<String>)>,
     pub validate_folder: Callback<PathBuf>,
+    pub generate_folder_preview: Callback<PathBuf>,
 }
 
 impl ImportManager {
@@ -50,6 +70,12 @@ impl ImportManager {
 
     pub async fn validate_folder(&self, path: PathBuf) -> Result<FolderValidation> {
         tokio::task::spawn_blocking(move || validate_folder_sync(&path))
+            .await
+            .unwrap_or_else(|e| Err(anyhow::anyhow!("Join error: {}", e)))
+    }
+
+    pub async fn generate_folder_preview(&self, path: PathBuf) -> Result<LocalFolderPreview> {
+        tokio::task::spawn_blocking(move || generate_folder_preview_sync(&path))
             .await
             .unwrap_or_else(|e| Err(anyhow::anyhow!("Join error: {}", e)))
     }
@@ -177,10 +203,30 @@ pub fn use_import_manager() -> ImportManager {
         // Return () to match expected callback type
     });
 
+    let generate_folder_preview = use_callback(move |path: PathBuf| {
+        spawn(async move {
+            let result = tokio::task::spawn_blocking(move || generate_folder_preview_sync(&path)).await;
+
+            match result {
+                Ok(Ok(_)) => {
+                    // Preview generation successful - the UI will handle the result
+                }
+                Ok(Err(e)) => {
+                    toast_helpers::error(format!("Preview generation failed: {e}"));
+                }
+                Err(e) => {
+                    toast_helpers::error(format!("Preview generation failed: {e}"));
+                }
+            }
+        });
+        // Return () to match expected callback type
+    });
+
     ImportManager {
         db,
         import_from_local_folder,
         validate_folder,
+        generate_folder_preview,
     }
 }
 
@@ -196,6 +242,25 @@ pub fn use_folder_validation(
         async move {
             if let Some(path) = folder_path {
                 import_manager.validate_folder(path).await.map(Some)
+            } else {
+                Ok(None)
+            }
+        }
+    })
+}
+
+/// Hook for reactive folder preview generation
+pub fn use_folder_preview(
+    folder_path: Option<PathBuf>,
+) -> Resource<Result<Option<LocalFolderPreview>, anyhow::Error>> {
+    let import_manager = use_import_manager();
+
+    use_resource(move || {
+        let import_manager = import_manager.clone();
+        let folder_path = folder_path.clone();
+        async move {
+            if let Some(path) = folder_path {
+                import_manager.generate_folder_preview(path).await.map(Some)
             } else {
                 Ok(None)
             }
@@ -274,6 +339,123 @@ fn validate_folder_sync(path: &Path) -> Result<FolderValidation> {
         total_size,
         error_message,
     })
+}
+
+/// Generate preview data for a local folder
+fn generate_folder_preview_sync(path: &Path) -> Result<LocalFolderPreview> {
+    // First validate the folder
+    let validation = validate_folder_sync(path)?;
+    
+    if !validation.is_valid {
+        return Err(anyhow::anyhow!(
+            "Cannot generate preview for invalid folder: {}",
+            validation.error_message.unwrap_or_else(|| "Unknown error".to_string())
+        ));
+    }
+
+    // Generate course title from folder name
+    let title = path
+        .file_name()
+        .and_then(|name| name.to_str())
+        .unwrap_or("Imported Course")
+        .to_string();
+
+    // Use the enhanced local ingest to scan recursively (matching validation behavior)
+    let ingest = crate::ingest::local_folder::EnhancedLocalIngest::new();
+    let video_files = ingest.scan_directory_recursive(path, None)
+        .map_err(|e| anyhow::anyhow!("Failed to scan folder for preview: {}", e))?;
+
+    // Convert video files to preview videos
+    let mut videos = Vec::new();
+    let mut total_duration = std::time::Duration::new(0, 0);
+
+    for (index, video_file) in video_files.iter().enumerate() {
+        // Extract title from file path
+        let title = video_file.path
+            .file_stem()
+            .and_then(|stem| stem.to_str())
+            .map(|s| clean_filename_title(s))
+            .unwrap_or_else(|| video_file.name.clone());
+
+        // Try to get video duration (this might be slow for many files, but needed for preview)
+        let duration = probe_video_duration(&video_file.path);
+
+        let format = video_file.path
+            .extension()
+            .and_then(|ext| ext.to_str())
+            .unwrap_or("unknown")
+            .to_uppercase();
+
+        videos.push(LocalVideoPreview {
+            title,
+            duration,
+            index,
+            file_size: video_file.size,
+            format,
+        });
+
+        if let Some(dur) = duration {
+            total_duration += dur;
+        }
+    }
+
+    Ok(LocalFolderPreview {
+        title,
+        video_count: videos.len(),
+        total_duration: Some(total_duration),
+        videos,
+        total_size: validation.total_size,
+    })
+}
+
+/// Clean and normalize titles extracted from filenames
+fn clean_filename_title(title: &str) -> String {
+    title
+        .trim()
+        // Replace common separators with spaces
+        .replace(['_', '-', '.'], " ")
+        // Remove common video quality indicators
+        .replace("1080p", "")
+        .replace("720p", "")
+        .replace("480p", "")
+        .replace("4K", "")
+        .replace("HD", "")
+        // Remove common brackets and their contents if they contain metadata
+        .split('[')
+        .next()
+        .unwrap_or(title)
+        .split('(')
+        .next()
+        .unwrap_or(title)
+        // Normalize whitespace
+        .split_whitespace()
+        .collect::<Vec<_>>()
+        .join(" ")
+        .trim()
+        .to_string()
+}
+
+/// Probe video duration using ffprobe CLI
+fn probe_video_duration(path: &std::path::Path) -> Option<std::time::Duration> {
+    use std::process::Command;
+    let output = Command::new("ffprobe")
+        .args([
+            "-v",
+            "error",
+            "-show_entries",
+            "format=duration",
+            "-of",
+            "default=noprint_wrappers=1:nokey=1",
+            path.to_string_lossy().as_ref(),
+        ])
+        .output()
+        .ok()?;
+    if !output.status.success() {
+        return None;
+    }
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    let secs = stdout.trim().parse::<f64>().ok()?;
+    Some(std::time::Duration::from_secs_f64(secs))
 }
 
 /// Helper function to check if an extension might be video-related

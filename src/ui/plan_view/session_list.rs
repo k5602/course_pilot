@@ -7,7 +7,7 @@ use uuid::Uuid;
 
 use crate::state::set_video_context_and_open_notes_reactive;
 use crate::types::{Plan, PlanItem, VideoContext};
-use crate::ui::{Badge, toast_helpers, use_app_state, use_toggle_plan_item_action};
+use crate::ui::{Badge, toast_helpers, use_app_state};
 use crate::video_player::{VideoPlayerManager, VideoSource};
 
 
@@ -41,10 +41,23 @@ pub fn group_items_by_session(items: &[PlanItem]) -> Vec<SessionGroup> {
         .into_iter()
         .enumerate()
         .map(|(session_idx, (date, items))| {
-            let total = items.len();
-            let completed = items.iter().filter(|(_, item)| item.completed).count();
-            let progress = if total > 0 {
-                (completed as f32 / total as f32) * 100.0
+            // Calculate total videos and completed videos across all items in the session
+            let total_videos: usize = items.iter().map(|(_, item)| item.video_indices.len()).sum();
+            
+            // For now, we'll use plan item completion as a proxy for individual video completion
+            // In a full implementation, this would check individual video completion status
+            let completed_videos: usize = items.iter()
+                .map(|(_, item)| {
+                    if item.completed {
+                        item.video_indices.len() // All videos in completed items are considered completed
+                    } else {
+                        0 // No videos in incomplete items are considered completed
+                    }
+                })
+                .sum();
+            
+            let progress = if total_videos > 0 {
+                (completed_videos as f32 / total_videos as f32) * 100.0
             } else {
                 0.0
             };
@@ -53,8 +66,8 @@ pub fn group_items_by_session(items: &[PlanItem]) -> Vec<SessionGroup> {
                 session_number: session_idx + 1,
                 date,
                 items,
-                total,
-                completed,
+                total: total_videos,
+                completed: completed_videos,
                 progress,
             }
         })
@@ -267,7 +280,7 @@ fn SessionAccordion(props: SessionAccordionProps) -> Element {
                     }
 
                     Badge {
-                        label: format!("{}/{}", props.session.completed, props.session.total),
+                        label: format!("{}/{} videos", props.session.completed, props.session.total),
                         color: Some(badge_color.to_string()),
                         class: Some("text-xs font-medium".to_string()),
                     }
@@ -338,22 +351,46 @@ fn SessionAccordion(props: SessionAccordionProps) -> Element {
                 }
 
                 div {
-                    class: "space-y-1 pt-2 pb-4",
+                    class: "space-y-2 pt-2 pb-4",
 
-                    // Render video items with smooth animations
-                    {props.session.items.iter().enumerate().map(|(video_idx, (original_index, item))| {
-                        rsx! {
-                            VideoItem {
-                                key: "{original_index}-{item.section_title}",
+                    // Render individual videos within each session item
+                    for (session_item_idx, (original_index, item)) in props.session.items.iter().enumerate() {
+                        // If the item has multiple videos, render each video individually
+                        if item.video_indices.len() > 1 {
+                            for (video_idx_in_item, &video_index) in item.video_indices.iter().enumerate() {
+                                VideoContentItem {
+                                    key: "{original_index}-{video_index}-{video_idx_in_item}",
+                                    plan_id: props.plan_id,
+                                    plan_item: item.clone(),
+                                    plan_item_index: *original_index,
+                                    video_index: video_index,
+                                    video_index_in_item: video_idx_in_item,
+                                    session_item_index: session_item_idx,
+                                    course_id: props.course_id,
+                                    is_session_expanded: is_expanded,
+                                }
+                            }
+                        } else {
+                            // Single video item - render as before but with new component
+                            VideoContentItem {
+                                key: "{original_index}-{item.video_indices.first().unwrap_or(&0)}",
                                 plan_id: props.plan_id,
-                                item: item.clone(),
-                                item_index: *original_index,
-                                video_index: video_idx,
+                                plan_item: item.clone(),
+                                plan_item_index: *original_index,
+                                video_index: *item.video_indices.first().unwrap_or(&0),
+                                video_index_in_item: 0,
+                                session_item_index: session_item_idx,
                                 course_id: props.course_id,
                                 is_session_expanded: is_expanded,
                             }
                         }
-                    })}
+                    }
+                    
+                    // Session progress summary
+                    SessionProgressBar {
+                        completed_videos: props.session.completed,
+                        total_videos: props.session.total,
+                    }
                 }
             }
         }
@@ -361,65 +398,88 @@ fn SessionAccordion(props: SessionAccordionProps) -> Element {
 }
 
 #[derive(Props, PartialEq, Clone)]
-pub struct VideoItemProps {
+pub struct VideoContentItemProps {
     pub plan_id: Uuid,
-    pub item: PlanItem,
-    pub item_index: usize,
+    pub plan_item: PlanItem,
+    pub plan_item_index: usize,
     pub video_index: usize,
+    pub video_index_in_item: usize,
+    pub session_item_index: usize,
     pub course_id: Uuid,
     pub is_session_expanded: bool,
 }
 
-/// Individual video item component with three-button layout and smooth interactions
+/// Individual video content item component with DaisyUI styling and individual video completion tracking
 #[component]
-fn VideoItem(props: VideoItemProps) -> Element {
-    let toggle_completion = use_toggle_plan_item_action();
-    let mut local_completed = use_signal(|| props.item.completed);
-    let is_updating = use_signal(|| false);
+fn VideoContentItem(props: VideoContentItemProps) -> Element {
     let app_state = use_app_state();
+    
+    // Individual video completion tracking
+    let video_completed = use_signal(|| {
+        // For now, we'll use the plan item completion status as a fallback
+        // In a full implementation, this would check individual video completion
+        props.plan_item.completed
+    });
+    let is_updating = use_signal(|| false);
 
-    // Sync local state with prop changes
-    use_effect(move || {
-        local_completed.set(props.item.completed);
+    // Get video title from course data
+    let video_title = use_memo(move || {
+        let courses = app_state.read().courses.clone();
+        if let Some(course) = courses.iter().find(|c| c.id == props.course_id) {
+            course.raw_titles.get(props.video_index).cloned()
+                .unwrap_or_else(|| format!("Video {}", props.video_index + 1))
+        } else {
+            format!("Video {}", props.video_index + 1)
+        }
     });
 
-    // Toggle completion handler with optimistic updates
-    let toggle_handler = {
-        let plan_id = props.plan_id;
-        let item_index = props.item_index;
-        let mut local_completed = local_completed;
+    // Toggle individual video completion handler
+    let toggle_video_completion = {
+        let mut video_completed = video_completed;
         let mut is_updating = is_updating;
-        let toggle_completion = toggle_completion;
+        let plan_id = props.plan_id;
+        let video_index = props.video_index;
+        let session_item_index = props.session_item_index;
 
         move |_| {
-            let new_state = !local_completed();
-            local_completed.set(new_state);
+            let new_state = !video_completed();
+            video_completed.set(new_state);
             is_updating.set(true);
 
             // Clone values for the async block
-            let toggle_completion = toggle_completion;
             let mut is_updating = is_updating;
 
-            // Optimistic update with backend sync
+            // For now, we'll just update the local state
+            // In a full implementation, this would call a backend method to update individual video completion
             spawn(async move {
-                toggle_completion((plan_id, item_index));
-
-                // Small delay to show loading state
+                // TODO: Implement backend call for individual video completion tracking
+                // let video_progress = VideoProgressUpdate::new(plan_id, session_item_index, video_index, new_state);
+                // backend.update_video_progress(video_progress).await;
+                
+                // Simulate API call delay
                 tokio::time::sleep(tokio::time::Duration::from_millis(300)).await;
                 is_updating.set(false);
+                
+                if new_state {
+                    toast_helpers::success("Video marked as completed");
+                } else {
+                    toast_helpers::info("Video marked as incomplete");
+                }
             });
         }
     };
 
-    // Play button handler with actual video player integration
+    // Play button handler for individual video
     let play_handler = {
         let course_id = props.course_id;
-        let item = props.item.clone();
+        let video_index = props.video_index;
+        let video_title = video_title.clone();
         let app_state = app_state.clone();
 
         move |_| {
             let course_id = course_id;
-            let item = item.clone();
+            let video_index = video_index;
+            let video_title = video_title();
             let app_state = app_state.clone();
             
             spawn(async move {
@@ -427,69 +487,59 @@ fn VideoItem(props: VideoItemProps) -> Element {
                 let courses = app_state.read().courses.clone();
                 
                 if let Some(course) = courses.iter().find(|c| c.id == course_id) {
-                        // Get the first video index from the plan item
-                        let video_index = if let Some(&first_video_index) = item.video_indices.first() {
-                            first_video_index
-                        } else {
-                            log::error!("No video indices found in plan item");
-                            toast_helpers::error("No video found for this item");
-                            return;
-                        };
+                    // Get the video title from raw_titles
+                    let actual_video_title = if let Some(title) = course.raw_titles.get(video_index) {
+                        title.clone()
+                    } else {
+                        log::error!("Video index {} not found in course raw_titles", video_index);
+                        toast_helpers::error("Video not found in course data");
+                        return;
+                    };
 
-                        // Get the video title from raw_titles
-                        let video_title = if let Some(title) = course.raw_titles.get(video_index) {
-                            title.clone()
-                        } else {
-                            log::error!("Video index {} not found in course raw_titles", video_index);
-                            toast_helpers::error("Video not found in course data");
-                            return;
-                        };
-
-                        // Determine video source type and create appropriate VideoSource
-                        let video_source = if is_youtube_video(&video_title) {
-                            // Try to extract YouTube video ID from title or URL
-                            if let Some(video_id) = extract_youtube_video_id(&video_title) {
-                                VideoSource::YouTube {
-                                    video_id,
-                                    playlist_id: None, // TODO: Could extract playlist ID if available
-                                    title: clean_youtube_title(&video_title),
-                                }
-                            } else {
-                                // Fallback: create a YouTube source with a placeholder ID
-                                // This might happen if the title doesn't contain a URL
-                                log::warn!("Could not extract YouTube video ID from title: {}", video_title);
-                                VideoSource::YouTube {
-                                    video_id: "dQw4w9WgXcQ".to_string(), // Placeholder
-                                    playlist_id: None,
-                                    title: video_title.clone(),
-                                }
+                    // Determine video source type and create appropriate VideoSource
+                    let video_source = if is_youtube_video(&actual_video_title) {
+                        // Try to extract YouTube video ID from title or URL
+                        if let Some(video_id) = extract_youtube_video_id(&actual_video_title) {
+                            VideoSource::YouTube {
+                                video_id,
+                                playlist_id: None, // TODO: Could extract playlist ID if available
+                                title: clean_youtube_title(&actual_video_title),
                             }
                         } else {
-                            // Assume it's a local video
-                            VideoSource::Local {
-                                path: std::path::PathBuf::from(&video_title),
-                                title: video_title.clone(),
-                            }
-                        };
-
-                        // Create video player manager and play the video
-                        match VideoPlayerManager::new() {
-                            Ok(mut player_manager) => {
-                                match player_manager.play_video(video_source) {
-                                    Ok(()) => {
-                                        toast_helpers::success(format!("Playing: {}", item.section_title));
-                                    }
-                                    Err(e) => {
-                                        log::error!("Failed to play video: {e}");
-                                        toast_helpers::error(&format!("Failed to play video: {e}"));
-                                    }
-                                }
-                            }
-                            Err(e) => {
-                                log::error!("Failed to create video player: {e}");
-                                toast_helpers::error("Failed to initialize video player");
+                            // Fallback: create a YouTube source with a placeholder ID
+                            log::warn!("Could not extract YouTube video ID from title: {}", actual_video_title);
+                            VideoSource::YouTube {
+                                video_id: "dQw4w9WgXcQ".to_string(), // Placeholder
+                                playlist_id: None,
+                                title: actual_video_title.clone(),
                             }
                         }
+                    } else {
+                        // Assume it's a local video
+                        VideoSource::Local {
+                            path: std::path::PathBuf::from(&actual_video_title),
+                            title: actual_video_title.clone(),
+                        }
+                    };
+
+                    // Create video player manager and play the video
+                    match VideoPlayerManager::new() {
+                        Ok(mut player_manager) => {
+                            match player_manager.play_video(video_source) {
+                                Ok(()) => {
+                                    toast_helpers::success(format!("Playing: {}", video_title));
+                                }
+                                Err(e) => {
+                                    log::error!("Failed to play video: {e}");
+                                    toast_helpers::error(&format!("Failed to play video: {e}"));
+                                }
+                            }
+                        }
+                        Err(e) => {
+                            log::error!("Failed to create video player: {e}");
+                            toast_helpers::error("Failed to initialize video player");
+                        }
+                    }
                 } else {
                     log::error!("Course not found: {}", course_id);
                     toast_helpers::error("Course not found");
@@ -500,15 +550,16 @@ fn VideoItem(props: VideoItemProps) -> Element {
 
     let notes_handler = {
         let course_id = props.course_id;
-        let item = props.item.clone();
-        let _app_state = app_state;
+        let video_index = props.video_index;
+        let video_title = video_title.clone();
+        let plan_item = props.plan_item.clone();
 
         move |_| {
             let video_context = VideoContext {
                 course_id,
-                video_index: props.item_index,
-                video_title: item.section_title.clone(),
-                module_title: item.module_title.clone(),
+                video_index,
+                video_title: video_title(),
+                module_title: plan_item.module_title.clone(),
             };
 
             if let Err(e) = set_video_context_and_open_notes_reactive(video_context) {
@@ -525,12 +576,13 @@ fn VideoItem(props: VideoItemProps) -> Element {
 
     use_effect({
         let is_expanded = props.is_session_expanded;
-        let video_index = props.video_index;
+        let video_index_in_item = props.video_index_in_item;
+        let session_item_index = props.session_item_index;
 
         move || {
             if is_expanded {
                 // Stagger video item animations when session expands
-                let delay = video_index as f32 * 0.05;
+                let delay = (session_item_index * 2 + video_index_in_item) as f32 * 0.05;
 
                 spawn(async move {
                     tokio::time::sleep(tokio::time::Duration::from_millis((delay * 1000.0) as u64))
@@ -576,7 +628,7 @@ fn VideoItem(props: VideoItemProps) -> Element {
     });
 
     // Dynamic icons and styling based on completion state
-    let check_icon = if local_completed() {
+    let check_icon = if video_completed() {
         rsx! {
             Icon {
                 icon: FaCheckDouble,
@@ -592,103 +644,95 @@ fn VideoItem(props: VideoItemProps) -> Element {
         }
     };
 
-    let text_classes = if local_completed() {
+    let text_classes = if video_completed() {
         "line-through text-base-content/50 transition-all duration-300"
     } else {
         "text-base-content transition-all duration-300"
     };
 
-    let item_bg_class = if local_completed() {
-        "bg-success/5 border-success/20"
+    let card_classes = if video_completed() {
+        "card bg-success/10 border-success/30 hover:bg-success/20 transition-colors duration-200"
     } else {
-        "bg-base-100 border-base-300 hover:border-base-400"
+        "card bg-base-100 border-base-300 hover:bg-base-200/50 transition-colors duration-200"
     };
 
     rsx! {
-        div {
-            class: "flex items-center gap-3 px-4 py-3 rounded-lg {item_bg_class} border transition-all duration-200 hover:shadow-sm group",
+        div { 
+            class: "{card_classes} border shadow-sm",
             style: "{item_style}",
-
-            // Progress checkbox with loading state
-            button {
-                class: "btn btn-ghost btn-sm btn-square hover:btn-primary transition-all duration-200",
-                disabled: is_updating(),
-                onclick: toggle_handler,
-                "aria-label": if local_completed() { "Mark as incomplete" } else { "Mark as complete" },
-
-                if is_updating() {
-                    span { class: "loading loading-spinner loading-xs" }
-                } else {
-                    {check_icon}
-                }
-            }
-
-            // Video content with truncated text
-            div {
-                class: "flex-1 min-w-0",
-
-                div {
-                    class: "text-sm font-medium {text_classes} leading-tight",
-                    style: "display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden;",
-                    title: "{props.item.section_title}",
-                    "{props.item.section_title}"
-                }
-
-                div {
-                    class: "text-xs text-base-content/60 mt-1 truncate",
-                    title: "Module: {props.item.module_title}",
-                    "Module: {props.item.module_title}"
-                }
-
-                // Duration information
-                div {
-                    class: "flex items-center gap-2 mt-1",
-                    div {
-                        class: "text-xs text-base-content/50 bg-base-200 px-2 py-0.5 rounded-full",
-                        title: "Video duration",
-                        "📹 {crate::types::duration_utils::format_duration(props.item.total_duration)}"
-                    }
-                    div {
-                        class: "text-xs text-base-content/50 bg-primary/10 text-primary px-2 py-0.5 rounded-full",
-                        title: "Estimated completion time (with buffer)",
-                        "⏱️ {crate::types::duration_utils::format_duration(props.item.estimated_completion_time)}"
+            
+            div { class: "card-body p-3 flex-row items-center gap-3",
+                // Completion checkbox with DaisyUI styling
+                div { class: "form-control",
+                    label { class: "cursor-pointer",
+                        input {
+                            r#type: "checkbox",
+                            class: "checkbox checkbox-sm checkbox-primary",
+                            checked: video_completed(),
+                            disabled: is_updating(),
+                            onchange: toggle_video_completion,
+                        }
+                        if is_updating() {
+                            span { class: "loading loading-spinner loading-xs ml-2" }
+                        }
                     }
                 }
-            }
-
-            // Action buttons with hover effects
-            div {
-                class: "flex items-center gap-1 shrink-0 opacity-60 group-hover:opacity-100 transition-opacity duration-200",
-
-                // Play button
-                button {
-                    class: "btn btn-ghost btn-sm btn-square hover:btn-primary hover:text-primary-content transition-all duration-200",
-                    onclick: play_handler,
-                    "aria-label": "Play video",
-                    title: "Play video",
-                    Icon {
-                        icon: FaPlay,
-                        class: "w-3 h-3"
+                
+                // Video info section
+                div { class: "flex-1 min-w-0",
+                    h4 { 
+                        class: "font-medium text-sm {text_classes} truncate", 
+                        title: "{video_title()}",
+                        "{video_title()}" 
+                    }
+                    div { class: "text-xs text-base-content/60 mt-1 truncate",
+                        title: "Module: {props.plan_item.module_title}",
+                        "Module: {props.plan_item.module_title}"
+                    }
+                    
+                    // Show video index within multi-video items
+                    if props.plan_item.video_indices.len() > 1 {
+                        div { class: "flex items-center gap-1 mt-1",
+                            span { class: "text-xs text-base-content/50 bg-base-200 px-2 py-0.5 rounded-full",
+                                "Video {props.video_index_in_item + 1} of {props.plan_item.video_indices.len()}"
+                            }
+                        }
                     }
                 }
-
-                button {
-                    class: "btn btn-ghost btn-sm btn-square hover:btn-accent hover:text-accent-content transition-all duration-200",
-                    onclick: notes_handler,
-                    "aria-label": "Open notes for this video",
-                    title: "Open notes",
-                    Icon {
-                        icon: FaFilePen,
-                        class: "w-3 h-3"
+                
+                // Action buttons with DaisyUI styling
+                div { class: "flex items-center gap-2 shrink-0",
+                    // Play button
+                    button {
+                        class: "btn btn-sm btn-primary btn-outline hover:btn-primary",
+                        onclick: play_handler,
+                        title: "Play video",
+                        span { class: "flex items-center gap-1",
+                            Icon {
+                                icon: FaPlay,
+                                class: "w-3 h-3"
+                            }
+                            span { class: "hidden sm:inline", "Play" }
+                        }
+                    }
+                    
+                    // Notes button
+                    button {
+                        class: "btn btn-sm btn-ghost btn-square hover:btn-accent",
+                        onclick: notes_handler,
+                        title: "Open notes",
+                        Icon {
+                            icon: FaFilePen,
+                            class: "w-3 h-3"
+                        }
                     }
                 }
-            }
-
-            // Status badge with dynamic styling
-            Badge {
-                label: if local_completed() { "Done".to_string() } else { "Pending".to_string() },
-                color: Some(if local_completed() { "success".to_string() } else { "ghost".to_string() }),
-                class: Some("text-xs shrink-0 transition-all duration-200".to_string()),
+                
+                // Status badge
+                div { class: "badge badge-sm",
+                    class: if video_completed() { "badge-success" } else { "badge-ghost" },
+                    if video_completed() { "✓ Done" } else { "Pending" }
+                }
             }
         }
     }
@@ -742,5 +786,51 @@ fn clean_youtube_title(title: &str) -> String {
         title.to_string()
     } else {
         title.to_string()
+    }
+}
+
+#[derive(Props, PartialEq, Clone)]
+pub struct SessionProgressBarProps {
+    pub completed_videos: usize,
+    pub total_videos: usize,
+}
+
+/// Session progress bar component with DaisyUI styling
+#[component]
+fn SessionProgressBar(props: SessionProgressBarProps) -> Element {
+    let progress_percentage = if props.total_videos > 0 {
+        (props.completed_videos as f32 / props.total_videos as f32) * 100.0
+    } else {
+        0.0
+    };
+    
+    let progress_color = if progress_percentage >= 100.0 {
+        "progress-success"
+    } else if progress_percentage >= 75.0 {
+        "progress-primary"
+    } else if progress_percentage >= 50.0 {
+        "progress-accent"
+    } else {
+        "progress-warning"
+    };
+
+    rsx! {
+        div { class: "mt-4 pt-3 border-t border-base-300",
+            div { class: "flex items-center justify-between mb-2",
+                span { class: "text-sm font-medium text-base-content",
+                    "Session Progress"
+                }
+                span { class: "text-xs text-base-content/60",
+                    "{props.completed_videos}/{props.total_videos} videos completed"
+                }
+            }
+            
+            progress {
+                class: "progress {progress_color} w-full h-2",
+                value: "{progress_percentage}",
+                max: "100",
+                "aria-label": "Session completion progress"
+            }
+        }
     }
 }

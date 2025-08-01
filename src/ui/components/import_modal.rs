@@ -1,4 +1,5 @@
 use crate::ui::{Badge, BaseModal, toast_helpers};
+use crate::ui::hooks::LocalFolderPreview;
 use dioxus::prelude::*;
 use dioxus_free_icons::Icon;
 use dioxus_free_icons::icons::fa_brands_icons::FaYoutube;
@@ -90,6 +91,8 @@ pub fn ImportModal(props: ImportModalProps) -> Element {
     let mut import_settings = use_signal(ImportSettings::default);
     let mut is_validating = use_signal(|| false);
     let mut folder_validation = use_signal(|| None::<crate::ui::hooks::FolderValidation>);
+    let mut is_generating_preview = use_signal(|| false);
+    let mut local_folder_preview = use_signal(|| None::<LocalFolderPreview>);
 
     let import_manager = crate::ui::hooks::use_import_manager();
     let _course_manager = crate::ui::hooks::use_course_manager();
@@ -236,51 +239,46 @@ pub fn ImportModal(props: ImportModalProps) -> Element {
         }
     };
 
-    // Validate folder when path changes
+    // Validate folder and generate preview when path changes
     use_effect({
         let import_manager = import_manager.clone();
         let local_path = local_path;
         let mut folder_validation = folder_validation;
         let mut is_validating = is_validating;
+        let mut is_generating_preview = is_generating_preview;
+        let mut local_folder_preview = local_folder_preview;
 
         move || {
             let path = local_path();
             if !path.trim().is_empty() && current_source == ImportSource::LocalFolder {
                 is_validating.set(true);
+                is_generating_preview.set(true);
+                folder_validation.set(None);
+                local_folder_preview.set(None);
+                
                 let import_manager = import_manager.clone();
                 let path = path.clone();
                 spawn(async move {
-                    // Call the callback (which handles the async work internally)
-                    import_manager
-                        .validate_folder
-                        .call(std::path::PathBuf::from(&path));
-
-                    // Create a dummy success result since the callback handles everything
-                    let result: Result<
-                        Result<crate::ui::hooks::use_import::FolderValidation, anyhow::Error>,
-                        tokio::task::JoinError,
-                    > = Ok(Ok(crate::ui::hooks::use_import::FolderValidation {
-                        is_valid: true,
-                        video_count: 0,
-                        supported_files: Vec::new(),
-                        unsupported_files: Vec::new(),
-                        total_size: 0,
-                        error_message: None,
-                    }));
-
-                    match result {
-                        Ok(Ok(validation)) => {
-                            folder_validation.set(Some(validation));
-                        }
-                        Ok(Err(e)) => {
-                            folder_validation.set(Some(crate::ui::hooks::FolderValidation {
-                                is_valid: false,
-                                video_count: 0,
-                                supported_files: Vec::new(),
-                                unsupported_files: Vec::new(),
-                                total_size: 0,
-                                error_message: Some(format!("Validation error: {e}")),
-                            }));
+                    let path_buf = std::path::PathBuf::from(&path);
+                    
+                    // First validate the folder
+                    match import_manager.validate_folder(path_buf.clone()).await {
+                        Ok(validation) => {
+                            folder_validation.set(Some(validation.clone()));
+                            is_validating.set(false);
+                            
+                            // If validation is successful, generate preview
+                            if validation.is_valid {
+                                match import_manager.generate_folder_preview(path_buf).await {
+                                    Ok(preview) => {
+                                        local_folder_preview.set(Some(preview));
+                                    }
+                                    Err(e) => {
+                                        log::error!("Failed to generate preview: {}", e);
+                                        crate::ui::toast_helpers::error(format!("Failed to generate preview: {}", e));
+                                    }
+                                }
+                            }
                         }
                         Err(e) => {
                             folder_validation.set(Some(crate::ui::hooks::FolderValidation {
@@ -291,12 +289,15 @@ pub fn ImportModal(props: ImportModalProps) -> Element {
                                 total_size: 0,
                                 error_message: Some(format!("Validation error: {e}")),
                             }));
+                            is_validating.set(false);
                         }
                     }
-                    is_validating.set(false);
+                    
+                    is_generating_preview.set(false);
                 });
             } else {
                 folder_validation.set(None);
+                local_folder_preview.set(None);
             }
         }
     });
@@ -309,6 +310,8 @@ pub fn ImportModal(props: ImportModalProps) -> Element {
             selected_tab.set(0);
             is_validating.set(false);
             folder_validation.set(None);
+            is_generating_preview.set(false);
+            local_folder_preview.set(None);
         }
     });
 
@@ -384,8 +387,8 @@ pub fn ImportModal(props: ImportModalProps) -> Element {
                             LocalFolderImportForm {
                                 path: local_path(),
                                 on_path_change: move |path| local_path.set(path),
-                                preview: props.preview.clone(),
-                                preview_loading: props.preview_loading,
+                                preview: local_folder_preview(),
+                                preview_loading: is_generating_preview(),
                                 folder_validation: folder_validation(),
                                 is_validating: is_validating(),
                             }
@@ -1701,7 +1704,7 @@ fn YouTubeImportFormWrapper(on_import_complete: EventHandler<crate::types::Cours
 fn LocalFolderImportForm(
     path: String,
     on_path_change: EventHandler<String>,
-    preview: Option<ImportPreview>,
+    preview: Option<LocalFolderPreview>,
     preview_loading: bool,
     folder_validation: Option<crate::ui::hooks::use_import::FolderValidation>,
     is_validating: bool,
@@ -1825,18 +1828,29 @@ fn LocalFolderImportForm(
 
             // Enhanced preview section
             if let Some(preview_data) = preview {
-                ImportPreviewPanel { preview: preview_data }
+                LocalFolderPreviewPanel { preview: preview_data }
             } else if let Some(ref validation) = folder_validation {
                 FolderValidationPanel { validation: validation.clone() }
-            } else if is_validating {
+            } else if is_validating || preview_loading {
                 div { class: "card bg-gradient-to-r from-base-200 to-base-300 shadow-sm",
                     div { class: "card-body",
-                        div { class: "flex items-center gap-3",
+                        div { class: "flex items-center gap-3 mb-3",
                             Icon { icon: FaSpinner, class: "w-5 h-5 animate-spin text-primary" }
-                            span { class: "text-base-content", "Validating folder..." }
+                            span { class: "text-base-content font-medium",
+                                if is_validating && preview_loading {
+                                    "Validating folder and generating preview..."
+                                } else if is_validating {
+                                    "Validating folder..."
+                                } else {
+                                    "Generating preview..."
+                                }
+                            }
                         }
-                        div { class: "mt-2",
+                        div { class: "space-y-2",
                             progress { class: "progress progress-primary w-full" }
+                            div { class: "text-xs text-base-content/70 text-center",
+                                "Scanning video files and extracting metadata..."
+                            }
                         }
                     }
                 }
@@ -2016,6 +2030,160 @@ fn ImportSettingsPanel(
                                 "Configure Defaults"
                             }
                         }
+                    }
+                }
+            }
+        }
+    }
+}
+
+/// Local folder preview panel with enhanced DaisyUI styling
+#[component]
+fn LocalFolderPreviewPanel(preview: LocalFolderPreview) -> Element {
+    let duration_text = if let Some(duration) = preview.total_duration {
+        let hours = duration.as_secs() / 3600;
+        let minutes = (duration.as_secs() % 3600) / 60;
+        if hours > 0 {
+            format!("{hours}h {minutes}m")
+        } else {
+            format!("{minutes}m")
+        }
+    } else {
+        "Unknown".to_string()
+    };
+
+    let size_text = {
+        let size_mb = (preview.total_size as f64) / (1024.0 * 1024.0);
+        if size_mb > 1024.0 {
+            format!("{:.1} GB", size_mb / 1024.0)
+        } else {
+            format!("{:.1} MB", size_mb)
+        }
+    };
+
+    rsx! {
+        div { class: "card bg-gradient-to-br from-success/5 to-primary/5 border border-success/20 shadow-lg",
+            div { class: "card-body",
+                div { class: "flex items-center justify-between mb-4",
+                    h3 { class: "card-title text-lg text-success flex items-center gap-2",
+                        Icon { icon: FaCheck, class: "w-5 h-5" }
+                        "Import Preview"
+                        Badge {
+                            label: "Ready".to_string(),
+                            color: Some("success".to_string()),
+                            class: Some("badge-sm".to_string())
+                        }
+                    }
+                }
+
+                // Enhanced summary stats with DaisyUI styling
+                div { class: "stats stats-horizontal shadow-md bg-white/80 backdrop-blur-sm w-full mb-4",
+                    div { class: "stat",
+                        div { class: "stat-figure text-primary",
+                            Icon { icon: FaFolder, class: "w-6 h-6" }
+                        }
+                        div { class: "stat-title text-xs", "Course Title" }
+                        div { class: "stat-value text-primary text-base", "{preview.title}" }
+                    }
+                    div { class: "stat",
+                        div { class: "stat-figure text-secondary",
+                            Icon { icon: FaVideo, class: "w-6 h-6" }
+                        }
+                        div { class: "stat-title text-xs", "Videos" }
+                        div { class: "stat-value text-secondary", "{preview.video_count}" }
+                    }
+                    div { class: "stat",
+                        div { class: "stat-figure text-accent",
+                            Icon { icon: FaClock, class: "w-6 h-6" }
+                        }
+                        div { class: "stat-title text-xs", "Duration" }
+                        div { class: "stat-value text-accent text-sm", "{duration_text}" }
+                    }
+                    div { class: "stat",
+                        div { class: "stat-figure text-info",
+                            Icon { icon: FaGear, class: "w-6 h-6" }
+                        }
+                        div { class: "stat-title text-xs", "Size" }
+                        div { class: "stat-value text-info text-sm", "{size_text}" }
+                    }
+                }
+
+                // Enhanced video list preview with DaisyUI styling
+                if !preview.videos.is_empty() {
+                    div { class: "mt-4",
+                        div { class: "flex items-center justify-between mb-3",
+                            h4 { class: "font-medium text-base-content flex items-center gap-2",
+                                Icon { icon: FaVideo, class: "w-4 h-4 text-primary" }
+                                "Video Preview"
+                            }
+                            Badge {
+                                label: format!("{} files", preview.videos.len()),
+                                color: Some("primary".to_string()),
+                                class: Some("badge-sm".to_string())
+                            }
+                        }
+                        div { class: "space-y-2 max-h-48 overflow-y-auto bg-white/50 rounded-lg p-3",
+                            {preview.videos.iter().take(8).enumerate().map(|(idx, video)| {
+                                let duration_str = if let Some(duration) = video.duration {
+                                    let minutes = duration.as_secs() / 60;
+                                    let seconds = duration.as_secs() % 60;
+                                    format!("{minutes}:{seconds:02}")
+                                } else {
+                                    "Unknown".to_string()
+                                };
+
+                                let file_size_str = {
+                                    let size_mb = (video.file_size as f64) / (1024.0 * 1024.0);
+                                    if size_mb > 1024.0 {
+                                        format!("{:.1} GB", size_mb / 1024.0)
+                                    } else if size_mb > 1.0 {
+                                        format!("{:.1} MB", size_mb)
+                                    } else {
+                                        format!("{:.0} KB", (video.file_size as f64) / 1024.0)
+                                    }
+                                };
+
+                                rsx! {
+                                    div {
+                                        key: "{idx}",
+                                        class: "flex justify-between items-center text-sm p-3 bg-white rounded-lg shadow-sm hover:shadow-md transition-shadow border border-base-200",
+                                        div { class: "flex items-center gap-3 flex-1 min-w-0",
+                                            div { class: "w-6 h-6 bg-primary/10 rounded-full flex items-center justify-center flex-shrink-0",
+                                                Icon { icon: FaVideo, class: "w-3 h-3 text-primary" }
+                                            }
+                                            span { class: "truncate flex-1 font-medium text-base-content", "{video.title}" }
+                                        }
+                                        div { class: "flex items-center gap-3 text-xs text-base-content/70",
+                                            Badge {
+                                                label: video.format.clone(),
+                                                color: Some("info".to_string()),
+                                                class: Some("badge-xs".to_string())
+                                            }
+                                            span { "{duration_str}" }
+                                            span { "{file_size_str}" }
+                                        }
+                                    }
+                                }
+                            })}
+
+                            if preview.videos.len() > 8 {
+                                div { class: "text-center text-sm text-base-content/70 py-3 bg-base-100/50 rounded-lg border border-dashed border-base-300",
+                                    Icon { icon: FaCircleInfo, class: "w-4 h-4 inline mr-2 text-info" }
+                                    "... and {preview.videos.len() - 8} more videos"
+                                }
+                            }
+                        }
+                    }
+                }
+
+                // Import readiness indicator
+                div { class: "mt-4 p-3 bg-success/10 rounded-lg border border-success/20",
+                    div { class: "flex items-center gap-2 text-success",
+                        Icon { icon: FaCheck, class: "w-4 h-4" }
+                        span { class: "text-sm font-medium", "Ready to import" }
+                    }
+                    p { class: "text-xs text-success/80 mt-1",
+                        "All videos have been validated and are ready for import. Click 'Import Course' to proceed."
                     }
                 }
             }
