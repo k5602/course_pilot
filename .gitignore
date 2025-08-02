@@ -44,7 +44,7 @@ yarn.lock
 *.DS_Store
 .DS_Store
 Thumbs.db
-/.course_pilot.db
+course_pilot.db
 # Temporary files
 **/*.swp
 **/*.swo

@@ -26,8 +26,10 @@ Course Pilot bridges the gap between scattered video content and structured lear
 
 #### **Intelligent Course Import**
 - **YouTube Playlists**: Paste any YouTube playlist URL for instant import with real-time validation
-- **Local Video Folders**: Native file picker with drag-and-drop support for MP4, AVI, MOV files
-- **Metadata Extraction**: Automatic title, duration, and content analysis with fallback handling
+- **Enhanced YouTube Metadata**: Intelligent fallback system for video metadata detection with comprehensive video information
+- **Local Video Folders**: Native file picker with drag-and-drop support for MP4, AVI, MOV, MKV files
+- **Structured Video Metadata**: Rich video information including thumbnails, descriptions, upload dates, view counts, and tags
+- **Metadata Extraction**: Automatic title, duration, and content analysis with robust fallback handling
 - **Bulk Processing**: Handle courses with hundreds of videos efficiently with progress tracking
 - **Import Progress Tracking**: Multi-stage import process with detailed progress indicators and cancellation support
 
@@ -62,9 +64,12 @@ Course Pilot bridges the gap between scattered video content and structured lear
 
 #### **Robust Data Management**
 - **SQLite Backend**: Reliable, embedded database with no setup required
+- **Connection Pooling**: High-performance database operations with r2d2 connection pooling
+- **Optimized Queries**: Performance-optimized queries with prepared statements and efficient indexing
+- **Database Maintenance**: Automated maintenance utilities for cleanup, optimization, and monitoring
 - **JSON Serialization**: Future-proof data formats for easy migration
 - **Backup & Restore**: Export/import your entire course library
-- **Performance Optimized**: Handles large course collections efficiently
+- **Performance Optimized**: Handles large course collections efficiently with comprehensive performance metrics
 
 #### **✅ NEW: Unified Component Architecture**
 - **Flexible Card System**: Unified Card component with variants for courses, plans, notes, and generic content
@@ -72,6 +77,14 @@ Course Pilot bridges the gap between scattered video content and structured lear
 - **Action Menus**: Contextual dropdown menus with proper keyboard navigation
 - **Progress Visualization**: Integrated progress rings and completion indicators
 - **Responsive Design**: Cards adapt beautifully across different screen sizes
+
+#### **✅ Advanced Cross-Platform Video Player**
+- **Multi-Platform Support**: Unified video playback interface for local files and YouTube content
+- **FFmpeg Integration**: Optional FFmpeg support for local video playback (MP4, AVI, MOV, MKV)
+- **YouTube Player**: Seamless YouTube video integration with webview-based playback
+- **Playback Controls**: Full video controls including play, pause, seek, volume, and fullscreen
+- **Video Source Management**: Intelligent switching between local and YouTube video sources
+- **Cross-Platform Abstraction**: Consistent video player API across different platforms and sources
 
 #### **✅ Complete Course Management System**
 - **Full CRUD Operations**: Create, read, update, and delete courses with comprehensive validation
@@ -516,9 +529,19 @@ src/
 │   ├── plan.rs         # Plan export with optimization details
 │   └── notes.rs        # Notes export with tagging support
 ├── storage/            # Advanced data persistence layer
-│   ├── database.rs     # SQLite operations with clustering analytics
+│   ├── database.rs     # SQLite operations with connection pooling and clustering analytics
+│   ├── maintenance.rs  # Database maintenance and optimization utilities
+│   ├── optimized_queries.rs # Performance-optimized queries with prepared statements
 │   ├── settings.rs     # User settings with clustering preferences
 │   └── preference_storage.rs # Preference learning data persistence
+├── video_player/       # Cross-platform video playback system
+│   ├── mod.rs          # Video player module exports and initialization
+│   ├── cross_platform.rs # Unified video player interface and manager
+│   ├── local_player.rs # FFmpeg-based local video playback
+│   ├── youtube_player.rs # YouTube video integration
+│   ├── webview_youtube_player.rs # WebView-based YouTube player implementation
+│   ├── controls.rs     # Video playback controls and UI
+│   └── types.rs        # Video player type definitions and traits
 └── ui/                 # Modern component library
     ├── theme_unified.rs # Design system with clustering visualizations
     ├── layout.rs       # Application shell
@@ -562,6 +585,20 @@ course_manager.navigate_to_course.call(course_id);
 
 // Track course progress
 let (progress, status, badge_color) = use_course_progress(course_id);
+
+// Video player management
+let video_player = use_video_player();
+
+// Play local video file
+video_player.play_local_video.call("/path/to/video.mp4".to_string());
+
+// Play YouTube video
+video_player.play_youtube_video.call("dQw4w9WgXcQ".to_string());
+
+// Control playback
+video_player.pause.call(());
+video_player.seek.call(120.0); // Seek to 2 minutes
+video_player.set_volume.call(0.8); // Set volume to 80%
 ```
 
 **Key Features:**
@@ -570,6 +607,7 @@ let (progress, status, badge_color) = use_course_progress(course_id);
 - **Optimistic Updates**: Immediate UI feedback with rollback on errors
 - **Type Safety**: Full type safety with Rust's type system
 - **Performance**: Efficient resource management with `use_resource`
+- **Cross-Platform Video**: Unified interface for local and YouTube video playback
 
 ### **Technology Stack**
 
@@ -577,14 +615,21 @@ let (progress, status, badge_color) = use_course_progress(course_id);
 - **Dioxus 0.6+**: Modern Rust UI framework with hot-reloading
 - **dioxus-router**: Type-safe client-side routing
 - **dioxus-desktop**: Cross-platform desktop runtime
-- **SQLite**: Embedded database with JSON support
+- **SQLite**: Embedded database with JSON support and connection pooling
+- **FFmpeg (Optional)**: Cross-platform video playback for local files (enable with `--features ffmpeg`)
 
 #### **Advanced Data Processing & AI**
-- **ytextract**: YouTube metadata extraction with error handling
+- **ytextract**: YouTube metadata extraction with intelligent fallback handling
 - **regex**: Pattern matching for advanced NLP analysis
 - **TF-IDF Analysis**: Sophisticated text processing with feature extraction and similarity matrices
 - **K-means Clustering**: Machine learning algorithms with optimal k determination and quality metrics
 - **Hierarchical Clustering**: Agglomerative clustering with multiple linkage methods
+
+#### **Database & Performance**
+- **r2d2**: Connection pooling for high-performance database operations
+- **Optimized Queries**: Prepared statements and efficient indexing for large datasets
+- **Database Maintenance**: Automated cleanup, optimization, and performance monitoring
+- **Performance Metrics**: Comprehensive tracking of database operations and query performance
 - **LDA Topic Modeling**: Latent Dirichlet Allocation with Gibbs sampling for topic discovery
 - **Hybrid Clustering**: Ensemble methods combining multiple algorithms for optimal results
 - **Dynamic Programming**: Optimal cluster splitting and duration balancing algorithms
@@ -621,11 +666,16 @@ curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
 # Ubuntu/Debian:
 sudo apt install libwebkit2gtk-4.0-dev libgtk-3-dev libsqlite3-dev
 
+# For FFmpeg support (optional - enables local video playback):
+sudo apt install libavformat-dev libavcodec-dev libavutil-dev libswscale-dev
+
 # macOS:
 # Xcode Command Line Tools (automatic)
+# For FFmpeg support: brew install ffmpeg
 
 # Windows:
 # WebView2 (usually pre-installed on Windows 11)
+# For FFmpeg support: Download FFmpeg development libraries
 ```
 
 ### **Quick Start**
@@ -638,11 +688,17 @@ cargo build --release
 # Run the application
 cargo run
 
+# Run with FFmpeg support for local video playback
+cargo run --features ffmpeg
+
 # Run tests
 cargo test
 
 # Development with hot-reload
 cargo run --features hot-reload
+
+# Build with all features
+cargo build --release --features ffmpeg
 ```
 
 ### **Development Workflow**
@@ -841,6 +897,9 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
   - Comprehensive preference learning tests with feedback simulation
 
 #### **🚀 Enhanced Core Features**
+- **Cross-Platform Video Player**: Complete video playback system with FFmpeg support for local files and YouTube integration
+- **Enhanced YouTube Metadata**: Intelligent fallback system for video metadata detection with comprehensive video information
+- **Database Performance Optimizations**: Connection pooling, optimized queries, and automated maintenance utilities
 - **Enhanced Notes Panel**: Advanced tagging system with autocomplete and real-time fuzzy search
 - **Unified Card Component**: Flexible architecture supporting courses, plans, notes, and generic content
 - **Navigation System**: Fixed routing with breadcrumb navigation and deep linking support
