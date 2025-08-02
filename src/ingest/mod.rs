@@ -104,10 +104,20 @@ pub async fn import_and_structure_youtube(
     let course_name = course_title.unwrap_or_else(|| metadata.title.clone());
     let raw_titles: Vec<String> = sections.iter().map(|s| s.title.clone()).collect();
     let videos: Vec<crate::types::VideoMetadata> = sections.iter().map(|s| {
+        let video_id = s.video_id.clone().unwrap_or_default();
+        let url = s.url.clone().unwrap_or_default();
+        
+        // Log what we're creating for debugging
+        log::info!("Creating VideoMetadata: title='{}', video_id='{}', url='{}'", s.title, video_id, url);
+        
+        if video_id.is_empty() {
+            log::error!("Empty video_id for YouTube video: '{}'", s.title);
+        }
+        
         crate::types::VideoMetadata::new_youtube(
             s.title.clone(),
-            s.video_id.clone().unwrap_or_default(),
-            s.url.clone().unwrap_or_default(),
+            video_id,
+            url,
         )
     }).collect();
     let mut course = Course::new_with_videos(course_name, videos);

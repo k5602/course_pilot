@@ -145,8 +145,20 @@ type PooledConnection = r2d2::PooledConnection<SqliteConnectionManager>;
 /// Helper function to detect if a title looks like a YouTube video
 fn is_youtube_video_title(title: &str) -> bool {
     // Simple heuristics to detect YouTube videos
-    title.contains("youtube.com") || title.contains("youtu.be") || 
-    title.contains("watch?v=") || title.len() > 50 // YouTube titles are often longer
+    if title.contains("youtube.com") || title.contains("youtu.be") || title.contains("watch?v=") {
+        return true;
+    }
+    
+    // Check if it looks like a typical YouTube video title
+    // YouTube titles typically don't have file extensions and are reasonable length
+    let has_video_extension = title.to_lowercase().ends_with(".mp4") || 
+                             title.to_lowercase().ends_with(".avi") || 
+                             title.to_lowercase().ends_with(".mov") || 
+                             title.to_lowercase().ends_with(".mkv") || 
+                             title.to_lowercase().ends_with(".webm");
+    
+    // If it doesn't have a video file extension and is reasonable length, assume YouTube
+    !has_video_extension && title.len() > 5 && title.len() < 200
 }
 
 /// Helper function to extract YouTube video ID from title if present
@@ -187,21 +199,26 @@ fn extract_youtube_video_id_from_title(title: &str) -> Option<String> {
 
 /// Create fallback video metadata from raw titles with intelligent detection
 fn create_fallback_video_metadata(raw_titles: &[String]) -> Vec<crate::types::VideoMetadata> {
-    raw_titles.iter().map(|title| {
+    raw_titles.iter().enumerate().map(|(index, title)| {
+        log::info!("Creating fallback metadata for video {}: '{}'", index, title);
+        
         // Try to detect if this is a YouTube video based on title patterns
         if is_youtube_video_title(title) {
+            log::info!("Detected as YouTube video: '{}'", title);
             if let Some(video_id) = extract_youtube_video_id_from_title(title) {
+                log::info!("Extracted video ID '{}' from title: '{}'", video_id, title);
                 crate::types::VideoMetadata::new_youtube(
                     title.clone(),
                     video_id.clone(),
                     format!("https://www.youtube.com/watch?v={}", video_id)
                 )
             } else {
-                // YouTube video but can't extract ID - create basic YouTube metadata
+                log::warn!("YouTube video detected but could not extract ID from title: '{}'", title);
+                // For YouTube videos without extractable ID, create a placeholder that will trigger title analysis
                 crate::types::VideoMetadata {
                     title: title.clone(),
-                    source_url: None,
-                    video_id: None,
+                    source_url: Some(format!("https://www.youtube.com/watch?v=PLACEHOLDER_{}", index)),
+                    video_id: Some(format!("PLACEHOLDER_{}", index)),
                     duration_seconds: None,
                     thumbnail_url: None,
                     description: None,
@@ -213,6 +230,7 @@ fn create_fallback_video_metadata(raw_titles: &[String]) -> Vec<crate::types::Vi
                 }
             }
         } else {
+            log::info!("Detected as local video: '{}'", title);
             // Assume local video
             crate::types::VideoMetadata::new_local(title.clone(), title.clone())
         }
@@ -440,6 +458,14 @@ pub fn save_course(db: &Database, course: &Course) -> Result<(), DatabaseError> 
         );
         DatabaseError::Serialization(e)
     })?;
+    
+    // Debug logging to see what we're saving
+    log::info!("Saving course '{}' with {} videos", course.name, course.videos.len());
+    if !course.videos.is_empty() {
+        let first_video = &course.videos[0];
+        log::info!("First video: title='{}', video_id={:?}, source_url={:?}, is_local={}", 
+                   first_video.title, first_video.video_id, first_video.source_url, first_video.is_local);
+    }
 
     let structure_json = course
         .structure
@@ -538,10 +564,50 @@ pub fn load_courses(db: &Database) -> Result<Vec<Course>, DatabaseError> {
 
             // Load videos with fallback to raw_titles for backward compatibility
             let videos: Vec<crate::types::VideoMetadata> = if let Some(videos_json) = videos_json {
-                serde_json::from_str(&videos_json).unwrap_or_else(|e| {
+                let parsed_videos: Vec<crate::types::VideoMetadata> = serde_json::from_str(&videos_json).unwrap_or_else(|e| {
                     log::warn!("Failed to deserialize video metadata, using intelligent fallback: {}", e);
                     create_fallback_video_metadata(&raw_titles)
-                })
+                });
+                
+                // Check if the parsed videos have valid metadata, if not, fix them
+                let mut fixed_videos = Vec::new();
+                for (index, video) in parsed_videos.into_iter().enumerate() {
+                    if video.video_id.is_none() && video.source_url.is_none() && !video.is_local {
+                        // This is a YouTube video with missing metadata, fix it
+                        log::warn!("Found YouTube video with missing metadata, fixing: '{}'", video.title);
+                        if is_youtube_video_title(&video.title) {
+                            if let Some(video_id) = extract_youtube_video_id_from_title(&video.title) {
+                                fixed_videos.push(crate::types::VideoMetadata::new_youtube(
+                                    video.title.clone(),
+                                    video_id.clone(),
+                                    format!("https://www.youtube.com/watch?v={}", video_id)
+                                ));
+                            } else {
+                                // Create placeholder metadata that will work with title analysis
+                                fixed_videos.push(crate::types::VideoMetadata {
+                                    title: video.title.clone(),
+                                    source_url: Some(format!("https://www.youtube.com/watch?v=PLACEHOLDER_{}", index)),
+                                    video_id: Some(format!("PLACEHOLDER_{}", index)),
+                                    duration_seconds: video.duration_seconds,
+                                    thumbnail_url: video.thumbnail_url,
+                                    description: video.description,
+                                    upload_date: video.upload_date,
+                                    author: video.author,
+                                    view_count: video.view_count,
+                                    tags: video.tags,
+                                    is_local: false,
+                                });
+                            }
+                        } else {
+                            // Assume local video
+                            fixed_videos.push(crate::types::VideoMetadata::new_local(video.title.clone(), video.title.clone()));
+                        }
+                    } else {
+                        // Video metadata is valid, keep as is
+                        fixed_videos.push(video);
+                    }
+                }
+                fixed_videos
             } else {
                 log::info!("No video metadata found, creating from raw_titles");
                 create_fallback_video_metadata(&raw_titles)
@@ -611,10 +677,50 @@ pub fn get_course_by_id(db: &Database, course_id: &Uuid) -> Result<Option<Course
 
             // Load videos with fallback to raw_titles for backward compatibility
             let videos: Vec<crate::types::VideoMetadata> = if let Some(videos_json) = videos_json {
-                serde_json::from_str(&videos_json).unwrap_or_else(|e| {
+                let parsed_videos: Vec<crate::types::VideoMetadata> = serde_json::from_str(&videos_json).unwrap_or_else(|e| {
                     log::warn!("Failed to deserialize video metadata for course {}, using intelligent fallback: {}", id, e);
                     create_fallback_video_metadata(&raw_titles)
-                })
+                });
+                
+                // Check if the parsed videos have valid metadata, if not, fix them
+                let mut fixed_videos = Vec::new();
+                for (index, video) in parsed_videos.into_iter().enumerate() {
+                    if video.video_id.is_none() && video.source_url.is_none() && !video.is_local {
+                        // This is a YouTube video with missing metadata, fix it
+                        log::warn!("Found YouTube video with missing metadata in course {}, fixing: '{}'", id, video.title);
+                        if is_youtube_video_title(&video.title) {
+                            if let Some(video_id) = extract_youtube_video_id_from_title(&video.title) {
+                                fixed_videos.push(crate::types::VideoMetadata::new_youtube(
+                                    video.title.clone(),
+                                    video_id.clone(),
+                                    format!("https://www.youtube.com/watch?v={}", video_id)
+                                ));
+                            } else {
+                                // Create placeholder metadata that will work with title analysis
+                                fixed_videos.push(crate::types::VideoMetadata {
+                                    title: video.title.clone(),
+                                    source_url: Some(format!("https://www.youtube.com/watch?v=PLACEHOLDER_{}", index)),
+                                    video_id: Some(format!("PLACEHOLDER_{}", index)),
+                                    duration_seconds: video.duration_seconds,
+                                    thumbnail_url: video.thumbnail_url,
+                                    description: video.description,
+                                    upload_date: video.upload_date,
+                                    author: video.author,
+                                    view_count: video.view_count,
+                                    tags: video.tags,
+                                    is_local: false,
+                                });
+                            }
+                        } else {
+                            // Assume local video
+                            fixed_videos.push(crate::types::VideoMetadata::new_local(video.title.clone(), video.title.clone()));
+                        }
+                    } else {
+                        // Video metadata is valid, keep as is
+                        fixed_videos.push(video);
+                    }
+                }
+                fixed_videos
             } else {
                 log::info!("No video metadata found for course {}, creating from raw_titles", id);
                 create_fallback_video_metadata(&raw_titles)

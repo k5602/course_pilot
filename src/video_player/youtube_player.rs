@@ -359,6 +359,36 @@ impl YouTubeEmbeddedPlayer {
             format!("https://www.youtube.com/embed/{video_id}?enablejsapi=1")
         }
     }
+
+    /// Open YouTube video URL with the system's default browser
+    fn open_youtube_url(&self, url: &str) -> Result<()> {
+        #[cfg(target_os = "windows")]
+        {
+            std::process::Command::new("cmd")
+                .args(["/C", "start", "", url])
+                .spawn()
+                .map_err(|e| anyhow!("Failed to open YouTube URL with system browser: {}", e))?;
+        }
+
+        #[cfg(target_os = "macos")]
+        {
+            std::process::Command::new("open")
+                .arg(url)
+                .spawn()
+                .map_err(|e| anyhow!("Failed to open YouTube URL with system browser: {}", e))?;
+        }
+
+        #[cfg(target_os = "linux")]
+        {
+            std::process::Command::new("xdg-open")
+                .arg(url)
+                .spawn()
+                .map_err(|e| anyhow!("Failed to open YouTube URL with system browser: {}", e))?;
+        }
+
+        log::info!("Opened YouTube URL with system browser: {}", url);
+        Ok(())
+    }
 }
 
 impl VideoPlayer for YouTubeEmbeddedPlayer {
@@ -369,15 +399,15 @@ impl VideoPlayer for YouTubeEmbeddedPlayer {
                 playlist_id,
                 title,
             } => {
-                // Load the video
-                self.load_youtube_video(video_id.clone(), playlist_id, title)?;
+                // Create YouTube URL
+                let url = if let Some(playlist) = &playlist_id {
+                    format!("https://www.youtube.com/watch?v={}&list={}", video_id, playlist)
+                } else {
+                    format!("https://www.youtube.com/watch?v={}", video_id)
+                };
 
-                // Wait a moment for the player to initialize, then play
-                // In a real implementation, we'd wait for the onReady event
-                std::thread::sleep(std::time::Duration::from_millis(500));
-                
-                // Start playback
-                self.execute_player_method("playVideo", "")?;
+                // Open YouTube video in system browser
+                self.open_youtube_url(&url)?;
 
                 // Update state
                 {
@@ -388,7 +418,24 @@ impl VideoPlayer for YouTubeEmbeddedPlayer {
                     *state = PlaybackState::Playing;
                 }
 
-                log::info!("Started playing YouTube video: {video_id}");
+                // Create video info
+                let video_source = VideoSource::YouTube {
+                    video_id: video_id.clone(),
+                    playlist_id,
+                    title: title.clone(),
+                };
+                let video_info = VideoInfo::new(video_source);
+
+                // Update current info
+                {
+                    let mut info = self
+                        .current_info
+                        .lock()
+                        .map_err(|_| anyhow!("Failed to lock current info"))?;
+                    *info = Some(video_info);
+                }
+
+                log::info!("Opened YouTube video in browser: {} ({})", title, video_id);
                 Ok(())
             }
             VideoSource::Local { .. } => Err(anyhow!(

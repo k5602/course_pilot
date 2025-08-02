@@ -240,6 +240,36 @@ impl LocalVideoPlayer {
         Ok(())
     }
 
+    /// Open YouTube video URL with the system's default browser
+    fn open_youtube_url(&self, url: &str) -> Result<()> {
+        #[cfg(target_os = "windows")]
+        {
+            std::process::Command::new("cmd")
+                .args(["/C", "start", "", url])
+                .spawn()
+                .map_err(|e| anyhow!("Failed to open YouTube URL with system browser: {}", e))?;
+        }
+
+        #[cfg(target_os = "macos")]
+        {
+            std::process::Command::new("open")
+                .arg(url)
+                .spawn()
+                .map_err(|e| anyhow!("Failed to open YouTube URL with system browser: {}", e))?;
+        }
+
+        #[cfg(target_os = "linux")]
+        {
+            std::process::Command::new("xdg-open")
+                .arg(url)
+                .spawn()
+                .map_err(|e| anyhow!("Failed to open YouTube URL with system browser: {}", e))?;
+        }
+
+        log::info!("Opened YouTube URL with system browser: {}", url);
+        Ok(())
+    }
+
     /// Get supported video formats
     pub fn get_supported_formats() -> Vec<&'static str> {
         vec!["mp4", "avi", "mov", "mkv", "webm", "flv", "wmv", "m4v"]

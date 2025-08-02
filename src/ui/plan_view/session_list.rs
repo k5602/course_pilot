@@ -492,11 +492,16 @@ fn VideoContentItem(props: VideoContentItemProps) -> Element {
                     Ok(Ok(Some(course))) => {
                     // Try to get video metadata first, fallback to raw_titles
                     let video_source = if let Some(video_metadata) = course.get_video_metadata(video_index) {
+                        // Debug logging to see what's in the metadata
+                        log::info!("Video metadata for index {}: title='{}', video_id={:?}, source_url={:?}, is_local={}", 
+                                   video_index, video_metadata.title, video_metadata.video_id, video_metadata.source_url, video_metadata.is_local);
+                        
                         // Use structured video metadata
                         if let Some(source) = video_metadata.get_video_source() {
                             source
                         } else {
-                            log::error!("Could not create video source from metadata for video index {}", video_index);
+                            log::error!("Could not create video source from metadata for video index {}: video_id={:?}, source_url={:?}, is_local={}", 
+                                       video_index, video_metadata.video_id, video_metadata.source_url, video_metadata.is_local);
                             toast_helpers::error("Invalid video metadata");
                             return;
                         }
