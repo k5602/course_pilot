@@ -1216,19 +1216,6 @@ mod tests {
             clustering_metadata: None,
         };
 
-        Course {
-            id: uuid::Uuid::new_v4(),
-            name: "Test Course".to_string(),
-            created_at: Utc::now(),
-            raw_titles: vec![
-                "Introduction to Programming".to_string(),
-                "Advanced Algorithms".to_string(),
-                "Basic Data Structures".to_string(),
-            ],
-            structure: Some(structure),
-        }
-    }
-
     fn create_test_plan(course: &Course) -> Plan {
         let items = vec![
             PlanItem {

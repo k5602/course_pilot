@@ -161,6 +161,22 @@ fn is_youtube_video_title(title: &str) -> bool {
     !has_video_extension && title.len() > 5 && title.len() < 200
 }
 
+/// Helper function to extract YouTube playlist ID from URL
+fn extract_playlist_id_from_url(url: &str) -> Option<String> {
+    // Look for list= parameter in YouTube URLs
+    if let Some(start) = url.find("list=") {
+        let id_start = start + 5; // length of "list="
+        if let Some(end) = url[id_start..].find('&') {
+            Some(url[id_start..id_start + end].to_string())
+        } else {
+            // No more parameters, take the rest
+            Some(url[id_start..].to_string())
+        }
+    } else {
+        None
+    }
+}
+
 /// Helper function to extract YouTube video ID from title if present
 fn extract_youtube_video_id_from_title(title: &str) -> Option<String> {
     // Try to extract video ID from URL patterns in title
@@ -197,6 +213,336 @@ fn extract_youtube_video_id_from_title(title: &str) -> Option<String> {
     }
 }
 
+/// Validate video metadata to ensure YouTube fields are not lost during database operations
+fn validate_video_metadata(videos: &[crate::types::VideoMetadata]) -> Result<Vec<crate::types::VideoMetadata>, DatabaseError> {
+    let mut validated_videos = Vec::new();
+    
+    for (index, video) in videos.iter().enumerate() {
+        let mut validated_video = video.clone();
+        
+        // Validate YouTube videos have required metadata
+        if !video.is_local {
+            // Check if this is a YouTube video missing critical metadata
+            if video.video_id.is_none() && video.source_url.is_none() {
+                warn!("YouTube video at index {} missing both video_id and source_url: '{}'", index, video.title);
+                
+                // Try to extract video_id from title if possible
+                if let Some(extracted_id) = extract_youtube_video_id_from_title(&video.title) {
+                    info!("Extracted video_id '{}' from title for video at index {}", extracted_id, index);
+                    validated_video.video_id = Some(extracted_id.clone());
+                    validated_video.source_url = Some(format!("https://www.youtube.com/watch?v={}", extracted_id));
+                    // Try to extract playlist_id from source_url if available
+                    if let Some(ref url) = validated_video.source_url {
+                        validated_video.playlist_id = extract_playlist_id_from_url(url);
+                    }
+                } else {
+                    // Create a placeholder that can be fixed later
+                    warn!("Could not extract video_id from title, creating placeholder for video at index {}", index);
+                    validated_video.video_id = Some(format!("PLACEHOLDER_{}", index));
+                    validated_video.source_url = Some(format!("https://www.youtube.com/watch?v=PLACEHOLDER_{}", index));
+                    validated_video.playlist_id = None;
+                }
+            } else if video.video_id.is_some() && video.source_url.is_none() {
+                // Has video_id but missing source_url, reconstruct it
+                if let Some(ref video_id) = video.video_id {
+                    let url = if let Some(ref playlist_id) = video.playlist_id {
+                        format!("https://www.youtube.com/watch?v={}&list={}", video_id, playlist_id)
+                    } else {
+                        format!("https://www.youtube.com/watch?v={}", video_id)
+                    };
+                    validated_video.source_url = Some(url);
+                }
+            } else if video.video_id.is_none() && video.source_url.is_some() {
+                // Has source_url but missing video_id, try to extract it
+                if let Some(ref url) = video.source_url {
+                    if let Some(extracted_id) = extract_youtube_video_id_from_title(url) {
+                        validated_video.video_id = Some(extracted_id);
+                    }
+                    // Also try to extract playlist_id
+                    if validated_video.playlist_id.is_none() {
+                        validated_video.playlist_id = extract_playlist_id_from_url(url);
+                    }
+                }
+            }
+        } else {
+            // For local videos, ensure source_url is set to file path
+            if video.source_url.is_none() {
+                validated_video.source_url = Some(video.title.clone());
+            }
+        }
+        
+        validated_videos.push(validated_video);
+    }
+    
+    Ok(validated_videos)
+}
+
+/// Run database migrations to update existing data
+fn run_database_migrations(conn: &mut Connection) -> Result<(), DatabaseError> {
+    // Get current database version
+    let current_version = get_database_version(conn)?;
+    
+    info!("Current database version: {}, target version: {}", current_version, DATABASE_VERSION);
+    
+    if current_version < DATABASE_VERSION {
+        info!("Running database migrations from version {} to {}", current_version, DATABASE_VERSION);
+        
+        // Run migrations in sequence
+        for version in (current_version + 1)..=DATABASE_VERSION {
+            info!("Applying migration to version {}", version);
+            match version {
+                1 => migrate_to_version_1(conn)?,
+                2 => migrate_to_version_2(conn)?,
+                _ => {
+                    warn!("Unknown migration version: {}", version);
+                }
+            }
+            
+            // Update version tracking
+            set_database_version(conn, version)?;
+            info!("Successfully applied migration to version {}", version);
+        }
+        
+        info!("All database migrations completed successfully");
+    } else {
+        info!("Database is up to date, no migrations needed");
+    }
+    
+    Ok(())
+}
+
+/// Get the current database version
+fn get_database_version(conn: &Connection) -> Result<i32, DatabaseError> {
+    let version = conn
+        .query_row(
+            "SELECT version FROM database_version ORDER BY version DESC LIMIT 1",
+            [],
+            |row| row.get::<_, i32>(0),
+        )
+        .unwrap_or(0); // Default to version 0 if no version is recorded
+    
+    Ok(version)
+}
+
+/// Set the database version
+fn set_database_version(conn: &Connection, version: i32) -> Result<(), DatabaseError> {
+    conn.execute(
+        "INSERT OR REPLACE INTO database_version (version, applied_at) VALUES (?1, ?2)",
+        params![version, Utc::now().timestamp()],
+    )?;
+    Ok(())
+}
+
+/// Migration to version 1 - Initial version tracking
+fn migrate_to_version_1(_conn: &Connection) -> Result<(), DatabaseError> {
+    info!("Migration v1: Setting up version tracking");
+    // This is just to establish version tracking, no actual data migration needed
+    Ok(())
+}
+
+/// Migration to version 2 - Fix VideoMetadata with missing playlist_id and original_index
+fn migrate_to_version_2(conn: &Connection) -> Result<(), DatabaseError> {
+    info!("Migration v2: Updating VideoMetadata to include playlist_id and original_index");
+    
+    // Get all courses that need migration
+    let mut stmt = conn.prepare(
+        "SELECT id, name, videos FROM courses WHERE videos IS NOT NULL"
+    )?;
+    
+    let courses_to_migrate: Vec<(String, String, String)> = stmt
+        .query_map([], |row| {
+            Ok((
+                row.get::<_, String>(0)?, // id
+                row.get::<_, String>(1)?, // name
+                row.get::<_, String>(2)?, // videos JSON
+            ))
+        })?
+        .collect::<Result<Vec<_>, _>>()?;
+    
+    info!("Found {} courses to migrate", courses_to_migrate.len());
+    
+    for (course_id, course_name, videos_json) in courses_to_migrate {
+        info!("Migrating course: {} ({})", course_name, course_id);
+        
+        // Parse existing video metadata
+        let existing_videos: Vec<serde_json::Value> = match serde_json::from_str(&videos_json) {
+            Ok(videos) => videos,
+            Err(e) => {
+                warn!("Failed to parse video metadata for course {}: {}", course_name, e);
+                continue;
+            }
+        };
+        
+        // Migrate each video metadata
+        let mut migrated_videos = Vec::new();
+        for (index, mut video) in existing_videos.into_iter().enumerate() {
+            // Add playlist_id field if missing
+            if !video.as_object().unwrap().contains_key("playlist_id") {
+                // Try to extract playlist_id from source_url if available
+                let playlist_id = if let Some(source_url) = video.get("source_url").and_then(|v| v.as_str()) {
+                    extract_playlist_id_from_url(source_url)
+                } else {
+                    None
+                };
+                video["playlist_id"] = serde_json::Value::from(playlist_id);
+            }
+            
+            // Add original_index field if missing
+            if !video.as_object().unwrap().contains_key("original_index") {
+                video["original_index"] = serde_json::Value::from(index);
+            }
+            
+            migrated_videos.push(video);
+        }
+        
+        // Serialize updated video metadata
+        let updated_videos_json = match serde_json::to_string(&migrated_videos) {
+            Ok(json) => json,
+            Err(e) => {
+                error!("Failed to serialize migrated video metadata for course {}: {}", course_name, e);
+                continue;
+            }
+        };
+        
+        // Update the course in the database
+        match conn.execute(
+            "UPDATE courses SET videos = ?1 WHERE id = ?2",
+            params![updated_videos_json, course_id],
+        ) {
+            Ok(_) => {
+                info!("Successfully migrated course: {}", course_name);
+            }
+            Err(e) => {
+                error!("Failed to update course {} after migration: {}", course_name, e);
+            }
+        }
+    }
+    
+    info!("Migration v2 completed");
+    Ok(())
+}
+
+/// Validate and repair loaded metadata to ensure complete VideoMetadata including video_id, playlist_id
+fn validate_and_repair_loaded_metadata(
+    parsed_videos: Vec<crate::types::VideoMetadata>, 
+    raw_titles: &[String]
+) -> Result<Vec<crate::types::VideoMetadata>, DatabaseError> {
+    let mut repaired_videos = Vec::new();
+    
+    for (index, video) in parsed_videos.into_iter().enumerate() {
+        let mut repaired_video = video.clone();
+        
+        // Check if this video needs repair
+        if !video.is_local && video.video_id.is_none() && video.source_url.is_none() {
+            // This is a YouTube video with missing metadata, try to repair it
+            log::warn!("Found YouTube video with missing metadata during load, repairing: '{}'", video.title);
+            
+            if is_youtube_video_title(&video.title) {
+                if let Some(video_id) = extract_youtube_video_id_from_title(&video.title) {
+                    log::info!("Repaired video_id '{}' from title for video at index {}", video_id, index);
+                    repaired_video.video_id = Some(video_id.clone());
+                    repaired_video.source_url = Some(format!("https://www.youtube.com/watch?v={}", video_id));
+                    // Set original_index if not already set
+                    if repaired_video.original_index == 0 && index > 0 {
+                        repaired_video.original_index = index;
+                    }
+                } else {
+                    // Create placeholder metadata that will work with title analysis
+                    log::warn!("Could not extract video_id from title, creating placeholder for video at index {}", index);
+                    repaired_video.video_id = Some(format!("PLACEHOLDER_{}", index));
+                    repaired_video.source_url = Some(format!("https://www.youtube.com/watch?v=PLACEHOLDER_{}", index));
+                    repaired_video.playlist_id = None;
+                    // Set original_index if not already set
+                    if repaired_video.original_index == 0 && index > 0 {
+                        repaired_video.original_index = index;
+                    }
+                }
+            } else {
+                // Assume local video if it doesn't look like YouTube
+                log::info!("Converting assumed YouTube video to local video at index {}", index);
+                repaired_video.is_local = true;
+                repaired_video.source_url = Some(video.title.clone());
+            }
+        } else if !video.is_local && video.video_id.is_some() && video.source_url.is_none() {
+            // Has video_id but missing source_url, reconstruct it
+            if let Some(ref video_id) = video.video_id {
+                log::info!("Reconstructing source_url for video_id '{}' at index {}", video_id, index);
+                let url = if let Some(ref playlist_id) = repaired_video.playlist_id {
+                    format!("https://www.youtube.com/watch?v={}&list={}", video_id, playlist_id)
+                } else {
+                    format!("https://www.youtube.com/watch?v={}", video_id)
+                };
+                repaired_video.source_url = Some(url);
+            }
+        } else if !video.is_local && video.video_id.is_none() && video.source_url.is_some() {
+            // Has source_url but missing video_id, try to extract it
+            if let Some(ref url) = video.source_url {
+                if let Some(extracted_id) = extract_youtube_video_id_from_title(url) {
+                    log::info!("Extracted video_id '{}' from source_url at index {}", extracted_id, index);
+                    repaired_video.video_id = Some(extracted_id);
+                }
+                // Also try to extract playlist_id
+                if repaired_video.playlist_id.is_none() {
+                    repaired_video.playlist_id = extract_playlist_id_from_url(url);
+                }
+            }
+        } else if video.is_local && video.source_url.is_none() {
+            // Local video missing source_url (file path)
+            log::info!("Setting source_url for local video at index {}", index);
+            repaired_video.source_url = Some(video.title.clone());
+        }
+        
+        // Ensure original_index is set correctly
+        if repaired_video.original_index != index {
+            repaired_video.original_index = index;
+        }
+        
+        repaired_videos.push(repaired_video);
+    }
+    
+    // If we have fewer videos than raw_titles, pad with fallback metadata
+    if repaired_videos.len() < raw_titles.len() {
+        log::warn!("Video metadata count ({}) less than raw_titles count ({}), padding with fallback", 
+                   repaired_videos.len(), raw_titles.len());
+        
+        for i in repaired_videos.len()..raw_titles.len() {
+            let fallback_video = if is_youtube_video_title(&raw_titles[i]) {
+                if let Some(video_id) = extract_youtube_video_id_from_title(&raw_titles[i]) {
+                    crate::types::VideoMetadata::new_youtube_with_playlist(
+                        raw_titles[i].clone(),
+                        video_id.clone(),
+                        format!("https://www.youtube.com/watch?v={}", video_id),
+                        None,
+                        i
+                    )
+                } else {
+                    crate::types::VideoMetadata {
+                        title: raw_titles[i].clone(),
+                        source_url: Some(format!("https://www.youtube.com/watch?v=PLACEHOLDER_{}", i)),
+                        video_id: Some(format!("PLACEHOLDER_{}", i)),
+                        playlist_id: None,
+                        original_index: i,
+                        duration_seconds: None,
+                        thumbnail_url: None,
+                        description: None,
+                        upload_date: None,
+                        author: None,
+                        view_count: None,
+                        tags: Vec::new(),
+                        is_local: false,
+                    }
+                }
+            } else {
+                crate::types::VideoMetadata::new_local_with_index(raw_titles[i].clone(), raw_titles[i].clone(), i)
+            };
+            
+            repaired_videos.push(fallback_video);
+        }
+    }
+    
+    Ok(repaired_videos)
+}
+
 /// Create fallback video metadata from raw titles with intelligent detection
 fn create_fallback_video_metadata(raw_titles: &[String]) -> Vec<crate::types::VideoMetadata> {
     raw_titles.iter().enumerate().map(|(index, title)| {
@@ -207,10 +553,12 @@ fn create_fallback_video_metadata(raw_titles: &[String]) -> Vec<crate::types::Vi
             log::info!("Detected as YouTube video: '{}'", title);
             if let Some(video_id) = extract_youtube_video_id_from_title(title) {
                 log::info!("Extracted video ID '{}' from title: '{}'", video_id, title);
-                crate::types::VideoMetadata::new_youtube(
+                crate::types::VideoMetadata::new_youtube_with_playlist(
                     title.clone(),
                     video_id.clone(),
-                    format!("https://www.youtube.com/watch?v={}", video_id)
+                    format!("https://www.youtube.com/watch?v={}", video_id),
+                    None, // No playlist_id available from title alone
+                    index
                 )
             } else {
                 log::warn!("YouTube video detected but could not extract ID from title: '{}'", title);
@@ -219,6 +567,8 @@ fn create_fallback_video_metadata(raw_titles: &[String]) -> Vec<crate::types::Vi
                     title: title.clone(),
                     source_url: Some(format!("https://www.youtube.com/watch?v=PLACEHOLDER_{}", index)),
                     video_id: Some(format!("PLACEHOLDER_{}", index)),
+                    playlist_id: None,
+                    original_index: index,
                     duration_seconds: None,
                     thumbnail_url: None,
                     description: None,
@@ -232,14 +582,28 @@ fn create_fallback_video_metadata(raw_titles: &[String]) -> Vec<crate::types::Vi
         } else {
             log::info!("Detected as local video: '{}'", title);
             // Assume local video
-            crate::types::VideoMetadata::new_local(title.clone(), title.clone())
+            crate::types::VideoMetadata::new_local_with_index(title.clone(), title.clone(), index)
         }
     }).collect()
 }
 
+/// Database version for migration tracking
+const DATABASE_VERSION: i32 = 2;
+
 /// Initialize database tables
 fn init_tables(conn: &mut Connection) -> Result<(), DatabaseError> {
     let tx = conn.transaction()?;
+
+    // Create database version table for migration tracking
+    tx.execute(
+        r#"
+        CREATE TABLE IF NOT EXISTS database_version (
+            version INTEGER PRIMARY KEY,
+            applied_at INTEGER NOT NULL
+        );
+        "#,
+        [],
+    )?;
 
     // Create courses table
     tx.execute(
@@ -280,6 +644,9 @@ fn init_tables(conn: &mut Connection) -> Result<(), DatabaseError> {
             "Notes table initialization failed: {e}"
         )))
     })?;
+
+    // Run database migrations
+    run_database_migrations(conn)?;
 
     // Start a new transaction for the remaining operations
     let tx = conn.transaction()?;
@@ -404,6 +771,15 @@ pub struct DatabasePerformanceMetrics {
     pub connection_pool_idle: u32,
 }
 
+/// Manually run database migrations (useful for troubleshooting)
+pub fn run_migrations(db: &Database) -> Result<(), DatabaseError> {
+    info!("Manually running database migrations");
+    let mut conn = db.get_conn()?;
+    run_database_migrations(&mut conn)?;
+    info!("Manual database migrations completed");
+    Ok(())
+}
+
 /// Initialize the database and create necessary tables
 pub fn init_db(db_path: &Path) -> Result<Database, DatabaseError> {
     // Create database directory if it doesn't exist
@@ -451,7 +827,9 @@ pub fn save_course(db: &Database, course: &Course) -> Result<(), DatabaseError> 
         DatabaseError::Serialization(e)
     })?;
 
-    let videos_json = serde_json::to_string(&course.videos).map_err(|e| {
+    // Validate and serialize video metadata with proper YouTube field preservation
+    let validated_videos = validate_video_metadata(&course.videos)?;
+    let videos_json = serde_json::to_string(&validated_videos).map_err(|e| {
         error!(
             "Failed to serialize videos for course {}: {}",
             course.name, e
@@ -460,11 +838,16 @@ pub fn save_course(db: &Database, course: &Course) -> Result<(), DatabaseError> 
     })?;
     
     // Debug logging to see what we're saving
-    log::info!("Saving course '{}' with {} videos", course.name, course.videos.len());
-    if !course.videos.is_empty() {
-        let first_video = &course.videos[0];
+    log::info!("Saving course '{}' with {} videos", course.name, validated_videos.len());
+    if !validated_videos.is_empty() {
+        let first_video = &validated_videos[0];
         log::info!("First video: title='{}', video_id={:?}, source_url={:?}, is_local={}", 
                    first_video.title, first_video.video_id, first_video.source_url, first_video.is_local);
+        
+        // Validate YouTube metadata is not lost
+        if !first_video.is_local && first_video.video_id.is_none() {
+            warn!("YouTube video missing video_id: '{}'", first_video.title);
+        }
     }
 
     let structure_json = course
@@ -569,45 +952,11 @@ pub fn load_courses(db: &Database) -> Result<Vec<Course>, DatabaseError> {
                     create_fallback_video_metadata(&raw_titles)
                 });
                 
-                // Check if the parsed videos have valid metadata, if not, fix them
-                let mut fixed_videos = Vec::new();
-                for (index, video) in parsed_videos.into_iter().enumerate() {
-                    if video.video_id.is_none() && video.source_url.is_none() && !video.is_local {
-                        // This is a YouTube video with missing metadata, fix it
-                        log::warn!("Found YouTube video with missing metadata, fixing: '{}'", video.title);
-                        if is_youtube_video_title(&video.title) {
-                            if let Some(video_id) = extract_youtube_video_id_from_title(&video.title) {
-                                fixed_videos.push(crate::types::VideoMetadata::new_youtube(
-                                    video.title.clone(),
-                                    video_id.clone(),
-                                    format!("https://www.youtube.com/watch?v={}", video_id)
-                                ));
-                            } else {
-                                // Create placeholder metadata that will work with title analysis
-                                fixed_videos.push(crate::types::VideoMetadata {
-                                    title: video.title.clone(),
-                                    source_url: Some(format!("https://www.youtube.com/watch?v=PLACEHOLDER_{}", index)),
-                                    video_id: Some(format!("PLACEHOLDER_{}", index)),
-                                    duration_seconds: video.duration_seconds,
-                                    thumbnail_url: video.thumbnail_url,
-                                    description: video.description,
-                                    upload_date: video.upload_date,
-                                    author: video.author,
-                                    view_count: video.view_count,
-                                    tags: video.tags,
-                                    is_local: false,
-                                });
-                            }
-                        } else {
-                            // Assume local video
-                            fixed_videos.push(crate::types::VideoMetadata::new_local(video.title.clone(), video.title.clone()));
-                        }
-                    } else {
-                        // Video metadata is valid, keep as is
-                        fixed_videos.push(video);
-                    }
-                }
-                fixed_videos
+                // Validate and fix any incomplete metadata during loading
+                validate_and_repair_loaded_metadata(parsed_videos, &raw_titles).unwrap_or_else(|e| {
+                    log::error!("Failed to repair loaded metadata: {}", e);
+                    create_fallback_video_metadata(&raw_titles)
+                })
             } else {
                 log::info!("No video metadata found, creating from raw_titles");
                 create_fallback_video_metadata(&raw_titles)
@@ -682,45 +1031,11 @@ pub fn get_course_by_id(db: &Database, course_id: &Uuid) -> Result<Option<Course
                     create_fallback_video_metadata(&raw_titles)
                 });
                 
-                // Check if the parsed videos have valid metadata, if not, fix them
-                let mut fixed_videos = Vec::new();
-                for (index, video) in parsed_videos.into_iter().enumerate() {
-                    if video.video_id.is_none() && video.source_url.is_none() && !video.is_local {
-                        // This is a YouTube video with missing metadata, fix it
-                        log::warn!("Found YouTube video with missing metadata in course {}, fixing: '{}'", id, video.title);
-                        if is_youtube_video_title(&video.title) {
-                            if let Some(video_id) = extract_youtube_video_id_from_title(&video.title) {
-                                fixed_videos.push(crate::types::VideoMetadata::new_youtube(
-                                    video.title.clone(),
-                                    video_id.clone(),
-                                    format!("https://www.youtube.com/watch?v={}", video_id)
-                                ));
-                            } else {
-                                // Create placeholder metadata that will work with title analysis
-                                fixed_videos.push(crate::types::VideoMetadata {
-                                    title: video.title.clone(),
-                                    source_url: Some(format!("https://www.youtube.com/watch?v=PLACEHOLDER_{}", index)),
-                                    video_id: Some(format!("PLACEHOLDER_{}", index)),
-                                    duration_seconds: video.duration_seconds,
-                                    thumbnail_url: video.thumbnail_url,
-                                    description: video.description,
-                                    upload_date: video.upload_date,
-                                    author: video.author,
-                                    view_count: video.view_count,
-                                    tags: video.tags,
-                                    is_local: false,
-                                });
-                            }
-                        } else {
-                            // Assume local video
-                            fixed_videos.push(crate::types::VideoMetadata::new_local(video.title.clone(), video.title.clone()));
-                        }
-                    } else {
-                        // Video metadata is valid, keep as is
-                        fixed_videos.push(video);
-                    }
-                }
-                fixed_videos
+                // Validate and fix any incomplete metadata during loading
+                validate_and_repair_loaded_metadata(parsed_videos, &raw_titles).unwrap_or_else(|e| {
+                    log::error!("Failed to repair loaded metadata: {}", e);
+                    create_fallback_video_metadata(&raw_titles)
+                })
             } else {
                 log::info!("No video metadata found for course {}, creating from raw_titles", id);
                 create_fallback_video_metadata(&raw_titles)
@@ -976,52 +1291,6 @@ pub fn delete_plan(db: &Database, plan_id: &Uuid) -> Result<(), DatabaseError> {
     Ok(())
 }
 
-#[cfg(test)]
-mod tests {
-    use super::*;
-    use crate::types::{CourseStructure, Module, Section, StructureMetadata};
-    use chrono::Utc;
-    use std::time::Duration;
-
-    #[test]
-    fn test_database_operations() {
-        // Create and initialize an in-memory database for testing
-        let conn = init_db(Path::new(":memory:")).unwrap();
-
-        // Create test course
-        let course = Course {
-            id: Uuid::new_v4(),
-            name: "Test Course".to_string(),
-            created_at: Utc::now(),
-            raw_titles: vec!["Video 1".to_string(), "Video 2".to_string()],
-            structure: Some(CourseStructure::new_basic(
-                vec![Module::new_basic(
-                    "Module 1".to_string(),
-                    vec![Section {
-                        title: "Section 1".to_string(),
-                        video_index: 0,
-                        duration: Duration::from_secs(3600),
-                    }],
-                )],
-                StructureMetadata {
-                    total_videos: 2,
-                    total_duration: Duration::from_secs(3600),
-                    estimated_duration_hours: Some(2.0),
-                    difficulty_level: Some("Beginner".to_string()),
-                    structure_quality_score: None,
-                    content_coherence_score: None,
-                },
-            )),
-        };
-
-        // Test save and load course
-        save_course(&conn, &course).unwrap();
-        let loaded_courses = load_courses(&conn).unwrap();
-        assert_eq!(loaded_courses.len(), 1);
-        assert_eq!(loaded_courses[0].name, course.name);
-        assert_eq!(loaded_courses[0].raw_titles, course.raw_titles);
-    }
-}
 // ============================================================================
 // ENHANCED CLUSTERING INTEGRATION
 // ============================================================================

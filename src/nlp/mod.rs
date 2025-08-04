@@ -6,12 +6,16 @@
 pub mod clustering;
 pub mod preference_service;
 pub mod processor;
+pub mod sequential_detection;
 
 // Re-export main processing function
 pub use processor::structure_course;
 
 // Re-export preference service
 pub use preference_service::{AutoTuningService, PreferenceService};
+
+// Re-export sequential detection
+pub use sequential_detection::{detect_sequential_patterns, ContentTypeAnalysis, ContentType, ProcessingRecommendation};
 
 // Re-export error types
 pub use crate::NlpError;

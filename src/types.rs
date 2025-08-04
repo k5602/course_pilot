@@ -26,6 +26,8 @@ pub struct VideoMetadata {
     pub title: String,
     pub source_url: Option<String>, // YouTube URL or local file path
     pub video_id: Option<String>, // YouTube video ID
+    pub playlist_id: Option<String>, // YouTube playlist ID for preserving playlist context
+    pub original_index: usize, // Preserve import order for sequential content detection
     pub duration_seconds: Option<f64>,
     pub thumbnail_url: Option<String>,
     pub description: Option<String>,
@@ -769,10 +771,12 @@ pub struct Note {
 impl Course {
     pub fn new(name: String, raw_titles: Vec<String>) -> Self {
         // Create basic video metadata from raw titles for backward compatibility
-        let videos = raw_titles.iter().map(|title| VideoMetadata {
+        let videos = raw_titles.iter().enumerate().map(|(index, title)| VideoMetadata {
             title: title.clone(),
             source_url: None,
             video_id: None,
+            playlist_id: None,
+            original_index: index,
             duration_seconds: None,
             thumbnail_url: None,
             description: None,
@@ -830,6 +834,26 @@ impl VideoMetadata {
             title,
             source_url: Some(url),
             video_id: Some(video_id),
+            playlist_id: None,
+            original_index: 0, // Will be set properly during import
+            duration_seconds: None,
+            thumbnail_url: None,
+            description: None,
+            upload_date: None,
+            author: None,
+            view_count: None,
+            tags: Vec::new(),
+            is_local: false,
+        }
+    }
+
+    pub fn new_youtube_with_playlist(title: String, video_id: String, url: String, playlist_id: Option<String>, original_index: usize) -> Self {
+        Self {
+            title,
+            source_url: Some(url),
+            video_id: Some(video_id),
+            playlist_id,
+            original_index,
             duration_seconds: None,
             thumbnail_url: None,
             description: None,
@@ -846,6 +870,26 @@ impl VideoMetadata {
             title,
             source_url: Some(file_path),
             video_id: None,
+            playlist_id: None,
+            original_index: 0, // Will be set properly during import
+            duration_seconds: None,
+            thumbnail_url: None,
+            description: None,
+            upload_date: None,
+            author: None,
+            view_count: None,
+            tags: Vec::new(),
+            is_local: true,
+        }
+    }
+
+    pub fn new_local_with_index(title: String, file_path: String, original_index: usize) -> Self {
+        Self {
+            title,
+            source_url: Some(file_path),
+            video_id: None,
+            playlist_id: None,
+            original_index,
             duration_seconds: None,
             thumbnail_url: None,
             description: None,
@@ -874,11 +918,26 @@ impl VideoMetadata {
         } else if let Some(video_id) = &self.video_id {
             Some(crate::video_player::VideoSource::YouTube {
                 video_id: video_id.clone(),
-                playlist_id: None, // TODO: Extract from URL if available
+                playlist_id: self.playlist_id.clone(),
                 title: self.title.clone(),
             })
         } else {
             None
+        }
+    }
+
+    /// Check if metadata is complete for the video type (YouTube vs local)
+    pub fn is_metadata_complete(&self) -> bool {
+        if self.is_local {
+            // Local videos need at least title and source_url (file path)
+            !self.title.is_empty() && self.source_url.is_some()
+        } else {
+            // YouTube videos need at least title, video_id, and source_url
+            !self.title.is_empty() && 
+            self.video_id.is_some() && 
+            self.source_url.is_some() &&
+            // Ensure video_id is not a placeholder
+            !self.video_id.as_ref().unwrap_or(&String::new()).starts_with("PLACEHOLDER_")
         }
     }
 }

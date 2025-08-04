@@ -93,33 +93,83 @@ pub async fn import_and_structure_youtube(
         .await
         .map_err(|e| ImportError::Network(format!("YouTube import failed: {e}")))?;
 
+    // Validate that YouTube import preserved all required metadata
+    for (index, section) in sections.iter().enumerate() {
+        if section.video_id.is_empty() {
+            return Err(ImportError::Network(format!(
+                "YouTube import failed: video {} '{}' has empty video_id",
+                index + 1,
+                section.title
+            )));
+        }
+        if section.url.is_empty() {
+            return Err(ImportError::Network(format!(
+                "YouTube import failed: video {} '{}' has empty URL",
+                index + 1,
+                section.title
+            )));
+        }
+    }
+
     progress_callback(ImportProgress {
         stage: ImportStage::Processing,
         progress: 0.3,
-        message: format!("Imported {} videos", sections.len()),
+        message: format!("Imported {} videos with complete metadata", sections.len()),
         clustering_stage: None,
     });
 
     // Stage 3: Create course with structured video metadata
     let course_name = course_title.unwrap_or_else(|| metadata.title.clone());
     let raw_titles: Vec<String> = sections.iter().map(|s| s.title.clone()).collect();
-    let videos: Vec<crate::types::VideoMetadata> = sections.iter().map(|s| {
-        let video_id = s.video_id.clone().unwrap_or_default();
-        let url = s.url.clone().unwrap_or_default();
-        
+    let videos: Vec<crate::types::VideoMetadata> = sections.iter().enumerate().map(|(_index, s)| {
         // Log what we're creating for debugging
-        log::info!("Creating VideoMetadata: title='{}', video_id='{}', url='{}'", s.title, video_id, url);
+        log::info!("Creating VideoMetadata: title='{}', video_id='{}', url='{}'", s.title, s.video_id, s.url);
         
-        if video_id.is_empty() {
-            log::error!("Empty video_id for YouTube video: '{}'", s.title);
-        }
-        
-        crate::types::VideoMetadata::new_youtube(
+        // Create VideoMetadata with complete YouTube metadata
+        let mut video_metadata = crate::types::VideoMetadata::new_youtube_with_playlist(
             s.title.clone(),
-            video_id,
-            url,
-        )
+            s.video_id.clone(),
+            s.url.clone(),
+            s.playlist_id.clone(),
+            s.original_index,
+        );
+        
+        // Set additional metadata fields
+        video_metadata.duration_seconds = Some(s.duration.as_secs_f64());
+        video_metadata.thumbnail_url = s.thumbnail_url.clone();
+        video_metadata.description = s.description.clone();
+        video_metadata.author = s.author.clone();
+        
+        video_metadata
     }).collect();
+    
+    // Validate that all imported metadata is complete before proceeding
+    for (index, video) in videos.iter().enumerate() {
+        if !video.is_metadata_complete() {
+            return Err(ImportError::Network(format!(
+                "Incomplete metadata for video {}: '{}'. Missing required fields for YouTube video.",
+                index + 1,
+                video.title
+            )));
+        }
+    }
+    
+    log::info!("Successfully validated metadata for {} YouTube videos", videos.len());
+    
+    // Log metadata preservation statistics
+    let videos_with_thumbnails = videos.iter().filter(|v| v.thumbnail_url.is_some()).count();
+    let videos_with_descriptions = videos.iter().filter(|v| v.description.is_some()).count();
+    let videos_with_authors = videos.iter().filter(|v| v.author.is_some()).count();
+    let videos_with_playlist_ids = videos.iter().filter(|v| v.playlist_id.is_some()).count();
+    
+    log::info!(
+        "Metadata preservation stats: thumbnails={}/{}, descriptions={}/{}, authors={}/{}, playlist_ids={}/{}",
+        videos_with_thumbnails, videos.len(),
+        videos_with_descriptions, videos.len(),
+        videos_with_authors, videos.len(),
+        videos_with_playlist_ids, videos.len()
+    );
+    
     let mut course = Course::new_with_videos(course_name, videos);
 
     // Stage 4: Structure using advanced clustering

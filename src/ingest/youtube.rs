@@ -23,8 +23,13 @@ fn create_http_client() -> Result<reqwest::Client, ImportError> {
 pub struct YoutubeSection {
     pub title: String,
     pub duration: Duration,
-    pub video_id: Option<String>,
-    pub url: Option<String>,
+    pub video_id: String, // Always present for YouTube videos
+    pub url: String, // Always present for YouTube videos
+    pub playlist_id: Option<String>, // Playlist ID for preserving playlist context
+    pub thumbnail_url: Option<String>, // Video thumbnail URL
+    pub description: Option<String>, // Video description
+    pub author: Option<String>, // Channel name/author
+    pub original_index: usize, // Preserve import order
 }
 
 /// YouTube playlist metadata
@@ -116,11 +121,11 @@ pub async fn import_from_youtube(
     }
 
     // Step 1.5: Fetch playlist metadata
-    let playlist_metadata = fetch_playlist_metadata(playlist_id, api_key, &client).await?;
+    let playlist_metadata = fetch_playlist_metadata(playlist_id.clone(), api_key, &client).await?;
 
-    // Step 2: Fetch video details (title, duration) in batches of 50
+    // Step 2: Fetch video details (title, duration, thumbnails, description) in batches of 50
     let mut sections = Vec::new();
-    for chunk in video_ids.chunks(50) {
+    for (chunk_index, chunk) in video_ids.chunks(50).enumerate() {
         let ids = chunk.join(",");
         let api_url = format!(
             "https://www.googleapis.com/youtube/v3/videos?part=contentDetails,snippet&id={ids}&key={api_key}"
@@ -143,6 +148,23 @@ pub async fn import_from_youtube(
         #[derive(Deserialize)]
         struct Snippet {
             title: String,
+            description: Option<String>,
+            #[serde(rename = "channelTitle")]
+            channel_title: Option<String>,
+            thumbnails: Option<Thumbnails>,
+        }
+        #[derive(Deserialize)]
+        struct Thumbnails {
+            #[serde(rename = "maxres")]
+            maxres: Option<ThumbnailInfo>,
+            high: Option<ThumbnailInfo>,
+            medium: Option<ThumbnailInfo>,
+            #[serde(rename = "default")]
+            default: Option<ThumbnailInfo>,
+        }
+        #[derive(Deserialize)]
+        struct ThumbnailInfo {
+            url: String,
         }
         #[derive(Deserialize)]
         struct VideoContentDetails {
@@ -151,17 +173,48 @@ pub async fn import_from_youtube(
         let videos_resp: VideosResponse = resp.json().await.map_err(|e| {
             ImportError::Network(format!("Failed to parse video details response: {e}"))
         })?;
-        for (item, video_id) in videos_resp.items.iter().zip(chunk.iter()) {
+        
+        // Validate that we got responses for all requested videos
+        if videos_resp.items.len() != chunk.len() {
+            log::warn!(
+                "YouTube API returned {} videos but requested {}. Some videos may be private or deleted.",
+                videos_resp.items.len(),
+                chunk.len()
+            );
+        }
+        for (video_index, (item, video_id)) in videos_resp.items.iter().zip(chunk.iter()).enumerate() {
             let title = clean_video_title(&item.snippet.title);
             let duration = parse_iso8601_duration(&item.content_details.duration)
                 .unwrap_or_else(|| Duration::from_secs(0));
             let url = format!("https://www.youtube.com/watch?v={}", video_id);
-            sections.push(YoutubeSection { 
+            
+            // Extract best available thumbnail
+            let thumbnail_url = item.snippet.thumbnails.as_ref().and_then(|thumbs| {
+                thumbs.maxres.as_ref()
+                    .or(thumbs.high.as_ref())
+                    .or(thumbs.medium.as_ref())
+                    .or(thumbs.default.as_ref())
+                    .map(|thumb| thumb.url.clone())
+            });
+            
+            // Calculate original index across all chunks
+            let original_index = chunk_index * 50 + video_index;
+            
+            let section = YoutubeSection { 
                 title, 
                 duration, 
-                video_id: Some(video_id.to_string()),
-                url: Some(url),
-            });
+                video_id: video_id.to_string(),
+                url,
+                playlist_id: Some(playlist_id.clone()),
+                thumbnail_url,
+                description: item.snippet.description.clone(),
+                author: item.snippet.channel_title.clone(),
+                original_index,
+            };
+            
+            // Validate section completeness
+            validate_youtube_section(&section)?;
+            sections.push(section);
         }
     }
 
@@ -325,6 +378,29 @@ fn clean_video_title(title: &str) -> String {
         .split_whitespace()
         .collect::<Vec<_>>()
         .join(" ")
+}
+
+/// Validate that a YoutubeSection has complete metadata
+fn validate_youtube_section(section: &YoutubeSection) -> Result<(), ImportError> {
+    if section.title.is_empty() {
+        return Err(ImportError::Network(
+            "YouTube video has empty title".to_string()
+        ));
+    }
+    
+    if section.video_id.is_empty() {
+        return Err(ImportError::Network(
+            format!("YouTube video '{}' has empty video_id", section.title)
+        ));
+    }
+    
+    if section.url.is_empty() {
+        return Err(ImportError::Network(
+            format!("YouTube video '{}' has empty URL", section.title)
+        ));
+    }
+    
+    Ok(())
 }
 
 /// Extract playlist ID from various YouTube URL formats

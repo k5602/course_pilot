@@ -11,6 +11,7 @@ use crate::nlp::clustering::{
     StrategySelection, TfIdfAnalyzer, TopicExtractor, VideoCluster, VideoWithMetadata,
 };
 use crate::nlp::{extract_numbers, is_module_indicator, normalize_text};
+use crate::nlp::sequential_detection::{detect_sequential_patterns, ProcessingRecommendation};
 use crate::types::{
     ClusteringMetadata, ClusteringStrategy, CourseStructure, DifficultyLevel, Module, PlanSettings,
     Section, StructureMetadata, TopicInfo,
@@ -35,30 +36,62 @@ pub fn structure_course(titles: Vec<String>) -> Result<CourseStructure, NlpError
 
     let start_time = Instant::now();
 
-    // Step 1: Check if we have explicit module structure that should be preserved
-    let has_explicit_modules = titles.iter().any(|title| is_module_indicator(title));
+    // Step 1: Perform content type analysis to determine optimal processing strategy
+    let content_analysis = detect_sequential_patterns(&titles);
+    
+    log::info!(
+        "Content analysis complete: type={:?}, confidence={:.2}, recommendation={:?}",
+        content_analysis.content_type,
+        content_analysis.confidence_score,
+        content_analysis.recommendation
+    );
 
-    // Step 2: If we have explicit modules or insufficient content, use rule-based approach
-    if has_explicit_modules || titles.len() < 8 {
-        log::info!("Using rule-based approach due to explicit modules or small dataset");
-        return structure_course_fallback(titles);
-    }
-
-    // Step 3: Try intelligent clustering approach for larger, unstructured datasets
-    match structure_course_with_clustering(&titles) {
-        Ok(clustered_structure) => {
-            log::info!(
-                "Successfully structured course using clustering in {}ms",
-                start_time.elapsed().as_millis()
-            );
-            Ok(clustered_structure)
+    // Step 2: Apply processing strategy based on content analysis
+    match content_analysis.recommendation {
+        ProcessingRecommendation::PreserveOrder => {
+            log::info!("Using sequential processing to preserve original order");
+            structure_course_sequential(titles, &content_analysis)
         }
-        Err(clustering_error) => {
-            log::warn!(
-                "Clustering failed: {clustering_error}, falling back to rule-based approach"
-            );
-
-            // Step 4: Fallback to existing rule-based approach
+        ProcessingRecommendation::ApplyClustering => {
+            log::info!("Using clustering approach for thematic content");
+            match structure_course_with_clustering(&titles) {
+                Ok(clustered_structure) => {
+                    log::info!(
+                        "Successfully structured course using clustering in {}ms",
+                        start_time.elapsed().as_millis()
+                    );
+                    Ok(clustered_structure)
+                }
+                Err(clustering_error) => {
+                    log::warn!(
+                        "Clustering failed: {clustering_error}, falling back to sequential processing"
+                    );
+                    structure_course_sequential(titles, &content_analysis)
+                }
+            }
+        }
+        ProcessingRecommendation::UserChoice => {
+            // For now, default to clustering for mixed content, but this could be enhanced
+            // to present user choice in the UI
+            log::info!("Mixed content detected, defaulting to clustering approach");
+            match structure_course_with_clustering(&titles) {
+                Ok(clustered_structure) => {
+                    log::info!(
+                        "Successfully structured mixed content using clustering in {}ms",
+                        start_time.elapsed().as_millis()
+                    );
+                    Ok(clustered_structure)
+                }
+                Err(clustering_error) => {
+                    log::warn!(
+                        "Clustering failed for mixed content: {clustering_error}, using sequential fallback"
+                    );
+                    structure_course_sequential(titles, &content_analysis)
+                }
+            }
+        }
+        ProcessingRecommendation::FallbackProcessing => {
+            log::info!("Using fallback processing for ambiguous content");
             structure_course_fallback(titles)
         }
     }
@@ -132,6 +165,37 @@ fn structure_course_fallback(titles: Vec<String>) -> Result<CourseStructure, Nlp
         &create_basic_analysis_for_difficulty(&titles),
     );
 
+    Ok(CourseStructure::new_basic(modules, metadata))
+}
+
+/// Structure course using sequential processing that preserves original order
+///
+/// This function creates a course structure that maintains the original video order
+/// while still providing logical module groupings based on detected patterns.
+///
+/// # Arguments
+/// * `titles` - Vector of video titles in original order
+/// * `content_analysis` - Results from sequential pattern detection
+///
+/// # Returns
+/// * `Ok(CourseStructure)` - Structured course preserving original order
+/// * `Err(NlpError)` - Error if structuring fails
+fn structure_course_sequential(
+    titles: Vec<String>,
+    content_analysis: &crate::nlp::sequential_detection::ContentTypeAnalysis,
+) -> Result<CourseStructure, NlpError> {
+    log::info!(
+        "Structuring course sequentially with {} patterns detected",
+        content_analysis.sequential_patterns.len()
+    );
+
+    // Step 1: Create modules that preserve original order
+    let modules = create_sequential_modules_preserving_order(&titles, content_analysis)?;
+
+    // Step 2: Generate metadata that reflects sequential processing
+    let metadata = generate_sequential_metadata(&titles, &modules, content_analysis);
+
+    // Step 3: Create course structure without clustering metadata
     Ok(CourseStructure::new_basic(modules, metadata))
 }
 
@@ -2838,4 +2902,333 @@ struct QualityMetrics {
     duration_quality: f32,
     #[allow(dead_code)]
     topic_quality: f32,
+}
+// ============================================================================
+// SEQUENTIAL PROCESSING HELPER FUNCTIONS
+// ============================================================================
+
+/// Create modules that preserve original video order while providing logical groupings
+fn create_sequential_modules_preserving_order(
+    titles: &[String],
+    content_analysis: &crate::nlp::sequential_detection::ContentTypeAnalysis,
+) -> Result<Vec<Module>, NlpError> {
+    // Check if we have explicit module indicators to use as boundaries
+    let modules = if !content_analysis.module_indicators.is_empty() {
+        create_modules_from_indicators(titles, content_analysis)?
+    } else {
+        // Create logical groupings based on sequential patterns
+        let mut modules = create_modules_from_sequential_patterns(titles, content_analysis)?;
+        
+        // If no clear structure found, create simple sequential chunks
+        if modules.is_empty() {
+            modules = create_simple_sequential_modules(titles)?;
+        }
+        
+        modules
+    };
+    
+    Ok(modules)
+}
+
+/// Create modules based on detected module indicators
+fn create_modules_from_indicators(
+    titles: &[String],
+    content_analysis: &crate::nlp::sequential_detection::ContentTypeAnalysis,
+) -> Result<Vec<Module>, NlpError> {
+    let mut modules = Vec::new();
+    let mut current_sections = Vec::new();
+    let mut current_module_title = "Introduction".to_string();
+    let mut _last_module_index = 0;
+    
+    for (i, title) in titles.iter().enumerate() {
+        // Check if this title is a module indicator
+        let is_module_boundary = content_analysis.module_indicators
+            .iter()
+            .any(|indicator| indicator.index == i);
+        
+        if is_module_boundary && !current_sections.is_empty() {
+            // Save the previous module
+            modules.push(Module::new_basic(
+                current_module_title.clone(),
+                std::mem::take(&mut current_sections),
+            ));
+            
+            // Start new module
+            current_module_title = extract_clean_module_title(title);
+            _last_module_index = i;
+        } else if !is_module_boundary {
+            // Add as section to current module
+            current_sections.push(Section {
+                title: title.clone(),
+                video_index: i,
+                duration: estimate_video_duration(title)
+                    .unwrap_or_else(|| Duration::from_secs(600)),
+            });
+        }
+    }
+    
+    // Add the last module if it has content
+    if !current_sections.is_empty() {
+        modules.push(Module::new_basic(current_module_title, current_sections));
+    }
+    
+    Ok(modules)
+}
+
+/// Create modules based on sequential patterns while preserving order
+fn create_modules_from_sequential_patterns(
+    titles: &[String],
+    content_analysis: &crate::nlp::sequential_detection::ContentTypeAnalysis,
+) -> Result<Vec<Module>, NlpError> {
+    let mut modules = Vec::new();
+    
+    // Find the strongest sequential pattern to use for grouping
+    if let Some(strongest_pattern) = content_analysis.sequential_patterns
+        .iter()
+        .max_by(|a, b| a.confidence.partial_cmp(&b.confidence).unwrap_or(std::cmp::Ordering::Equal))
+    {
+        match strongest_pattern.pattern_type {
+            crate::nlp::sequential_detection::SequentialPatternType::NumericSequence |
+            crate::nlp::sequential_detection::SequentialPatternType::ModuleProgression => {
+                modules = create_modules_from_numeric_pattern(titles, strongest_pattern)?;
+            }
+            crate::nlp::sequential_detection::SequentialPatternType::AlphabeticSequence => {
+                modules = create_modules_from_alphabetic_pattern(titles, strongest_pattern)?;
+            }
+            crate::nlp::sequential_detection::SequentialPatternType::StepByStep => {
+                modules = create_modules_from_step_pattern(titles, strongest_pattern)?;
+            }
+            crate::nlp::sequential_detection::SequentialPatternType::ChronologicalOrder => {
+                modules = create_modules_from_chronological_pattern(titles, strongest_pattern)?;
+            }
+        }
+    }
+    
+    Ok(modules)
+}
+
+/// Create modules from numeric sequence patterns
+fn create_modules_from_numeric_pattern(
+    titles: &[String],
+    pattern: &crate::nlp::sequential_detection::SequentialPattern,
+) -> Result<Vec<Module>, NlpError> {
+    let mut modules = Vec::new();
+    let chunk_size = calculate_optimal_sequential_chunk_size(titles.len());
+    
+    for (module_index, chunk) in titles.chunks(chunk_size).enumerate() {
+        let module_title = if pattern.matched_indices.contains(&(module_index * chunk_size)) {
+            // Use the actual title if it's a pattern match
+            extract_clean_module_title(&chunk[0])
+        } else {
+            format!("Section {}", module_index + 1)
+        };
+        
+        let sections: Vec<Section> = chunk
+            .iter()
+            .enumerate()
+            .map(|(section_index, title)| Section {
+                title: title.clone(),
+                video_index: module_index * chunk_size + section_index,
+                duration: estimate_video_duration(title)
+                    .unwrap_or_else(|| Duration::from_secs(600)),
+            })
+            .collect();
+        
+        modules.push(Module::new_basic(module_title, sections));
+    }
+    
+    Ok(modules)
+}
+
+/// Create modules from alphabetic sequence patterns
+fn create_modules_from_alphabetic_pattern(
+    titles: &[String],
+    _pattern: &crate::nlp::sequential_detection::SequentialPattern,
+) -> Result<Vec<Module>, NlpError> {
+    // For alphabetic patterns, create modules based on letter groupings
+    let chunk_size = calculate_optimal_sequential_chunk_size(titles.len());
+    let mut modules = Vec::new();
+    
+    for (module_index, chunk) in titles.chunks(chunk_size).enumerate() {
+        let letter = char::from(b'A' + (module_index as u8));
+        let module_title = format!("Chapter {}", letter);
+        
+        let sections: Vec<Section> = chunk
+            .iter()
+            .enumerate()
+            .map(|(section_index, title)| Section {
+                title: title.clone(),
+                video_index: module_index * chunk_size + section_index,
+                duration: estimate_video_duration(title)
+                    .unwrap_or_else(|| Duration::from_secs(600)),
+            })
+            .collect();
+        
+        modules.push(Module::new_basic(module_title, sections));
+    }
+    
+    Ok(modules)
+}
+
+/// Create modules from step-by-step patterns
+fn create_modules_from_step_pattern(
+    titles: &[String],
+    _pattern: &crate::nlp::sequential_detection::SequentialPattern,
+) -> Result<Vec<Module>, NlpError> {
+    // Group step-by-step content into logical phases
+    let chunk_size = calculate_optimal_sequential_chunk_size(titles.len());
+    let mut modules = Vec::new();
+    
+    let phase_names = ["Getting Started", "Building Skills", "Advanced Techniques", "Mastery"];
+    
+    for (module_index, chunk) in titles.chunks(chunk_size).enumerate() {
+        let module_title = phase_names
+            .get(module_index)
+            .unwrap_or(&"Additional Steps")
+            .to_string();
+        
+        let sections: Vec<Section> = chunk
+            .iter()
+            .enumerate()
+            .map(|(section_index, title)| Section {
+                title: title.clone(),
+                video_index: module_index * chunk_size + section_index,
+                duration: estimate_video_duration(title)
+                    .unwrap_or_else(|| Duration::from_secs(600)),
+            })
+            .collect();
+        
+        modules.push(Module::new_basic(module_title, sections));
+    }
+    
+    Ok(modules)
+}
+
+/// Create modules from chronological patterns
+fn create_modules_from_chronological_pattern(
+    titles: &[String],
+    _pattern: &crate::nlp::sequential_detection::SequentialPattern,
+) -> Result<Vec<Module>, NlpError> {
+    // Create modules that respect chronological flow
+    let chunk_size = calculate_optimal_sequential_chunk_size(titles.len());
+    let mut modules = Vec::new();
+    
+    for (module_index, chunk) in titles.chunks(chunk_size).enumerate() {
+        let module_title = match module_index {
+            0 => "Foundation".to_string(),
+            i if i == (titles.len() / chunk_size) => "Conclusion".to_string(),
+            i => format!("Phase {}", i),
+        };
+        
+        let sections: Vec<Section> = chunk
+            .iter()
+            .enumerate()
+            .map(|(section_index, title)| Section {
+                title: title.clone(),
+                video_index: module_index * chunk_size + section_index,
+                duration: estimate_video_duration(title)
+                    .unwrap_or_else(|| Duration::from_secs(600)),
+            })
+            .collect();
+        
+        modules.push(Module::new_basic(module_title, sections));
+    }
+    
+    Ok(modules)
+}
+
+/// Create simple sequential modules when no clear pattern is detected
+fn create_simple_sequential_modules(titles: &[String]) -> Result<Vec<Module>, NlpError> {
+    let chunk_size = calculate_optimal_sequential_chunk_size(titles.len());
+    let mut modules = Vec::new();
+    
+    for (module_index, chunk) in titles.chunks(chunk_size).enumerate() {
+        let module_title = format!("Part {}", module_index + 1);
+        
+        let sections: Vec<Section> = chunk
+            .iter()
+            .enumerate()
+            .map(|(section_index, title)| Section {
+                title: title.clone(),
+                video_index: module_index * chunk_size + section_index,
+                duration: estimate_video_duration(title)
+                    .unwrap_or_else(|| Duration::from_secs(600)),
+            })
+            .collect();
+        
+        modules.push(Module::new_basic(module_title, sections));
+    }
+    
+    Ok(modules)
+}
+
+/// Calculate optimal chunk size for sequential processing
+fn calculate_optimal_sequential_chunk_size(total_videos: usize) -> usize {
+    match total_videos {
+        1..=12 => std::cmp::max(total_videos / 2, 1),
+        13..=30 => total_videos / 4,
+        31..=60 => total_videos / 6,
+        _ => total_videos / 8,
+    }
+}
+
+/// Extract a clean module title from a raw title
+fn extract_clean_module_title(title: &str) -> String {
+    // Remove common prefixes and clean up the title
+    let cleaned = title
+        .trim()
+        .split(':')
+        .next()
+        .unwrap_or(title)
+        .split('-')
+        .next()
+        .unwrap_or(title)
+        .trim();
+    
+    if cleaned.is_empty() {
+        "Module".to_string()
+    } else {
+        cleaned.to_string()
+    }
+}
+
+/// Generate metadata for sequential processing
+fn generate_sequential_metadata(
+    titles: &[String],
+    modules: &[Module],
+    content_analysis: &crate::nlp::sequential_detection::ContentTypeAnalysis,
+) -> StructureMetadata {
+    let total_videos = titles.len();
+    let total_duration: Duration = modules.iter().map(|m| m.total_duration).sum();
+    
+    let estimated_duration_hours = Some(total_duration.as_secs() as f32 / 3600.0);
+    
+    // Determine difficulty based on content analysis
+    let difficulty_level = if content_analysis.sequential_patterns.iter()
+        .any(|p| p.pattern_description.to_lowercase().contains("advanced"))
+    {
+        Some("Advanced".to_string())
+    } else if content_analysis.sequential_patterns.iter()
+        .any(|p| p.pattern_description.to_lowercase().contains("basic") || 
+                 p.pattern_description.to_lowercase().contains("introduction"))
+    {
+        Some("Beginner".to_string())
+    } else {
+        Some("Intermediate".to_string())
+    };
+    
+    // Quality score based on pattern confidence
+    let structure_quality_score = Some(content_analysis.confidence_score);
+    
+    // Content coherence is high for sequential content
+    let content_coherence_score = Some(0.8);
+    
+    StructureMetadata {
+        total_videos,
+        total_duration,
+        estimated_duration_hours,
+        difficulty_level,
+        structure_quality_score,
+        content_coherence_score,
+    }
 }

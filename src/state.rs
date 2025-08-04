@@ -752,16 +752,6 @@ mod tests {
     use crate::types::Course;
     use chrono::Utc;
 
-    #[allow(dead_code)] // Helper function for tests
-    fn create_test_course(name: &str) -> Course {
-        Course {
-            id: Uuid::new_v4(),
-            name: name.to_string(),
-            created_at: Utc::now(),
-            raw_titles: vec!["Lesson 1".to_string()],
-            structure: None,
-        }
-    }
 
     #[test]
     fn test_course_context_creation() {
