@@ -3,13 +3,15 @@
 //! This module contains performance-optimized queries that use prepared statements,
 //! proper indexing, and efficient query patterns for common database operations.
 
-use crate::DatabaseError;
+
 use crate::storage::Database;
 use crate::types::{Course, Note, Plan};
 use anyhow::Result;
 use chrono::{DateTime, Utc};
+use log::{info, warn};
 use rusqlite::params;
 use std::collections::HashMap;
+use std::time::Instant;
 use uuid::Uuid;
 
 /// Optimized query manager for frequently used database operations
@@ -23,10 +25,201 @@ impl OptimizedQueries {
         Self { db }
     }
 
+    /// Analyze query performance using EXPLAIN QUERY PLAN
+    pub fn analyze_query_performance(&self, query: &str) -> Result<QueryAnalysis> {
+        let conn = self.db.get_conn()?;
+        let start_time = Instant::now();
+
+        // Get query plan
+        let explain_query = format!("EXPLAIN QUERY PLAN {}", query);
+        let mut stmt = conn.prepare(&explain_query)?;
+        
+        let mut query_plan = Vec::new();
+        let plan_rows = stmt.query_map([], |row| {
+            Ok(QueryPlanStep {
+                id: row.get(0)?,
+                parent: row.get(1)?,
+                notused: row.get(2)?,
+                detail: row.get(3)?,
+            })
+        })?;
+
+        for row in plan_rows {
+            query_plan.push(row?);
+        }
+
+        let analysis_time = start_time.elapsed();
+
+        // Analyze the plan for performance issues
+        let mut issues = Vec::new();
+        let mut uses_index = false;
+        let mut has_full_scan = false;
+
+        for step in &query_plan {
+            if step.detail.contains("USING INDEX") {
+                uses_index = true;
+            }
+            if step.detail.contains("SCAN TABLE") && !step.detail.contains("USING INDEX") {
+                has_full_scan = true;
+                issues.push(format!("Full table scan detected: {}", step.detail));
+            }
+            if step.detail.contains("TEMP B-TREE") {
+                issues.push("Temporary B-tree created for sorting - consider adding index".to_string());
+            }
+        }
+
+        // Estimate query cost based on plan analysis
+        let estimated_cost = if has_full_scan { 10 } else if uses_index { 1 } else { 5 };
+
+        Ok(QueryAnalysis {
+            query: query.to_string(),
+            query_plan,
+            uses_index,
+            has_full_scan,
+            estimated_cost,
+            analysis_time_ms: analysis_time.as_millis() as u64,
+            performance_issues: issues,
+        })
+    }
+
+    /// Monitor slow queries and log performance warnings
+    pub fn execute_with_monitoring<F, R>(&self, query_name: &str, operation: F) -> Result<R>
+    where
+        F: FnOnce() -> Result<R>,
+    {
+        let start_time = Instant::now();
+        let result = operation()?;
+        let execution_time = start_time.elapsed();
+
+        // Log slow queries (> 100ms)
+        if execution_time.as_millis() > 100 {
+            warn!(
+                "Slow query detected: '{}' took {}ms",
+                query_name,
+                execution_time.as_millis()
+            );
+        } else {
+            info!(
+                "Query '{}' completed in {}ms",
+                query_name,
+                execution_time.as_millis()
+            );
+        }
+
+        Ok(result)
+    }
+
+    /// Add missing indexes based on query analysis
+    pub fn add_performance_indexes(&self) -> Result<()> {
+        let conn = self.db.get_conn()?;
+
+        info!("Adding performance indexes for frequently queried columns");
+
+        // Indexes for courses table
+        conn.execute(
+            "CREATE INDEX IF NOT EXISTS idx_courses_name_search ON courses(name COLLATE NOCASE);",
+            [],
+        )?;
+
+        // Full-text search index for course names (if SQLite FTS is available)
+        if let Err(e) = conn.execute(
+            "CREATE VIRTUAL TABLE IF NOT EXISTS courses_fts USING fts5(name, content=courses, content_rowid=rowid);",
+            [],
+        ) {
+            warn!("FTS not available, using regular LIKE searches: {}", e);
+        }
+
+        // Indexes for plans table - covering index for common queries
+        conn.execute(
+            "CREATE INDEX IF NOT EXISTS idx_plans_course_created_settings ON plans(course_id, created_at, settings);",
+            [],
+        )?;
+
+        // Indexes for notes table - composite indexes for common query patterns
+        conn.execute(
+            "CREATE INDEX IF NOT EXISTS idx_notes_course_created ON notes(course_id, created_at);",
+            [],
+        )?;
+
+        conn.execute(
+            "CREATE INDEX IF NOT EXISTS idx_notes_video_timestamp ON notes(video_id, timestamp);",
+            [],
+        )?;
+
+        // Partial index for course-level notes (video_id IS NULL)
+        conn.execute(
+            "CREATE INDEX IF NOT EXISTS idx_notes_course_level ON notes(course_id, created_at) WHERE video_id IS NULL;",
+            [],
+        )?;
+
+        // Index for content search with better performance
+        conn.execute(
+            "CREATE INDEX IF NOT EXISTS idx_notes_content_trigram ON notes(content) WHERE length(content) > 3;",
+            [],
+        )?;
+
+        info!("Performance indexes added successfully");
+        Ok(())
+    }
+
+    /// Get database statistics for performance monitoring
+    pub fn get_performance_statistics(&self) -> Result<DatabasePerformanceStats> {
+        let conn = self.db.get_conn()?;
+
+        // Get table sizes
+        let courses_count: i64 = conn.query_row("SELECT COUNT(*) FROM courses", [], |row| row.get(0))?;
+        let plans_count: i64 = conn.query_row("SELECT COUNT(*) FROM plans", [], |row| row.get(0))?;
+        let notes_count: i64 = conn.query_row("SELECT COUNT(*) FROM notes", [], |row| row.get(0))?;
+
+        // Get database file size
+        let page_count: i64 = conn.query_row("PRAGMA page_count", [], |row| row.get(0))?;
+        let page_size: i64 = conn.query_row("PRAGMA page_size", [], |row| row.get(0))?;
+        let db_size_bytes = (page_count * page_size) as usize;
+
+        // Get index usage statistics
+        let mut index_stats = Vec::new();
+        let mut stmt = conn.prepare(
+            "SELECT name, tbl_name FROM sqlite_master WHERE type = 'index' AND name NOT LIKE 'sqlite_%'"
+        )?;
+        
+        let index_rows = stmt.query_map([], |row| {
+            Ok(IndexInfo {
+                name: row.get(0)?,
+                table: row.get(1)?,
+            })
+        })?;
+
+        for row in index_rows {
+            index_stats.push(row?);
+        }
+
+        // Check for fragmentation
+        let freelist_count: i64 = conn.query_row("PRAGMA freelist_count", [], |row| row.get(0))?;
+        let fragmentation_ratio = if page_count > 0 {
+            (freelist_count as f64 / page_count as f64) * 100.0
+        } else {
+            0.0
+        };
+
+        Ok(DatabasePerformanceStats {
+            table_counts: TableCounts {
+                courses: courses_count as usize,
+                plans: plans_count as usize,
+                notes: notes_count as usize,
+            },
+            database_size_bytes: db_size_bytes,
+            page_count: page_count as usize,
+            page_size: page_size as usize,
+            fragmentation_ratio,
+            index_count: index_stats.len(),
+            indexes: index_stats,
+        })
+    }
+
     /// Get courses with their latest plans in a single optimized query
     pub fn get_courses_with_latest_plans(
         &self,
-    ) -> Result<Vec<(Course, Option<Plan>)>, DatabaseError> {
+    ) -> Result<Vec<(Course, Option<Plan>)>> {
         let conn = self.db.get_conn()?;
 
         // Use a LEFT JOIN to get courses with their most recent plans
@@ -148,7 +341,7 @@ impl OptimizedQueries {
     }
 
     /// Get course statistics in a single optimized query
-    pub fn get_course_statistics(&self) -> Result<CourseStatistics, DatabaseError> {
+    pub fn get_course_statistics(&self) -> Result<CourseStatistics> {
         let conn = self.db.get_conn()?;
 
         // Get comprehensive statistics in a single query
@@ -177,7 +370,7 @@ impl OptimizedQueries {
     }
 
     /// Get notes count by course in a single optimized query
-    pub fn get_notes_count_by_course(&self) -> Result<HashMap<Uuid, usize>, DatabaseError> {
+    pub fn get_notes_count_by_course(&self) -> Result<HashMap<Uuid, usize>> {
         let conn = self.db.get_conn()?;
 
         let mut stmt =
@@ -206,7 +399,7 @@ impl OptimizedQueries {
     }
 
     /// Batch insert notes for better performance
-    pub fn batch_insert_notes(&self, notes: &[Note]) -> Result<(), DatabaseError> {
+    pub fn batch_insert_notes(&self, notes: &[Note]) -> Result<()> {
         if notes.is_empty() {
             return Ok(());
         }
@@ -244,7 +437,7 @@ impl OptimizedQueries {
     }
 
     /// Get recent activity across all entities
-    pub fn get_recent_activity(&self, limit: usize) -> Result<Vec<ActivityItem>, DatabaseError> {
+    pub fn get_recent_activity(&self, limit: usize) -> Result<Vec<ActivityItem>> {
         let conn = self.db.get_conn()?;
 
         let mut stmt = conn.prepare(
@@ -323,7 +516,7 @@ impl OptimizedQueries {
         &self,
         query: &str,
         limit: usize,
-    ) -> Result<Vec<SearchResult>, DatabaseError> {
+    ) -> Result<Vec<SearchResult>> {
         let conn = self.db.get_conn()?;
         let search_pattern = format!("%{query}%");
 
@@ -440,6 +633,54 @@ pub struct SearchResult {
 pub enum SearchResultType {
     Course,
     Note,
+}
+
+/// Query analysis result with performance metrics
+#[derive(Debug, Clone)]
+pub struct QueryAnalysis {
+    pub query: String,
+    pub query_plan: Vec<QueryPlanStep>,
+    pub uses_index: bool,
+    pub has_full_scan: bool,
+    pub estimated_cost: u32,
+    pub analysis_time_ms: u64,
+    pub performance_issues: Vec<String>,
+}
+
+/// Individual step in query execution plan
+#[derive(Debug, Clone)]
+pub struct QueryPlanStep {
+    pub id: i32,
+    pub parent: i32,
+    pub notused: i32,
+    pub detail: String,
+}
+
+/// Database performance statistics
+#[derive(Debug, Clone)]
+pub struct DatabasePerformanceStats {
+    pub table_counts: TableCounts,
+    pub database_size_bytes: usize,
+    pub page_count: usize,
+    pub page_size: usize,
+    pub fragmentation_ratio: f64,
+    pub index_count: usize,
+    pub indexes: Vec<IndexInfo>,
+}
+
+/// Table row counts
+#[derive(Debug, Clone)]
+pub struct TableCounts {
+    pub courses: usize,
+    pub plans: usize,
+    pub notes: usize,
+}
+
+/// Index information
+#[derive(Debug, Clone)]
+pub struct IndexInfo {
+    pub name: String,
+    pub table: String,
 }
 
 #[cfg(test)]

@@ -1,4 +1,5 @@
 use crate::types::Note;
+use crate::storage::Database;
 use anyhow::{Context, Result};
 use chrono::{DateTime, Utc};
 use rusqlite::{Connection, OptionalExtension, Row, ToSql, params};
@@ -88,6 +89,12 @@ pub fn init_notes_table(conn: &Connection) -> Result<()> {
     Ok(())
 }
 
+/// Insert a new note into the database using connection pooling.
+pub fn create_note_pooled(db: &Database, note: &Note) -> Result<()> {
+    let conn = db.get_conn()?;
+    create_note(&conn, note)
+}
+
 /// Insert a new note into the database.
 pub fn create_note(conn: &Connection, note: &Note) -> Result<()> {
     conn.execute(
@@ -109,6 +116,12 @@ pub fn create_note(conn: &Connection, note: &Note) -> Result<()> {
     )
     .context("Failed to insert note")?;
     Ok(())
+}
+
+/// Update an existing note by id using connection pooling.
+pub fn update_note_pooled(db: &Database, note: &Note) -> Result<()> {
+    let conn = db.get_conn()?;
+    update_note(&conn, note)
 }
 
 /// Update an existing note by id.
@@ -134,6 +147,12 @@ pub fn update_note(conn: &Connection, note: &Note) -> Result<()> {
     Ok(())
 }
 
+/// Delete a note by id using connection pooling.
+pub fn delete_note_pooled(db: &Database, note_id: Uuid) -> Result<()> {
+    let conn = db.get_conn()?;
+    delete_note(&conn, note_id)
+}
+
 /// Delete a note by id.
 pub fn delete_note(conn: &Connection, note_id: Uuid) -> Result<()> {
     conn.execute(
@@ -142,6 +161,12 @@ pub fn delete_note(conn: &Connection, note_id: Uuid) -> Result<()> {
     )
     .context("Failed to delete note")?;
     Ok(())
+}
+
+/// Get all notes across all courses using connection pooling.
+pub fn get_all_notes_pooled(db: &Database) -> Result<Vec<Note>> {
+    let conn = db.get_conn()?;
+    get_all_notes(&conn)
 }
 
 /// Get all notes across all courses.
@@ -155,6 +180,12 @@ pub fn get_all_notes(conn: &Connection) -> Result<Vec<Note>> {
     Ok(notes)
 }
 
+/// Get all notes for a given course using connection pooling.
+pub fn get_notes_by_course_pooled(db: &Database, course_id: Uuid) -> Result<Vec<Note>> {
+    let conn = db.get_conn()?;
+    get_notes_by_course(&conn, course_id)
+}
+
 /// Get all notes for a given course (both course-level and video-level).
 pub fn get_notes_by_course(conn: &Connection, course_id: Uuid) -> Result<Vec<Note>> {
     let mut stmt = conn.prepare(
@@ -164,6 +195,12 @@ pub fn get_notes_by_course(conn: &Connection, course_id: Uuid) -> Result<Vec<Not
         .query_map(params![course_id.to_string()], note_from_row)?
         .collect::<Result<Vec<_>, _>>()?;
     Ok(notes)
+}
+
+/// Get all notes for a given video using connection pooling.
+pub fn get_notes_by_video_pooled(db: &Database, video_id: Uuid) -> Result<Vec<Note>> {
+    let conn = db.get_conn()?;
+    get_notes_by_video(&conn, video_id)
 }
 
 /// Get all notes for a given video (video-level notes only).
@@ -177,6 +214,12 @@ pub fn get_notes_by_video(conn: &Connection, video_id: Uuid) -> Result<Vec<Note>
     Ok(notes)
 }
 
+/// Get all course-level notes using connection pooling.
+pub fn get_course_level_notes_pooled(db: &Database, course_id: Uuid) -> Result<Vec<Note>> {
+    let conn = db.get_conn()?;
+    get_course_level_notes(&conn, course_id)
+}
+
 /// Get all course-level notes (notes not tied to a specific video) for a course.
 pub fn get_course_level_notes(conn: &Connection, course_id: Uuid) -> Result<Vec<Note>> {
     let mut stmt = conn.prepare(
@@ -186,6 +229,16 @@ pub fn get_course_level_notes(conn: &Connection, course_id: Uuid) -> Result<Vec<
         .query_map(params![course_id.to_string()], note_from_row)?
         .collect::<Result<Vec<_>, _>>()?;
     Ok(notes)
+}
+
+/// Get all notes for a specific video by course ID and video index using connection pooling.
+pub fn get_notes_by_video_index_pooled(
+    db: &Database,
+    course_id: Uuid,
+    video_index: usize,
+) -> Result<Vec<Note>> {
+    let conn = db.get_conn()?;
+    get_notes_by_video_index(&conn, course_id, video_index)
 }
 
 /// Get all notes for a specific video by course ID and video index.
@@ -206,6 +259,12 @@ pub fn get_notes_by_video_index(
     Ok(notes)
 }
 
+/// Get a single note by id using connection pooling.
+pub fn get_note_by_id_pooled(db: &Database, note_id: Uuid) -> Result<Option<Note>> {
+    let conn = db.get_conn()?;
+    get_note_by_id(&conn, note_id)
+}
+
 /// Get a single note by id.
 pub fn get_note_by_id(conn: &Connection, note_id: Uuid) -> Result<Option<Note>> {
     conn.query_row(
@@ -215,6 +274,12 @@ pub fn get_note_by_id(conn: &Connection, note_id: Uuid) -> Result<Option<Note>> 
     )
     .optional()
     .context("Failed to fetch note by id")
+}
+
+/// Search notes by content using connection pooling.
+pub fn search_notes_pooled(db: &Database, query: &str) -> Result<Vec<Note>> {
+    let conn = db.get_conn()?;
+    search_notes(&conn, query)
 }
 
 /// Search notes by content (case-insensitive LIKE).
@@ -241,6 +306,12 @@ pub struct NoteSearchFilters<'a> {
     pub created_before: Option<DateTime<Utc>>,
     pub updated_after: Option<DateTime<Utc>>,
     pub updated_before: Option<DateTime<Utc>>,
+}
+
+/// Advanced search for notes with flexible filters using connection pooling.
+pub fn search_notes_advanced_pooled(db: &Database, filters: NoteSearchFilters) -> Result<Vec<Note>> {
+    let conn = db.get_conn()?;
+    search_notes_advanced(&conn, filters)
 }
 
 /// Advanced search for notes with flexible filters.
@@ -313,6 +384,12 @@ pub fn search_notes_advanced(conn: &Connection, filters: NoteSearchFilters) -> R
     Ok(notes)
 }
 
+/// Export all notes for a course as markdown using connection pooling.
+pub fn export_notes_markdown_by_course_pooled(db: &Database, course_id: Uuid) -> Result<String> {
+    let conn = db.get_conn()?;
+    export_notes_markdown_by_course(&conn, course_id)
+}
+
 /// Export all notes for a course as a markdown string (includes both course-level and video-level notes).
 pub fn export_notes_markdown_by_course(conn: &Connection, course_id: Uuid) -> Result<String> {
     let notes = get_notes_by_course(conn, course_id)?;
@@ -334,6 +411,12 @@ pub fn export_notes_markdown_by_course(conn: &Connection, course_id: Uuid) -> Re
         ));
     }
     Ok(md)
+}
+
+/// Export all notes for a video as markdown using connection pooling.
+pub fn export_notes_markdown_by_video_pooled(db: &Database, video_id: Uuid) -> Result<String> {
+    let conn = db.get_conn()?;
+    export_notes_markdown_by_video(&conn, video_id)
 }
 
 /// Export all notes for a video as a markdown string (video-level notes only).

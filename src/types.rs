@@ -221,6 +221,37 @@ impl CourseStructure {
     pub fn is_clustered(&self) -> bool {
         self.clustering_metadata.is_some()
     }
+
+    /// Get the content organization type for UI display
+    pub fn get_content_organization_type(&self) -> String {
+        // First check if we have explicit content type information
+        if let Some(content_type) = &self.metadata.content_type_detected {
+            return content_type.clone();
+        }
+
+        // Fallback to determining from clustering metadata
+        if self.clustering_metadata.is_some() {
+            "Clustered".to_string()
+        } else {
+            // Check if original order was preserved
+            if self.metadata.original_order_preserved.unwrap_or(false) {
+                "Sequential".to_string()
+            } else {
+                "Unknown".to_string()
+            }
+        }
+    }
+
+    /// Get a user-friendly description of the content organization
+    pub fn get_content_organization_description(&self) -> String {
+        match self.get_content_organization_type().as_str() {
+            "Sequential" => "Content follows original order with preserved progression".to_string(),
+            "Clustered" => "Content organized by topics using intelligent clustering".to_string(),
+            "Mixed" => "Content contains both sequential and thematic elements".to_string(),
+            "Ambiguous" => "Content organization could not be clearly determined".to_string(),
+            _ => "Content organization type unknown".to_string(),
+        }
+    }
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
@@ -231,6 +262,9 @@ pub struct StructureMetadata {
     pub difficulty_level: Option<String>,
     pub structure_quality_score: Option<f32>,
     pub content_coherence_score: Option<f32>,
+    pub content_type_detected: Option<String>, // "Sequential", "Clustered", "Mixed", "Ambiguous"
+    pub original_order_preserved: Option<bool>, // true if content follows original order
+    pub processing_strategy_used: Option<String>, // "PreserveOrder", "ApplyClustering", "UserChoice", "FallbackProcessing"
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
@@ -907,22 +941,38 @@ impl VideoMetadata {
 
     pub fn get_video_source(&self) -> Option<crate::video_player::VideoSource> {
         if self.is_local {
+            // For local videos, we need a valid file path
             if let Some(path) = &self.source_url {
-                Some(crate::video_player::VideoSource::Local {
-                    path: std::path::PathBuf::from(path),
-                    title: self.title.clone(),
-                })
+                if !path.trim().is_empty() {
+                    Some(crate::video_player::VideoSource::Local {
+                        path: std::path::PathBuf::from(path),
+                        title: self.title.clone(),
+                    })
+                } else {
+                    log::error!("Local video has empty source_url: {}", self.title);
+                    None
+                }
             } else {
+                log::error!("Local video missing source_url: {}", self.title);
                 None
             }
-        } else if let Some(video_id) = &self.video_id {
-            Some(crate::video_player::VideoSource::YouTube {
-                video_id: video_id.clone(),
-                playlist_id: self.playlist_id.clone(),
-                title: self.title.clone(),
-            })
         } else {
-            None
+            // For YouTube videos, we need a valid video_id
+            if let Some(video_id) = &self.video_id {
+                if !video_id.trim().is_empty() && !video_id.starts_with("PLACEHOLDER_") {
+                    Some(crate::video_player::VideoSource::YouTube {
+                        video_id: video_id.clone(),
+                        playlist_id: self.playlist_id.clone(),
+                        title: self.title.clone(),
+                    })
+                } else {
+                    log::error!("YouTube video has invalid video_id '{}': {}", video_id, self.title);
+                    None
+                }
+            } else {
+                log::error!("YouTube video missing video_id: {}", self.title);
+                None
+            }
         }
     }
 
@@ -930,15 +980,44 @@ impl VideoMetadata {
     pub fn is_metadata_complete(&self) -> bool {
         if self.is_local {
             // Local videos need at least title and source_url (file path)
-            !self.title.is_empty() && self.source_url.is_some()
+            !self.title.trim().is_empty() && 
+            self.source_url.as_ref().map_or(false, |url| !url.trim().is_empty())
         } else {
             // YouTube videos need at least title, video_id, and source_url
-            !self.title.is_empty() && 
-            self.video_id.is_some() && 
-            self.source_url.is_some() &&
-            // Ensure video_id is not a placeholder
-            !self.video_id.as_ref().unwrap_or(&String::new()).starts_with("PLACEHOLDER_")
+            !self.title.trim().is_empty() && 
+            self.video_id.as_ref().map_or(false, |id| !id.trim().is_empty() && !id.starts_with("PLACEHOLDER_")) &&
+            self.source_url.as_ref().map_or(false, |url| !url.trim().is_empty())
         }
+    }
+
+    /// Validate metadata and return detailed error information if incomplete
+    pub fn validate_metadata(&self) -> Result<(), String> {
+        if self.title.trim().is_empty() {
+            return Err("Video title is empty".to_string());
+        }
+
+        if self.is_local {
+            match &self.source_url {
+                None => return Err("Local video missing file path".to_string()),
+                Some(path) if path.trim().is_empty() => return Err("Local video has empty file path".to_string()),
+                Some(_) => {} // Valid
+            }
+        } else {
+            match &self.video_id {
+                None => return Err("YouTube video missing video_id".to_string()),
+                Some(id) if id.trim().is_empty() => return Err("YouTube video has empty video_id".to_string()),
+                Some(id) if id.starts_with("PLACEHOLDER_") => return Err("YouTube video has placeholder video_id".to_string()),
+                Some(_) => {} // Valid
+            }
+
+            match &self.source_url {
+                None => return Err("YouTube video missing source URL".to_string()),
+                Some(url) if url.trim().is_empty() => return Err("YouTube video has empty source URL".to_string()),
+                Some(_) => {} // Valid
+            }
+        }
+
+        Ok(())
     }
 }
 

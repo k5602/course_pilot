@@ -6,7 +6,7 @@ use uuid::Uuid;
 use super::{PlanHeader, SessionControlPanel, SessionList, group_items_by_session};
 use crate::types::{PlanExt, PlanSettings};
 use crate::ui::toast_helpers;
-use crate::ui::use_plan_resource;
+use crate::ui::{use_plan_resource, hooks::use_course_resource};
 
 #[derive(Props, PartialEq, Clone)]
 pub struct PlanViewProps {
@@ -17,6 +17,7 @@ pub struct PlanViewProps {
 #[component]
 pub fn PlanView(props: PlanViewProps) -> Element {
     let plan_resource = use_plan_resource(props.course_id);
+    let course_resource = use_course_resource(props.course_id);
     let expanded_sessions = use_signal(HashSet::new);
 
     // Show loading toast only once when plan is None
@@ -44,6 +45,7 @@ pub fn PlanView(props: PlanViewProps) -> Element {
                     total_sections: total_sections,
                     expanded_sessions: expanded_sessions,
                     course_id: props.course_id,
+                    course_resource: course_resource,
                 }
             }
         }
@@ -95,6 +97,7 @@ fn render_enhanced_plan_content(
     total_sections: usize,
     expanded_sessions: Signal<HashSet<usize>>,
     course_id: Uuid,
+    course_resource: Resource<Result<Option<crate::types::Course>, anyhow::Error>>,
 ) -> Element {
     let mut list_opacity = use_motion(0.0f32);
     let mut list_y = use_motion(-16.0f32);
@@ -161,6 +164,9 @@ fn render_enhanced_plan_content(
                 completed_sections: completed_sections,
                 total_sections: total_sections,
             }
+
+            // Content organization indicator
+            {render_content_organization_indicator(&course_resource)}
 
             // Duration summary and validation feedback
             {render_duration_summary(&plan)}
@@ -370,5 +376,74 @@ fn render_duration_summary(plan: &crate::types::Plan) -> Element {
                 }
             }
         }
+    }
+}
+/// Render content organization indicator showing whether content follows original or clustered order
+fn render_content_organization_indicator(course_resource: &Resource<Result<Option<crate::types::Course>, anyhow::Error>>) -> Element {
+    match &*course_resource.read_unchecked() {
+        Some(Ok(Some(course))) => {
+            if let Some(structure) = &course.structure {
+                let content_type = structure.get_content_organization_type();
+                let description = structure.get_content_organization_description();
+                
+                let (badge_color, icon, indicator_text) = match content_type.as_str() {
+                    "Sequential" => ("info", "📚", "Sessions follow original video order"),
+                    "Clustered" => ("secondary", "🎯", "Sessions organized by intelligent topic clustering"),
+                    "Mixed" => ("warning", "🔀", "Sessions contain both sequential and thematic elements"),
+                    _ => ("ghost", "❓", "Content organization type unknown"),
+                };
+
+                rsx! {
+                    div {
+                        class: "alert alert-info mb-4",
+                        div {
+                            class: "flex items-center gap-3",
+                            span { class: "text-lg", "{icon}" }
+                            div {
+                                class: "flex-1",
+                                div {
+                                    class: "flex items-center gap-2 mb-1",
+                                    span { class: "font-semibold", "Content Organization:" }
+                                    span {
+                                        class: "badge badge-{badge_color}",
+                                        "{content_type}"
+                                    }
+                                }
+                                p {
+                                    class: "text-sm opacity-80",
+                                    "{indicator_text}"
+                                }
+                            }
+                            div {
+                                class: "tooltip tooltip-left",
+                                "data-tip": "{description}",
+                                button {
+                                    class: "btn btn-circle btn-ghost btn-xs",
+                                    "ℹ️"
+                                }
+                            }
+                        }
+                    }
+                }
+            } else {
+                rsx! {
+                    div {
+                        class: "alert alert-warning mb-4",
+                        div {
+                            class: "flex items-center gap-3",
+                            span { class: "text-lg", "⚠️" }
+                            div {
+                                span { class: "font-semibold", "Course not yet structured" }
+                                p {
+                                    class: "text-sm opacity-80",
+                                    "Structure the course to see content organization details"
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        _ => rsx! { div {} } // Don't show anything if course is loading or failed
     }
 }

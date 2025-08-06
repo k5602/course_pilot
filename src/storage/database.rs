@@ -4,8 +4,9 @@
 //! using JSON serialization for complex data structures.
 //! It uses connection pooling for better performance under load.
 
-use crate::DatabaseError;
+use crate::error_handling::DatabaseError;
 use crate::types::{Course, Plan};
+use anyhow::{Context, Result};
 use chrono::{DateTime, Utc};
 use log::{error, info, warn};
 use r2d2::Pool;
@@ -14,6 +15,7 @@ use rusqlite::{Connection, OptionalExtension, params};
 use serde_json;
 use std::path::Path;
 use std::sync::Arc;
+
 use uuid::Uuid;
 
 /// Helper function to parse UUID from string, returning rusqlite::Error
@@ -41,21 +43,18 @@ pub struct Database {
 
 impl Database {
     /// Initialize a new database connection pool
-    pub fn new(db_path: &Path) -> Result<Self, DatabaseError> {
+    pub fn new(db_path: &Path) -> Result<Self> {
         info!("Initializing database at: {}", db_path.display());
 
         // Ensure the parent directory exists
         if let Some(parent) = db_path.parent() {
             if !parent.exists() {
                 info!("Creating database directory: {}", parent.display());
-                std::fs::create_dir_all(parent).map_err(|e| {
-                    error!(
-                        "Failed to create database directory {}: {}",
-                        parent.display(),
-                        e
-                    );
-                    DatabaseError::Io(e)
-                })?;
+                std::fs::create_dir_all(parent)
+                    .with_context(|| format!("Failed to create database directory {}", parent.display()))
+                    .map_err(|e| DatabaseError::ConnectionFailed { 
+                        message: format!("Could not create database directory: {}", e) 
+                    })?;
             }
         }
 
@@ -91,20 +90,33 @@ impl Database {
         let pool = Pool::builder()
             .max_size(10) // Maximum number of connections in the pool
             .min_idle(Some(2)) // Minimum idle connections to maintain
-            .build(manager)?;
+            .build(manager)
+            .map_err(|e| DatabaseError::ConnectionFailed { 
+                message: format!("Failed to create connection pool: {}", e) 
+            })
+            .with_context(|| "Failed to create database connection pool")?;
 
         // Initialize database schema
-        let mut conn = pool.get()?;
-        init_tables(&mut conn)?;
+        let mut conn = pool.get()
+            .map_err(|e| DatabaseError::ConnectionFailed { 
+                message: format!("Failed to get connection for initialization: {}", e) 
+            })
+            .with_context(|| "Failed to get initial database connection")?;
+        
+        init_tables(&mut conn)
+            .with_context(|| "Failed to initialize database tables")?;
 
         Ok(Database {
             pool: Arc::new(pool),
         })
     }
 
-    /// Get a connection from the pool
-    pub fn get_conn(&self) -> Result<PooledConnection, DatabaseError> {
-        self.pool.get().map_err(Into::into)
+    /// Get a connection from the pool with error handling
+    pub fn get_conn(&self) -> Result<PooledConnection> {
+        self.pool.get()
+            .map_err(|e| DatabaseError::Pool(e))
+            .with_context(|| "Failed to get database connection from pool")
+            .map_err(Into::into)
     }
 
     /// Get a reference to the underlying pool
@@ -112,26 +124,94 @@ impl Database {
         &self.pool
     }
 
+    /// Check connection pool health and return metrics
+    pub fn check_pool_health(&self) -> Result<ConnectionPoolHealth> {
+        let state = self.pool.state();
+        
+        // Test a connection to ensure the pool is working
+        let test_result = match self.pool.get() {
+            Ok(_conn) => true,
+            Err(e) => {
+                log::warn!("Connection pool health check failed: {}", e);
+                false
+            }
+        };
+
+        Ok(ConnectionPoolHealth {
+            total_connections: state.connections,
+            idle_connections: state.idle_connections,
+            active_connections: state.connections - state.idle_connections,
+            is_healthy: test_result,
+            max_connections: 10, // From pool configuration
+        })
+    }
+
+    /// Execute a query with automatic retry on connection failures
+    pub fn execute_with_retry<F, R>(&self, operation: F) -> Result<R>
+    where
+        F: Fn(&Connection) -> Result<R> + Send + 'static,
+        R: Send + 'static,
+    {
+        const MAX_RETRIES: u32 = 3;
+        const INITIAL_DELAY_MS: u64 = 100;
+
+        let mut last_error = None;
+        
+        for attempt in 0..MAX_RETRIES {
+            match self.get_conn() {
+                Ok(conn) => {
+                    match operation(&conn) {
+                        Ok(result) => return Ok(result),
+                        Err(e) => {
+                            last_error = Some(e);
+                            if attempt < MAX_RETRIES - 1 {
+                                let delay = INITIAL_DELAY_MS * 2_u64.pow(attempt);
+                                log::warn!("Database operation failed (attempt {}), retrying in {}ms: {}", 
+                                          attempt + 1, delay, last_error.as_ref().unwrap());
+                                std::thread::sleep(std::time::Duration::from_millis(delay));
+                            }
+                        }
+                    }
+                }
+                Err(e) => {
+                    last_error = Some(e);
+                    if attempt < MAX_RETRIES - 1 {
+                        let delay = INITIAL_DELAY_MS * 2_u64.pow(attempt);
+                        log::warn!("Failed to get database connection (attempt {}), retrying in {}ms: {}", 
+                                  attempt + 1, delay, last_error.as_ref().unwrap());
+                        std::thread::sleep(std::time::Duration::from_millis(delay));
+                    }
+                }
+            }
+        }
+
+        Err(last_error.unwrap_or_else(|| anyhow::anyhow!("All retry attempts failed")))
+    }
+
     /// Clean up WAL and SHM files from previous runs
-    fn cleanup_wal_files(db_path: &Path) -> Result<(), DatabaseError> {
+    fn cleanup_wal_files(db_path: &Path) -> Result<()> {
         let wal_path = db_path.with_extension("db-wal");
         let shm_path = db_path.with_extension("db-shm");
 
         // Remove WAL file if it exists
         if wal_path.exists() {
-            std::fs::remove_file(&wal_path).map_err(|e| {
-                log::warn!("Failed to remove WAL file {}: {}", wal_path.display(), e);
-                DatabaseError::Io(e)
-            })?;
+            std::fs::remove_file(&wal_path)
+                .with_context(|| format!("Failed to remove WAL file {}", wal_path.display()))
+                .map_err(|e| {
+                    log::warn!("Failed to remove WAL file {}: {}", wal_path.display(), e);
+                    e
+                })?;
             log::info!("Removed existing WAL file: {}", wal_path.display());
         }
 
         // Remove SHM file if it exists
         if shm_path.exists() {
-            std::fs::remove_file(&shm_path).map_err(|e| {
-                log::warn!("Failed to remove SHM file {}: {}", shm_path.display(), e);
-                DatabaseError::Io(e)
-            })?;
+            std::fs::remove_file(&shm_path)
+                .with_context(|| format!("Failed to remove SHM file {}", shm_path.display()))
+                .map_err(|e| {
+                    log::warn!("Failed to remove SHM file {}: {}", shm_path.display(), e);
+                    e
+                })?;
             log::info!("Removed existing SHM file: {}", shm_path.display());
         }
 
@@ -141,6 +221,16 @@ impl Database {
 
 /// Type alias for a pooled connection
 type PooledConnection = r2d2::PooledConnection<SqliteConnectionManager>;
+
+/// Connection pool health metrics
+#[derive(Debug, Clone)]
+pub struct ConnectionPoolHealth {
+    pub total_connections: u32,
+    pub idle_connections: u32,
+    pub active_connections: u32,
+    pub is_healthy: bool,
+    pub max_connections: u32,
+}
 
 /// Helper function to detect if a title looks like a YouTube video
 fn is_youtube_video_title(title: &str) -> bool {
@@ -214,7 +304,7 @@ fn extract_youtube_video_id_from_title(title: &str) -> Option<String> {
 }
 
 /// Validate video metadata to ensure YouTube fields are not lost during database operations
-fn validate_video_metadata(videos: &[crate::types::VideoMetadata]) -> Result<Vec<crate::types::VideoMetadata>, DatabaseError> {
+fn validate_video_metadata(videos: &[crate::types::VideoMetadata]) -> Result<Vec<crate::types::VideoMetadata>> {
     let mut validated_videos = Vec::new();
     
     for (index, video) in videos.iter().enumerate() {
@@ -277,156 +367,34 @@ fn validate_video_metadata(videos: &[crate::types::VideoMetadata]) -> Result<Vec
     Ok(validated_videos)
 }
 
-/// Run database migrations to update existing data
-fn run_database_migrations(conn: &mut Connection) -> Result<(), DatabaseError> {
-    // Get current database version
-    let current_version = get_database_version(conn)?;
+/// Run database migrations using the new migration system
+fn run_database_migrations(conn: &mut Connection) -> Result<()> {
+    use crate::storage::migrations::MigrationManager;
     
-    info!("Current database version: {}, target version: {}", current_version, DATABASE_VERSION);
+    let migration_manager = MigrationManager::new();
+    migration_manager.migrate(conn)?;
     
-    if current_version < DATABASE_VERSION {
-        info!("Running database migrations from version {} to {}", current_version, DATABASE_VERSION);
-        
-        // Run migrations in sequence
-        for version in (current_version + 1)..=DATABASE_VERSION {
-            info!("Applying migration to version {}", version);
-            match version {
-                1 => migrate_to_version_1(conn)?,
-                2 => migrate_to_version_2(conn)?,
-                _ => {
-                    warn!("Unknown migration version: {}", version);
-                }
-            }
-            
-            // Update version tracking
-            set_database_version(conn, version)?;
-            info!("Successfully applied migration to version {}", version);
-        }
-        
-        info!("All database migrations completed successfully");
-    } else {
-        info!("Database is up to date, no migrations needed");
+    // Validate database after migrations
+    let validation_report = migration_manager.validate_database(conn)?;
+    if !validation_report.is_valid {
+        error!("Database validation failed after migrations: {:?}", validation_report.issues);
+        return Err(anyhow::anyhow!("Database validation failed: {:?}", validation_report.issues));
+    }
+    
+    if !validation_report.warnings.is_empty() {
+        warn!("Database validation warnings: {:?}", validation_report.warnings);
     }
     
     Ok(())
 }
 
-/// Get the current database version
-fn get_database_version(conn: &Connection) -> Result<i32, DatabaseError> {
-    let version = conn
-        .query_row(
-            "SELECT version FROM database_version ORDER BY version DESC LIMIT 1",
-            [],
-            |row| row.get::<_, i32>(0),
-        )
-        .unwrap_or(0); // Default to version 0 if no version is recorded
-    
-    Ok(version)
-}
 
-/// Set the database version
-fn set_database_version(conn: &Connection, version: i32) -> Result<(), DatabaseError> {
-    conn.execute(
-        "INSERT OR REPLACE INTO database_version (version, applied_at) VALUES (?1, ?2)",
-        params![version, Utc::now().timestamp()],
-    )?;
-    Ok(())
-}
-
-/// Migration to version 1 - Initial version tracking
-fn migrate_to_version_1(_conn: &Connection) -> Result<(), DatabaseError> {
-    info!("Migration v1: Setting up version tracking");
-    // This is just to establish version tracking, no actual data migration needed
-    Ok(())
-}
-
-/// Migration to version 2 - Fix VideoMetadata with missing playlist_id and original_index
-fn migrate_to_version_2(conn: &Connection) -> Result<(), DatabaseError> {
-    info!("Migration v2: Updating VideoMetadata to include playlist_id and original_index");
-    
-    // Get all courses that need migration
-    let mut stmt = conn.prepare(
-        "SELECT id, name, videos FROM courses WHERE videos IS NOT NULL"
-    )?;
-    
-    let courses_to_migrate: Vec<(String, String, String)> = stmt
-        .query_map([], |row| {
-            Ok((
-                row.get::<_, String>(0)?, // id
-                row.get::<_, String>(1)?, // name
-                row.get::<_, String>(2)?, // videos JSON
-            ))
-        })?
-        .collect::<Result<Vec<_>, _>>()?;
-    
-    info!("Found {} courses to migrate", courses_to_migrate.len());
-    
-    for (course_id, course_name, videos_json) in courses_to_migrate {
-        info!("Migrating course: {} ({})", course_name, course_id);
-        
-        // Parse existing video metadata
-        let existing_videos: Vec<serde_json::Value> = match serde_json::from_str(&videos_json) {
-            Ok(videos) => videos,
-            Err(e) => {
-                warn!("Failed to parse video metadata for course {}: {}", course_name, e);
-                continue;
-            }
-        };
-        
-        // Migrate each video metadata
-        let mut migrated_videos = Vec::new();
-        for (index, mut video) in existing_videos.into_iter().enumerate() {
-            // Add playlist_id field if missing
-            if !video.as_object().unwrap().contains_key("playlist_id") {
-                // Try to extract playlist_id from source_url if available
-                let playlist_id = if let Some(source_url) = video.get("source_url").and_then(|v| v.as_str()) {
-                    extract_playlist_id_from_url(source_url)
-                } else {
-                    None
-                };
-                video["playlist_id"] = serde_json::Value::from(playlist_id);
-            }
-            
-            // Add original_index field if missing
-            if !video.as_object().unwrap().contains_key("original_index") {
-                video["original_index"] = serde_json::Value::from(index);
-            }
-            
-            migrated_videos.push(video);
-        }
-        
-        // Serialize updated video metadata
-        let updated_videos_json = match serde_json::to_string(&migrated_videos) {
-            Ok(json) => json,
-            Err(e) => {
-                error!("Failed to serialize migrated video metadata for course {}: {}", course_name, e);
-                continue;
-            }
-        };
-        
-        // Update the course in the database
-        match conn.execute(
-            "UPDATE courses SET videos = ?1 WHERE id = ?2",
-            params![updated_videos_json, course_id],
-        ) {
-            Ok(_) => {
-                info!("Successfully migrated course: {}", course_name);
-            }
-            Err(e) => {
-                error!("Failed to update course {} after migration: {}", course_name, e);
-            }
-        }
-    }
-    
-    info!("Migration v2 completed");
-    Ok(())
-}
 
 /// Validate and repair loaded metadata to ensure complete VideoMetadata including video_id, playlist_id
 fn validate_and_repair_loaded_metadata(
     parsed_videos: Vec<crate::types::VideoMetadata>, 
     raw_titles: &[String]
-) -> Result<Vec<crate::types::VideoMetadata>, DatabaseError> {
+) -> Result<Vec<crate::types::VideoMetadata>> {
     let mut repaired_videos = Vec::new();
     
     for (index, video) in parsed_videos.into_iter().enumerate() {
@@ -587,11 +555,11 @@ fn create_fallback_video_metadata(raw_titles: &[String]) -> Vec<crate::types::Vi
     }).collect()
 }
 
-/// Database version for migration tracking
-const DATABASE_VERSION: i32 = 2;
+/// Database version for migration tracking (now handled by migrations.rs)
+const DATABASE_VERSION: i32 = 3;
 
 /// Initialize database tables
-fn init_tables(conn: &mut Connection) -> Result<(), DatabaseError> {
+fn init_tables(conn: &mut Connection) -> Result<()> {
     let tx = conn.transaction()?;
 
     // Create database version table for migration tracking
@@ -639,11 +607,8 @@ fn init_tables(conn: &mut Connection) -> Result<(), DatabaseError> {
     tx.commit()?;
 
     // Initialize notes table with proper migration logic
-    crate::storage::notes::init_notes_table(conn).map_err(|e| {
-        DatabaseError::Io(std::io::Error::other(format!(
-            "Notes table initialization failed: {e}"
-        )))
-    })?;
+    crate::storage::notes::init_notes_table(conn)
+        .with_context(|| "Notes table initialization failed")?;
 
     // Run database migrations
     run_database_migrations(conn)?;
@@ -684,7 +649,7 @@ fn init_tables(conn: &mut Connection) -> Result<(), DatabaseError> {
 }
 
 /// Optimize database performance by running maintenance operations
-pub fn optimize_database(db: &Database) -> Result<(), DatabaseError> {
+pub fn optimize_database(db: &Database) -> Result<()> {
     info!("Running database optimization");
 
     let conn = db.get_conn()?;
@@ -705,13 +670,14 @@ pub fn optimize_database(db: &Database) -> Result<(), DatabaseError> {
     info!("Optimized database file structure");
 
     // Check for integrity issues
-    let integrity_check: String = conn.query_row("PRAGMA integrity_check", [], |row| row.get(0))?;
+    let integrity_check: String = conn.query_row("PRAGMA integrity_check", [], |row| row.get(0))
+        .with_context(|| "Failed to run database integrity check")?;
     if integrity_check != "ok" {
         warn!("Database integrity check failed: {integrity_check}");
-        return Err(DatabaseError::Io(std::io::Error::new(
-            std::io::ErrorKind::InvalidData,
-            format!("Database integrity check failed: {integrity_check}"),
-        )));
+        return Err(DatabaseError::CorruptionDetected { 
+            table: "database".to_string(), 
+            message: format!("Integrity check failed: {integrity_check}") 
+        }.into());
     }
 
     info!("Database optimization completed successfully");
@@ -721,7 +687,7 @@ pub fn optimize_database(db: &Database) -> Result<(), DatabaseError> {
 /// Get database performance metrics
 pub fn get_database_performance_metrics(
     db: &Database,
-) -> Result<DatabasePerformanceMetrics, DatabaseError> {
+) -> Result<DatabasePerformanceMetrics> {
     let conn = db.get_conn()?;
 
     // Get basic database info
@@ -772,7 +738,7 @@ pub struct DatabasePerformanceMetrics {
 }
 
 /// Manually run database migrations (useful for troubleshooting)
-pub fn run_migrations(db: &Database) -> Result<(), DatabaseError> {
+pub fn run_migrations(db: &Database) -> Result<()> {
     info!("Manually running database migrations");
     let mut conn = db.get_conn()?;
     run_database_migrations(&mut conn)?;
@@ -781,7 +747,7 @@ pub fn run_migrations(db: &Database) -> Result<(), DatabaseError> {
 }
 
 /// Initialize the database and create necessary tables
-pub fn init_db(db_path: &Path) -> Result<Database, DatabaseError> {
+pub fn init_db(db_path: &Path) -> Result<Database> {
     // Create database directory if it doesn't exist
     if let Some(parent) = db_path.parent() {
         if !parent.exists() {
@@ -816,26 +782,24 @@ pub fn init_db(db_path: &Path) -> Result<Database, DatabaseError> {
 }
 
 /// Save a course to the database
-pub fn save_course(db: &Database, course: &Course) -> Result<(), DatabaseError> {
+pub fn save_course(db: &Database, course: &Course) -> Result<()> {
     info!("Saving course: {} (ID: {})", course.name, course.id);
 
-    let raw_titles_json = serde_json::to_string(&course.raw_titles).map_err(|e| {
-        error!(
-            "Failed to serialize raw_titles for course {}: {}",
-            course.name, e
-        );
-        DatabaseError::Serialization(e)
-    })?;
+    let raw_titles_json = serde_json::to_string(&course.raw_titles)
+        .with_context(|| format!("Failed to serialize raw_titles for course '{}'", course.name))
+        .map_err(|e| {
+            error!("Failed to serialize raw_titles for course '{}': {}", course.name, e);
+            e
+        })?;
 
     // Validate and serialize video metadata with proper YouTube field preservation
     let validated_videos = validate_video_metadata(&course.videos)?;
-    let videos_json = serde_json::to_string(&validated_videos).map_err(|e| {
-        error!(
-            "Failed to serialize videos for course {}: {}",
-            course.name, e
-        );
-        DatabaseError::Serialization(e)
-    })?;
+    let videos_json = serde_json::to_string(&validated_videos)
+        .with_context(|| format!("Failed to serialize videos for course '{}'", course.name))
+        .map_err(|e| {
+            error!("Failed to serialize videos for course '{}': {}", course.name, e);
+            e
+        })?;
     
     // Debug logging to see what we're saving
     log::info!("Saving course '{}' with {} videos", course.name, validated_videos.len());
@@ -898,7 +862,7 @@ pub fn save_course(db: &Database, course: &Course) -> Result<(), DatabaseError> 
 }
 
 /// Load all courses from the database with optimized query
-pub fn load_courses(db: &Database) -> Result<Vec<Course>, DatabaseError> {
+pub fn load_courses(db: &Database) -> Result<Vec<Course>> {
     info!("Loading all courses from database");
 
     let conn = db.get_conn().map_err(|e| {
@@ -946,8 +910,8 @@ pub fn load_courses(db: &Database) -> Result<Vec<Course>, DatabaseError> {
             })?;
 
             // Load videos with fallback to raw_titles for backward compatibility
-            let videos: Vec<crate::types::VideoMetadata> = if let Some(videos_json) = videos_json {
-                let parsed_videos: Vec<crate::types::VideoMetadata> = serde_json::from_str(&videos_json).unwrap_or_else(|e| {
+            let videos: Vec<crate::types::VideoMetadata> = if let Some(ref videos_json) = videos_json {
+                let parsed_videos: Vec<crate::types::VideoMetadata> = serde_json::from_str(videos_json).unwrap_or_else(|e| {
                     log::warn!("Failed to deserialize video metadata, using intelligent fallback: {}", e);
                     create_fallback_video_metadata(&raw_titles)
                 });
@@ -963,8 +927,9 @@ pub fn load_courses(db: &Database) -> Result<Vec<Course>, DatabaseError> {
             };
 
             let structure = structure_json
+                .as_ref()
                 .map(|json| {
-                    serde_json::from_str(&json).map_err(|e| {
+                    serde_json::from_str(json).map_err(|e| {
                         rusqlite::Error::FromSqlConversionFailure(
                             5,
                             rusqlite::types::Type::Text,
@@ -989,7 +954,7 @@ pub fn load_courses(db: &Database) -> Result<Vec<Course>, DatabaseError> {
 }
 
 /// Get a specific course by ID
-pub fn get_course_by_id(db: &Database, course_id: &Uuid) -> Result<Option<Course>, DatabaseError> {
+pub fn get_course_by_id(db: &Database, course_id: &Uuid) -> Result<Option<Course>> {
     let conn = db.get_conn()?;
     let mut stmt = conn.prepare(
         r#"
@@ -1025,8 +990,8 @@ pub fn get_course_by_id(db: &Database, course_id: &Uuid) -> Result<Option<Course
             })?;
 
             // Load videos with fallback to raw_titles for backward compatibility
-            let videos: Vec<crate::types::VideoMetadata> = if let Some(videos_json) = videos_json {
-                let parsed_videos: Vec<crate::types::VideoMetadata> = serde_json::from_str(&videos_json).unwrap_or_else(|e| {
+            let videos: Vec<crate::types::VideoMetadata> = if let Some(ref videos_json) = videos_json {
+                let parsed_videos: Vec<crate::types::VideoMetadata> = serde_json::from_str(videos_json).unwrap_or_else(|e| {
                     log::warn!("Failed to deserialize video metadata for course {}, using intelligent fallback: {}", id, e);
                     create_fallback_video_metadata(&raw_titles)
                 });
@@ -1042,7 +1007,8 @@ pub fn get_course_by_id(db: &Database, course_id: &Uuid) -> Result<Option<Course
             };
 
             let structure = structure_json
-                .map(|json| serde_json::from_str(&json))
+                .as_ref()
+                .map(|json| serde_json::from_str(json))
                 .transpose()
                 .map_err(|e| {
                     rusqlite::Error::FromSqlConversionFailure(
@@ -1067,7 +1033,7 @@ pub fn get_course_by_id(db: &Database, course_id: &Uuid) -> Result<Option<Course
 }
 
 /// Save a plan to the database
-pub fn save_plan(db: &Database, plan: &Plan) -> Result<(), DatabaseError> {
+pub fn save_plan(db: &Database, plan: &Plan) -> Result<()> {
     let settings_json = serde_json::to_string(&plan.settings)?;
     let items_json = serde_json::to_string(&plan.items)?;
 
@@ -1094,7 +1060,7 @@ pub fn save_plan(db: &Database, plan: &Plan) -> Result<(), DatabaseError> {
 pub fn get_plan_by_course_id(
     db: &Database,
     course_id: &Uuid,
-) -> Result<Option<Plan>, DatabaseError> {
+) -> Result<Option<Plan>> {
     let conn = db.get_conn()?;
     let mut stmt = conn.prepare(
         r#"
@@ -1160,7 +1126,7 @@ pub fn get_plan_by_course_id(
 }
 
 /// Load a specific plan by ID
-pub fn load_plan(db: &Database, plan_id: &Uuid) -> Result<Option<Plan>, DatabaseError> {
+pub fn load_plan(db: &Database, plan_id: &Uuid) -> Result<Option<Plan>> {
     let conn = db.get_conn()?;
     let mut stmt = conn.prepare(
         r#"
@@ -1253,11 +1219,11 @@ pub fn load_plan(db: &Database, plan_id: &Uuid) -> Result<Option<Plan>, Database
         }
     };
 
-    result
+    result.map_err(Into::into)
 }
 
 /// Delete a course from the database
-pub fn delete_course(db: &Database, course_id: &Uuid) -> Result<(), DatabaseError> {
+pub fn delete_course(db: &Database, course_id: &Uuid) -> Result<()> {
     let mut conn = db.get_conn()?;
 
     // Start a transaction to ensure atomicity
@@ -1282,7 +1248,7 @@ pub fn delete_course(db: &Database, course_id: &Uuid) -> Result<(), DatabaseErro
 }
 
 /// Delete a plan from the database
-pub fn delete_plan(db: &Database, plan_id: &Uuid) -> Result<(), DatabaseError> {
+pub fn delete_plan(db: &Database, plan_id: &Uuid) -> Result<()> {
     let conn = db.get_conn()?;
     conn.execute(
         "DELETE FROM plans WHERE id = ?1",
@@ -1331,7 +1297,7 @@ pub struct ProcessingTimeStats {
 pub fn get_courses_by_clustering_quality(
     db: &Database,
     min_quality: f32,
-) -> Result<Vec<Course>, DatabaseError> {
+) -> Result<Vec<Course>> {
     let conn = db.get_conn()?;
 
     let mut stmt = conn.prepare(
@@ -1381,7 +1347,7 @@ pub fn get_courses_by_clustering_quality(
 }
 
 /// Get comprehensive clustering analytics
-pub fn get_clustering_analytics(db: &Database) -> Result<ClusteringAnalytics, DatabaseError> {
+pub fn get_clustering_analytics(db: &Database) -> Result<ClusteringAnalytics> {
     let conn = db.get_conn()?;
 
     // Get total course count
@@ -1446,7 +1412,7 @@ pub fn update_clustering_metadata(
     db: &Database,
     course_id: Uuid,
     metadata: ClusteringMetadata,
-) -> Result<(), DatabaseError> {
+) -> Result<()> {
     let conn = db.get_conn()?;
 
     // Get current course structure
@@ -1481,7 +1447,7 @@ pub fn get_similar_courses_by_clustering(
     db: &Database,
     reference_course_id: Uuid,
     similarity_threshold: f32,
-) -> Result<Vec<Course>, DatabaseError> {
+) -> Result<Vec<Course>> {
     let conn = db.get_conn()?;
 
     // Get reference course clustering metadata
@@ -1549,7 +1515,7 @@ pub fn get_similar_courses_by_clustering(
 pub fn get_clustering_performance_history(
     db: &Database,
     days: i64,
-) -> Result<Vec<ClusteringPerformancePoint>, DatabaseError> {
+) -> Result<Vec<ClusteringPerformancePoint>> {
     let conn = db.get_conn()?;
 
     let cutoff_date = Utc::now() - chrono::Duration::days(days);

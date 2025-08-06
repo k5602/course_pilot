@@ -54,7 +54,7 @@ pub fn structure_course(titles: Vec<String>) -> Result<CourseStructure, NlpError
         }
         ProcessingRecommendation::ApplyClustering => {
             log::info!("Using clustering approach for thematic content");
-            match structure_course_with_clustering(&titles) {
+            match structure_course_with_clustering(&titles, &content_analysis) {
                 Ok(clustered_structure) => {
                     log::info!(
                         "Successfully structured course using clustering in {}ms",
@@ -74,7 +74,7 @@ pub fn structure_course(titles: Vec<String>) -> Result<CourseStructure, NlpError
             // For now, default to clustering for mixed content, but this could be enhanced
             // to present user choice in the UI
             log::info!("Mixed content detected, defaulting to clustering approach");
-            match structure_course_with_clustering(&titles) {
+            match structure_course_with_clustering(&titles, &content_analysis) {
                 Ok(clustered_structure) => {
                     log::info!(
                         "Successfully structured mixed content using clustering in {}ms",
@@ -98,7 +98,10 @@ pub fn structure_course(titles: Vec<String>) -> Result<CourseStructure, NlpError
 }
 
 /// Structure course using advanced clustering pipeline with full optimization
-fn structure_course_with_clustering(titles: &[String]) -> Result<CourseStructure, NlpError> {
+fn structure_course_with_clustering(
+    titles: &[String], 
+    sequential_analysis: &crate::nlp::sequential_detection::ContentTypeAnalysis
+) -> Result<CourseStructure, NlpError> {
     let start_time = Instant::now();
 
     // For small datasets (< 5 titles), clustering is not effective, so fail early
@@ -127,7 +130,7 @@ fn structure_course_with_clustering(titles: &[String]) -> Result<CourseStructure
     };
 
     // Step 3: Generate enhanced metadata with quality assessment
-    let mut metadata = generate_enhanced_metadata(titles, &modules, &content_analysis);
+    let mut metadata = generate_enhanced_metadata(titles, &modules, &content_analysis, sequential_analysis);
     metadata.structure_quality_score = Some(clustering_metadata.quality_score);
     metadata.content_coherence_score = Some(calculate_advanced_coherence_score(&modules));
 
@@ -159,10 +162,24 @@ fn structure_course_fallback(titles: Vec<String>) -> Result<CourseStructure, Nlp
     };
 
     // Step 4: Generate metadata
+    let fallback_content_analysis = crate::nlp::sequential_detection::ContentTypeAnalysis {
+        content_type: crate::nlp::sequential_detection::ContentType::Ambiguous,
+        confidence_score: 0.5,
+        sequential_patterns: Vec::new(),
+        module_indicators: Vec::new(),
+        naming_consistency: crate::nlp::sequential_detection::NamingConsistency {
+            consistency_score: 0.5,
+            common_patterns: Vec::new(),
+            naming_variations: 0,
+            has_consistent_format: false,
+        },
+        recommendation: crate::nlp::sequential_detection::ProcessingRecommendation::FallbackProcessing,
+    };
     let metadata = generate_enhanced_metadata(
         &titles,
         &modules,
         &create_basic_analysis_for_difficulty(&titles),
+        &fallback_content_analysis,
     );
 
     Ok(CourseStructure::new_basic(modules, metadata))
@@ -1067,6 +1084,7 @@ fn generate_enhanced_metadata(
     titles: &[String],
     modules: &[Module],
     analysis: &AdvancedContentAnalysis,
+    content_analysis: &crate::nlp::sequential_detection::ContentTypeAnalysis,
 ) -> StructureMetadata {
     let total_videos = titles.len();
 
@@ -1091,6 +1109,9 @@ fn generate_enhanced_metadata(
         difficulty_level,
         structure_quality_score: Some(analysis.clustering_feasibility),
         content_coherence_score: Some(analysis.topic_coherence_score),
+        content_type_detected: Some(format!("{:?}", content_analysis.content_type)),
+        original_order_preserved: Some(false), // Clustering doesn't preserve original order
+        processing_strategy_used: Some(format!("{:?}", content_analysis.recommendation)),
     }
 }
 
@@ -3230,5 +3251,8 @@ fn generate_sequential_metadata(
         difficulty_level,
         structure_quality_score,
         content_coherence_score,
+        content_type_detected: Some(format!("{:?}", content_analysis.content_type)),
+        original_order_preserved: Some(true), // Sequential processing always preserves order
+        processing_strategy_used: Some(format!("{:?}", content_analysis.recommendation)),
     }
 }

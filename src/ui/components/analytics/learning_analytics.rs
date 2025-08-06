@@ -1,4 +1,4 @@
-use crate::DatabaseError;
+
 use crate::planner::scheduler::{PlanAnalysis, VelocityCategory};
 use crate::storage::{ClusteringAnalytics, Database, get_clustering_analytics};
 use crate::ui::hooks::use_analytics_manager;
@@ -21,9 +21,7 @@ pub fn LearningAnalytics() -> Element {
             tokio::task::spawn_blocking(move || get_clustering_analytics(&db_clone))
                 .await
                 .unwrap_or_else(|_| {
-                    Err(DatabaseError::NotFound(
-                        "Failed to load analytics".to_string(),
-                    ))
+                    Err(anyhow::anyhow!("Failed to load analytics"))
                 })
         }
     });

@@ -33,6 +33,7 @@ pub fn YouTubePlayer(props: YouTubePlayerProps) -> Element {
     let show_controls = use_signal(|| props.show_controls.unwrap_or(true));
     let player_id = use_signal(|| format!("youtube-player-{}", Uuid::new_v4().simple()));
     let _is_api_ready = use_signal(|| false);
+    let error_message = use_signal(|| None::<String>);
     let window = use_window();
 
     // Helper function to execute JavaScript
@@ -87,12 +88,42 @@ pub fn YouTubePlayer(props: YouTubePlayerProps) -> Element {
         let video_source = props.video_source.clone();
         let execute_script = execute_script.clone();
         let player_id_val = player_id();
+        let on_error = props.on_error.clone();
         move || {
             if let Some(source) = video_source.clone() {
                 match source {
                     VideoSource::YouTube { video_id, playlist_id, title } => {
-                        let playlist_param = if let Some(playlist) = playlist_id {
-                            format!(", list: '{playlist}'")
+                        // Validate video_id before proceeding
+                        if video_id.trim().is_empty() {
+                            log::error!("YouTube video has empty video_id: {}", title);
+                            current_state.set(PlaybackState::Error);
+                            if let Some(on_error) = &on_error {
+                                on_error.call("YouTube video has empty video ID".to_string());
+                            }
+                            return;
+                        }
+
+                        if video_id.starts_with("PLACEHOLDER_") {
+                            log::error!("YouTube video has placeholder video_id: {} ({})", video_id, title);
+                            current_state.set(PlaybackState::Error);
+                            if let Some(on_error) = &on_error {
+                                on_error.call("YouTube video has placeholder video ID".to_string());
+                            }
+                            return;
+                        }
+
+                        // Validate video_id format (basic YouTube video ID validation)
+                        if video_id.len() != 11 || !video_id.chars().all(|c| c.is_alphanumeric() || c == '_' || c == '-') {
+                            log::warn!("YouTube video_id may be invalid format: {} ({})", video_id, title);
+                            // Continue anyway as some valid IDs might not match this pattern
+                        }
+
+                        let playlist_param = if let Some(playlist) = &playlist_id {
+                            if !playlist.trim().is_empty() {
+                                format!(", list: '{}'", playlist.trim())
+                            } else {
+                                String::new()
+                            }
                         } else {
                             String::new()
                         };
@@ -103,43 +134,71 @@ pub fn YouTubePlayer(props: YouTubePlayerProps) -> Element {
                                 if (window.YT && window.YT.Player) {{
                                     console.log('Creating YouTube player for video: {video_id}');
                                     
-                                    window.ytPlayer_{player_id} = new YT.Player('{player_id}', {{
-                                        height: '100%',
-                                        width: '100%',
-                                        videoId: '{video_id}'{playlist_param},
-                                        playerVars: {{
-                                            'enablejsapi': 1,
-                                            'origin': window.location.origin,
-                                            'playsinline': 1,
-                                            'rel': 0,
-                                            'modestbranding': 1,
-                                            'controls': 0,
-                                            'disablekb': 1,
-                                            'fs': 0,
-                                            'iv_load_policy': 3
-                                        }},
-                                        events: {{
-                                            'onReady': function(event) {{
-                                                console.log('YouTube player ready: {player_id}');
-                                                window.ytPlayerReady_{player_id} = true;
-                                                window.ytPlayerInstance_{player_id} = event.target;
+                                    try {{
+                                        window.ytPlayer_{player_id} = new YT.Player('{player_id}', {{
+                                            height: '100%',
+                                            width: '100%',
+                                            videoId: '{video_id}'{playlist_param},
+                                            playerVars: {{
+                                                'enablejsapi': 1,
+                                                'origin': window.location.origin,
+                                                'playsinline': 1,
+                                                'rel': 0,
+                                                'modestbranding': 1,
+                                                'controls': 0,
+                                                'disablekb': 1,
+                                                'fs': 0,
+                                                'iv_load_policy': 3
                                             }},
-                                            'onStateChange': function(event) {{
-                                                console.log('YouTube player state changed: {player_id}', event.data);
-                                                window.ytPlayerState_{player_id} = event.data;
-                                                
-                                                // Update position and duration
-                                                if (event.target) {{
-                                                    window.ytPlayerPosition_{player_id} = event.target.getCurrentTime() || 0;
-                                                    window.ytPlayerDuration_{player_id} = event.target.getDuration() || 0;
+                                            events: {{
+                                                'onReady': function(event) {{
+                                                    console.log('YouTube player ready: {player_id}');
+                                                    window.ytPlayerReady_{player_id} = true;
+                                                    window.ytPlayerInstance_{player_id} = event.target;
+                                                }},
+                                                'onStateChange': function(event) {{
+                                                    console.log('YouTube player state changed: {player_id}', event.data);
+                                                    window.ytPlayerState_{player_id} = event.data;
+                                                    
+                                                    // Update position and duration
+                                                    if (event.target) {{
+                                                        try {{
+                                                            window.ytPlayerPosition_{player_id} = event.target.getCurrentTime() || 0;
+                                                            window.ytPlayerDuration_{player_id} = event.target.getDuration() || 0;
+                                                        }} catch (e) {{
+                                                            console.warn('Error getting player time info:', e);
+                                                        }}
+                                                    }}
+                                                }},
+                                                'onError': function(event) {{
+                                                    console.error('YouTube player error: {player_id}', event.data);
+                                                    window.ytPlayerError_{player_id} = event.data;
+                                                    
+                                                    // Map YouTube error codes to user-friendly messages
+                                                    var errorMessage = 'Unknown YouTube error';
+                                                    switch(event.data) {{
+                                                        case 2:
+                                                            errorMessage = 'Invalid video ID: {video_id}';
+                                                            break;
+                                                        case 5:
+                                                            errorMessage = 'HTML5 player error';
+                                                            break;
+                                                        case 100:
+                                                            errorMessage = 'Video not found or private';
+                                                            break;
+                                                        case 101:
+                                                        case 150:
+                                                            errorMessage = 'Video cannot be embedded';
+                                                            break;
+                                                    }}
+                                                    console.error('YouTube error details:', errorMessage);
                                                 }}
-                                            }},
-                                            'onError': function(event) {{
-                                                console.error('YouTube player error: {player_id}', event.data);
-                                                window.ytPlayerError_{player_id} = event.data;
                                             }}
-                                        }}
-                                    }});
+                                        }});
+                                    }} catch (e) {{
+                                        console.error('Error creating YouTube player:', e);
+                                        window.ytPlayerError_{player_id} = 'Player creation failed';
+                                    }}
                                 }} else {{
                                     console.log('YouTube API not ready yet, retrying...');
                                     setTimeout(createYouTubePlayer, 100);
@@ -156,6 +215,15 @@ pub fn YouTubePlayer(props: YouTubePlayerProps) -> Element {
                                         createYouTubePlayer();
                                     }}
                                 }}, 100);
+                                
+                                // Timeout after 10 seconds
+                                setTimeout(function() {{
+                                    if (!window.ytAPIReady) {{
+                                        clearInterval(checkAPI);
+                                        console.error('YouTube API failed to load within timeout');
+                                        window.ytPlayerError_{player_id} = 'YouTube API load timeout';
+                                    }}
+                                }}, 10000);
                             }}
                         "#, 
                         player_id = player_id_val, 
@@ -164,15 +232,47 @@ pub fn YouTubePlayer(props: YouTubePlayerProps) -> Element {
                         );
 
                         execute_script(script);
-                        current_state.set(PlaybackState::Stopped);
-                        log::info!("YouTube video loading initiated: {video_id} ({})", title);
+                        current_state.set(PlaybackState::Buffering);
+                        log::info!("YouTube video loading initiated: {} ({})", video_id, title);
                     }
                     VideoSource::Local { .. } => {
                         log::error!("Local videos not supported by YouTube player");
                         current_state.set(PlaybackState::Error);
+                        if let Some(on_error) = &on_error {
+                            on_error.call("Local videos are not supported by YouTube player".to_string());
+                        }
                     }
                 }
+            } else {
+                // No video source provided
+                current_state.set(PlaybackState::Stopped);
+                log::debug!("No video source provided to YouTube player");
             }
+        }
+    });
+
+    // Monitor for JavaScript errors and update state
+    use_effect({
+        let execute_script = execute_script.clone();
+        let player_id_val = player_id();
+        let on_error = props.on_error.clone();
+        move || {
+            let interval_script = format!(r#"
+                // Check for player errors every 2 seconds
+                setInterval(function() {{
+                    if (window.ytPlayerError_{player_id}) {{
+                        console.log('Detected YouTube player error:', window.ytPlayerError_{player_id});
+                        // Clear the error flag to avoid repeated notifications
+                        var error = window.ytPlayerError_{player_id};
+                        window.ytPlayerError_{player_id} = null;
+                        
+                        // You could emit a custom event here to notify Rust side
+                        // For now, we'll just log it
+                    }}
+                }}, 2000);
+            "#, player_id = player_id_val);
+            
+            execute_script(interval_script);
         }
     });
 
@@ -388,9 +488,29 @@ pub fn YouTubePlayer(props: YouTubePlayerProps) -> Element {
                     div {
                         class: "absolute inset-0 bg-red-900/50 flex items-center justify-center",
                         div {
-                            class: "text-white text-center",
+                            class: "text-white text-center p-4",
                             div { class: "text-4xl mb-2", "❌" }
-                            div { "Error loading video" }
+                            div { 
+                                class: "text-lg font-semibold mb-2",
+                                "Error loading YouTube video" 
+                            }
+                            if let Some(error) = error_message() {
+                                div { 
+                                    class: "text-sm text-gray-300 max-w-md",
+                                    "{error}" 
+                                }
+                            } else {
+                                div { 
+                                    class: "text-sm text-gray-300",
+                                    "Please check the video ID and try again" 
+                                }
+                            }
+                            if let Some(VideoSource::YouTube { video_id, .. }) = &props.video_source {
+                                div { 
+                                    class: "text-xs text-gray-400 mt-2 font-mono",
+                                    "Video ID: {video_id}" 
+                                }
+                            }
                         }
                     }
                 }

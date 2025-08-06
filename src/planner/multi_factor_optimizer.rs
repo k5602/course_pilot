@@ -1212,9 +1212,26 @@ mod tests {
                 structure_quality_score: None,
                 difficulty_level: None,
                 content_coherence_score: None,
+                content_type_detected: Some("Sequential".to_string()),
+                original_order_preserved: Some(true),
+                processing_strategy_used: Some("PreserveOrder".to_string()),
             },
             clustering_metadata: None,
         };
+
+        Course {
+            id: uuid::Uuid::new_v4(),
+            name: "Test Course".to_string(),
+            created_at: Utc::now(),
+            raw_titles: vec![
+                "Introduction to Programming".to_string(),
+                "Advanced Algorithms".to_string(),
+                "Basic Data Structures".to_string(),
+            ],
+            videos: vec![], // Empty for test
+            structure: Some(structure),
+        }
+    }
 
     fn create_test_plan(course: &Course) -> Plan {
         let items = vec![

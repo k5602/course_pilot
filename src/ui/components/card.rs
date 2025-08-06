@@ -150,11 +150,28 @@ pub fn Card(props: CardProps) -> Element {
 
                             // Render badges
                             if let Some(badges) = &props.badges {
-                                for badge in badges {
-                                    Badge {
-                                        label: badge.label.clone(),
-                                        color: badge.color.clone(),
-                                        class: Some("ml-2".to_string())
+                                for (index, badge) in badges.iter().enumerate() {
+                                    // Add tooltip for content type badges 
+                                    if index == 1 && (badge.label == "Sequential" || badge.label == "Clustered" || badge.label == "Mixed") {
+                                        div {
+                                            class: "tooltip tooltip-bottom ml-2",
+                                            "data-tip": match badge.label.as_str() {
+                                                "Sequential" => "Content follows original order with preserved progression",
+                                                "Clustered" => "Content organized by topics using intelligent clustering",
+                                                "Mixed" => "Content contains both sequential and thematic elements",
+                                                _ => "Content organization type"
+                                            },
+                                            Badge {
+                                                label: badge.label.clone(),
+                                                color: badge.color.clone(),
+                                            }
+                                        }
+                                    } else {
+                                        Badge {
+                                            label: badge.label.clone(),
+                                            color: badge.color.clone(),
+                                            class: Some("ml-2".to_string())
+                                        }
                                     }
                                 }
                             }

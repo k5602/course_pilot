@@ -3,7 +3,7 @@
 //! This module provides utilities for maintaining database performance,
 //! including cleanup, optimization, and monitoring functions.
 
-use crate::DatabaseError;
+
 use crate::storage::{Database, DatabasePerformanceMetrics};
 use anyhow::Result;
 use chrono::{DateTime, Duration, Utc};
@@ -22,7 +22,7 @@ impl DatabaseMaintenance {
     }
 
     /// Run comprehensive database maintenance
-    pub fn run_maintenance(&self) -> Result<MaintenanceReport, DatabaseError> {
+    pub fn run_maintenance(&self) -> Result<MaintenanceReport> {
         info!("Starting database maintenance");
         let start_time = Utc::now();
 
@@ -106,7 +106,7 @@ impl DatabaseMaintenance {
     }
 
     /// Clean up old data based on retention policies
-    fn cleanup_old_data(&self) -> Result<(), DatabaseError> {
+    fn cleanup_old_data(&self) -> Result<()> {
         let conn = self.db.get_conn()?;
         let cutoff_date = Utc::now() - Duration::days(365); // Keep data for 1 year
 
@@ -135,7 +135,7 @@ impl DatabaseMaintenance {
     }
 
     /// Rebuild indexes if database is large enough to benefit
-    fn rebuild_indexes_if_needed(&self) -> Result<(), DatabaseError> {
+    fn rebuild_indexes_if_needed(&self) -> Result<()> {
         let conn = self.db.get_conn()?;
 
         // Check database size
@@ -154,7 +154,7 @@ impl DatabaseMaintenance {
     }
 
     /// Vacuum database if fragmentation is high
-    fn vacuum_if_needed(&self) -> Result<(), DatabaseError> {
+    fn vacuum_if_needed(&self) -> Result<()> {
         let conn = self.db.get_conn()?;
 
         let page_count: i64 = conn.query_row("PRAGMA page_count", [], |row| row.get(0))?;
@@ -185,7 +185,7 @@ impl DatabaseMaintenance {
     }
 
     /// Update query optimizer statistics
-    fn update_statistics(&self) -> Result<(), DatabaseError> {
+    fn update_statistics(&self) -> Result<()> {
         let conn = self.db.get_conn()?;
         conn.execute("ANALYZE", [])?;
         info!("Query optimizer statistics updated");
@@ -193,7 +193,7 @@ impl DatabaseMaintenance {
     }
 
     /// Check database health and return recommendations
-    pub fn check_database_health(&self) -> Result<HealthReport, DatabaseError> {
+    pub fn check_database_health(&self) -> Result<HealthReport> {
         let conn = self.db.get_conn()?;
         let mut recommendations = Vec::new();
         let mut warnings = Vec::new();
@@ -259,7 +259,7 @@ impl DatabaseMaintenance {
     }
 
     /// Get maintenance schedule recommendations
-    pub fn get_maintenance_schedule(&self) -> Result<MaintenanceSchedule, DatabaseError> {
+    pub fn get_maintenance_schedule(&self) -> Result<MaintenanceSchedule> {
         let metrics = crate::storage::get_database_performance_metrics(&self.db)?;
 
         // Base schedule on database size and activity

@@ -18,6 +18,12 @@ pub fn choose_clustering_aware_strategy(
 ) -> Result<crate::types::DistributionStrategy, PlanError> {
     use crate::planner::choose_distribution_strategy;
 
+    // First check if content should be treated as sequential
+    if should_preserve_original_order_in_clustering(course, clustering_metadata) {
+        log::info!("Sequential content detected in clustering metadata, using order-preserving strategy");
+        return Ok(crate::types::DistributionStrategy::ModuleBased); // Preserves module order
+    }
+
     let basic_strategy = choose_distribution_strategy(course, settings)?;
 
     // Enhance strategy selection with clustering insights
@@ -32,12 +38,23 @@ pub fn choose_clustering_aware_strategy(
                     other => other,
                 }
             } else {
-                basic_strategy.clone()
+                // Low quality clustering might indicate sequential content
+                if clustering_metadata.quality_score < 0.5 {
+                    log::info!("Low clustering quality ({:.2}), using module-based approach to preserve structure", clustering_metadata.quality_score);
+                    crate::types::DistributionStrategy::ModuleBased
+                } else {
+                    basic_strategy.clone()
+                }
             }
         }
         crate::types::ClusteringAlgorithm::Hybrid => {
             // Hybrid clustering works well with hybrid planning
             crate::types::DistributionStrategy::Hybrid
+        }
+        crate::types::ClusteringAlgorithm::Fallback => {
+            // Fallback clustering suggests sequential content
+            log::info!("Fallback clustering detected, using module-based approach");
+            crate::types::DistributionStrategy::ModuleBased
         }
         _ => basic_strategy.clone(),
     };
@@ -62,15 +79,14 @@ pub fn generate_topic_aware_module_plan(
     let mut plan_items = Vec::new();
     let mut current_date = settings.start_date;
 
-    // Group modules by topic similarity for better session flow
-    let topic_grouped_modules =
-        group_modules_by_topic_similarity(&structure.modules, clustering_metadata);
+    // Check if we should preserve original order within modules
+    let preserve_order = should_preserve_original_order_in_clustering(course, clustering_metadata);
 
-    for module_group in topic_grouped_modules {
-        for module in module_group {
-            // Create topic-aware sessions within each module
-            let module_sessions =
-                create_topic_aware_sessions(module, settings, clustering_metadata)?;
+    if preserve_order {
+        log::info!("Generating module-based plan with preserved video order");
+        // Process modules in their original order and preserve video order within modules
+        for module in &structure.modules {
+            let module_sessions = create_sequential_sessions_within_module(module, settings)?;
 
             for session_videos in module_sessions {
                 let plan_item = create_plan_item_from_videos(session_videos, current_date);
@@ -81,6 +97,30 @@ pub fn generate_topic_aware_module_plan(
                     settings.sessions_per_week,
                     settings.include_weekends,
                 );
+            }
+        }
+    } else {
+        log::info!("Generating topic-aware module-based plan with clustering optimization");
+        // Group modules by topic similarity for better session flow
+        let topic_grouped_modules =
+            group_modules_by_topic_similarity(&structure.modules, clustering_metadata);
+
+        for module_group in topic_grouped_modules {
+            for module in module_group {
+                // Create topic-aware sessions within each module
+                let module_sessions =
+                    create_topic_aware_sessions(module, settings, clustering_metadata)?;
+
+                for session_videos in module_sessions {
+                    let plan_item = create_plan_item_from_videos(session_videos, current_date);
+                    plan_items.push(plan_item);
+
+                    current_date = get_next_session_date(
+                        current_date,
+                        settings.sessions_per_week,
+                        settings.include_weekends,
+                    );
+                }
             }
         }
     }
@@ -232,6 +272,87 @@ pub fn optimize_clustering_aware_plan(
 }
 
 // ============================================================================
+// SEQUENTIAL CONTENT DETECTION FUNCTIONS
+// ============================================================================
+
+/// Check if clustering metadata indicates content should preserve original order
+///
+/// This function analyzes clustering metadata to determine if the content
+/// has sequential characteristics that warrant preserving the original order.
+fn should_preserve_original_order_in_clustering(
+    course: &Course,
+    clustering_metadata: &ClusteringMetadata,
+) -> bool {
+    // Check clustering quality - very low quality suggests sequential content
+    if clustering_metadata.quality_score < 0.4 {
+        log::debug!("Very low clustering quality ({:.2}), suggesting sequential content", clustering_metadata.quality_score);
+        return true;
+    }
+
+    // Check if fallback algorithm was used (indicates clustering wasn't suitable)
+    if clustering_metadata.algorithm_used == crate::types::ClusteringAlgorithm::Fallback {
+        log::debug!("Fallback clustering algorithm used, preserving original order");
+        return true;
+    }
+
+    // Check topic keywords for sequential indicators
+    if has_sequential_topic_keywords(&clustering_metadata.content_topics) {
+        log::debug!("Sequential topic keywords found in clustering metadata");
+        return true;
+    }
+
+    // Check confidence scores for low module grouping confidence
+    if clustering_metadata.confidence_scores.module_grouping_confidence < 0.5 {
+        log::debug!("Low module grouping confidence ({:.2}), preserving original order", 
+                   clustering_metadata.confidence_scores.module_grouping_confidence);
+        return true;
+    }
+
+    // Check if course structure has very few modules (might indicate forced clustering)
+    if let Some(structure) = &course.structure {
+        let video_count = course.video_count();
+        let module_count = structure.modules.len();
+        
+        // If we have very few modules relative to video count, clustering might be inappropriate
+        if module_count > 0 && video_count / module_count > 20 {
+            log::debug!("Very large modules detected ({} videos per module), suggesting sequential content", 
+                       video_count / module_count);
+            return true;
+        }
+    }
+
+    false
+}
+
+/// Check if topic keywords suggest sequential progression
+fn has_sequential_topic_keywords(topics: &[crate::types::TopicInfo]) -> bool {
+    let sequential_keywords = [
+        "introduction", "basic", "fundamentals", "getting started", "overview",
+        "lesson", "part", "chapter", "module", "step", "tutorial", "beginner",
+        "intermediate", "advanced", "final", "conclusion", "setup", "installation"
+    ];
+
+    let mut sequential_topic_count = 0;
+    for topic in topics {
+        let keyword_lower = topic.keyword.to_lowercase();
+        for seq_keyword in &sequential_keywords {
+            if keyword_lower.contains(seq_keyword) {
+                sequential_topic_count += 1;
+                break;
+            }
+        }
+    }
+
+    // If more than 25% of topics are sequential, consider it sequential content
+    if topics.is_empty() {
+        false
+    } else {
+        let sequential_ratio = sequential_topic_count as f32 / topics.len() as f32;
+        sequential_ratio > 0.25
+    }
+}
+
+// ============================================================================
 // HELPER FUNCTIONS
 // ============================================================================
 
@@ -297,6 +418,57 @@ fn modules_have_similar_topics(
 
     let similarity = intersection as f32 / union as f32;
     similarity > 0.3 // 30% topic overlap threshold
+}
+
+/// Create sequential sessions within a module that preserve video order
+fn create_sequential_sessions_within_module(
+    module: &crate::types::Module,
+    settings: &PlanSettings,
+) -> Result<Vec<Vec<VideoItem>>, PlanError> {
+    let mut videos: Vec<VideoItem> = module
+        .sections
+        .iter()
+        .map(|section| VideoItem {
+            module_title: module.title.clone(),
+            section_title: section.title.clone(),
+            video_index: section.video_index,
+            duration: section.duration,
+        })
+        .collect();
+
+    // Sort by video_index to ensure original order is preserved
+    videos.sort_by_key(|v| v.video_index);
+
+    // Group videos by session capacity while preserving order
+    let mut sessions = Vec::new();
+    let mut current_session = Vec::new();
+    let mut current_duration = Duration::from_secs(0);
+    let session_limit = Duration::from_secs(settings.session_length_minutes as u64 * 60);
+    let effective_limit = Duration::from_secs((session_limit.as_secs() as f32 * 0.8) as u64);
+
+    for video in videos {
+        // Check if adding this video would exceed the session limit
+        if current_duration + video.duration > effective_limit && !current_session.is_empty() {
+            sessions.push(std::mem::take(&mut current_session));
+            current_duration = Duration::from_secs(0);
+        }
+
+        current_duration += video.duration;
+        current_session.push(video);
+    }
+
+    if !current_session.is_empty() {
+        sessions.push(current_session);
+    }
+
+    log::debug!(
+        "Created {} sequential sessions for module '{}' with {} videos",
+        sessions.len(),
+        module.title,
+        module.sections.len()
+    );
+
+    Ok(sessions)
 }
 
 /// Create topic-aware sessions within a module
@@ -409,6 +581,20 @@ fn create_hybrid_clustering_sessions(
     settings: &PlanSettings,
     clustering_metadata: &ClusteringMetadata,
 ) -> Result<Vec<Vec<VideoItem>>, PlanError> {
+    // Check if we should preserve order first
+    let preserve_order = clustering_metadata.quality_score < 0.5 || 
+                        clustering_metadata.algorithm_used == crate::types::ClusteringAlgorithm::Fallback;
+
+    if preserve_order {
+        log::info!("Creating hybrid sessions with preserved order due to low clustering quality");
+        let mut sessions = Vec::new();
+        for module in modules {
+            let module_sessions = create_sequential_sessions_within_module(module, settings)?;
+            sessions.extend(module_sessions);
+        }
+        return Ok(sessions);
+    }
+
     // Weight between topic coherence and duration balance based on clustering quality
     let topic_weight = clustering_metadata.quality_score;
 
@@ -581,10 +767,20 @@ fn create_plan_item_from_videos(videos: Vec<VideoItem>, date: DateTime<Utc>) -> 
         .first()
         .map(|v| v.module_title.clone())
         .unwrap_or_else(|| "Unknown".to_string());
-    let section_title = if videos.len() == 1 {
+    
+    // Create section title with content type indicator
+    let base_section_title = if videos.len() == 1 {
         videos[0].section_title.clone()
     } else {
         format!("{} (+{} more)", videos[0].section_title, videos.len() - 1)
+    };
+
+    // Check if videos are in sequential order (consecutive indices)
+    let is_sequential = is_video_sequence_sequential(&video_indices);
+    let section_title = if is_sequential && videos.len() > 1 {
+        format!("{} [Sequential]", base_section_title)
+    } else {
+        base_section_title
     };
 
     // Check for overflow warnings
@@ -604,6 +800,26 @@ fn create_plan_item_from_videos(videos: Vec<VideoItem>, date: DateTime<Utc>) -> 
         estimated_completion_time,
         overflow_warnings,
     }
+}
+
+/// Check if video indices represent a sequential order
+fn is_video_sequence_sequential(indices: &[usize]) -> bool {
+    if indices.len() < 2 {
+        return true; // Single video is always "sequential"
+    }
+
+    let mut sorted_indices = indices.to_vec();
+    sorted_indices.sort_unstable();
+
+    // Check if indices are consecutive
+    for i in 1..sorted_indices.len() {
+        if sorted_indices[i] != sorted_indices[i - 1] + 1 {
+            return false;
+        }
+    }
+
+    // Check if original order matches sorted order (preserves sequence)
+    indices == &sorted_indices
 }
 
 // Helper functions for topic analysis

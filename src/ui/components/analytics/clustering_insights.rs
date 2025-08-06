@@ -18,9 +18,7 @@ pub fn ClusteringInsights() -> Element {
             tokio::task::spawn_blocking(move || get_clustering_analytics(&db_clone))
                 .await
                 .unwrap_or_else(|_| {
-                    Err(crate::DatabaseError::NotFound(
-                        "Failed to load clustering analytics".to_string(),
-                    ))
+                    Err(anyhow::anyhow!("Failed to load clustering analytics"))
                 })
         }
     });
@@ -31,9 +29,7 @@ pub fn ClusteringInsights() -> Element {
             tokio::task::spawn_blocking(move || get_courses_by_clustering_quality(&db_clone, 0.8))
                 .await
                 .unwrap_or_else(|_| {
-                    Err(crate::DatabaseError::NotFound(
-                        "Failed to load high quality courses".to_string(),
-                    ))
+                    Err(anyhow::anyhow!("Failed to load high quality courses"))
                 })
         }
     });

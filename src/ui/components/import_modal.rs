@@ -788,6 +788,9 @@ fn YouTubeImportForm(
                             difficulty_level: None,
                             structure_quality_score: None,
                             content_coherence_score: None,
+                            content_type_detected: Some("Sequential".to_string()),
+                            original_order_preserved: Some(true),
+                            processing_strategy_used: Some("PreserveOrder".to_string()),
                         };
 
                         // Set the basic course structure

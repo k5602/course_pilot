@@ -3,8 +3,9 @@
 //! This module provides a connection manager that caches frequently used
 //! prepared statements for better performance.
 
-use crate::DatabaseError;
+
 use crate::storage::Database;
+use anyhow::Result;
 use rusqlite::Connection;
 use std::collections::HashMap;
 use std::sync::{Arc, Mutex};
@@ -30,9 +31,9 @@ impl ConnectionManager {
         query_key: &str,
         query: &str,
         f: F,
-    ) -> Result<R, DatabaseError>
+    ) -> Result<R>
     where
-        F: FnOnce(&Connection, &str) -> Result<R, DatabaseError>,
+        F: FnOnce(&Connection, &str) -> Result<R>,
     {
         // Cache the query for reuse
         {
@@ -45,18 +46,18 @@ impl ConnectionManager {
     }
 
     /// Get frequently used queries for courses
-    pub fn get_courses_optimized<F, R>(&self, f: F) -> Result<R, DatabaseError>
+    pub fn get_courses_optimized<F, R>(&self, f: F) -> Result<R>
     where
-        F: FnOnce(&Connection) -> Result<R, DatabaseError>,
+        F: FnOnce(&Connection) -> Result<R>,
     {
         let conn = self.db.get_conn()?;
         f(&conn)
     }
 
     /// Batch operations with transaction support
-    pub fn execute_batch<F, R>(&self, f: F) -> Result<R, DatabaseError>
+    pub fn execute_batch<F, R>(&self, f: F) -> Result<R>
     where
-        F: FnOnce(&Connection) -> Result<R, DatabaseError>,
+        F: FnOnce(&Connection) -> Result<R>,
     {
         let mut conn = self.db.get_conn()?;
         let tx = conn.transaction()?;
@@ -109,7 +110,7 @@ impl ConnectionManager {
     }
 
     /// Get database statistics for monitoring
-    pub fn get_database_stats(&self) -> Result<DatabaseStats, DatabaseError> {
+    pub fn get_database_stats(&self) -> Result<DatabaseStats> {
         let conn = self.db.get_conn()?;
 
         // Get table sizes
@@ -152,7 +153,7 @@ impl ConnectionManager {
     fn get_index_usage_stats(
         &self,
         conn: &Connection,
-    ) -> Result<HashMap<String, IndexUsage>, DatabaseError> {
+    ) -> Result<HashMap<String, IndexUsage>> {
         let mut index_stats = HashMap::new();
 
         // Get all indexes

@@ -9,6 +9,28 @@ use crate::ui::toast_helpers;
 use crate::ui::components::YouTubePlayer;
 use crate::video_player::{PlaybackState, VideoPlayerManager, VideoSource};
 
+/// Helper function to create fallback video source when primary source fails
+fn create_fallback_source(original_source: &VideoSource, error: &str) -> Option<VideoSource> {
+    match original_source {
+        VideoSource::YouTube { video_id, title, .. } => {
+            // For YouTube videos, we could try without playlist_id as fallback
+            if error.contains("playlist") {
+                Some(VideoSource::YouTube {
+                    video_id: video_id.clone(),
+                    playlist_id: None,
+                    title: title.clone(),
+                })
+            } else {
+                None // No other fallback for YouTube
+            }
+        }
+        VideoSource::Local { .. } => {
+            // For local videos, no meaningful fallback
+            None
+        }
+    }
+}
+
 #[derive(Props, PartialEq, Clone)]
 pub struct VideoPlayerProps {
     pub video_source: Option<VideoSource>,
@@ -32,6 +54,7 @@ pub fn VideoPlayer(props: VideoPlayerProps) -> Element {
     let mut is_fullscreen = use_signal(|| false);
     let mut is_muted = use_signal(|| false);
     let show_controls = use_signal(|| props.show_controls.unwrap_or(true));
+    let mut error_message = use_signal(|| None::<String>);
 
     // Initialize player manager
     use_effect({
@@ -54,29 +77,88 @@ pub fn VideoPlayer(props: VideoPlayerProps) -> Element {
         }
     });
 
-    // Load video when source changes
+    // Validate video source and set error state if invalid
+    use_effect({
+        let video_source = props.video_source.clone();
+        let on_error = props.on_error.clone();
+        move || {
+            if let Some(source) = video_source.clone() {
+                // Validate the video source
+                match &source {
+                    VideoSource::YouTube { video_id, title, .. } => {
+                        if video_id.trim().is_empty() {
+                            let error_msg = format!("YouTube video '{}' has empty video ID", title);
+                            log::error!("{}", error_msg);
+                            error_message.set(Some(error_msg.clone()));
+                            current_state.set(PlaybackState::Error);
+                            if let Some(on_error) = &on_error {
+                                on_error.call(error_msg);
+                            }
+                            return;
+                        }
+                        if video_id.starts_with("PLACEHOLDER_") {
+                            let error_msg = format!("YouTube video '{}' has placeholder video ID", title);
+                            log::error!("{}", error_msg);
+                            error_message.set(Some(error_msg.clone()));
+                            current_state.set(PlaybackState::Error);
+                            if let Some(on_error) = &on_error {
+                                on_error.call(error_msg);
+                            }
+                            return;
+                        }
+                    }
+                    VideoSource::Local { path, title } => {
+                        if !path.exists() {
+                            let error_msg = format!("Local video file not found: {}", path.display());
+                            log::error!("{}", error_msg);
+                            error_message.set(Some(error_msg.clone()));
+                            current_state.set(PlaybackState::Error);
+                            if let Some(on_error) = &on_error {
+                                on_error.call(error_msg);
+                            }
+                            return;
+                        }
+                    }
+                }
+
+                // Clear any previous error
+                error_message.set(None);
+                current_state.set(PlaybackState::Stopped);
+                log::info!("Video source validated successfully: {}", source.title());
+            } else {
+                // No video source
+                error_message.set(None);
+                current_state.set(PlaybackState::Stopped);
+            }
+        }
+    });
+
+    // Load video when source changes (only for local videos, YouTube handled by YouTubePlayer)
     use_effect({
         let video_source = props.video_source.clone();
         move || {
             if let Some(source) = video_source.clone() {
-                spawn(async move {
-                    // Try to get the manager and play video
-                    let manager_option = player_manager.write().take();
-                    if let Some(mut manager) = manager_option {
-                        match manager.play_video(source.clone()) {
-                            Ok(()) => {
-                                log::info!("Video loaded successfully");
-                                current_state.set(PlaybackState::Playing);
+                if matches!(source, VideoSource::Local { .. }) {
+                    spawn(async move {
+                        // Try to get the manager and play video
+                        let manager_option = player_manager.write().take();
+                        if let Some(mut manager) = manager_option {
+                            match manager.play_video(source.clone()) {
+                                Ok(()) => {
+                                    log::info!("Local video loaded successfully");
+                                    current_state.set(PlaybackState::Playing);
+                                }
+                                Err(e) => {
+                                    log::error!("Failed to load local video: {e}");
+                                    error_message.set(Some(format!("Failed to load video: {e}")));
+                                    current_state.set(PlaybackState::Error);
+                                }
                             }
-                            Err(e) => {
-                                log::error!("Failed to load video: {e}");
-                                current_state.set(PlaybackState::Error);
-                            }
+                            // Put the manager back
+                            player_manager.set(Some(manager));
                         }
-                        // Put the manager back
-                        player_manager.set(Some(manager));
-                    }
-                });
+                    });
+                }
             }
         }
     });
@@ -212,16 +294,53 @@ pub fn VideoPlayer(props: VideoPlayerProps) -> Element {
 
             // Render appropriate player based on video source
             match &props.video_source {
-                Some(VideoSource::YouTube { .. }) => rsx! {
-                    YouTubePlayer {
-                        video_source: props.video_source.clone(),
-                        width: props.width.clone(),
-                        height: props.height.clone(),
-                        show_controls: props.show_controls,
-                        autoplay: props.autoplay,
-                        on_state_change: props.on_state_change,
-                        on_position_change: props.on_position_change,
-                        on_error: props.on_error,
+                Some(VideoSource::YouTube { .. }) => {
+                    // Only render YouTube player if video source is valid
+                    if current_state() == PlaybackState::Error {
+                        rsx! {
+                            div {
+                                class: "flex-1 bg-gray-900 flex items-center justify-center relative",
+                                div {
+                                    class: "text-white text-center p-4",
+                                    div { class: "text-4xl mb-2", "❌" }
+                                    div { 
+                                        class: "text-lg font-semibold mb-2",
+                                        "Video Error" 
+                                    }
+                                    if let Some(error) = error_message() {
+                                        div { 
+                                            class: "text-sm text-gray-300 max-w-md",
+                                            "{error}" 
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    } else {
+                        rsx! {
+                            YouTubePlayer {
+                                video_source: props.video_source.clone(),
+                                width: props.width.clone(),
+                                height: props.height.clone(),
+                                show_controls: props.show_controls,
+                                autoplay: props.autoplay,
+                                on_state_change: move |state| {
+                                    current_state.set(state);
+                                    if let Some(on_state_change) = &props.on_state_change {
+                                        on_state_change.call(state);
+                                    }
+                                },
+                                on_position_change: props.on_position_change,
+                                on_error: move |error: String| {
+                                    log::error!("YouTube player error: {}", error);
+                                    error_message.set(Some(error.clone()));
+                                    current_state.set(PlaybackState::Error);
+                                    if let Some(on_error) = &props.on_error {
+                                        on_error.call(error);
+                                    }
+                                },
+                            }
+                        }
                     }
                 },
                 Some(VideoSource::Local { .. }) => rsx! {
@@ -229,46 +348,77 @@ pub fn VideoPlayer(props: VideoPlayerProps) -> Element {
                     div {
                         class: "flex-1 bg-gray-900 flex items-center justify-center relative",
 
-                        // Video content placeholder for local videos
-                        div {
-                            class: "text-white text-center",
-
+                        if current_state() == PlaybackState::Error {
+                            // Error state for local videos
                             div {
-                                class: "mb-4",
-                                h3 {
-                                    class: "text-xl font-semibold mb-2",
-                                    match &props.video_source {
-                                        Some(VideoSource::Local { title, .. }) => title.clone(),
-                                        _ => "Unknown".to_string(),
+                                class: "text-white text-center p-4",
+                                div { class: "text-4xl mb-2", "❌" }
+                                div { 
+                                    class: "text-lg font-semibold mb-2",
+                                    "Local Video Error" 
+                                }
+                                if let Some(error) = error_message() {
+                                    div { 
+                                        class: "text-sm text-gray-300 max-w-md mb-2",
+                                        "{error}" 
                                     }
                                 }
-                                p {
-                                    class: "text-gray-400 text-sm",
-                                    match &props.video_source {
-                                        Some(VideoSource::Local { path, .. }) => format!("Local: {}", path.display()),
-                                        _ => "Unknown path".to_string(),
+                                match &props.video_source {
+                                    Some(VideoSource::Local { path, title }) => rsx! {
+                                        div { 
+                                            class: "text-sm text-gray-400 mb-1",
+                                            "File: {title}" 
+                                        }
+                                        div { 
+                                            class: "text-xs text-gray-500 font-mono",
+                                            "Path: {path.display()}" 
+                                        }
+                                    },
+                                    _ => rsx! { div {} }
+                                }
+                            }
+                        } else {
+                            // Normal state for local videos
+                            div {
+                                class: "text-white text-center",
+
+                                div {
+                                    class: "mb-4",
+                                    h3 {
+                                        class: "text-xl font-semibold mb-2",
+                                        match &props.video_source {
+                                            Some(VideoSource::Local { title, .. }) => title.clone(),
+                                            _ => "Unknown".to_string(),
+                                        }
+                                    }
+                                    p {
+                                        class: "text-gray-400 text-sm",
+                                        match &props.video_source {
+                                            Some(VideoSource::Local { path, .. }) => format!("Local: {}", path.display()),
+                                            _ => "Unknown path".to_string(),
+                                        }
+                                    }
+                                }
+
+                                // State indicator
+                                div {
+                                    class: "mt-4 text-sm",
+                                    match current_state() {
+                                        PlaybackState::Stopped => "⏹️ Stopped",
+                                        PlaybackState::Playing => "▶️ Playing",
+                                        PlaybackState::Paused => "⏸️ Paused",
+                                        PlaybackState::Buffering => "⏳ Buffering",
+                                        PlaybackState::Error => "❌ Error",
                                     }
                                 }
                             }
 
-                            // State indicator
-                            div {
-                                class: "mt-4 text-sm",
-                                match current_state() {
-                                    PlaybackState::Stopped => "⏹️ Stopped",
-                                    PlaybackState::Playing => "▶️ Playing",
-                                    PlaybackState::Paused => "⏸️ Paused",
-                                    PlaybackState::Buffering => "⏳ Buffering",
-                                    PlaybackState::Error => "❌ Error",
-                                }
+                            // Click to toggle play/pause (only if not in error state)
+                            button {
+                                class: "absolute inset-0 bg-transparent hover:bg-black/20 transition-colors duration-200",
+                                onclick: handle_play_pause,
+                                "aria-label": "Toggle play/pause"
                             }
-                        }
-
-                        // Click to toggle play/pause
-                        button {
-                            class: "absolute inset-0 bg-transparent hover:bg-black/20 transition-colors duration-200",
-                            onclick: handle_play_pause,
-                            "aria-label": "Toggle play/pause"
                         }
                     }
                 },

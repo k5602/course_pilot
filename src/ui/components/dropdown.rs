@@ -135,8 +135,11 @@ pub fn create_course_actions(
     on_structure: EventHandler<()>,
     on_export: EventHandler<()>,
     on_delete: EventHandler<()>,
+    on_recluster: Option<EventHandler<()>>,
+    on_restore_order: Option<EventHandler<()>>,
+    on_manual_reorder: Option<EventHandler<()>>,
 ) -> Vec<DropdownItem> {
-    vec![
+    let mut actions = vec![
         DropdownItem {
             label: "View Plan".to_string(),
             icon: Some("📋".to_string()),
@@ -165,6 +168,43 @@ pub fn create_course_actions(
             disabled: !has_videos || has_structure,
             divider: false,
         },
+    ];
+
+    // Add content reorganization options if course is structured
+    if has_structure {
+        if let Some(on_recluster) = on_recluster {
+            actions.push(DropdownItem {
+                label: "Re-cluster Content".to_string(),
+                icon: Some("🎯".to_string()),
+                on_select: Some(on_recluster),
+                disabled: false,
+                divider: false,
+            });
+        }
+        
+        if let Some(on_restore_order) = on_restore_order {
+            actions.push(DropdownItem {
+                label: "Restore Original Order".to_string(),
+                icon: Some("📚".to_string()),
+                on_select: Some(on_restore_order),
+                disabled: false,
+                divider: false,
+            });
+        }
+        
+        if let Some(on_manual_reorder) = on_manual_reorder {
+            actions.push(DropdownItem {
+                label: "Manual Reorder".to_string(),
+                icon: Some("🔀".to_string()),
+                on_select: Some(on_manual_reorder),
+                disabled: false,
+                divider: true,
+            });
+        }
+    }
+
+    // Add remaining actions
+    actions.extend(vec![
         DropdownItem {
             label: "Export".to_string(),
             icon: Some("📤".to_string()),
@@ -179,7 +219,9 @@ pub fn create_course_actions(
             disabled: false,
             divider: false,
         },
-    ]
+    ]);
+
+    actions
 }
 
 /// Create settings dropdown items - reusable pattern

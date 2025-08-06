@@ -6,7 +6,7 @@ use crate::ui::{
 };
 use dioxus::prelude::*;
 
-use super::CourseActions;
+use super::{CourseActions, ContentReorganizationModals};
 
 #[derive(Props, PartialEq, Clone)]
 pub struct CourseCardProps {
@@ -35,6 +35,11 @@ pub fn CourseCard(props: CourseCardProps) -> Element {
             format!("{hours}h {mins}m")
         })
         .unwrap_or_else(|| "N/A".to_string());
+
+    // Content reorganization modals
+    let recluster_modal = use_modal_manager(false);
+    let restore_order_modal = use_modal_manager(false);
+    let manual_reorder_modal = use_modal_manager(false);
 
     // Create dropdown actions for the course
     let dropdown_actions = create_course_actions(
@@ -105,13 +110,48 @@ pub fn CourseCard(props: CourseCardProps) -> Element {
                 delete_modal.open.call(());
             }
         }),
+        // Content reorganization handlers
+        Some(EventHandler::new({
+            let recluster_modal = recluster_modal.clone();
+            move |_| {
+                recluster_modal.open.call(());
+            }
+        })),
+        Some(EventHandler::new({
+            let restore_order_modal = restore_order_modal.clone();
+            move |_| {
+                restore_order_modal.open.call(());
+            }
+        })),
+        Some(EventHandler::new({
+            let manual_reorder_modal = manual_reorder_modal.clone();
+            move |_| {
+                manual_reorder_modal.open.call(());
+            }
+        })),
     );
 
     // Create badges for the card
-    let badges = vec![BadgeData {
+    let mut badges = vec![BadgeData {
         label: status.clone(),
         color: badge_color.clone(),
     }];
+
+    // Add content type badge if course is structured
+    if let Some(structure) = &props.course.structure {
+        let content_type = structure.get_content_organization_type();
+        let content_badge_color = match content_type.as_str() {
+            "Sequential" => Some("info".to_string()),
+            "Clustered" => Some("secondary".to_string()),
+            "Mixed" => Some("warning".to_string()),
+            _ => Some("ghost".to_string()),
+        };
+        
+        badges.push(BadgeData {
+            label: content_type,
+            color: content_badge_color,
+        });
+    }
 
     // Handle export with format selection
     let handle_export_with_format = {
@@ -188,6 +228,17 @@ pub fn CourseCard(props: CourseCardProps) -> Element {
             on_close: move |_| export_dialog.close.call(()),
             on_export: handle_export_with_format,
             title: Some(format!("Export Course: {}", props.course.name)),
+        }
+
+        // Content reorganization modals
+        ContentReorganizationModals {
+            course: props.course.clone(),
+            recluster_modal_open: recluster_modal.is_open,
+            restore_order_modal_open: restore_order_modal.is_open,
+            manual_reorder_modal_open: manual_reorder_modal.is_open,
+            on_recluster_close: move |_| recluster_modal.close.call(()),
+            on_restore_order_close: move |_| restore_order_modal.close.call(()),
+            on_manual_reorder_close: move |_| manual_reorder_modal.close.call(()),
         }
     }
 }

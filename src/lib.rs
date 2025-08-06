@@ -119,23 +119,8 @@ pub enum PlanError {
     Algorithm(String),
 }
 
-#[derive(Error, Debug)]
-pub enum DatabaseError {
-    #[error("SQLite error: {0}")]
-    Sqlite(#[from] rusqlite::Error),
-
-    #[error("Serialization error: {0}")]
-    Serialization(#[from] serde_json::Error),
-
-    #[error("I/O error: {0}")]
-    Io(#[from] std::io::Error),
-
-    #[error("Connection pool error: {0}")]
-    Pool(#[from] r2d2::Error),
-
-    #[error("Data not found: {0}")]
-    NotFound(String),
-}
+// DatabaseError moved to error_handling module for standardization
+pub use crate::error_handling::DatabaseError;
 
 #[derive(Error, Debug)]
 pub enum Phase3Error {

@@ -6,6 +6,7 @@
 pub mod connection_manager;
 pub mod database;
 pub mod maintenance;
+pub mod migrations;
 pub mod notes;
 pub mod optimized_queries;
 pub mod preference_storage;
@@ -15,6 +16,7 @@ pub mod settings;
 pub use database::{
     ClusteringAnalytics,
     ClusteringPerformancePoint,
+    ConnectionPoolHealth,
     Database,
     DatabasePerformanceMetrics,
     ProcessingTimeStats,
@@ -39,10 +41,18 @@ pub use database::{
 };
 
 // Re-export error types
-pub use crate::DatabaseError;
+pub use crate::error_handling::DatabaseError;
 
 // Re-export notes functions for convenience
-pub use notes::{get_notes_by_course, init_notes_table};
+pub use notes::{
+    get_notes_by_course, init_notes_table,
+    // Pooled versions (preferred for new code)
+    create_note_pooled, update_note_pooled, delete_note_pooled,
+    get_all_notes_pooled, get_notes_by_course_pooled, get_notes_by_video_pooled,
+    get_course_level_notes_pooled, get_notes_by_video_index_pooled,
+    get_note_by_id_pooled, search_notes_pooled, search_notes_advanced_pooled,
+    export_notes_markdown_by_course_pooled, export_notes_markdown_by_video_pooled,
+};
 
 // Re-export settings functions for convenience
 pub use settings::{
@@ -55,15 +65,21 @@ pub use preference_storage::PreferenceStorage;
 
 // Re-export optimized queries for convenience
 pub use optimized_queries::{
-    ActivityItem, ActivityType, CourseStatistics, OptimizedQueries, SearchResult, SearchResultType,
+    ActivityItem, ActivityType, CourseStatistics, DatabasePerformanceStats, IndexInfo,
+    OptimizedQueries, QueryAnalysis, QueryPlanStep, SearchResult, SearchResultType, TableCounts,
 };
 
 // Re-export connection manager for convenience
-pub use connection_manager::{ConnectionManager, DatabaseStats, IndexUsage, QueryAnalysis};
+pub use connection_manager::{ConnectionManager, DatabaseStats, IndexUsage};
 
 // Re-export maintenance utilities for convenience
 pub use maintenance::{
     DatabaseMaintenance, HealthReport, HealthStatus, MaintenanceReport, MaintenanceSchedule,
+};
+
+// Re-export migration utilities for convenience
+pub use migrations::{
+    MigrationManager, MigrationRecord, ValidationReport, CURRENT_SCHEMA_VERSION,
 };
 
 // Seed data functionality removed

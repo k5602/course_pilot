@@ -24,14 +24,20 @@ use std::time::Duration;
 /// * `Ok(Plan)` - Generated study plan with scheduled sessions
 /// * `Err(PlanError)` - Error if plan generation fails
 pub fn generate_plan(course: &Course, settings: &PlanSettings) -> Result<Plan, PlanError> {
-    // Check if course has clustering metadata for enhanced planning
+    // Step 1: Check if content should be processed sequentially
+    if should_use_sequential_planning(course) {
+        log::info!("Using sequential planning to preserve original video order");
+        return generate_sequential_plan(course, settings);
+    }
+
+    // Step 2: Check if course has clustering metadata for enhanced planning
     if let Some(structure) = &course.structure {
         if structure.clustering_metadata.is_some() {
             return generate_clustering_aware_plan(course, settings);
         }
     }
 
-    // Fallback to basic planning
+    // Step 3: Fallback to basic planning
     generate_basic_plan(course, settings)
 }
 
@@ -2107,6 +2113,9 @@ mod tests {
                 difficulty_level: Some("Intermediate".to_string()),
                 structure_quality_score: None,
                 content_coherence_score: None,
+                content_type_detected: Some("Sequential".to_string()),
+                original_order_preserved: Some(true),
+                processing_strategy_used: Some("PreserveOrder".to_string()),
             },
         );
 
@@ -2319,6 +2328,9 @@ mod tests {
                 difficulty_level: Some("Beginner".to_string()),
                 structure_quality_score: None,
                 content_coherence_score: None,
+                content_type_detected: Some("Sequential".to_string()),
+                original_order_preserved: Some(true),
+                processing_strategy_used: Some("PreserveOrder".to_string()),
             },
         );
 
@@ -2529,6 +2541,9 @@ mod tests {
                 difficulty_level: Some("Advanced".to_string()),
                 structure_quality_score: None,
                 content_coherence_score: None,
+                content_type_detected: Some("Sequential".to_string()),
+                original_order_preserved: Some(true),
+                processing_strategy_used: Some("PreserveOrder".to_string()),
             },
         );
 
@@ -2594,6 +2609,9 @@ mod tests {
                 difficulty_level: Some("Intermediate".to_string()),
                 structure_quality_score: None,
                 content_coherence_score: None,
+                content_type_detected: Some("Sequential".to_string()),
+                original_order_preserved: Some(true),
+                processing_strategy_used: Some("PreserveOrder".to_string()),
             },
         );
 
@@ -3449,4 +3467,351 @@ fn estimate_item_difficulty(item: &PlanItem) -> f32 {
     }
 
     difficulty.clamp(0.0, 1.0)
+}
+
+// ============================================================================
+// SEQUENTIAL PLANNING FUNCTIONS
+// ============================================================================
+
+/// Check if course content should use sequential planning instead of clustering
+///
+/// This function analyzes the course structure to determine if the content
+/// is sequential in nature and should preserve its original order.
+///
+/// # Arguments
+/// * `course` - The course to analyze
+///
+/// # Returns
+/// * `bool` - true if sequential planning should be used, false otherwise
+fn should_use_sequential_planning(course: &Course) -> bool {
+    // Check if course has structure metadata
+    let structure = match &course.structure {
+        Some(s) => s,
+        None => {
+            // No structure available, analyze raw video titles for sequential patterns
+            return analyze_raw_titles_for_sequential_patterns(&course.raw_titles);
+        }
+    };
+
+    // If clustering metadata is absent, it likely means sequential processing was used
+    if structure.clustering_metadata.is_none() {
+        log::debug!("No clustering metadata found, assuming sequential content");
+        return true;
+    }
+
+    // Check clustering metadata for sequential indicators
+    if let Some(clustering_metadata) = &structure.clustering_metadata {
+        // Low quality clustering scores suggest sequential content might be better
+        if clustering_metadata.quality_score < 0.6 {
+            log::debug!(
+                "Low clustering quality score ({:.2}), considering sequential approach",
+                clustering_metadata.quality_score
+            );
+            return true;
+        }
+
+        // Check if content topics suggest sequential progression
+        if has_sequential_topic_indicators(&clustering_metadata.content_topics) {
+            log::debug!("Sequential topic indicators found in clustering metadata");
+            return true;
+        }
+    }
+
+    // Check module titles for sequential patterns
+    let module_titles: Vec<String> = structure.modules.iter().map(|m| m.title.clone()).collect();
+    if analyze_raw_titles_for_sequential_patterns(&module_titles) {
+        log::debug!("Sequential patterns detected in module titles");
+        return true;
+    }
+
+    false
+}
+
+/// Analyze raw titles for sequential patterns
+fn analyze_raw_titles_for_sequential_patterns(titles: &[String]) -> bool {
+    if titles.len() < 2 {
+        return false;
+    }
+
+    let mut sequential_indicators = 0;
+    let total_titles = titles.len();
+
+    for title in titles {
+        let title_lower = title.to_lowercase();
+        
+        // Check for numeric sequences
+        if title_lower.contains("lesson") || title_lower.contains("part") || 
+           title_lower.contains("chapter") || title_lower.contains("module") ||
+           title_lower.contains("step") || title_lower.contains("tutorial") {
+            // Look for numbers in the title
+            if title.chars().any(|c| c.is_ascii_digit()) {
+                sequential_indicators += 1;
+            }
+        }
+
+        // Check for explicit sequential words
+        if title_lower.contains("introduction") || title_lower.contains("getting started") ||
+           title_lower.contains("basics") || title_lower.contains("fundamentals") ||
+           title_lower.contains("overview") {
+            sequential_indicators += 1;
+        }
+    }
+
+    // If more than 40% of titles have sequential indicators, consider it sequential
+    let sequential_ratio = sequential_indicators as f32 / total_titles as f32;
+    sequential_ratio > 0.4
+}
+
+/// Check if topic keywords suggest sequential progression
+fn has_sequential_topic_indicators(topics: &[crate::types::TopicInfo]) -> bool {
+    let sequential_keywords = [
+        "introduction", "basic", "fundamentals", "getting started", "overview",
+        "lesson", "part", "chapter", "module", "step", "tutorial", "beginner",
+        "intermediate", "advanced", "final", "conclusion"
+    ];
+
+    let mut sequential_topic_count = 0;
+    for topic in topics {
+        let keyword_lower = topic.keyword.to_lowercase();
+        for seq_keyword in &sequential_keywords {
+            if keyword_lower.contains(seq_keyword) {
+                sequential_topic_count += 1;
+                break;
+            }
+        }
+    }
+
+    // If more than 30% of topics are sequential, consider it sequential content
+    if topics.is_empty() {
+        false
+    } else {
+        let sequential_ratio = sequential_topic_count as f32 / topics.len() as f32;
+        sequential_ratio > 0.3
+    }
+}
+
+/// Generate a sequential study plan that preserves original video order
+///
+/// This function creates study sessions that maintain the pedagogical progression
+/// of the original content by preserving video order within sessions.
+///
+/// # Arguments
+/// * `course` - The course to create a plan for
+/// * `settings` - User preferences for the study schedule
+///
+/// # Returns
+/// * `Ok(Plan)` - Generated sequential study plan
+/// * `Err(PlanError)` - Error if plan generation fails
+fn generate_sequential_plan(course: &Course, settings: &PlanSettings) -> Result<Plan, PlanError> {
+    // Validate input parameters
+    validate_plan_settings(
+        settings.sessions_per_week,
+        settings.session_length_minutes,
+        settings.start_date,
+    )
+    .map_err(PlanError::InvalidSettings)?;
+
+    log::info!(
+        "Generating sequential plan for course '{}' with {} videos",
+        course.name,
+        course.video_count()
+    );
+
+    // Create sequential plan items that preserve video order
+    let plan_items = if let Some(structure) = &course.structure {
+        generate_sequential_plan_from_structure(structure, settings)?
+    } else {
+        generate_sequential_plan_from_raw_titles(course, settings)?
+    };
+
+    // Create and return the plan
+    let mut plan = Plan::new(course.id, settings.clone());
+    plan.items = plan_items;
+
+    // Apply basic optimization while preserving order
+    optimize_sequential_plan(&mut plan)?;
+
+    log::info!(
+        "Generated sequential plan with {} sessions, preserving original video order",
+        plan.items.len()
+    );
+
+    Ok(plan)
+}
+
+/// Generate sequential plan items from course structure
+fn generate_sequential_plan_from_structure(
+    structure: &crate::types::CourseStructure,
+    settings: &PlanSettings,
+) -> Result<Vec<PlanItem>, PlanError> {
+    let mut plan_items = Vec::new();
+    let mut current_date = settings.start_date;
+    let mut video_queue: VecDeque<VideoItem> = VecDeque::new();
+
+    // Collect all videos in their original order (by video_index)
+    let mut all_videos: Vec<VideoItem> = Vec::new();
+    for module in &structure.modules {
+        for section in &module.sections {
+            all_videos.push(VideoItem {
+                module_title: module.title.clone(),
+                section_title: section.title.clone(),
+                video_index: section.video_index,
+                duration: section.duration,
+            });
+        }
+    }
+
+    // Sort by video_index to ensure original order is preserved
+    all_videos.sort_by_key(|v| v.video_index);
+    video_queue.extend(all_videos);
+
+    // Create sessions while preserving order
+    while !video_queue.is_empty() {
+        let session_videos = pack_videos_into_sequential_session(&mut video_queue, settings)?;
+
+        if !session_videos.is_empty() {
+            plan_items.push(create_plan_item_from_videos(session_videos, current_date));
+
+            current_date = crate::planner::get_next_session_date(
+                current_date,
+                settings.sessions_per_week,
+                settings.include_weekends,
+            );
+        }
+    }
+
+    Ok(plan_items)
+}
+
+/// Generate sequential plan items from raw titles (fallback)
+fn generate_sequential_plan_from_raw_titles(
+    course: &Course,
+    settings: &PlanSettings,
+) -> Result<Vec<PlanItem>, PlanError> {
+    let mut plan_items = Vec::new();
+    let mut current_date = settings.start_date;
+    let mut video_queue: VecDeque<VideoItem> = VecDeque::new();
+
+    // Create video items from raw titles in original order
+    for (index, title) in course.raw_titles.iter().enumerate() {
+        video_queue.push_back(VideoItem {
+            module_title: "Sequential Content".to_string(),
+            section_title: title.clone(),
+            video_index: index,
+            duration: Duration::from_secs(600), // Default 10 minutes if no duration available
+        });
+    }
+
+    // Create sessions while preserving order
+    while !video_queue.is_empty() {
+        let session_videos = pack_videos_into_sequential_session(&mut video_queue, settings)?;
+
+        if !session_videos.is_empty() {
+            plan_items.push(create_plan_item_from_videos(session_videos, current_date));
+
+            current_date = crate::planner::get_next_session_date(
+                current_date,
+                settings.sessions_per_week,
+                settings.include_weekends,
+            );
+        }
+    }
+
+    Ok(plan_items)
+}
+
+/// Pack videos into a session while preserving sequential order
+///
+/// This function is similar to the existing pack_videos_into_session but
+/// specifically designed for sequential content where order must be preserved.
+fn pack_videos_into_sequential_session(
+    video_queue: &mut VecDeque<VideoItem>,
+    settings: &PlanSettings,
+) -> Result<Vec<VideoItem>, PlanError> {
+    let session_limit = Duration::from_secs(settings.session_length_minutes as u64 * 60);
+    // Apply 20% buffer time for breaks, notes, and processing
+    let effective_session_limit =
+        Duration::from_secs((session_limit.as_secs() as f32 * 0.8) as u64);
+
+    let mut session_videos = Vec::new();
+    let mut session_duration = Duration::from_secs(0);
+
+    // Take videos in order until session limit is reached
+    while let Some(video) = video_queue.front() {
+        let video_duration = video.duration;
+
+        // Handle videos that exceed session time limits
+        if video_exceeds_session_limit(video_duration, settings) {
+            if session_videos.is_empty() {
+                // Must include this video even if it exceeds limit
+                let video = video_queue.pop_front().unwrap();
+                log::warn!(
+                    "Video '{}' ({:.1} min) exceeds session limit ({} min) but included to preserve order",
+                    video.section_title,
+                    video_duration.as_secs() as f32 / 60.0,
+                    settings.session_length_minutes
+                );
+                session_videos.push(video);
+                break;
+            } else {
+                // Stop here, this video will be in the next session
+                break;
+            }
+        }
+
+        // Check if video fits in current session
+        if session_duration + video_duration <= effective_session_limit || session_videos.is_empty()
+        {
+            let video = video_queue.pop_front().unwrap();
+            session_duration += video_duration;
+            session_videos.push(video);
+        } else {
+            // Video doesn't fit, stop here
+            break;
+        }
+    }
+
+    Ok(session_videos)
+}
+
+/// Apply optimization to sequential plan while preserving order
+fn optimize_sequential_plan(plan: &mut Plan) -> Result<(), PlanError> {
+    // Apply basic optimizations that don't change video order
+    
+    // 1. Validate session durations and add warnings
+    for item in &mut plan.items {
+        if item.total_duration.as_secs() > (plan.settings.session_length_minutes as u64 * 60 * 120 / 100) {
+            // More than 120% of target session length
+            item.overflow_warnings.push(format!(
+                "Session duration ({}) significantly exceeds target ({})",
+                crate::types::duration_utils::format_duration(item.total_duration),
+                crate::types::duration_utils::format_duration(Duration::from_secs(
+                    plan.settings.session_length_minutes as u64 * 60
+                ))
+            ));
+        }
+    }
+
+    // 2. Ensure proper date spacing
+    let mut current_date = plan.settings.start_date;
+    for item in &mut plan.items {
+        item.date = current_date;
+        current_date = crate::planner::get_next_session_date(
+            current_date,
+            plan.settings.sessions_per_week,
+            plan.settings.include_weekends,
+        );
+    }
+
+    log::info!(
+        "Optimized sequential plan: {} sessions spanning {} days",
+        plan.items.len(),
+        if let (Some(first), Some(last)) = (plan.items.first(), plan.items.last()) {
+            (last.date - first.date).num_days()
+        } else {
+            0
+        }
+    );
+
+    Ok(())
 }
