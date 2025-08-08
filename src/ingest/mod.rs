@@ -68,6 +68,157 @@ pub struct ImportProgress {
     pub clustering_stage: Option<u8>, // 0-4 for clustering progress
 }
 
+/// Ingest-only service (order-preserving, metadata-complete, no structuring, no DB I/O)
+/// NOTE: Intentionally free functions for now to avoid introducing async-trait; callers can wrap
+/// them behind their own service objects. These functions build a Course with videos populated and
+/// preserve original_index; they DO NOT call NLP or save to storage.
+pub mod ingest_only {
+    use super::*;
+
+    /// Ingest a YouTube playlist preserving order and metadata without structuring or saving.
+    pub async fn ingest_youtube_only(
+        url: &str,
+        api_key: &str,
+        course_title: Option<String>,
+        mut progress_callback: Option<impl FnMut(ImportProgress) + Send + 'static>,
+    ) -> Result<Course, ImportError> {
+        if let Some(cb) = progress_callback.as_mut() {
+            cb(ImportProgress {
+                stage: ImportStage::Fetching,
+                progress: 0.0,
+                message: "Initializing YouTube ingest...".to_string(),
+                clustering_stage: None,
+            });
+        }
+
+        if let Some(cb) = progress_callback.as_mut() {
+            cb(ImportProgress {
+                stage: ImportStage::Fetching,
+                progress: 0.2,
+                message: "Fetching playlist data...".to_string(),
+                clustering_stage: None,
+            });
+        }
+
+        let (sections, metadata) = youtube::import_from_youtube(url, api_key)
+            .await
+            .map_err(|e| ImportError::Network(format!("YouTube import failed: {e}")))?;
+
+        // Validate required fields and build videos
+        let mut videos: Vec<crate::types::VideoMetadata> = Vec::with_capacity(sections.len());
+        for (i, s) in sections.iter().enumerate() {
+            if s.video_id.is_empty() || s.url.is_empty() {
+                return Err(ImportError::Network(format!(
+                    "Incomplete metadata for YouTube item {} '{}'",
+                    i + 1,
+                    s.title
+                )));
+            }
+
+            let mut v = crate::types::VideoMetadata::new_youtube_with_playlist(
+                s.title.clone(),
+                s.video_id.clone(),
+                s.url.clone(),
+                s.playlist_id.clone(),
+                s.original_index,
+            );
+            v.duration_seconds = Some(s.duration.as_secs_f64());
+            v.thumbnail_url = s.thumbnail_url.clone();
+            v.description = s.description.clone();
+            v.author = s.author.clone();
+            if !v.is_metadata_complete() {
+                return Err(ImportError::Network(format!(
+                    "Incomplete metadata after build for video {}: '{}'",
+                    i + 1,
+                    v.title
+                )));
+            }
+            videos.push(v);
+        }
+
+        if let Some(cb) = progress_callback.as_mut() {
+            cb(ImportProgress {
+                stage: ImportStage::Processing,
+                progress: 0.8,
+                message: format!("Prepared {} videos (order preserved)", videos.len()),
+                clustering_stage: None,
+            });
+        }
+
+        let name = course_title.unwrap_or_else(|| metadata.title.clone());
+        let course = Course::new_with_videos(name, videos);
+
+        if let Some(cb) = progress_callback.as_mut() {
+            cb(ImportProgress {
+                stage: ImportStage::Saving,
+                progress: 1.0,
+                message: "Ingest complete (no structuring, no save)".to_string(),
+                clustering_stage: None,
+            });
+        }
+
+        Ok(course)
+    }
+
+    /// Ingest a local folder preserving file order and metadata without structuring or saving.
+    pub fn ingest_local_folder_only(
+        folder_path: &Path,
+        course_title: String,
+        mut progress_callback: Option<impl FnMut(ImportProgress) + Send + 'static>,
+    ) -> Result<Course, ImportError> {
+        if let Some(cb) = progress_callback.as_mut() {
+            cb(ImportProgress {
+                stage: ImportStage::Fetching,
+                progress: 0.0,
+                message: "Scanning local folder...".to_string(),
+                clustering_stage: None,
+            });
+        }
+
+        let import_result = local_folder::import_from_local_folder_with_analysis(folder_path)
+            .map_err(|e| ImportError::FileSystem(format!("Folder import failed: {e}")))?;
+
+        let mut videos: Vec<crate::types::VideoMetadata> = Vec::with_capacity(import_result.sections.len());
+        for s in &import_result.sections {
+            let mut v = crate::types::VideoMetadata::new_local_with_index(
+                s.title.clone(),
+                s.file_path.clone().unwrap_or_default(),
+                s.original_index,
+            );
+            v.duration_seconds = Some(s.duration.as_secs_f64());
+            if !v.is_metadata_complete() {
+                return Err(ImportError::FileSystem(format!(
+                    "Incomplete local metadata for '{}'",
+                    v.title
+                )));
+            }
+            videos.push(v);
+        }
+
+        if let Some(cb) = progress_callback.as_mut() {
+            cb(ImportProgress {
+                stage: ImportStage::Processing,
+                progress: 0.8,
+                message: format!("Prepared {} videos (order preserved)", videos.len()),
+                clustering_stage: None,
+            });
+        }
+
+        let course = Course::new_with_videos(course_title, videos);
+
+        if let Some(cb) = progress_callback.as_mut() {
+            cb(ImportProgress {
+                stage: ImportStage::Saving,
+                progress: 1.0,
+                message: "Ingest complete (no structuring, no save)".to_string(),
+                clustering_stage: None,
+            });
+        }
+
+        Ok(course)
+    }
+}
+
 /// Processing strategy for local folder content based on analysis
 #[derive(Debug, Clone, PartialEq)]
 pub enum ProcessingStrategy {

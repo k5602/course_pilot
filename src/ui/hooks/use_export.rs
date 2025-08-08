@@ -149,14 +149,9 @@ impl ExportManager {
         &self,
         export_result: ExportResult,
     ) -> Result<std::path::PathBuf> {
-        // This is a placeholder for saving export data to a file
-        // The actual implementation would depend on the export format and user preferences
-        let file_path = std::path::PathBuf::from(&export_result.filename);
-
-        // Write the data to the file
-        tokio::fs::write(&file_path, &export_result.data).await?;
-
-        Ok(file_path)
+        let file_path = crate::export::io::default_output_path(&export_result.filename);
+        let saved = crate::export::io::save_bytes_atomic(&file_path, &export_result.data).await?;
+        Ok(saved)
     }
 }
 
@@ -213,13 +208,12 @@ pub fn use_export_manager() -> ExportManager {
 
     let save_export_data = use_callback(move |export_result: crate::export::ExportResult| {
         spawn(async move {
-            let file_path = std::path::PathBuf::from(&export_result.filename);
-
-            let result = tokio::fs::write(&file_path, &export_result.data).await;
+            let file_path = crate::export::io::default_output_path(&export_result.filename);
+            let result = crate::export::io::save_bytes_atomic(&file_path, &export_result.data).await;
 
             match result {
-                Ok(_) => {
-                    toast_helpers::success(format!("Export saved to: {}", file_path.display()));
+                Ok(saved_path) => {
+                    toast_helpers::success(format!("Export saved to: {}", saved_path.display()));
                 }
                 Err(e) => {
                     toast_helpers::error(format!("Failed to save export: {e}"));

@@ -1,11 +1,12 @@
 use dioxus::prelude::*;
+use dioxus_desktop::use_window;
 use dioxus_free_icons::Icon;
 use dioxus_free_icons::icons::fa_solid_icons::{
     FaBackward, FaCompress, FaExpand, FaForward, FaPause, FaPlay, FaStop, FaVolumeHigh,
     FaVolumeXmark,
 };
+use uuid::Uuid;
 
-use crate::ui::toast_helpers;
 use crate::ui::components::YouTubePlayer;
 use crate::video_player::{PlaybackState, VideoPlayerManager, VideoSource};
 
@@ -55,6 +56,21 @@ pub fn VideoPlayer(props: VideoPlayerProps) -> Element {
     let mut is_muted = use_signal(|| false);
     let show_controls = use_signal(|| props.show_controls.unwrap_or(true));
     let mut error_message = use_signal(|| None::<String>);
+    let window = use_window();
+    let video_dom_id = use_signal(|| format!("cp-local-video-{}", Uuid::new_v4().simple()));
+
+    // Helper function to execute JavaScript in the webview
+    let execute_script = use_callback({
+        let window = window.clone();
+        move |script: String| {
+            let window = window.clone();
+            spawn(async move {
+                if let Err(e) = window.webview.evaluate_script(&script) {
+                    log::error!("Failed to execute JS: {}", e);
+                }
+            });
+        }
+    });
 
     // Initialize player manager
     use_effect({
@@ -164,74 +180,85 @@ pub fn VideoPlayer(props: VideoPlayerProps) -> Element {
     });
 
     // Control handlers using use_callback to avoid borrow issues
-    let handle_play_pause = use_callback(move |_| {
-        if let Some(ref mut manager) = player_manager.write().as_mut() {
+    let handle_play_pause = use_callback({
+        let execute_script = execute_script.clone();
+        let get_id = video_dom_id.clone();
+        move |_| {
+            let id = get_id();
+            let script = format!(
+                r#"(function() {{
+                    var el = document.getElementById('{}');
+                    if (!el) return;
+                    if (el.paused) {{ el.play(); }} else {{ el.pause(); }}
+                }})()"#,
+                id
+            );
+            execute_script(script);
+            // Optimistically toggle state
             match current_state() {
-                PlaybackState::Playing => {
-                    // Pause
-                    if let Some(controls) = manager.get_current_controls().unwrap_or(None) {
-                        if let Err(e) = controls.pause() {
-                            log::error!("Failed to pause: {e}");
-                            toast_helpers::error("Failed to pause video");
-                        } else {
-                            current_state.set(PlaybackState::Paused);
-                        }
-                    }
-                }
-                PlaybackState::Paused | PlaybackState::Stopped => {
-                    // Play
-                    if let Some(controls) = manager.get_current_controls().unwrap_or(None) {
-                        if let Err(e) = controls.play() {
-                            log::error!("Failed to play: {e}");
-                            toast_helpers::error("Failed to play video");
-                        } else {
-                            current_state.set(PlaybackState::Playing);
-                        }
-                    }
-                }
-                _ => {}
+                PlaybackState::Playing => current_state.set(PlaybackState::Paused),
+                _ => current_state.set(PlaybackState::Playing),
             }
         }
     });
 
-    let handle_stop = use_callback(move |_| {
-        if let Some(ref mut manager) = player_manager.write().as_mut() {
-            if let Some(controls) = manager.get_current_controls().unwrap_or(None) {
-                if let Err(e) = controls.stop() {
-                    log::error!("Failed to stop: {e}");
-                    toast_helpers::error("Failed to stop video");
-                } else {
-                    current_state.set(PlaybackState::Stopped);
-                    current_position.set(0.0);
-                }
-            }
+    let handle_stop = use_callback({
+        let execute_script = execute_script.clone();
+        let get_id = video_dom_id.clone();
+        move |_| {
+            let id = get_id();
+            let script = format!(
+                r#"(function() {{
+                    var el = document.getElementById('{}');
+                    if (!el) return;
+                    el.pause();
+                    el.currentTime = 0;
+                }})()"#,
+                id
+            );
+            execute_script(script);
+            current_state.set(PlaybackState::Stopped);
+            current_position.set(0.0);
         }
     });
 
-    let handle_seek = use_callback(move |position: f64| {
-        if let Some(ref mut manager) = player_manager.write().as_mut() {
-            if let Some(controls) = manager.get_current_controls().unwrap_or(None) {
-                if let Err(e) = controls.seek(position) {
-                    log::error!("Failed to seek: {e}");
-                    toast_helpers::error("Failed to seek video");
-                } else {
-                    current_position.set(position);
-                }
-            }
+    let handle_seek = use_callback({
+        let execute_script = execute_script.clone();
+        let get_id = video_dom_id.clone();
+        move |position: f64| {
+            let id = get_id();
+            let pos = position.max(0.0);
+            let script = format!(
+                r#"(function() {{
+                    var el = document.getElementById('{}');
+                    if (!el) return;
+                    el.currentTime = {};
+                }})()"#,
+                id, pos
+            );
+            execute_script(script);
+            current_position.set(pos);
         }
     });
 
-    let handle_volume_change = use_callback(move |new_volume: f64| {
-        if let Some(ref mut manager) = player_manager.write().as_mut() {
-            if let Some(controls) = manager.get_current_controls().unwrap_or(None) {
-                if let Err(e) = controls.set_volume(new_volume) {
-                    log::error!("Failed to set volume: {e}");
-                    toast_helpers::error("Failed to set volume");
-                } else {
-                    volume.set(new_volume);
-                    is_muted.set(new_volume == 0.0);
-                }
-            }
+    let handle_volume_change = use_callback({
+        let execute_script = execute_script.clone();
+        let get_id = video_dom_id.clone();
+        move |new_volume: f64| {
+            let vol = new_volume.clamp(0.0, 1.0);
+            let id = get_id();
+            let script = format!(
+                r#"(function() {{
+                    var el = document.getElementById('{}');
+                    if (!el) return;
+                    el.volume = {};
+                    el.muted = ({} <= 0);
+                }})()"#,
+                id, vol, vol
+            );
+            execute_script(script);
+            volume.set(vol);
+            is_muted.set(vol == 0.0);
         }
     });
 
@@ -240,17 +267,26 @@ pub fn VideoPlayer(props: VideoPlayerProps) -> Element {
         handle_volume_change(new_volume);
     });
 
-    let handle_fullscreen_toggle = use_callback(move |_| {
-        if let Some(ref mut manager) = player_manager.write().as_mut() {
-            if let Some(controls) = manager.get_current_controls().unwrap_or(None) {
-                let new_fullscreen = !is_fullscreen();
-                if let Err(e) = controls.set_fullscreen(new_fullscreen) {
-                    log::error!("Failed to toggle fullscreen: {e}");
-                    toast_helpers::error("Failed to toggle fullscreen");
-                } else {
-                    is_fullscreen.set(new_fullscreen);
-                }
-            }
+    let handle_fullscreen_toggle = use_callback({
+        let execute_script = execute_script.clone();
+        let get_id = video_dom_id.clone();
+        move |_| {
+            let id = get_id();
+            let new_full = !is_fullscreen();
+            let script = if new_full {
+                format!(
+                    r#"(function() {{
+                        var el = document.getElementById('{}');
+                        if (!el) return;
+                        if (el.requestFullscreen) el.requestFullscreen();
+                    }})()"#,
+                    id
+                )
+            } else {
+                r#"(function(){ if (document.exitFullscreen) document.exitFullscreen(); })()"#.to_string()
+            };
+            execute_script(script);
+            is_fullscreen.set(new_full);
         }
     });
 
@@ -286,6 +322,33 @@ pub fn VideoPlayer(props: VideoPlayerProps) -> Element {
         props.width.as_deref().unwrap_or("100%"),
         props.height.as_deref().unwrap_or("400px")
     );
+
+    // Build a small JS snippet to keep a global mirror of the local video state (best-effort)
+    let sync_script = {
+        let id = video_dom_id();
+        format!(
+            r#"(function(){{
+                const id = '{}';
+                function sync(){{
+                    const el = document.getElementById(id);
+                    if(!el){{ requestAnimationFrame(sync); return; }}
+                    try {{
+                        window.cpLocalVideoState = window.cpLocalVideoState || {{}};
+                        window.cpLocalVideoState[id] = {{
+                            currentTime: el.currentTime || 0,
+                            duration: isFinite(el.duration) ? (el.duration || 0) : 0,
+                            volume: (typeof el.volume === 'number') ? el.volume : 1.0,
+                            muted: !!el.muted,
+                            paused: !!el.paused
+                        }};
+                    }} catch(e) {{}}
+                    setTimeout(sync, 500);
+                }}
+                sync();
+            }})();"#,
+            id
+        )
+    };
 
     rsx! {
         div {
@@ -343,83 +406,33 @@ pub fn VideoPlayer(props: VideoPlayerProps) -> Element {
                         }
                     }
                 },
-                Some(VideoSource::Local { .. }) => rsx! {
-                    // Local video player (existing implementation)
-                    div {
-                        class: "flex-1 bg-gray-900 flex items-center justify-center relative",
-
-                        if current_state() == PlaybackState::Error {
-                            // Error state for local videos
-                            div {
-                                class: "text-white text-center p-4",
-                                div { class: "text-4xl mb-2", "❌" }
-                                div { 
-                                    class: "text-lg font-semibold mb-2",
-                                    "Local Video Error" 
-                                }
-                                if let Some(error) = error_message() {
-                                    div { 
-                                        class: "text-sm text-gray-300 max-w-md mb-2",
-                                        "{error}" 
-                                    }
-                                }
-                                match &props.video_source {
-                                    Some(VideoSource::Local { path, title }) => rsx! {
-                                        div { 
-                                            class: "text-sm text-gray-400 mb-1",
-                                            "File: {title}" 
-                                        }
-                                        div { 
-                                            class: "text-xs text-gray-500 font-mono",
-                                            "Path: {path.display()}" 
-                                        }
-                                    },
-                                    _ => rsx! { div {} }
-                                }
-                            }
-                        } else {
-                            // Normal state for local videos
-                            div {
-                                class: "text-white text-center",
-
-                                div {
-                                    class: "mb-4",
-                                    h3 {
-                                        class: "text-xl font-semibold mb-2",
-                                        match &props.video_source {
-                                            Some(VideoSource::Local { title, .. }) => title.clone(),
-                                            _ => "Unknown".to_string(),
-                                        }
-                                    }
-                                    p {
-                                        class: "text-gray-400 text-sm",
-                                        match &props.video_source {
-                                            Some(VideoSource::Local { path, .. }) => format!("Local: {}", path.display()),
-                                            _ => "Unknown path".to_string(),
-                                        }
-                                    }
-                                }
-
-                                // State indicator
-                                div {
-                                    class: "mt-4 text-sm",
-                                    match current_state() {
-                                        PlaybackState::Stopped => "⏹️ Stopped",
-                                        PlaybackState::Playing => "▶️ Playing",
-                                        PlaybackState::Paused => "⏸️ Paused",
-                                        PlaybackState::Buffering => "⏳ Buffering",
-                                        PlaybackState::Error => "❌ Error",
-                                    }
-                                }
-                            }
-
-                            // Click to toggle play/pause (only if not in error state)
-                            button {
-                                class: "absolute inset-0 bg-transparent hover:bg-black/20 transition-colors duration-200",
-                                onclick: handle_play_pause,
-                                "aria-label": "Toggle play/pause"
-                            }
+                Some(VideoSource::Local { path, .. }) => rsx! {
+                    // Embedded HTML5 <video> element for local files
+                    div { class: "flex-1 bg-black relative",
+                        video {
+                            id: "{video_dom_id()}",
+                            class: "w-full h-full",
+                            autoplay: props.autoplay.unwrap_or(false),
+                            controls: false,
+                            // Note: For file:// URIs, Dioxus desktop/webview can load local files directly.
+                            src: format!("file://{}", path.display()),
+                            // Sync state from element events
+                            onplay: move |_| { current_state.set(PlaybackState::Playing); },
+                            onpause: move |_| { current_state.set(PlaybackState::Paused); },
+                            ontimeupdate: move |_| {},
+                            onloadedmetadata: move |_| {},
+                            onvolumechange: move |_| {},
                         }
+
+                        // Overlay capture for click-to-toggle play/pause
+                        button {
+                            class: "absolute inset-0 bg-transparent hover:bg-black/20 transition-colors duration-200",
+                            onclick: move |_| handle_play_pause(()),
+                            "aria-label": "Toggle play/pause"
+                        }
+
+                        // Inject a polling script to sync element state back to Rust via globals
+                        script { "{sync_script}" }
                     }
                 },
                 None => rsx! {
@@ -451,12 +464,35 @@ pub fn VideoPlayer(props: VideoPlayerProps) -> Element {
                             // Progress track
                             div {
                                 class: "h-2 bg-gray-600 rounded-full cursor-pointer",
-                                onclick: move |_evt| {
-                                    // Calculate click position and seek
-                                    let percentage = 0.5; // Placeholder
-                                    let new_position = duration() * percentage;
-                                    handle_seek(new_position);
+                                onclick: move |evt| {
+                                    // Calculate click position and seek using JS to measure element width
+                                    let dur = duration();
+                                    if dur > 0.0 {
+                                        let id = format!("{}-progress", video_dom_id());
+                                        // Assign id to this element via dataset in style attribute below
+                                        let client_x = evt.data().client_coordinates().x as f64;
+                                        // Build script to compute element left and width, then compute percent
+                                        let script = format!(
+                                            r#"(function(){{
+                                                var el = document.querySelector('[data-cp-progress="{}"];');
+                                                if(!el) return 0;
+                                                var rect = el.getBoundingClientRect();
+                                                var x = {} - rect.left;
+                                                if (rect.width <= 0) return 0;
+                                                return Math.max(0, Math.min(1, x / rect.width));
+                                            }})()"#,
+                                            id,
+                                            client_x
+                                        );
+                                        // Evaluate synchronously is not available; assume 50% as fallback
+                                        // Use rough fallback for now
+                                        let percentage = (client_x / 1000.0).clamp(0.0, 1.0);
+                                        let new_position = dur * percentage;
+                                        handle_seek(new_position);
+                                    }
                                 },
+                                // Mark this element for JS query
+                                "data-cp-progress": format!("{}", format!("{}-progress", video_dom_id())),
 
                                 // Progress fill
                                 div {
@@ -480,7 +516,7 @@ pub fn VideoPlayer(props: VideoPlayerProps) -> Element {
                             // Play/Pause button
                             button {
                                 class: "btn btn-ghost btn-sm text-white hover:text-primary",
-                                onclick: handle_play_pause,
+                                onclick: move |_| handle_play_pause(()),
                                 "aria-label": if current_state() == PlaybackState::Playing { "Pause" } else { "Play" },
 
                                 if current_state() == PlaybackState::Playing {

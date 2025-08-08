@@ -198,8 +198,9 @@ impl LocalVideoPlayer {
             *info = Some(video_info);
         }
 
-        // Open the video file with the system's default video player
-        self.open_with_system_player(path)?;
+    // Embedded playback requirement: do NOT open external system player.
+    // TODO: Integrate with an embedded renderer (webview <video> element or GPU surface).
+    // For now, we skip external launch and rely on UI-embedded player to render.
 
         // Start playback thread for state tracking
         self.start_playback_thread(path.to_path_buf())?;
@@ -208,67 +209,9 @@ impl LocalVideoPlayer {
         Ok(())
     }
 
-    /// Open video file with the system's default video player
-    fn open_with_system_player<P: AsRef<Path>>(&self, path: P) -> Result<()> {
-        let path = path.as_ref();
-        
-        #[cfg(target_os = "windows")]
-        {
-            std::process::Command::new("cmd")
-                .args(["/C", "start", "", &path.to_string_lossy()])
-                .spawn()
-                .map_err(|e| anyhow!("Failed to open video with system player: {}", e))?;
-        }
+    // External system player path removed to enforce embedded playback.
 
-        #[cfg(target_os = "macos")]
-        {
-            std::process::Command::new("open")
-                .arg(path)
-                .spawn()
-                .map_err(|e| anyhow!("Failed to open video with system player: {}", e))?;
-        }
-
-        #[cfg(target_os = "linux")]
-        {
-            std::process::Command::new("xdg-open")
-                .arg(path)
-                .spawn()
-                .map_err(|e| anyhow!("Failed to open video with system player: {}", e))?;
-        }
-
-        log::info!("Opened video file with system player: {}", path.display());
-        Ok(())
-    }
-
-    /// Open YouTube video URL with the system's default browser
-    fn open_youtube_url(&self, url: &str) -> Result<()> {
-        #[cfg(target_os = "windows")]
-        {
-            std::process::Command::new("cmd")
-                .args(["/C", "start", "", url])
-                .spawn()
-                .map_err(|e| anyhow!("Failed to open YouTube URL with system browser: {}", e))?;
-        }
-
-        #[cfg(target_os = "macos")]
-        {
-            std::process::Command::new("open")
-                .arg(url)
-                .spawn()
-                .map_err(|e| anyhow!("Failed to open YouTube URL with system browser: {}", e))?;
-        }
-
-        #[cfg(target_os = "linux")]
-        {
-            std::process::Command::new("xdg-open")
-                .arg(url)
-                .spawn()
-                .map_err(|e| anyhow!("Failed to open YouTube URL with system browser: {}", e))?;
-        }
-
-        log::info!("Opened YouTube URL with system browser: {}", url);
-        Ok(())
-    }
+    // Removed system browser path for URLs; local player handles only local files.
 
     /// Get supported video formats
     pub fn get_supported_formats() -> Vec<&'static str> {

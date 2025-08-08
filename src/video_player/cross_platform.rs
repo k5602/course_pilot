@@ -3,13 +3,13 @@ use std::sync::{Arc, Mutex};
 
 use crate::video_player::{
     PlaybackState, VideoInfo, VideoPlayer, VideoSource, controls::VideoPlayerControls,
-    local_player::LocalVideoPlayer, youtube_player::YouTubeEmbeddedPlayer,
+    local_player::LocalVideoPlayer, webview_youtube_player::WebViewYouTubePlayer,
 };
 
 /// Cross-platform video player manager that handles both local and YouTube videos
 pub struct VideoPlayerManager {
     local_player: Arc<Mutex<LocalVideoPlayer>>,
-    youtube_player: Arc<Mutex<YouTubeEmbeddedPlayer>>,
+    youtube_player: Arc<Mutex<WebViewYouTubePlayer>>,
     current_player_type: Arc<Mutex<Option<PlayerType>>>,
     current_video_info: Arc<Mutex<Option<VideoInfo>>>,
 }
@@ -27,7 +27,7 @@ impl VideoPlayerManager {
         crate::video_player::init()?;
 
         let local_player = Arc::new(Mutex::new(LocalVideoPlayer::new()?));
-        let youtube_player = Arc::new(Mutex::new(YouTubeEmbeddedPlayer::new()?));
+    let youtube_player = Arc::new(Mutex::new(WebViewYouTubePlayer::new()?));
 
         Ok(Self {
             local_player,
@@ -323,7 +323,7 @@ impl VideoPlayerControlsInterface for LocalPlayerControls {
 
 /// YouTube player controls wrapper
 struct YouTubePlayerControls {
-    controls: VideoPlayerControls<YouTubeEmbeddedPlayer>,
+    controls: VideoPlayerControls<WebViewYouTubePlayer>,
 }
 
 impl VideoPlayerControlsInterface for YouTubePlayerControls {
@@ -389,7 +389,6 @@ impl Default for VideoPlayerManager {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use std::path::PathBuf;
 
     #[test]
     fn test_supported_formats() {
