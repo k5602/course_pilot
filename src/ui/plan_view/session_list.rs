@@ -8,6 +8,8 @@ use uuid::Uuid;
 use crate::state::set_video_context_and_open_notes_reactive;
 use crate::types::{Plan, PlanItem, VideoContext};
 use crate::ui::{Badge, toast_helpers, use_app_state};
+use crate::ui::components::video_player_modal::{VideoPlayerModal, use_video_player_modal};
+use crate::ui::hooks::use_backend;
 use crate::video_player::{VideoSource};
 
 
@@ -182,6 +184,10 @@ fn SessionAccordion(props: SessionAccordionProps) -> Element {
     let session_id = format!("session-{}-{}", props.plan_id, props.session_index);
     let mut expanded_sessions = props.expanded_sessions;
     let is_expanded = expanded_sessions.read().contains(&props.session_index);
+
+    // Initialize video player modal
+    let video_player_modal = use_video_player_modal();
+    let _backend = use_backend();
 
     // Toggle session expansion with smooth animation
     let toggle_session = move |_| {
@@ -394,6 +400,14 @@ fn SessionAccordion(props: SessionAccordionProps) -> Element {
                 }
             }
         }
+
+        // Video Player Modal
+        VideoPlayerModal {
+            is_open: video_player_modal.is_open,
+            on_close: video_player_modal.close,
+            video_source: video_player_modal.video_source,
+            title: video_player_modal.title,
+        }
     }
 }
 
@@ -413,6 +427,8 @@ pub struct VideoContentItemProps {
 #[component]
 fn VideoContentItem(props: VideoContentItemProps) -> Element {
     let app_state = use_app_state();
+    let backend = use_backend();
+    let video_player_modal = use_video_player_modal();
     
     // Individual video completion tracking
     let video_completed = use_signal(|| {
@@ -438,9 +454,10 @@ fn VideoContentItem(props: VideoContentItemProps) -> Element {
     let toggle_video_completion = {
         let mut video_completed = video_completed;
         let mut is_updating = is_updating;
-        let _plan_id = props.plan_id;
-        let _video_index = props.video_index;
-        let _session_item_index = props.session_item_index;
+        let plan_id = props.plan_id;
+        let video_index = props.video_index;
+        let session_item_index = props.session_item_index;
+        let backend = backend.clone();
 
         move |_| {
             let new_state = !video_completed();
@@ -449,22 +466,24 @@ fn VideoContentItem(props: VideoContentItemProps) -> Element {
 
             // Clone values for the async block
             let mut is_updating = is_updating;
+            let backend = backend.clone();
 
-            // For now, we'll just update the local state
-            // In a full implementation, this would call a backend method to update individual video completion
             spawn(async move {
-                // TODO: Implement backend call for individual video completion tracking
-                // let video_progress = VideoProgressUpdate::new(plan_id, session_item_index, video_index, new_state);
-                // backend.update_video_progress(video_progress).await;
-                
-                // Simulate API call delay
-                tokio::time::sleep(tokio::time::Duration::from_millis(300)).await;
-                is_updating.set(false);
-                
-                if new_state {
-                    toast_helpers::success("Video marked as completed");
-                } else {
-                    toast_helpers::info("Video marked as incomplete");
+                // Implement actual video completion tracking
+                match backend.mark_video_completed(plan_id, session_item_index, video_index, new_state).await {
+                    Ok(_) => {
+                        is_updating.set(false);
+                        if new_state {
+                            toast_helpers::success("Video marked as completed");
+                        } else {
+                            toast_helpers::info("Video marked as incomplete");
+                        }
+                    }
+                    Err(e) => {
+                        is_updating.set(false);
+                        video_completed.set(!new_state); // Revert on error
+                        toast_helpers::error(format!("Failed to update video progress: {}", e));
+                    }
                 }
             });
         }
@@ -475,12 +494,14 @@ fn VideoContentItem(props: VideoContentItemProps) -> Element {
         let course_id = props.course_id;
         let video_index = props.video_index;
         let video_title = video_title.clone();
+        let video_player_modal = video_player_modal.clone();
         let db = use_context::<std::sync::Arc<crate::storage::Database>>();
 
         move |_| {
             let course_id = course_id;
             let video_index = video_index;
             let video_title = video_title();
+            let video_player_modal = video_player_modal.clone();
             let db = db.clone();
             
             spawn(async move {
@@ -532,13 +553,10 @@ fn VideoContentItem(props: VideoContentItemProps) -> Element {
                         return;
                     };
 
-                    // Show video player with the video source
-                    // Note: This would typically open a video player modal or navigate to a video view
-                    log::info!("Playing video: {} - {}", video_title, video_source.title());
-                    toast_helpers::success(format!("Playing: {}", video_title));
-                    
-                    // TODO: Integrate with video player modal or dedicated video view
-                    // For now, we just log the action
+                    // Open video player modal with the video source
+                    log::info!("Opening video player for: {} - {}", &video_title, video_source.title());
+                    video_player_modal.open_video.call((video_source, Some(video_title.clone())));
+                    toast_helpers::success(format!("Opening video player: {}", video_title));
                     }
                     Ok(Ok(None)) => {
                         log::error!("Course not found in database: {}", course_id);

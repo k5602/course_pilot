@@ -1655,3 +1655,94 @@ fn calculate_clustering_similarity(
 
     similarity.clamp(0.0, 1.0)
 }
+
+/// Save video progress tracking information
+pub fn save_video_progress(db: &Database, progress: &crate::types::VideoProgressUpdate) -> Result<(), DatabaseError> {
+    let conn = db.get_conn()
+        .map_err(|e| DatabaseError::ConnectionFailed { message: e.to_string() })?;
+    
+    conn.execute(
+        "INSERT OR REPLACE INTO video_progress (plan_id, session_index, video_index, completed, updated_at) 
+         VALUES (?1, ?2, ?3, ?4, ?5)",
+        params![
+            progress.plan_id.to_string(),
+            progress.session_index as i64,
+            progress.video_index as i64,
+            progress.completed,
+            chrono::Utc::now().to_rfc3339()
+        ],
+    ).map_err(|e| DatabaseError::QueryFailed { 
+        query: "INSERT OR REPLACE INTO video_progress".to_string(), 
+        message: e.to_string() 
+    })?;
+    
+    Ok(())
+}
+
+/// Get video completion status
+pub fn get_video_completion_status(db: &Database, plan_id: &uuid::Uuid, session_index: usize, video_index: usize) -> Result<bool, DatabaseError> {
+    let conn = db.get_conn()
+        .map_err(|e| DatabaseError::ConnectionFailed { message: e.to_string() })?;
+    
+    let mut stmt = conn.prepare(
+        "SELECT completed FROM video_progress WHERE plan_id = ?1 AND session_index = ?2 AND video_index = ?3"
+    ).map_err(|e| DatabaseError::QueryFailed { 
+        query: "SELECT completed FROM video_progress".to_string(), 
+        message: e.to_string() 
+    })?;
+    
+    let result = stmt.query_row(
+        params![plan_id.to_string(), session_index as i64, video_index as i64],
+        |row| Ok(row.get::<_, bool>(0)?)
+    );
+    
+    match result {
+        Ok(completed) => Ok(completed),
+        Err(rusqlite::Error::QueryReturnedNoRows) => Ok(false), // Default to not completed
+        Err(e) => Err(DatabaseError::QueryFailed { 
+            query: "SELECT completed FROM video_progress".to_string(), 
+            message: e.to_string() 
+        }),
+    }
+}
+
+/// Get session progress as percentage (0.0 to 1.0)
+pub fn get_session_progress(db: &Database, plan_id: &uuid::Uuid, session_index: usize) -> Result<f32, DatabaseError> {
+    let conn = db.get_conn()
+        .map_err(|e| DatabaseError::ConnectionFailed { message: e.to_string() })?;
+    
+    // Get total videos in the session and completed count
+    let mut stmt = conn.prepare(
+        "SELECT 
+            COUNT(*) as total_videos,
+            SUM(CASE WHEN completed = 1 THEN 1 ELSE 0 END) as completed_videos
+         FROM video_progress 
+         WHERE plan_id = ?1 AND session_index = ?2"
+    ).map_err(|e| DatabaseError::QueryFailed { 
+        query: "SELECT COUNT(*) FROM video_progress".to_string(), 
+        message: e.to_string() 
+    })?;
+    
+    let result = stmt.query_row(
+        params![plan_id.to_string(), session_index as i64],
+        |row| {
+            let total: i64 = row.get(0)?;
+            let completed: i64 = row.get(1)?;
+            Ok((total, completed))
+        }
+    );
+    
+    match result {
+        Ok((total, completed)) => {
+            if total > 0 {
+                Ok(completed as f32 / total as f32)
+            } else {
+                Ok(0.0)
+            }
+        }
+        Err(e) => Err(DatabaseError::QueryFailed { 
+            query: "SELECT COUNT(*) FROM video_progress".to_string(), 
+            message: e.to_string() 
+        }),
+    }
+}

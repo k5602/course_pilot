@@ -188,6 +188,24 @@ impl Backend {
         self.analytics.get_available_scheduling_strategies().await
     }
 
+    // --- Video Progress Tracking ---
+    pub async fn mark_video_completed(&self, plan_id: Uuid, session_index: usize, video_index: usize, completed: bool) -> Result<()> {
+        // Create video progress update
+        let progress_update = crate::types::VideoProgressUpdate::new(plan_id, session_index, video_index, completed);
+        
+        // Store in database via analytics manager (which handles progress tracking)
+        self.analytics.update_video_progress(progress_update).await
+    }
+
+    pub async fn get_video_completion_status(&self, plan_id: Uuid, session_index: usize, video_index: usize) -> Result<bool> {
+        self.analytics.get_video_completion_status(plan_id, session_index, video_index).await
+    }
+
+    pub async fn get_session_progress(&self, plan_id: Uuid, session_index: usize) -> Result<f32> {
+        self.analytics.get_session_progress(plan_id, session_index).await
+    }
+
+    // --- Analytics ---
     pub async fn get_available_difficulty_levels(&self) -> Result<Vec<DifficultyLevel>> {
         self.analytics.get_available_difficulty_levels().await
     }

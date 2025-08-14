@@ -21,6 +21,7 @@ pub mod timer;
 pub mod toast;
 pub mod top_bar;
 pub mod video_player;
+pub mod video_player_modal;
 
 // exports for convenience
 pub use analytics::{

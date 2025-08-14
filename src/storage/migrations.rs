@@ -10,7 +10,7 @@ use rusqlite::{Connection, OptionalExtension, params};
 use std::collections::HashMap;
 
 /// Current database schema version
-pub const CURRENT_SCHEMA_VERSION: i32 = 3;
+pub const CURRENT_SCHEMA_VERSION: i32 = 4;
 
 /// Migration manager for handling database schema changes
 pub struct MigrationManager {
@@ -28,6 +28,7 @@ impl MigrationManager {
         manager.register_migration(1, Box::new(InitialVersionTracking));
         manager.register_migration(2, Box::new(VideoMetadataEnhancement));
         manager.register_migration(3, Box::new(PerformanceIndexes));
+        manager.register_migration(4, Box::new(VideoProgressTracking));
 
         manager
     }
@@ -592,6 +593,75 @@ impl Migration for PerformanceIndexes {
         conn.execute("DROP INDEX IF EXISTS idx_plans_course_created_covering;", [])?;
 
         info!("Performance indexes rolled back successfully");
+        Ok(())
+    }
+}
+
+/// Migration 4: Add video progress tracking
+struct VideoProgressTracking;
+
+impl Migration for VideoProgressTracking {
+    fn name(&self) -> &str {
+        "video_progress_tracking"
+    }
+
+    fn validate(&self, _conn: &Connection) -> Result<()> {
+        // No specific validation needed for this migration
+        Ok(())
+    }
+
+    fn apply(&self, conn: &Connection) -> Result<()> {
+        info!("Creating video progress tracking table...");
+        
+        // Create video_progress table
+        conn.execute(
+            "CREATE TABLE IF NOT EXISTS video_progress (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                plan_id TEXT NOT NULL,
+                session_index INTEGER NOT NULL,
+                video_index INTEGER NOT NULL,
+                completed BOOLEAN NOT NULL DEFAULT 0,
+                updated_at TEXT NOT NULL,
+                UNIQUE(plan_id, session_index, video_index)
+            )",
+            [],
+        ).context("Failed to create video_progress table")?;
+        
+        // Create index for efficient lookups
+        conn.execute(
+            "CREATE INDEX IF NOT EXISTS idx_video_progress_plan_session 
+             ON video_progress(plan_id, session_index)",
+            [],
+        ).context("Failed to create video progress index")?;
+        
+        info!("Video progress tracking migration completed successfully");
+        Ok(())
+    }
+
+    fn verify(&self, conn: &Connection) -> Result<()> {
+        // Verify table exists
+        let mut stmt = conn.prepare(
+            "SELECT name FROM sqlite_master WHERE type='table' AND name='video_progress'"
+        )?;
+        
+        let table_exists = stmt.query_row([], |_| Ok(())).is_ok();
+        
+        if !table_exists {
+            return Err(anyhow::anyhow!("video_progress table was not created"));
+        }
+        
+        // Verify index exists
+        let mut stmt = conn.prepare(
+            "SELECT name FROM sqlite_master WHERE type='index' AND name='idx_video_progress_plan_session'"
+        )?;
+        
+        let index_exists = stmt.query_row([], |_| Ok(())).is_ok();
+        
+        if !index_exists {
+            return Err(anyhow::anyhow!("video_progress index was not created"));
+        }
+        
+        info!("Video progress tracking migration verification completed successfully");
         Ok(())
     }
 }

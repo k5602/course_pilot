@@ -3,7 +3,7 @@ use crate::planner::scheduler::{
     analyze_plan_effectiveness,
 };
 use crate::storage::database::Database;
-use crate::types::{AdvancedSchedulerSettings, Course, DifficultyLevel, DistributionStrategy};
+use crate::types::{AdvancedSchedulerSettings, Course, DifficultyLevel, DistributionStrategy, VideoProgressUpdate};
 use crate::ui::toast_helpers;
 use anyhow::Result;
 use dioxus::prelude::*;
@@ -355,4 +355,36 @@ pub fn use_ai_recommendations(
                 .await
         }
     })
+}
+
+impl AnalyticsManager {
+    /// Update video progress tracking
+    pub async fn update_video_progress(&self, progress_update: VideoProgressUpdate) -> Result<()> {
+        let db = self.db.clone();
+        tokio::task::spawn_blocking(move || {
+            crate::storage::save_video_progress(&db, &progress_update)
+                .map_err(|e| anyhow::anyhow!("Failed to save video progress: {}", e))
+        })
+        .await?
+    }
+
+    /// Get video completion status
+    pub async fn get_video_completion_status(&self, plan_id: Uuid, session_index: usize, video_index: usize) -> Result<bool> {
+        let db = self.db.clone();
+        tokio::task::spawn_blocking(move || {
+            crate::storage::get_video_completion_status(&db, &plan_id, session_index, video_index)
+                .map_err(|e| anyhow::anyhow!("Failed to get video completion status: {}", e))
+        })
+        .await?
+    }
+
+    /// Get session progress as percentage (0.0 to 1.0)
+    pub async fn get_session_progress(&self, plan_id: Uuid, session_index: usize) -> Result<f32> {
+        let db = self.db.clone();
+        tokio::task::spawn_blocking(move || {
+            crate::storage::get_session_progress(&db, &plan_id, session_index)
+                .map_err(|e| anyhow::anyhow!("Failed to get session progress: {}", e))
+        })
+        .await?
+    }
 }

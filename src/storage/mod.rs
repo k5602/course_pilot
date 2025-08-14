@@ -37,6 +37,9 @@ pub use database::{
     optimize_database,
     save_course,
     save_plan,
+    save_video_progress,
+    get_video_completion_status,
+    get_session_progress,
     update_clustering_metadata,
 };
 
