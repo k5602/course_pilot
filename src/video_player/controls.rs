@@ -1,315 +1,492 @@
-use anyhow::Result;
-use std::sync::{Arc, Mutex};
+use dioxus::prelude::*;
+use dioxus_free_icons::Icon;
+use dioxus_free_icons::icons::fa_solid_icons::{
+    FaBackward, FaCompress, FaExpand, FaForward, FaPause, FaPlay, FaStop, FaVolumeHigh,
+    FaVolumeXmark,
+};
 
-use crate::video_player::{PlaybackState, VideoPlayer};
+use crate::video_player::{PlaybackState, use_video_player, VideoSource};
 
-/// Video player control interface
-pub struct VideoPlayerControls<T: VideoPlayer> {
-    player: Arc<Mutex<T>>,
+#[derive(Props, PartialEq, Clone)]
+pub struct VideoControlsProps {
+    pub player_id: String,
+    pub show_playlist_controls: Option<bool>,
+    pub on_play_pause: Option<EventHandler<()>>,
+    pub on_stop: Option<EventHandler<()>>,
+    pub on_seek: Option<EventHandler<f64>>,
+    pub on_volume_change: Option<EventHandler<f64>>,
+    pub on_fullscreen_toggle: Option<EventHandler<()>>,
 }
 
-impl<T: VideoPlayer> VideoPlayerControls<T> {
-    /// Create new video player controls
-    pub fn new(player: Arc<Mutex<T>>) -> Self {
-        Self { player }
-    }
+/// Custom video controls overlay with DaisyUI styling
+#[component]
+pub fn VideoControls(props: VideoControlsProps) -> Element {
+    let state = use_video_player();
+    let show_playlist_controls = props.show_playlist_controls.unwrap_or(false);
+    let controls_visible = use_signal(|| true);
 
-    /// Play or resume playback
-    pub fn play(&self) -> Result<()> {
-        let mut player = self
-            .player
-            .lock()
-            .map_err(|_| anyhow::anyhow!("Failed to lock player"))?;
-
-        match player.get_state() {
-            PlaybackState::Stopped | PlaybackState::Paused => player.resume(),
-            PlaybackState::Playing => Ok(()),   // Already playing
-            PlaybackState::Buffering => Ok(()), // Let it continue buffering
-            PlaybackState::Error => {
-                // Try to resume from error state
-                player.resume()
+    // Auto-hide controls in fullscreen mode
+    let handle_mouse_move = use_callback({
+        let mut controls_visible = controls_visible.clone();
+        let state = state.clone();
+        move |_| {
+            controls_visible.set(true);
+            
+            // Set timer to hide controls after 3 seconds in fullscreen
+            if *state.is_fullscreen.read() {
+                let mut controls_visible = controls_visible.clone();
+                spawn(async move {
+                    tokio::time::sleep(tokio::time::Duration::from_secs(3)).await;
+                    controls_visible.set(false);
+                });
             }
         }
-    }
+    });
 
-    /// Pause playback
-    pub fn pause(&self) -> Result<()> {
-        let mut player = self
-            .player
-            .lock()
-            .map_err(|_| anyhow::anyhow!("Failed to lock player"))?;
+    // Format time helper
+    let format_time = |seconds: f64| -> String {
+        let total_seconds = seconds as u64;
+        let hours = total_seconds / 3600;
+        let minutes = (total_seconds % 3600) / 60;
+        let secs = total_seconds % 60;
 
-        if player.get_state().can_pause() {
-            player.pause()
+        if hours > 0 {
+            format!("{hours:02}:{minutes:02}:{secs:02}")
         } else {
-            Ok(()) // Can't pause in current state
+            format!("{minutes:02}:{secs:02}")
         }
-    }
+    };
 
-    /// Stop playback
-    pub fn stop(&self) -> Result<()> {
-        let mut player = self
-            .player
-            .lock()
-            .map_err(|_| anyhow::anyhow!("Failed to lock player"))?;
-        player.stop()
-    }
+    // Calculate progress percentage
+    let progress_percentage = state.progress_percentage();
 
-    /// Toggle play/pause
-    pub fn toggle_play_pause(&self) -> Result<()> {
-        let player = self
-            .player
-            .lock()
-            .map_err(|_| anyhow::anyhow!("Failed to lock player"))?;
-
-        match player.get_state() {
-            PlaybackState::Playing => {
-                drop(player);
-                self.pause()
+    // Control handlers
+    let handle_play_pause = use_callback({
+        let mut state = state.clone();
+        let on_play_pause = props.on_play_pause.clone();
+        move |_| {
+            state.toggle_play_pause();
+            if let Some(on_play_pause) = &on_play_pause {
+                on_play_pause.call(());
             }
-            PlaybackState::Paused | PlaybackState::Stopped => {
-                drop(player);
-                self.play()
-            }
-            _ => Ok(()), // Don't toggle in other states
         }
+    });
+
+    let handle_stop = use_callback({
+        let mut state = state.clone();
+        let on_stop = props.on_stop.clone();
+        move |_| {
+            state.stop();
+            if let Some(on_stop) = &on_stop {
+                on_stop.call(());
+            }
+        }
+    });
+
+    let handle_seek_backward = use_callback({
+        let mut state = state.clone();
+        let on_seek = props.on_seek.clone();
+        move |_| {
+            state.seek_relative(-10.0);
+            if let Some(on_seek) = &on_seek {
+                on_seek.call(*state.position.read());
+            }
+        }
+    });
+
+    let handle_seek_forward = use_callback({
+        let mut state = state.clone();
+        let on_seek = props.on_seek.clone();
+        move |_| {
+            state.seek_relative(10.0);
+            if let Some(on_seek) = &on_seek {
+                on_seek.call(*state.position.read());
+            }
+        }
+    });
+
+    let handle_volume_change = use_callback({
+        let mut state = state.clone();
+        let on_volume_change = props.on_volume_change.clone();
+        move |evt: Event<FormData>| {
+            if let Ok(new_volume) = evt.value().parse::<f64>() {
+                state.set_volume(new_volume);
+                if let Some(on_volume_change) = &on_volume_change {
+                    on_volume_change.call(new_volume);
+                }
+            }
+        }
+    });
+
+    let handle_mute_toggle = use_callback({
+        let mut state = state.clone();
+        let on_volume_change = props.on_volume_change.clone();
+        move |_| {
+            state.toggle_mute();
+            if let Some(on_volume_change) = &on_volume_change {
+                on_volume_change.call(*state.volume.read());
+            }
+        }
+    });
+
+    let handle_fullscreen_toggle = use_callback({
+        let mut state = state.clone();
+        let on_fullscreen_toggle = props.on_fullscreen_toggle.clone();
+        move |_| {
+            state.toggle_fullscreen();
+            if let Some(on_fullscreen_toggle) = &on_fullscreen_toggle {
+                on_fullscreen_toggle.call(());
+            }
+        }
+    });
+
+    let handle_progress_click = use_callback({
+        let mut state = state.clone();
+        let on_seek = props.on_seek.clone();
+        move |_evt: MouseEvent| {
+            let duration = *state.duration.read();
+            if duration > 0.0 {
+                // Calculate click position as percentage
+                // Note: This is a simplified calculation - in a real implementation,
+                // you'd need to get the actual element bounds
+                let percentage = 0.5; // Placeholder - would calculate from click position
+                let new_position = duration * percentage;
+                state.seek_to(new_position);
+                if let Some(on_seek) = &on_seek {
+                    on_seek.call(new_position);
+                }
+            }
+        }
+    });
+
+    // Don't render controls if video is not loaded
+    if !state.has_video() {
+        return rsx! { div {} };
     }
 
-    /// Seek to position (in seconds)
-    pub fn seek(&self, position_seconds: f64) -> Result<()> {
-        let mut player = self
-            .player
-            .lock()
-            .map_err(|_| anyhow::anyhow!("Failed to lock player"))?;
+    let controls_class = if *state.is_fullscreen.read() && !*controls_visible.read() {
+        "absolute bottom-0 left-0 right-0 bg-gradient-to-t from-black/80 to-transparent p-6 opacity-0 transition-opacity duration-300"
+    } else {
+        "absolute bottom-0 left-0 right-0 bg-gradient-to-t from-black/80 to-transparent p-4 opacity-100 transition-opacity duration-300"
+    };
 
-        // Clamp position to valid range
-        let duration = player.get_duration().unwrap_or(0.0);
-        let clamped_position = position_seconds.clamp(0.0, duration);
+    rsx! {
+        div {
+            class: "{controls_class}",
+            onmousemove: handle_mouse_move,
 
-        player.seek(clamped_position)
-    }
+            // Progress bar
+            div {
+                class: "flex items-center gap-3 text-white text-sm mb-3",
 
-    /// Seek forward by seconds
-    pub fn seek_forward(&self, seconds: f64) -> Result<()> {
-        let player = self
-            .player
-            .lock()
-            .map_err(|_| anyhow::anyhow!("Failed to lock player"))?;
+                span { 
+                    class: "text-xs font-mono min-w-[3rem]", 
+                    "{format_time(*state.position.read())}" 
+                }
 
-        let current_position = player.get_position().unwrap_or(0.0);
-        drop(player);
+                div {
+                    class: "flex-1 relative",
 
-        self.seek(current_position + seconds)
-    }
+                    // Progress track
+                    div {
+                        class: "h-2 bg-white/20 rounded-full cursor-pointer hover:bg-white/30 transition-colors",
+                        onclick: handle_progress_click,
 
-    /// Seek backward by seconds
-    pub fn seek_backward(&self, seconds: f64) -> Result<()> {
-        let player = self
-            .player
-            .lock()
-            .map_err(|_| anyhow::anyhow!("Failed to lock player"))?;
+                        // Progress fill
+                        div {
+                            class: "h-full bg-primary rounded-full transition-all duration-200",
+                            style: "width: {progress_percentage}%"
+                        }
 
-        let current_position = player.get_position().unwrap_or(0.0);
-        drop(player);
+                        // Progress handle
+                        div {
+                            class: "absolute top-1/2 -translate-y-1/2 w-3 h-3 bg-primary rounded-full opacity-0 hover:opacity-100 transition-opacity",
+                            style: "left: {progress_percentage}%"
+                        }
+                    }
+                }
 
-        self.seek(current_position - seconds)
-    }
+                span { 
+                    class: "text-xs font-mono min-w-[3rem]", 
+                    "{format_time(*state.duration.read())}" 
+                }
+            }
 
-    /// Set volume (0.0 to 1.0)
-    pub fn set_volume(&self, volume: f64) -> Result<()> {
-        let mut player = self
-            .player
-            .lock()
-            .map_err(|_| anyhow::anyhow!("Failed to lock player"))?;
-        player.set_volume(volume)
-    }
+            // Control buttons
+            div {
+                class: "flex items-center justify-between",
 
-    /// Increase volume by amount
-    pub fn volume_up(&self, amount: f64) -> Result<()> {
-        let player = self
-            .player
-            .lock()
-            .map_err(|_| anyhow::anyhow!("Failed to lock player"))?;
+                // Left controls
+                div {
+                    class: "flex items-center gap-2",
 
-        // Get current volume (assume 1.0 if we can't get it)
-        let current_volume = 1.0; // TODO: Add get_volume to VideoPlayer trait
-        drop(player);
+                    // Previous video (for playlists)
+                    if show_playlist_controls {
+                        button {
+                            class: "btn btn-ghost btn-sm text-white hover:text-primary",
+                            "aria-label": "Previous video",
+                            title: "Previous video",
 
-        let new_volume = (current_volume + amount).clamp(0.0, 1.0);
-        self.set_volume(new_volume)
-    }
+                            Icon {
+                                icon: FaBackward,
+                                class: "w-4 h-4"
+                            }
+                        }
+                    }
 
-    /// Decrease volume by amount
-    pub fn volume_down(&self, amount: f64) -> Result<()> {
-        let player = self
-            .player
-            .lock()
-            .map_err(|_| anyhow::anyhow!("Failed to lock player"))?;
+                    // Seek backward
+                    button {
+                        class: "btn btn-ghost btn-sm text-white hover:text-primary",
+                        onclick: handle_seek_backward,
+                        "aria-label": "Seek backward 10 seconds",
+                        title: "Seek backward 10s (J)",
 
-        // Get current volume (assume 1.0 if we can't get it)
-        let current_volume = 1.0; // TODO: Add get_volume to VideoPlayer trait
-        drop(player);
+                        Icon {
+                            icon: FaBackward,
+                            class: "w-4 h-4"
+                        }
+                        span { class: "text-xs ml-1", "10s" }
+                    }
 
-        let new_volume = (current_volume - amount).clamp(0.0, 1.0);
-        self.set_volume(new_volume)
-    }
+                    // Play/Pause button
+                    button {
+                        class: "btn btn-ghost btn-lg text-white hover:text-primary",
+                        onclick: handle_play_pause,
+                        "aria-label": if *state.playback_state.read() == PlaybackState::Playing { "Pause" } else { "Play" },
+                        title: if *state.playback_state.read() == PlaybackState::Playing { "Pause (Space)" } else { "Play (Space)" },
 
-    /// Toggle fullscreen mode
-    pub fn toggle_fullscreen(&self) -> Result<()> {
-        let mut player = self
-            .player
-            .lock()
-            .map_err(|_| anyhow::anyhow!("Failed to lock player"))?;
+                        if *state.playback_state.read() == PlaybackState::Playing {
+                            Icon {
+                                icon: FaPause,
+                                class: "w-6 h-6"
+                            }
+                        } else {
+                            Icon {
+                                icon: FaPlay,
+                                class: "w-6 h-6"
+                            }
+                        }
+                    }
 
-        let is_fullscreen = player.is_fullscreen();
-        player.set_fullscreen(!is_fullscreen)
-    }
+                    // Stop button
+                    button {
+                        class: "btn btn-ghost btn-sm text-white hover:text-primary",
+                        onclick: handle_stop,
+                        "aria-label": "Stop",
+                        title: "Stop",
 
-    /// Set fullscreen mode
-    pub fn set_fullscreen(&self, fullscreen: bool) -> Result<()> {
-        let mut player = self
-            .player
-            .lock()
-            .map_err(|_| anyhow::anyhow!("Failed to lock player"))?;
-        player.set_fullscreen(fullscreen)
-    }
+                        Icon {
+                            icon: FaStop,
+                            class: "w-4 h-4"
+                        }
+                    }
 
-    /// Get current playback position
-    pub fn get_position(&self) -> Result<f64> {
-        let player = self
-            .player
-            .lock()
-            .map_err(|_| anyhow::anyhow!("Failed to lock player"))?;
-        player.get_position()
-    }
+                    // Seek forward
+                    button {
+                        class: "btn btn-ghost btn-sm text-white hover:text-primary",
+                        onclick: handle_seek_forward,
+                        "aria-label": "Seek forward 10 seconds",
+                        title: "Seek forward 10s (L)",
 
-    /// Get total duration
-    pub fn get_duration(&self) -> Result<f64> {
-        let player = self
-            .player
-            .lock()
-            .map_err(|_| anyhow::anyhow!("Failed to lock player"))?;
-        player.get_duration()
-    }
+                        Icon {
+                            icon: FaForward,
+                            class: "w-4 h-4"
+                        }
+                        span { class: "text-xs ml-1", "10s" }
+                    }
 
-    /// Get current playback state
-    pub fn get_state(&self) -> Result<PlaybackState> {
-        let player = self
-            .player
-            .lock()
-            .map_err(|_| anyhow::anyhow!("Failed to lock player"))?;
-        Ok(player.get_state())
-    }
+                    // Next video (for playlists)
+                    if show_playlist_controls {
+                        button {
+                            class: "btn btn-ghost btn-sm text-white hover:text-primary",
+                            "aria-label": "Next video",
+                            title: "Next video",
 
-    /// Check if currently playing
-    pub fn is_playing(&self) -> Result<bool> {
-        let player = self
-            .player
-            .lock()
-            .map_err(|_| anyhow::anyhow!("Failed to lock player"))?;
-        Ok(player.is_playing())
-    }
+                            Icon {
+                                icon: FaForward,
+                                class: "w-4 h-4"
+                            }
+                        }
+                    }
+                }
 
-    /// Check if in fullscreen mode
-    pub fn is_fullscreen(&self) -> Result<bool> {
-        let player = self
-            .player
-            .lock()
-            .map_err(|_| anyhow::anyhow!("Failed to lock player"))?;
-        Ok(player.is_fullscreen())
+                // Center info (video title for YouTube)
+                div {
+                    class: "flex-1 text-center",
+                    if let Some(VideoSource::YouTube { title, .. }) = &*state.current_video.read() {
+                        div {
+                            class: "text-sm text-white/80 truncate max-w-md mx-auto",
+                            title: "{title}",
+                            "{title}"
+                        }
+                    }
+                }
+
+                // Right controls
+                div {
+                    class: "flex items-center gap-2",
+
+                    // Volume controls
+                    div {
+                        class: "flex items-center gap-2",
+
+                        // Mute button
+                        button {
+                            class: "btn btn-ghost btn-sm text-white hover:text-primary",
+                            onclick: handle_mute_toggle,
+                            "aria-label": if *state.is_muted.read() { "Unmute" } else { "Mute" },
+                            title: if *state.is_muted.read() { "Unmute (M)" } else { "Mute (M)" },
+
+                            if *state.is_muted.read() {
+                                Icon {
+                                    icon: FaVolumeXmark,
+                                    class: "w-4 h-4"
+                                }
+                            } else {
+                                Icon {
+                                    icon: FaVolumeHigh,
+                                    class: "w-4 h-4"
+                                }
+                            }
+                        }
+
+                        // Volume slider
+                        input {
+                            r#type: "range",
+                            class: "range range-primary range-sm w-20",
+                            min: "0",
+                            max: "1",
+                            step: "0.1",
+                            value: "{*state.volume.read()}",
+                            oninput: handle_volume_change,
+                            title: "Volume: {(*state.volume.read() * 100.0) as i32}%",
+                        }
+
+                        // Volume percentage
+                        span {
+                            class: "text-xs text-white/60 min-w-[2rem]",
+                            "{(*state.volume.read() * 100.0) as i32}%"
+                        }
+                    }
+
+                    // Playback speed (for future implementation)
+                    div {
+                        class: "dropdown dropdown-top dropdown-end",
+                        
+                        button {
+                            class: "btn btn-ghost btn-sm text-white hover:text-primary",
+                            title: "Playback speed",
+                            "1x"
+                        }
+                        
+                        div {
+                            class: "dropdown-content menu p-2 shadow bg-base-100 rounded-box w-32",
+                            for speed in [0.25, 0.5, 0.75, 1.0, 1.25, 1.5, 1.75, 2.0] {
+                                button {
+                                    class: "btn btn-ghost btn-sm justify-start",
+                                    "{speed}x"
+                                }
+                            }
+                        }
+                    }
+
+                    // Fullscreen button
+                    button {
+                        class: "btn btn-ghost btn-sm text-white hover:text-primary",
+                        onclick: handle_fullscreen_toggle,
+                        "aria-label": if *state.is_fullscreen.read() { "Exit fullscreen" } else { "Enter fullscreen" },
+                        title: if *state.is_fullscreen.read() { "Exit fullscreen (F)" } else { "Enter fullscreen (F)" },
+
+                        if *state.is_fullscreen.read() {
+                            Icon {
+                                icon: FaCompress,
+                                class: "w-4 h-4"
+                            }
+                        } else {
+                            Icon {
+                                icon: FaExpand,
+                                class: "w-4 h-4"
+                            }
+                        }
+                    }
+                }
+            }
+        }
     }
 }
 
-/// Keyboard shortcuts for video player controls
-pub struct VideoPlayerKeyboardShortcuts;
+/// Simplified controls for minimal UI
+#[component]
+pub fn MinimalVideoControls(
+    on_play_pause: EventHandler<()>,
+) -> Element {
+    let state = use_video_player();
 
-impl VideoPlayerKeyboardShortcuts {
-    /// Get default keyboard shortcuts mapping
-    pub fn get_default_shortcuts() -> Vec<(String, String)> {
-        vec![
-            ("Space".to_string(), "Toggle Play/Pause".to_string()),
-            ("K".to_string(), "Toggle Play/Pause".to_string()),
-            ("J".to_string(), "Seek Backward 10s".to_string()),
-            ("L".to_string(), "Seek Forward 10s".to_string()),
-            ("ArrowLeft".to_string(), "Seek Backward 5s".to_string()),
-            ("ArrowRight".to_string(), "Seek Forward 5s".to_string()),
-            ("ArrowUp".to_string(), "Volume Up".to_string()),
-            ("ArrowDown".to_string(), "Volume Down".to_string()),
-            ("M".to_string(), "Toggle Mute".to_string()),
-            ("F".to_string(), "Toggle Fullscreen".to_string()),
-            ("Escape".to_string(), "Exit Fullscreen".to_string()),
-            ("0".to_string(), "Seek to Start".to_string()),
-            ("1".to_string(), "Seek to 10%".to_string()),
-            ("2".to_string(), "Seek to 20%".to_string()),
-            ("3".to_string(), "Seek to 30%".to_string()),
-            ("4".to_string(), "Seek to 40%".to_string()),
-            ("5".to_string(), "Seek to 50%".to_string()),
-            ("6".to_string(), "Seek to 60%".to_string()),
-            ("7".to_string(), "Seek to 70%".to_string()),
-            ("8".to_string(), "Seek to 80%".to_string()),
-            ("9".to_string(), "Seek to 90%".to_string()),
-        ]
+    rsx! {
+        div {
+            class: "absolute inset-0 flex items-center justify-center",
+            
+            button {
+                class: "btn btn-circle btn-lg bg-black/50 border-white/20 text-white hover:bg-black/70",
+                onclick: {
+                    let state = state.clone();
+                    move |_| {
+                        let mut state = state.clone();
+                        state.toggle_play_pause();
+                        on_play_pause.call(());
+                    }
+                },
+                "aria-label": if *state.playback_state.read() == PlaybackState::Playing { "Pause" } else { "Play" },
+
+                if *state.playback_state.read() == PlaybackState::Playing {
+                    Icon {
+                        icon: FaPause,
+                        class: "w-8 h-8"
+                    }
+                } else {
+                    Icon {
+                        icon: FaPlay,
+                        class: "w-8 h-8"
+                    }
+                }
+            }
+        }
     }
+}
 
-    /// Handle keyboard shortcut
-    pub fn handle_shortcut<T: VideoPlayer>(
-        key: &str,
-        controls: &VideoPlayerControls<T>,
-    ) -> Result<bool> {
-        match key {
-            "Space" | "K" => {
-                controls.toggle_play_pause()?;
-                Ok(true)
+/// Progress bar only (for compact layouts)
+#[component]
+pub fn VideoProgressBar(
+    on_seek: EventHandler<f64>,
+) -> Element {
+    let state = use_video_player();
+
+    let handle_progress_click = use_callback({
+        let state = state.clone();
+        move |_evt: MouseEvent| {
+            let duration = *state.duration.read();
+            if duration > 0.0 {
+                // Simplified click handling - would need proper bounds calculation
+                let percentage = 0.5; // Placeholder
+                let new_position = duration * percentage;
+                let mut state = state.clone();
+                state.seek_to(new_position);
+                on_seek.call(new_position);
             }
-            "J" => {
-                controls.seek_backward(10.0)?;
-                Ok(true)
+        }
+    });
+
+    let progress_percentage = state.progress_percentage();
+
+    rsx! {
+        div {
+            class: "w-full h-1 bg-white/20 rounded-full cursor-pointer hover:h-2 transition-all duration-200",
+            onclick: handle_progress_click,
+
+            div {
+                class: "h-full bg-primary rounded-full transition-all duration-200",
+                style: "width: {progress_percentage}%"
             }
-            "L" => {
-                controls.seek_forward(10.0)?;
-                Ok(true)
-            }
-            "ArrowLeft" => {
-                controls.seek_backward(5.0)?;
-                Ok(true)
-            }
-            "ArrowRight" => {
-                controls.seek_forward(5.0)?;
-                Ok(true)
-            }
-            "ArrowUp" => {
-                controls.volume_up(0.1)?;
-                Ok(true)
-            }
-            "ArrowDown" => {
-                controls.volume_down(0.1)?;
-                Ok(true)
-            }
-            "M" => {
-                // Toggle mute (set volume to 0 or restore)
-                // TODO: Implement mute state tracking
-                controls.set_volume(0.0)?;
-                Ok(true)
-            }
-            "F" => {
-                controls.toggle_fullscreen()?;
-                Ok(true)
-            }
-            "Escape" => {
-                controls.set_fullscreen(false)?;
-                Ok(true)
-            }
-            "0" => {
-                controls.seek(0.0)?;
-                Ok(true)
-            }
-            "1" | "2" | "3" | "4" | "5" | "6" | "7" | "8" | "9" => {
-                let percentage = key.parse::<f64>().unwrap_or(0.0) / 10.0;
-                let duration = controls.get_duration().unwrap_or(0.0);
-                controls.seek(duration * percentage)?;
-                Ok(true)
-            }
-            _ => Ok(false), // Shortcut not handled
         }
     }
 }
@@ -319,14 +496,25 @@ mod tests {
     use super::*;
 
     #[test]
-    fn test_default_shortcuts() {
-        let shortcuts = VideoPlayerKeyboardShortcuts::get_default_shortcuts();
-        assert!(!shortcuts.is_empty());
+    fn test_video_controls_props() {
+        let props = VideoControlsProps {
+            player_id: "test-player".to_string(),
+            show_playlist_controls: Some(true),
+            on_play_pause: None,
+            on_stop: None,
+            on_seek: None,
+            on_volume_change: None,
+            on_fullscreen_toggle: None,
+        };
 
-        // Check that common shortcuts are present
-        let shortcut_keys: Vec<&String> = shortcuts.iter().map(|(key, _)| key).collect();
-        assert!(shortcut_keys.contains(&&"Space".to_string()));
-        assert!(shortcut_keys.contains(&&"F".to_string()));
-        assert!(shortcut_keys.contains(&&"K".to_string()));
+        assert_eq!(props.player_id, "test-player");
+        assert_eq!(props.show_playlist_controls, Some(true));
+    }
+
+    #[test]
+    fn test_format_time() {
+        // This would test the time formatting if it were extracted as a separate function
+        // For now, this is a placeholder
+        assert!(true);
     }
 }

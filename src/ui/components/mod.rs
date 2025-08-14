@@ -21,7 +21,6 @@ pub mod timer;
 pub mod toast;
 pub mod top_bar;
 pub mod video_player;
-pub mod youtube_player;
 
 // exports for convenience
 pub use analytics::{
@@ -50,5 +49,4 @@ pub use toast::{
     use_toast_manager,
 };
 pub use top_bar::TopBar;
-pub use video_player::VideoPlayer;
-pub use youtube_player::YouTubePlayer;
+pub use video_player::VideoPlayerComponent;

@@ -167,10 +167,10 @@ pub fn ContentReorganizationModals(props: ContentReorganizationModalsProps) -> E
     let handle_restore_order = {
         let course_manager = course_manager.clone();
         let on_close = props.on_restore_order_close;
-        let course_id = props.course.id;
+        let _course_id = props.course.id;
 
         Callback::new(move |_| {
-            let course_manager = course_manager.clone();
+            let _course_manager = course_manager.clone();
             
             spawn(async move {
                 toast_helpers::info("Restoring original video order...");

@@ -264,54 +264,122 @@ impl Default for PlayerCapabilities {
 /// Video player error types
 #[derive(Debug, Clone, PartialEq)]
 pub enum VideoPlayerError {
-    /// File not found or inaccessible
-    FileNotFound(String),
-    /// Unsupported video format
+    // File-related errors
+    FileNotFound(std::path::PathBuf),
+    FileAccessDenied(std::path::PathBuf),
     UnsupportedFormat(String),
-    /// Network error (for streaming videos)
+    
+    // Network-related errors
     NetworkError(String),
-    /// Codec error
-    CodecError(String),
-    /// Permission denied
-    PermissionDenied(String),
-    /// Player initialization failed
+    YouTubeApiError { code: i32, message: String },
+    
+    // Player-related errors
     InitializationFailed(String),
-    /// Playback error
     PlaybackError(String),
-    /// Seek error
-    SeekError(String),
-    /// Volume control error
-    VolumeError(String),
-    /// Fullscreen error
-    FullscreenError(String),
-    /// Generic error
-    Other(String),
+    WebViewError(String),
+    
+    // Validation errors
+    InvalidVideoId(String),
+    InvalidSource(String),
 }
 
 impl std::fmt::Display for VideoPlayerError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            VideoPlayerError::FileNotFound(path) => write!(f, "Video file not found: {path}"),
+            VideoPlayerError::FileNotFound(path) => write!(f, "Video file not found: {}", path.display()),
+            VideoPlayerError::FileAccessDenied(path) => write!(f, "Cannot access video file: {}", path.display()),
             VideoPlayerError::UnsupportedFormat(format) => {
                 write!(f, "Unsupported video format: {format}")
             }
             VideoPlayerError::NetworkError(msg) => write!(f, "Network error: {msg}"),
-            VideoPlayerError::CodecError(msg) => write!(f, "Codec error: {msg}"),
-            VideoPlayerError::PermissionDenied(msg) => write!(f, "Permission denied: {msg}"),
+            VideoPlayerError::YouTubeApiError { code, message } => {
+                write!(f, "YouTube API error {code}: {message}")
+            }
             VideoPlayerError::InitializationFailed(msg) => {
                 write!(f, "Player initialization failed: {msg}")
             }
             VideoPlayerError::PlaybackError(msg) => write!(f, "Playback error: {msg}"),
-            VideoPlayerError::SeekError(msg) => write!(f, "Seek error: {msg}"),
-            VideoPlayerError::VolumeError(msg) => write!(f, "Volume control error: {msg}"),
-            VideoPlayerError::FullscreenError(msg) => write!(f, "Fullscreen error: {msg}"),
-            VideoPlayerError::Other(msg) => write!(f, "Video player error: {msg}"),
+            VideoPlayerError::WebViewError(msg) => write!(f, "WebView error: {msg}"),
+            VideoPlayerError::InvalidVideoId(id) => write!(f, "Invalid video ID: {id}"),
+            VideoPlayerError::InvalidSource(msg) => write!(f, "Invalid video source: {msg}"),
         }
     }
 }
 
 impl std::error::Error for VideoPlayerError {}
 
+/// YouTube player state information from the YouTube API
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+pub struct YouTubePlayerState {
+    /// Current playback time in seconds
+    pub current_time: f64,
+    /// Total video duration in seconds
+    pub duration: f64,
+    /// Current volume (0.0 to 1.0)
+    pub volume: f64,
+    /// Whether the player is muted
+    pub is_muted: bool,
+    /// Playback rate (e.g., 1.0 for normal speed)
+    pub playback_rate: f64,
+    /// YouTube player state number (-1: unstarted, 0: ended, 1: playing, 2: paused, 3: buffering, 5: video cued)
+    pub player_state: i32,
+    /// Video quality (e.g., "hd720", "large", "medium", "small")
+    pub quality: Option<String>,
+}
+
+impl YouTubePlayerState {
+    /// Create a new YouTube player state with default values
+    pub fn new() -> Self {
+        Self {
+            current_time: 0.0,
+            duration: 0.0,
+            volume: 1.0,
+            is_muted: false,
+            playback_rate: 1.0,
+            player_state: -1, // Unstarted
+            quality: None,
+        }
+    }
+
+    /// Check if the player is playing
+    pub fn is_playing(&self) -> bool {
+        self.player_state == 1
+    }
+
+    /// Check if the player is paused
+    pub fn is_paused(&self) -> bool {
+        self.player_state == 2
+    }
+
+    /// Check if the player is buffering
+    pub fn is_buffering(&self) -> bool {
+        self.player_state == 3
+    }
+
+    /// Check if the video has ended
+    pub fn has_ended(&self) -> bool {
+        self.player_state == 0
+    }
+
+    /// Get a human-readable state description
+    pub fn state_description(&self) -> &'static str {
+        match self.player_state {
+            -1 => "Unstarted",
+            0 => "Ended",
+            1 => "Playing",
+            2 => "Paused",
+            3 => "Buffering",
+            5 => "Video Cued",
+            _ => "Unknown",
+        }
+    }
+}
+
+impl Default for YouTubePlayerState {
+    fn default() -> Self {
+        Self::new()
+    }
+}
 
 
 /// Video metadata extracted from files or URLs
