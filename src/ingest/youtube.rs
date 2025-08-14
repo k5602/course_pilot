@@ -183,10 +183,17 @@ pub async fn import_from_youtube(
             );
         }
         for (video_index, (item, video_id)) in videos_resp.items.iter().zip(chunk.iter()).enumerate() {
+            // Debug log the raw YouTube API data
+            log::info!("YouTube API response for video {}: title='{}', requested_id='{}', response_title='{}'", 
+                       video_index, item.snippet.title, video_id, item.snippet.title);
+            
             let title = clean_video_title(&item.snippet.title);
             let duration = parse_iso8601_duration(&item.content_details.duration)
                 .unwrap_or_else(|| Duration::from_secs(0));
             let url = format!("https://www.youtube.com/watch?v={}", video_id);
+            
+            // Debug log what we're creating
+            log::info!("Creating YoutubeSection: title='{}', video_id='{}', url='{}'", title, video_id, url);
             
             // Extract best available thumbnail
             let thumbnail_url = item.snippet.thumbnails.as_ref().and_then(|thumbs| {

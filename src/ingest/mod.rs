@@ -107,7 +107,11 @@ pub mod ingest_only {
         // Validate required fields and build videos
         let mut videos: Vec<crate::types::VideoMetadata> = Vec::with_capacity(sections.len());
         for (i, s) in sections.iter().enumerate() {
+            log::info!("Processing YouTube section {}: title='{}', video_id='{}', url='{}', playlist_id={:?}", 
+                       i, s.title, s.video_id, s.url, s.playlist_id);
+            
             if s.video_id.is_empty() || s.url.is_empty() {
+                log::error!("Incomplete metadata for section {}: video_id='{}', url='{}'", i, s.video_id, s.url);
                 return Err(ImportError::Network(format!(
                     "Incomplete metadata for YouTube item {} '{}'",
                     i + 1,
@@ -122,6 +126,9 @@ pub mod ingest_only {
                 s.playlist_id.clone(),
                 s.original_index,
             );
+            
+            log::info!("Created VideoMetadata: video_id={:?}, source_url={:?}, is_local={}", 
+                       v.video_id, v.source_url, v.is_local);
             v.duration_seconds = Some(s.duration.as_secs_f64());
             v.thumbnail_url = s.thumbnail_url.clone();
             v.description = s.description.clone();
@@ -301,6 +308,10 @@ pub async fn import_and_structure_youtube(
         video_metadata.thumbnail_url = s.thumbnail_url.clone();
         video_metadata.description = s.description.clone();
         video_metadata.author = s.author.clone();
+        
+        // Debug log the created video metadata
+        log::info!("Created VideoMetadata: title='{}', video_id={:?}, source_url={:?}, is_local={}", 
+                   video_metadata.title, video_metadata.video_id, video_metadata.source_url, video_metadata.is_local);
         
         video_metadata
     }).collect();

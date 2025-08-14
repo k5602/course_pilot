@@ -145,33 +145,25 @@ pub fn ImportModal(props: ImportModalProps) -> Element {
                     if !path.is_empty() {
                         if let Some(validation) = folder_validation() {
                             if validation.is_valid {
-                                // Start local folder import
+                                // Start local folder import and wait for completion
                                 let import_manager = import_manager.clone();
                                 let on_close = on_close;
                                 let path = path.clone();
                                 spawn(async move {
                                     toast_helpers::info("Starting local folder import...");
 
-                                    // Call the callback (which handles the async work internally)
-                                    import_manager.import_from_local_folder.call((
+                                    // Use the async method directly instead of the callback
+                                    let result = import_manager.import_from_local_folder(
                                         std::path::PathBuf::from(&path),
                                         None, // Let it auto-generate title from folder name
-                                    ));
-
-                                    // Create a dummy success result since the callback handles everything
-                                    let result: Result<
-                                        Result<crate::types::Course, anyhow::Error>,
-                                        tokio::task::JoinError,
-                                    > = Ok(Ok(crate::types::Course::new(
-                                        "Imported Course".to_string(),
-                                        vec![],
-                                    )));
+                                    ).await;
 
                                     match result {
-                                        Ok(Ok(course)) => {
+                                        Ok(course) => {
                                             toast_helpers::success(format!(
-                                                "Course '{}' imported successfully!",
-                                                course.name
+                                                "Course '{}' imported successfully with {} videos!",
+                                                course.name,
+                                                course.videos.len()
                                             ));
                                             on_close.call(());
 
@@ -182,11 +174,10 @@ pub fn ImportModal(props: ImportModalProps) -> Element {
                                                 refresh_callback.call(());
                                             }
                                         }
-                                        Ok(Err(e)) => {
-                                            toast_helpers::error(format!("Import failed: {e}"));
-                                        }
                                         Err(e) => {
-                                            toast_helpers::error(format!("Import failed: {e}"));
+                                            toast_helpers::error(format!(
+                                                "Failed to import course: {e}"
+                                            ));
                                         }
                                     }
                                 });
@@ -757,10 +748,35 @@ fn YouTubeImportForm(
                         );
 
                         // Convert to course with proper structure
-                        let raw_titles: Vec<String> =
-                            sections.iter().map(|s| s.title.clone()).collect();
                         let course_name = metadata.title;
-                        let mut course = crate::types::Course::new(course_name, raw_titles);
+                        
+                        // Convert YoutubeSection objects to VideoMetadata with proper video_id and URLs
+                        let videos: Vec<crate::types::VideoMetadata> = sections
+                            .iter()
+                            .enumerate()
+                            .map(|(_index, section)| {
+                                let mut video = crate::types::VideoMetadata::new_youtube_with_playlist(
+                                    section.title.clone(),
+                                    section.video_id.clone(),
+                                    section.url.clone(),
+                                    section.playlist_id.clone(),
+                                    section.original_index,
+                                );
+                                video.duration_seconds = Some(section.duration.as_secs_f64());
+                                video.thumbnail_url = section.thumbnail_url.clone();
+                                video.description = section.description.clone();
+                                video.author = section.author.clone();
+                                video
+                            })
+                            .collect();
+
+                        log::info!("Created {} VideoMetadata objects from YoutubeSection data", videos.len());
+                        if !videos.is_empty() {
+                            log::info!("First video: title='{}', video_id={:?}, source_url={:?}", 
+                                       videos[0].title, videos[0].video_id, videos[0].source_url);
+                        }
+                        
+                        let mut course = crate::types::Course::new_with_videos(course_name, videos);
 
                         // Create course structure with durations
                         let course_sections: Vec<crate::types::Section> = sections

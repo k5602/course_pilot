@@ -311,6 +311,8 @@ pub fn scan_directory(path: &Path) -> Result<Vec<PathBuf>, ImportError> {
 /// * `Ok(LocalImportResult)` - Import result with sections and content analysis
 /// * `Err(ImportError)` - Error if import fails
 pub fn import_from_local_folder_with_analysis(path: &Path) -> Result<LocalImportResult, ImportError> {
+    log::info!("Starting local folder analysis for: {}", path.display());
+    
     // Validate that the path exists and is a directory
     if !path.exists() {
         return Err(ImportError::FileSystem(format!(
@@ -326,34 +328,25 @@ pub fn import_from_local_folder_with_analysis(path: &Path) -> Result<LocalImport
         )));
     }
 
-    // Read directory entries
-    let entries = match fs::read_dir(path) {
-        Ok(entries) => entries,
-        Err(e) => {
-            return Err(ImportError::FileSystem(format!(
-                "Failed to read directory {}: {}",
-                path.display(),
-                e
-            )));
-        }
-    };
-
-    // Collect video files with metadata for sorting
+    // Use recursive scanning like the validation does
     let mut video_files = Vec::new();
 
-    for entry in entries {
-        let entry = match entry {
-            Ok(entry) => entry,
-            Err(e) => {
-                eprintln!("Warning: Failed to read directory entry: {e}");
-                continue;
+    for entry in WalkDir::new(path)
+        .follow_links(false)
+        .into_iter()
+        .filter_map(|e| match e {
+            Ok(entry) => Some(entry),
+            Err(err) => {
+                log::warn!("Error accessing path during analysis: {err}");
+                None
             }
-        };
-
+        })
+        .filter(|e| e.file_type().is_file())
+    {
         let file_path = entry.path();
 
-        // Skip directories, hidden files, and system files
-        if file_path.is_dir() || is_hidden_or_system_file(&file_path) {
+        // Skip hidden files and system files
+        if is_hidden_or_system_file(&file_path) {
             continue;
         }
 
@@ -364,7 +357,7 @@ pub fn import_from_local_folder_with_analysis(path: &Path) -> Result<LocalImport
                 Err(_) => {
                     // If we can't get metadata, still include the file but use current time
                     video_files.push(VideoFileInfo {
-                        path: file_path,
+                        path: file_path.to_path_buf(),
                         created: SystemTime::now(),
                     });
                     continue;
@@ -376,7 +369,7 @@ pub fn import_from_local_folder_with_analysis(path: &Path) -> Result<LocalImport
                 .unwrap_or_else(|_| metadata.modified().unwrap_or_else(|_| SystemTime::now()));
 
             video_files.push(VideoFileInfo {
-                path: file_path,
+                path: file_path.to_path_buf(),
                 created,
             });
         }
@@ -750,8 +743,12 @@ pub fn import_from_folder(
     folder_path: &Path,
     course_title: &str,
 ) -> Result<Course, ImportError> {
+    log::info!("Starting import from folder: {} with title: {}", folder_path.display(), course_title);
+    
     // Use the enhanced import with content analysis
     let import_result = import_from_local_folder_with_analysis(folder_path)?;
+    
+    log::info!("Import analysis completed with {} sections", import_result.sections.len());
     
     if import_result.sections.is_empty() {
         return Err(ImportError::NoContent);

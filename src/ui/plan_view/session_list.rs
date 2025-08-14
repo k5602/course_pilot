@@ -405,8 +405,8 @@ fn SessionAccordion(props: SessionAccordionProps) -> Element {
         VideoPlayerModal {
             is_open: video_player_modal.is_open,
             on_close: video_player_modal.close,
-            video_source: video_player_modal.video_source,
-            title: video_player_modal.title,
+            video_source: video_player_modal.video_source.read().clone(),
+            title: video_player_modal.title.read().clone(),
         }
     }
 }

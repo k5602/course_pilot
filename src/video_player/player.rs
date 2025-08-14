@@ -33,8 +33,10 @@ pub fn VideoPlayer(props: VideoPlayerProps) -> Element {
         let mut state = state.clone();
         move || {
             if let Some(video_source) = source.clone() {
+                log::info!("VideoPlayer: Loading video source: {:?}", video_source);
                 state.load_video(video_source);
             } else {
+                log::info!("VideoPlayer: No video source provided");
                 state.current_video.set(None);
                 state.playback_state.set(PlaybackState::Stopped);
             }
@@ -412,6 +414,9 @@ fn LocalVideoPlayer(
     on_loadedmetadata: EventHandler<()>,
     on_error: EventHandler<String>,
 ) -> Element {
+    // Convert file path to custom protocol URL
+    let video_url = format!("local-video://file/{}", path.display());
+    
     rsx! {
         div { class: "flex-1 bg-black relative",
             video {
@@ -420,7 +425,7 @@ fn LocalVideoPlayer(
                 autoplay: autoplay,
                 controls: false,
                 preload: "metadata",
-                src: format!("file://{}", path.display()),
+                src: "{video_url}",
                 
                 // Event handlers
                 onplay: move |_| on_play.call(()),

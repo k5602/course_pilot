@@ -1,6 +1,7 @@
 use dioxus::prelude::*;
 use crate::video_player::{VideoSource, VideoInfo, PlaybackState};
 use crate::ui::hooks::use_modal_manager;
+use crate::video_player::player::VideoPlayer;
 
 #[derive(Props, Clone, PartialEq)]
 pub struct VideoPlayerModalProps {
@@ -25,8 +26,10 @@ pub fn VideoPlayerModal(props: VideoPlayerModalProps) -> Element {
     // Initialize video when source changes
     let video_source_clone = props.video_source.clone();
     use_effect(move || {
+        log::info!("VideoPlayerModal: Source changed to: {:?}", video_source_clone);
         if let Some(source) = &video_source_clone {
             if props.is_open {
+                log::info!("VideoPlayerModal: Modal is open, initializing video: {}", source.title());
                 is_loading.set(true);
                 error_message.set(None);
                 
@@ -41,7 +44,11 @@ pub fn VideoPlayerModal(props: VideoPlayerModalProps) -> Element {
                     is_loading.set(false);
                     playback_state.set(PlaybackState::Playing);
                 });
+            } else {
+                log::info!("VideoPlayerModal: Modal is closed, not initializing video");
             }
+        } else {
+            log::info!("VideoPlayerModal: No video source provided");
         }
     });
 
@@ -120,38 +127,29 @@ pub fn VideoPlayerModal(props: VideoPlayerModalProps) -> Element {
                     div {
                         class: "bg-black rounded-lg aspect-video flex items-center justify-center relative overflow-hidden",
 
-                        {
-                            if let Some(source) = &props.video_source {
-                                match source {
-                                    VideoSource::YouTube { video_id, .. } => rsx! {
-                                        iframe {
-                                            class: "w-full h-full",
-                                            src: format!("https://www.youtube.com/embed/{video_id}?autoplay=1&rel=0"),
-                                            title: "YouTube video player",
-                                            frame_border: "0",
-                                            allow: "accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share",
-                                            allowfullscreen: true,
-                                        }
-                                    },
-                                    VideoSource::Local { path, .. } => rsx! {
-                                        video {
-                                            class: "w-full h-full",
-                                            controls: true,
-                                            autoplay: true,
-                                            src: format!("file://{}", path.display()),
-                                            "Your browser does not support the video tag."
-                                        }
-                                    },
+                        // Use the proper VideoPlayer component instead of simple iframe
+                        VideoPlayer {
+                            source: props.video_source.clone(),
+                            width: Some("100%".to_string()),
+                            height: Some("100%".to_string()),
+                            show_controls: Some(true),
+                            autoplay: Some(false), // Don't autoplay to avoid browser blocking
+                            on_progress: move |position| {
+                                if let Some(mut info) = video_info() {
+                                    info.position_seconds = position;
+                                    video_info.set(Some(info));
                                 }
-                            } else {
-                                rsx! {
-                                    div {
-                                        class: "text-white text-center",
-                                        div { class: "text-6xl mb-4", "🎬" }
-                                        p { "No video selected" }
-                                    }
-                                }
-                            }
+                            },
+                            on_complete: move |_| {
+                                playback_state.set(PlaybackState::Stopped);
+                                log::info!("Video playback completed");
+                            },
+                            on_error: move |error| {
+                                error_message.set(Some(error));
+                                playback_state.set(PlaybackState::Error);
+                                is_loading.set(false);
+                                log::error!("Video playback error: {}", error_message().unwrap_or_default());
+                            },
                         }
                         
                         // Loading overlay
@@ -257,24 +255,34 @@ pub fn VideoPlayerModal(props: VideoPlayerModalProps) -> Element {
 /// Hook for managing video player modal state
 pub fn use_video_player_modal() -> VideoPlayerModalManager {
     let modal_manager = use_modal_manager(false);
-    let mut current_video = use_signal(|| None::<VideoSource>);
-    let mut current_title = use_signal(|| None::<String>);
+    let current_video = use_signal(|| None::<VideoSource>);
+    let current_title = use_signal(|| None::<String>);
 
-    let open_video = use_callback(move |(source, title): (VideoSource, Option<String>)| {
-        current_video.set(Some(source));
-        current_title.set(title);
-        modal_manager.open.call(());
+    let open_video = use_callback({
+        let mut current_video = current_video;
+        let mut current_title = current_title;
+        let modal_manager = modal_manager.clone();
+        move |(source, title): (VideoSource, Option<String>)| {
+            log::info!("VideoPlayerModalManager: Opening video: {:?} with title: {:?}", source, title);
+            current_video.set(Some(source));
+            current_title.set(title);
+            modal_manager.open.call(());
+        }
     });
 
-    let close = use_callback(move |_| {
-        modal_manager.close.call(());
-        // Keep video source until next video to prevent flicker
+    let close = use_callback({
+        let modal_manager = modal_manager.clone();
+        move |_| {
+            log::info!("VideoPlayerModalManager: Closing video player modal");
+            modal_manager.close.call(());
+            // Keep video source until next video to prevent flicker
+        }
     });
 
     VideoPlayerModalManager {
         is_open: modal_manager.is_open,
-        video_source: current_video(),
-        title: current_title(),
+        video_source: current_video,
+        title: current_title,
         open_video,
         close,
     }
@@ -283,8 +291,8 @@ pub fn use_video_player_modal() -> VideoPlayerModalManager {
 #[derive(Clone)]
 pub struct VideoPlayerModalManager {
     pub is_open: bool,
-    pub video_source: Option<VideoSource>,
-    pub title: Option<String>,
+    pub video_source: Signal<Option<VideoSource>>,
+    pub title: Signal<Option<String>>,
     pub open_video: Callback<(VideoSource, Option<String>)>,
     pub close: Callback<()>,
 }

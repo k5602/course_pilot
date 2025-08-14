@@ -308,6 +308,10 @@ fn validate_video_metadata(videos: &[crate::types::VideoMetadata]) -> Result<Vec
     let mut validated_videos = Vec::new();
     
     for (index, video) in videos.iter().enumerate() {
+        // Debug logging to see what we're validating
+        info!("Validating video {}: title='{}', video_id={:?}, source_url={:?}, is_local={}", 
+              index, video.title, video.video_id, video.source_url, video.is_local);
+        
         let mut validated_video = video.clone();
         
         // Validate YouTube videos have required metadata
@@ -326,11 +330,11 @@ fn validate_video_metadata(videos: &[crate::types::VideoMetadata]) -> Result<Vec
                         validated_video.playlist_id = extract_playlist_id_from_url(url);
                     }
                 } else {
-                    // Create a placeholder that can be fixed later
-                    warn!("Could not extract video_id from title, creating placeholder for video at index {}", index);
-                    validated_video.video_id = Some(format!("PLACEHOLDER_{}", index));
-                    validated_video.source_url = Some(format!("https://www.youtube.com/watch?v=PLACEHOLDER_{}", index));
-                    validated_video.playlist_id = None;
+                    // Instead of creating placeholders, return an error to prevent corruption
+                    return Err(anyhow::anyhow!(
+                        "Cannot save YouTube video '{}' at index {}: missing video_id and cannot extract from title. This indicates an import error. Raw video data: video_id={:?}, source_url={:?}, is_local={}",
+                        video.title, index, video.video_id, video.source_url, video.is_local
+                    ).into());
                 }
             } else if video.video_id.is_some() && video.source_url.is_none() {
                 // Has video_id but missing source_url, reconstruct it
@@ -353,6 +357,18 @@ fn validate_video_metadata(videos: &[crate::types::VideoMetadata]) -> Result<Vec
                         validated_video.playlist_id = extract_playlist_id_from_url(url);
                     }
                 }
+            } else {
+                // YouTube video should have both video_id and source_url - validate them
+                if let Some(ref video_id) = video.video_id {
+                    if video_id.starts_with("PLACEHOLDER_") {
+                        return Err(anyhow::anyhow!(
+                            "Cannot save YouTube video '{}' at index {}: contains placeholder video_id '{}'. This indicates corrupted import data.",
+                            video.title, index, video_id
+                        ).into());
+                    }
+                }
+                
+                // Video appears to have valid YouTube metadata, keep as-is
             }
         } else {
             // For local videos, ensure source_url is set to file path
