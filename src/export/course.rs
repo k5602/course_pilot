@@ -130,9 +130,67 @@ impl Exportable for Course {
     }
 
     fn export_pdf(&self) -> Result<Vec<u8>> {
-        Err(anyhow::anyhow!(
-            "PDF export will be implemented in a future update"
-        ))
+        // Build a simple PDF using genpdf without requiring external font files
+        let font_family = genpdf::fonts::from_files("./fonts", "LiberationSans", None)
+            .map_err(|e| anyhow::anyhow!("Failed to load font family: {}", e))?;
+        let mut doc = genpdf::Document::new(font_family);
+        doc.set_title(format!("Course Export: {}", self.name));
+
+        // Page decorator with margins
+        let mut decorator = genpdf::SimplePageDecorator::new();
+        decorator.set_margins(10);
+        doc.set_page_decorator(decorator);
+
+        // Header
+        doc.push(genpdf::elements::Paragraph::new(format!(
+            "Course: {}",
+            self.name
+        )));
+        doc.push(genpdf::elements::Paragraph::new(format!(
+            "Created At: {}",
+            crate::export::utils::format_timestamp(self.created_at)
+        )));
+        doc.push(genpdf::elements::Paragraph::new(format!(
+            "Total Videos: {}",
+            self.video_count()
+        )));
+        doc.push(genpdf::elements::Paragraph::new(" "));
+
+        // Content
+        if let Some(structure) = &self.structure {
+            doc.push(genpdf::elements::Paragraph::new("Structure:"));
+            for module in &structure.modules {
+                doc.push(genpdf::elements::Paragraph::new(format!(
+                    "• Module: {} (Duration: {})",
+                    module.title,
+                    crate::export::utils::format_duration(module.total_duration)
+                )));
+                for section in &module.sections {
+                    doc.push(genpdf::elements::Paragraph::new(format!(
+                        "    - {} (Video #{}) [{}]",
+                        section.title,
+                        section.video_index,
+                        crate::export::utils::format_duration(section.duration)
+                    )));
+                }
+            }
+        } else {
+            doc.push(genpdf::elements::Paragraph::new(
+                "Raw Video Titles (Unstructured):",
+            ));
+            for (idx, title) in self.raw_titles.iter().enumerate() {
+                doc.push(genpdf::elements::Paragraph::new(format!(
+                    "• {:>3}. {}",
+                    idx, title
+                )));
+            }
+        }
+
+        // Render to bytes
+        let mut bytes = Vec::new();
+        doc.render(&mut bytes)
+            .map_err(|e| anyhow::anyhow!("Failed to render PDF: {}", e))?;
+        Ok(bytes)
     }
 
     fn export_with_options(&self, options: ExportOptions) -> Result<ExportResult> {
@@ -154,9 +212,10 @@ impl Exportable for Course {
                 self.export_csv()?.into_bytes()
             }
             ExportFormat::Pdf => {
-                return Err(anyhow::anyhow!(
-                    "PDF export will be implemented in a future update"
-                ));
+                if let Some(ref callback) = options.progress_callback {
+                    callback(25.0, "Generating PDF document...".to_string());
+                }
+                self.export_pdf()?
             }
         };
 
@@ -253,9 +312,79 @@ pub mod course_utils {
                 csv_data.into_bytes()
             }
             ExportFormat::Pdf => {
-                return Err(anyhow::anyhow!(
-                    "PDF export will be implemented in a future update"
-                ));
+                // Build a batch PDF containing all courses
+                let font_family = genpdf::fonts::from_files("./fonts", "LiberationSans", None)
+                    .map_err(|e| anyhow::anyhow!("Failed to load font family: {}", e))?;
+                let mut doc = genpdf::Document::new(font_family);
+                doc.set_title("Courses Batch Export".to_string());
+
+                let mut decorator = genpdf::SimplePageDecorator::new();
+                decorator.set_margins(10);
+                doc.set_page_decorator(decorator);
+
+                // Title page
+                doc.push(genpdf::elements::Paragraph::new("Courses Batch Export"));
+                doc.push(genpdf::elements::Paragraph::new(format!(
+                    "Generated: {}",
+                    chrono::Utc::now().format("%Y-%m-%d %H:%M:%S UTC")
+                )));
+                doc.push(genpdf::elements::Paragraph::new(" "));
+
+                for (i, course) in courses.iter().enumerate() {
+                    doc.push(genpdf::elements::Paragraph::new(format!(
+                        "==================== Course {} ====================",
+                        i + 1
+                    )));
+                    doc.push(genpdf::elements::Paragraph::new(format!(
+                        "Name: {}",
+                        course.name
+                    )));
+                    doc.push(genpdf::elements::Paragraph::new(format!(
+                        "Created At: {}",
+                        crate::export::utils::format_timestamp(course.created_at)
+                    )));
+                    doc.push(genpdf::elements::Paragraph::new(format!(
+                        "Total Videos: {}",
+                        course.video_count()
+                    )));
+                    doc.push(genpdf::elements::Paragraph::new(" "));
+
+                    if let Some(structure) = &course.structure {
+                        doc.push(genpdf::elements::Paragraph::new("Structure:"));
+                        for module in &structure.modules {
+                            doc.push(genpdf::elements::Paragraph::new(format!(
+                                "• Module: {} (Duration: {})",
+                                module.title,
+                                crate::export::utils::format_duration(module.total_duration)
+                            )));
+                            for section in &module.sections {
+                                doc.push(genpdf::elements::Paragraph::new(format!(
+                                    "    - {} (Video #{}) [{}]",
+                                    section.title,
+                                    section.video_index,
+                                    crate::export::utils::format_duration(section.duration)
+                                )));
+                            }
+                        }
+                    } else {
+                        doc.push(genpdf::elements::Paragraph::new(
+                            "Raw Video Titles (Unstructured):",
+                        ));
+                        for (idx, title) in course.raw_titles.iter().enumerate() {
+                            doc.push(genpdf::elements::Paragraph::new(format!(
+                                "• {:>3}. {}",
+                                idx, title
+                            )));
+                        }
+                    }
+
+                    doc.push(genpdf::elements::Paragraph::new(" "));
+                }
+
+                let mut data = Vec::new();
+                doc.render(&mut data)
+                    .map_err(|e| anyhow::anyhow!("Failed to render PDF: {}", e))?;
+                data
             }
         };
 

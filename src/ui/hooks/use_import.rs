@@ -205,7 +205,8 @@ pub fn use_import_manager() -> ImportManager {
 
     let generate_folder_preview = use_callback(move |path: PathBuf| {
         spawn(async move {
-            let result = tokio::task::spawn_blocking(move || generate_folder_preview_sync(&path)).await;
+            let result =
+                tokio::task::spawn_blocking(move || generate_folder_preview_sync(&path)).await;
 
             match result {
                 Ok(Ok(_)) => {
@@ -345,11 +346,13 @@ fn validate_folder_sync(path: &Path) -> Result<FolderValidation> {
 fn generate_folder_preview_sync(path: &Path) -> Result<LocalFolderPreview> {
     // First validate the folder
     let validation = validate_folder_sync(path)?;
-    
+
     if !validation.is_valid {
         return Err(anyhow::anyhow!(
             "Cannot generate preview for invalid folder: {}",
-            validation.error_message.unwrap_or_else(|| "Unknown error".to_string())
+            validation
+                .error_message
+                .unwrap_or_else(|| "Unknown error".to_string())
         ));
     }
 
@@ -362,7 +365,8 @@ fn generate_folder_preview_sync(path: &Path) -> Result<LocalFolderPreview> {
 
     // Use the enhanced local ingest to scan recursively (matching validation behavior)
     let ingest = crate::ingest::local_folder::EnhancedLocalIngest::new();
-    let video_files = ingest.scan_directory_recursive(path, None)
+    let video_files = ingest
+        .scan_directory_recursive(path, None)
         .map_err(|e| anyhow::anyhow!("Failed to scan folder for preview: {}", e))?;
 
     // Convert video files to preview videos
@@ -371,7 +375,8 @@ fn generate_folder_preview_sync(path: &Path) -> Result<LocalFolderPreview> {
 
     for (index, video_file) in video_files.iter().enumerate() {
         // Extract title from file path
-        let title = video_file.path
+        let title = video_file
+            .path
             .file_stem()
             .and_then(|stem| stem.to_str())
             .map(|s| clean_filename_title(s))
@@ -380,7 +385,8 @@ fn generate_folder_preview_sync(path: &Path) -> Result<LocalFolderPreview> {
         // Try to get video duration (this might be slow for many files, but needed for preview)
         let duration = probe_video_duration(&video_file.path);
 
-        let format = video_file.path
+        let format = video_file
+            .path
             .extension()
             .and_then(|ext| ext.to_str())
             .unwrap_or("unknown")
@@ -435,27 +441,66 @@ fn clean_filename_title(title: &str) -> String {
         .to_string()
 }
 
-/// Probe video duration using ffprobe CLI
+/// Probe video duration using Symphonia (pure Rust, no external CLI)
 fn probe_video_duration(path: &std::path::Path) -> Option<std::time::Duration> {
-    use std::process::Command;
-    let output = Command::new("ffprobe")
-        .args([
-            "-v",
-            "error",
-            "-show_entries",
-            "format=duration",
-            "-of",
-            "default=noprint_wrappers=1:nokey=1",
-            path.to_string_lossy().as_ref(),
-        ])
-        .output()
-        .ok()?;
-    if !output.status.success() {
-        return None;
+    use std::fs::File;
+    use symphonia::core::formats::FormatOptions;
+    use symphonia::core::io::MediaSourceStream;
+    use symphonia::core::meta::MetadataOptions;
+    use symphonia::core::probe::Hint;
+
+    // Open the media source.
+    let file = File::open(path).ok()?;
+    let mss = MediaSourceStream::new(Box::new(file), Default::default());
+
+    // Provide a hint based on the file extension.
+    let mut hint = Hint::new();
+    if let Some(ext) = path.extension().and_then(|e| e.to_str()) {
+        hint.with_extension(ext);
     }
-    let stdout = String::from_utf8_lossy(&output.stdout);
-    let secs = stdout.trim().parse::<f64>().ok()?;
-    Some(std::time::Duration::from_secs_f64(secs))
+
+    // Probe the media format.
+    let probed = symphonia::default::get_probe()
+        .format(
+            &hint,
+            mss,
+            &FormatOptions::default(),
+            &MetadataOptions::default(),
+        )
+        .ok()?;
+
+    let mut format = probed.format;
+
+    // Use the default track for duration calculations.
+    let track = format.default_track()?;
+
+    // Preferred: derive duration from track time_base and n_frames if available.
+    if let (Some(tb), Some(n_frames)) = (track.codec_params.time_base, track.codec_params.n_frames)
+    {
+        let t = tb.calc_time(n_frames);
+        let secs = t.seconds as f64 + (t.frac as f64 / 1_000_000_000.0);
+        return Some(std::time::Duration::from_secs_f64(secs.max(0.0)));
+    }
+
+    // Fallback: iterate packets to get the last timestamp for the default track.
+    let mut last_ts: Option<u64> = None;
+    let tb = track.codec_params.time_base;
+    let track_id = track.id;
+    drop(track);
+
+    while let Ok(packet) = format.next_packet() {
+        if packet.track_id() == track_id {
+            last_ts = Some(packet.ts());
+        }
+    }
+
+    if let (Some(tb), Some(ts)) = (tb, last_ts) {
+        let t = tb.calc_time(ts);
+        let secs = t.seconds as f64 + (t.frac as f64 / 1_000_000_000.0);
+        return Some(std::time::Duration::from_secs_f64(secs.max(0.0)));
+    }
+
+    None
 }
 
 /// Helper function to check if an extension might be video-related

@@ -87,10 +87,89 @@ impl Exportable for Plan {
     }
 
     fn export_pdf(&self) -> Result<Vec<u8>> {
-        // PDF export functionality to be implemented
-        Err(anyhow::anyhow!(
-            "PDF export functionality is not yet implemented. Please use JSON or CSV export for now."
-        ))
+        // Build a simple PDF using genpdf without requiring external font files
+        let font_family = genpdf::fonts::from_files("./fonts", "LiberationSans", None)
+            .map_err(|e| anyhow::anyhow!("Failed to load font family: {}", e))?;
+        let mut doc = genpdf::Document::new(font_family);
+        doc.set_title(format!("Study Plan Export: {}", self.id));
+
+        // Page decorator with margins
+        let mut decorator = genpdf::SimplePageDecorator::new();
+        decorator.set_margins(10);
+        doc.set_page_decorator(decorator);
+
+        // Header
+        doc.push(genpdf::elements::Paragraph::new("Study Plan"));
+        doc.push(genpdf::elements::Paragraph::new(format!(
+            "Plan ID: {}",
+            self.id
+        )));
+        doc.push(genpdf::elements::Paragraph::new(format!(
+            "Created At: {}",
+            crate::export::utils::format_timestamp(self.created_at)
+        )));
+        doc.push(genpdf::elements::Paragraph::new(" "));
+
+        // Progress summary
+        let summary = self.calculate_progress_summary();
+        doc.push(genpdf::elements::Paragraph::new("Progress Summary:"));
+        doc.push(genpdf::elements::Paragraph::new(format!(
+            "• Total Sessions: {}",
+            summary.total_sessions
+        )));
+        doc.push(genpdf::elements::Paragraph::new(format!(
+            "• Completed Sessions: {}",
+            summary.completed_sessions
+        )));
+        doc.push(genpdf::elements::Paragraph::new(format!(
+            "• Progress: {:.1}%",
+            summary.progress_percentage
+        )));
+        if let Some(date) = summary.estimated_completion_date {
+            doc.push(genpdf::elements::Paragraph::new(format!(
+                "• Estimated Completion: {}",
+                crate::export::utils::format_timestamp(date)
+            )));
+        }
+        doc.push(genpdf::elements::Paragraph::new(format!(
+            "• Sessions/Week: {}",
+            summary.sessions_per_week
+        )));
+        doc.push(genpdf::elements::Paragraph::new(format!(
+            "• Avg Session Length: {} min",
+            summary.average_session_length
+        )));
+        doc.push(genpdf::elements::Paragraph::new(" "));
+
+        // Sessions detail
+        doc.push(genpdf::elements::Paragraph::new("Sessions:"));
+        for (index, item) in self.items.iter().enumerate() {
+            let indices_str = item
+                .video_indices
+                .iter()
+                .map(|i| i.to_string())
+                .collect::<Vec<_>>()
+                .join(",");
+            doc.push(genpdf::elements::Paragraph::new(format!(
+                "• {:>3}. {} | {} | Videos [{}] | Date: {} | {}",
+                index + 1,
+                item.module_title,
+                item.section_title,
+                indices_str,
+                item.date.format("%Y-%m-%d"),
+                if item.completed {
+                    "Completed"
+                } else {
+                    "Pending"
+                }
+            )));
+        }
+
+        // Render to bytes
+        let mut bytes = Vec::new();
+        doc.render(&mut bytes)
+            .map_err(|e| anyhow::anyhow!("Failed to render PDF: {}", e))?;
+        Ok(bytes)
     }
 
     fn export_with_options(&self, options: ExportOptions) -> Result<ExportResult> {
@@ -112,9 +191,10 @@ impl Exportable for Plan {
                 self.export_csv()?.into_bytes()
             }
             ExportFormat::Pdf => {
-                return Err(anyhow::anyhow!(
-                    "PDF export will be implemented in a future update"
-                ));
+                if let Some(ref callback) = options.progress_callback {
+                    callback(25.0, "Generating PDF document...".to_string());
+                }
+                self.export_pdf()?
             }
         };
 

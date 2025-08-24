@@ -472,27 +472,66 @@ struct VideoFileInfo {
     created: SystemTime,
 }
 
-/// Probe video duration using rust-ffmpeg, fallback to ffprobe CLI if needed
+/// Probe video duration using Symphonia (pure Rust, no external CLI)
 fn probe_video_duration(path: &std::path::Path) -> Option<std::time::Duration> {
-    use std::process::Command;
-    let output = Command::new("ffprobe")
-        .args([
-            "-v",
-            "error",
-            "-show_entries",
-            "format=duration",
-            "-of",
-            "default=noprint_wrappers=1:nokey=1",
-            path.to_string_lossy().as_ref(),
-        ])
-        .output()
-        .ok()?;
-    if !output.status.success() {
-        return None;
+    use std::fs::File;
+    use symphonia::core::formats::FormatOptions;
+    use symphonia::core::io::MediaSourceStream;
+    use symphonia::core::meta::MetadataOptions;
+    use symphonia::core::probe::Hint;
+
+    // Open the media source.
+    let file = File::open(path).ok()?;
+    let mss = MediaSourceStream::new(Box::new(file), Default::default());
+
+    // Provide a hint based on the file extension.
+    let mut hint = Hint::new();
+    if let Some(ext) = path.extension().and_then(|e| e.to_str()) {
+        hint.with_extension(ext);
     }
-    let stdout = String::from_utf8_lossy(&output.stdout);
-    let secs = stdout.trim().parse::<f64>().ok()?;
-    Some(std::time::Duration::from_secs_f64(secs))
+
+    // Probe the media format.
+    let probed = symphonia::default::get_probe()
+        .format(
+            &hint,
+            mss,
+            &FormatOptions::default(),
+            &MetadataOptions::default(),
+        )
+        .ok()?;
+
+    let mut format = probed.format;
+
+    // Use the default track for duration calculations.
+    let track = format.default_track()?;
+
+    // Preferred: derive duration from track time_base and n_frames if available.
+    if let (Some(tb), Some(n_frames)) = (track.codec_params.time_base, track.codec_params.n_frames)
+    {
+        let t = tb.calc_time(n_frames);
+        let secs = t.seconds as f64 + (t.frac as f64 / 1_000_000_000.0);
+        return Some(std::time::Duration::from_secs_f64(secs.max(0.0)));
+    }
+
+    // Fallback: iterate packets to get the last timestamp for the default track.
+    let mut last_ts: Option<u64> = None;
+    let tb = track.codec_params.time_base;
+    let track_id = track.id;
+    drop(track);
+
+    while let Ok(packet) = format.next_packet() {
+        if packet.track_id() == track_id {
+            last_ts = Some(packet.ts());
+        }
+    }
+
+    if let (Some(tb), Some(ts)) = (tb, last_ts) {
+        let t = tb.calc_time(ts);
+        let secs = t.seconds as f64 + (t.frac as f64 / 1_000_000_000.0);
+        return Some(std::time::Duration::from_secs_f64(secs.max(0.0)));
+    }
+
+    None
 }
 
 /// Check if a file has a video extension

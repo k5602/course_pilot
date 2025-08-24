@@ -14,6 +14,7 @@ pub mod imports;
 pub mod notes;
 pub mod plans;
 pub mod ui;
+pub mod video_player;
 
 // Re-export commonly used types
 use dioxus::prelude::*;
@@ -50,6 +51,7 @@ pub use imports::*;
 pub use notes::*;
 pub use plans::*;
 pub use ui::*;
+pub use video_player::*;
 
 /// Initialize global application state
 ///

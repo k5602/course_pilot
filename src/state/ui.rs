@@ -290,39 +290,6 @@ pub fn is_notes_panel_open_reactive() -> bool {
     *video_context_state.is_notes_panel_open.read()
 }
 
-/// Legacy hook functions for compatibility
-pub fn use_contextual_panel() -> Signal<ContextualPanelState> {
-    use_contextual_panel_reactive()
-}
-
-pub fn use_mobile_sidebar() -> Signal<bool> {
-    use_mobile_sidebar_reactive()
-}
-
-/// Non-reactive UI operations for backend integration
-pub fn set_video_context_and_open_notes(course_id: Uuid, video_index: usize, video_title: String) {
-    // Legacy wrapper without module_title, default to empty
-    set_video_context_and_open_notes_reactive_from_parts(
-        course_id,
-        video_index,
-        video_title,
-        String::new(),
-    );
-}
-
-/// Preferred non-reactive wrapper using full VideoContext
-pub fn set_video_context_and_open_notes_with_context(video_context: VideoContext) {
-    set_video_context_and_open_notes_reactive(video_context);
-}
-
-pub fn clear_video_context() {
-    clear_video_context_reactive();
-}
-
-pub fn toggle_mobile_sidebar() {
-    toggle_mobile_sidebar_reactive();
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;

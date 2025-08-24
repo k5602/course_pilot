@@ -85,9 +85,34 @@ impl Exportable for Vec<Note> {
     }
 
     fn export_pdf(&self) -> Result<Vec<u8>> {
-        Err(anyhow::anyhow!(
-            "PDF export will be implemented in a future update"
-        ))
+        // Build a simple PDF using genpdf, loading a font family from the local fonts directory
+        let font_family = genpdf::fonts::from_files("./fonts", "LiberationSans", None)
+            .map_err(|e| anyhow::anyhow!("Failed to load font family: {}", e))?;
+        let mut doc = genpdf::Document::new(font_family);
+        doc.set_title("Notes Export".to_string());
+
+        // Page decorator with margins
+        let mut decorator = genpdf::SimplePageDecorator::new();
+        decorator.set_margins(10);
+        doc.set_page_decorator(decorator);
+
+        // Header
+        doc.push(genpdf::elements::Paragraph::new("Notes Export"));
+        doc.push(genpdf::elements::Paragraph::new(format!(
+            "Generated: {}",
+            crate::export::utils::format_timestamp(chrono::Utc::now())
+        )));
+        doc.push(genpdf::elements::Paragraph::new(" "));
+
+        // Content generated from notes
+        let content = self.generate_pdf_content()?;
+        doc.push(genpdf::elements::Paragraph::new(content));
+
+        // Render to bytes
+        let mut bytes = Vec::new();
+        doc.render(&mut bytes)
+            .map_err(|e| anyhow::anyhow!("Failed to render PDF: {}", e))?;
+        Ok(bytes)
     }
 
     fn export_with_options(&self, options: ExportOptions) -> Result<ExportResult> {
@@ -109,9 +134,10 @@ impl Exportable for Vec<Note> {
                 self.export_csv()?.into_bytes()
             }
             ExportFormat::Pdf => {
-                return Err(anyhow::anyhow!(
-                    "PDF export will be implemented in a future update"
-                ));
+                if let Some(ref callback) = options.progress_callback {
+                    callback(25.0, "Generating PDF document...".to_string());
+                }
+                self.export_pdf()?
             }
         };
 
