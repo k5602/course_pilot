@@ -848,12 +848,12 @@ fn YouTubeImportForm(
                             process_start.elapsed().as_millis() as u64,
                         );
 
-                        // TF-IDF Analysis stage
+                        // Title analysis stage
                         let tfidf_start = std::time::Instant::now();
                         update_job_progress(
                             crate::types::ImportStage::TfIdfAnalysis,
                             0.0,
-                            "Computing term frequency and semantic similarity...".to_string(),
+                            "Analyzing titles and preparing session grouping...".to_string(),
                         );
 
                         // Simulate TF-IDF progress
@@ -862,7 +862,7 @@ fn YouTubeImportForm(
                             update_job_progress(
                                 crate::types::ImportStage::TfIdfAnalysis,
                                 i as f32 * 20.0,
-                                format!("Analyzing semantic relationships... ({i}/5)"),
+                                format!("Reviewing title patterns... ({i}/5)"),
                             );
                         }
                         complete_stage(
@@ -870,12 +870,12 @@ fn YouTubeImportForm(
                             tfidf_start.elapsed().as_millis() as u64,
                         );
 
-                        // K-Means Clustering stage
+                        // Session grouping stage
                         let kmeans_start = std::time::Instant::now();
                         update_job_progress(
                             crate::types::ImportStage::KMeansClustering,
                             0.0,
-                            "Grouping videos into learning modules...".to_string(),
+                            "Grouping videos into study sessions...".to_string(),
                         );
 
                         // Structure the course using NLP
@@ -886,16 +886,28 @@ fn YouTubeImportForm(
                                     quality_score: 8.5,
                                     confidence_level: 87.0,
                                     cluster_count: course_structure.modules.len(),
-                                    rationale: "Videos grouped by topic similarity and learning progression".to_string(),
-                                    key_topics: vec!["Introduction".to_string(), "Core Concepts".to_string(), "Advanced Topics".to_string()],
-                                    estimated_modules: course_structure.modules.iter().enumerate().map(|(i, module)| {
-                                        crate::types::EstimatedModule {
+                                    rationale:
+                                        "Preliminary session grouping based on title analysis"
+                                            .to_string(),
+                                    key_topics: vec![
+                                        "Introduction".to_string(),
+                                        "Core Concepts".to_string(),
+                                        "Advanced Topics".to_string(),
+                                    ],
+                                    estimated_modules: course_structure
+                                        .modules
+                                        .iter()
+                                        .enumerate()
+                                        .map(|(i, module)| crate::types::EstimatedModule {
                                             title: module.title.clone(),
                                             video_count: module.sections.len(),
                                             confidence: 0.85 + (i as f32 * 0.05),
-                                            key_topics: vec!["Topic A".to_string(), "Topic B".to_string()],
-                                        }
-                                    }).collect(),
+                                            key_topics: vec![
+                                                "Topic A".to_string(),
+                                                "Topic B".to_string(),
+                                            ],
+                                        })
+                                        .collect(),
                                 };
 
                                 // Update job with clustering preview
@@ -907,19 +919,19 @@ fn YouTubeImportForm(
                                 update_job_progress(
                                     crate::types::ImportStage::KMeansClustering,
                                     80.0,
-                                    "Finalizing module structure...".to_string(),
+                                    "Finalizing session grouping...".to_string(),
                                 );
                                 complete_stage(
                                     crate::types::ImportStage::KMeansClustering,
                                     kmeans_start.elapsed().as_millis() as u64,
                                 );
 
-                                // Optimization stage
+                                // Finalization stage
                                 let opt_start = std::time::Instant::now();
                                 update_job_progress(
                                     crate::types::ImportStage::Optimization,
                                     0.0,
-                                    "Optimizing learning flow and module boundaries...".to_string(),
+                                    "Finalizing session grouping...".to_string(),
                                 );
 
                                 course.structure = Some(course_structure);

@@ -7,10 +7,10 @@ use crate::nlp::clustering::{
     ABTestConfig, ABTestResult, ABTestVariant, ClusteringFeedback, ClusteringPreferences,
     FeedbackType, ManualAdjustment, PreferenceLearningEngine,
 };
+
 use crate::storage::{AppSettings, PreferenceStorage};
 use crate::types::{Course, DifficultyLevel};
 use anyhow::Result;
-
 use std::sync::{Arc, Mutex};
 use uuid::Uuid;
 
@@ -169,7 +169,7 @@ impl PreferenceService {
             .engine
             .lock()
             .map_err(|e| anyhow::anyhow!("Lock error: {}", e))?;
-        engine.record_ab_test_result(result.clone())?;
+        let _ = engine.record_ab_test_result(result.clone());
 
         // Update test sample size in storage
         self.storage.update_ab_test_sample_size(
@@ -199,7 +199,7 @@ impl PreferenceService {
         }
 
         // Save updated preferences
-        self.storage.save_preferences(engine.get_preferences())?;
+        self.storage.save_preferences(&engine.get_preferences())?;
 
         Ok(analysis)
     }
@@ -299,7 +299,11 @@ impl PreferenceService {
             .engine
             .lock()
             .map_err(|e| anyhow::anyhow!("Lock error: {}", e))?;
-        Ok(engine.get_active_ab_tests().into_iter().cloned().collect())
+        Ok(engine
+            .get_active_ab_tests()
+            .into_iter()
+            .map(|c| (*c).clone())
+            .collect())
     }
 
     /// Update settings and refresh engine
@@ -327,7 +331,7 @@ impl PreferenceService {
             };
 
             engine.update_preferences_from_feedback(feedback)?;
-            self.storage.save_preferences(engine.get_preferences())?;
+            self.storage.save_preferences(&engine.get_preferences())?;
         }
 
         Ok(())
