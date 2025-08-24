@@ -8,7 +8,7 @@ use std::sync::Arc;
 
 use crate::state::{
     ContextualPanelContextProvider, CourseContextProvider, ImportContextProvider,
-    MobileSidebarContextProvider, NotesContextProvider, PlanContextProvider,
+    MobileSidebarContextProvider, NotesContextProvider, PlanContextProvider, VideoContextProvider,
     initialize_global_state,
 };
 use crate::storage::database::Database;
@@ -43,8 +43,10 @@ pub fn AppRoot() -> Element {
                     ImportContextProvider {
                         ContextualPanelContextProvider {
                             MobileSidebarContextProvider {
-                                crate::state::ExportProgressProvider {
-                                    AppWithContexts { app_state: services.app_state }
+                                VideoContextProvider {
+                                    crate::state::ExportProgressProvider {
+                                        AppWithContexts { app_state: services.app_state }
+                                    }
                                 }
                             }
                         }
