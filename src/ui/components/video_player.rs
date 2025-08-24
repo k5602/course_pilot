@@ -1,8 +1,7 @@
 use dioxus::prelude::*;
 
-use crate::video_player::{
-    PlaybackState, VideoPlayer, VideoPlayerProvider, VideoSource, use_video_keyboard_shortcuts,
-};
+use crate::ui::hooks::use_video_keyboard_shortcuts;
+use crate::video_player::{PlaybackState, VideoPlayer, VideoPlayerProvider, VideoSource};
 
 #[derive(Props, PartialEq, Clone)]
 pub struct VideoPlayerProps {
