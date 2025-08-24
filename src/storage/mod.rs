@@ -30,7 +30,9 @@ pub use database::{
     get_courses_by_clustering_quality,
     get_database_performance_metrics,
     get_plan_by_course_id,
+    get_session_progress,
     get_similar_courses_by_clustering,
+    get_video_completion_status,
     init_db,
     load_courses,
     load_plan,
@@ -38,8 +40,6 @@ pub use database::{
     save_course,
     save_plan,
     save_video_progress,
-    get_video_completion_status,
-    get_session_progress,
     update_clustering_metadata,
 };
 
@@ -48,13 +48,22 @@ pub use crate::error_handling::DatabaseError;
 
 // Re-export notes functions for convenience
 pub use notes::{
-    get_notes_by_course, init_notes_table,
     // Pooled versions (preferred for new code)
-    create_note_pooled, update_note_pooled, delete_note_pooled,
-    get_all_notes_pooled, get_notes_by_course_pooled, get_notes_by_video_pooled,
-    get_course_level_notes_pooled, get_notes_by_video_index_pooled,
-    get_note_by_id_pooled, search_notes_pooled, search_notes_advanced_pooled,
-    export_notes_markdown_by_course_pooled, export_notes_markdown_by_video_pooled,
+    create_note_pooled,
+    delete_note_pooled,
+    export_notes_markdown_by_course_pooled,
+    export_notes_markdown_by_video_pooled,
+    get_all_notes_pooled,
+    get_course_level_notes_pooled,
+    get_note_by_id_pooled,
+    get_notes_by_course,
+    get_notes_by_course_pooled,
+    get_notes_by_video_index_pooled,
+    get_notes_by_video_pooled,
+    init_notes_table,
+    search_notes_advanced_pooled,
+    search_notes_pooled,
+    update_note_pooled,
 };
 
 // Re-export settings functions for convenience
@@ -81,11 +90,4 @@ pub use maintenance::{
 };
 
 // Re-export migration utilities for convenience
-pub use migrations::{
-    MigrationManager, MigrationRecord, ValidationReport, CURRENT_SCHEMA_VERSION,
-};
-
-// Seed data functionality removed
-
-// Re-export Connection type for convenience
-pub use rusqlite::Connection;
+pub use migrations::{CURRENT_SCHEMA_VERSION, MigrationManager, MigrationRecord, ValidationReport};

@@ -3,12 +3,14 @@ use crate::ui::toast_helpers;
 use anyhow::Result;
 use dioxus::prelude::*;
 use std::sync::Arc;
+
 use uuid::Uuid;
 
 /// Export operations hook
 #[derive(Clone)]
 pub struct ExportManager {
     db: Arc<crate::storage::database::Database>,
+
     pub export_course_with_progress: Callback<(
         Uuid,
         crate::export::ExportFormat,
@@ -120,6 +122,7 @@ impl ExportManager {
         F: Fn(f32, String) + Send + Sync + 'static,
     {
         let db = self.db.clone();
+
         tokio::task::spawn_blocking(move || {
             use crate::export::Exportable;
 
@@ -209,7 +212,8 @@ pub fn use_export_manager() -> ExportManager {
     let save_export_data = use_callback(move |export_result: crate::export::ExportResult| {
         spawn(async move {
             let file_path = crate::export::io::default_output_path(&export_result.filename);
-            let result = crate::export::io::save_bytes_atomic(&file_path, &export_result.data).await;
+            let result =
+                crate::export::io::save_bytes_atomic(&file_path, &export_result.data).await;
 
             match result {
                 Ok(saved_path) => {

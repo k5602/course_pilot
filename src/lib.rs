@@ -36,7 +36,7 @@ pub use planner::generate_plan;
 pub use storage::{init_db, load_courses, load_plan, save_course, save_plan};
 
 // Re-export enhanced integrated functions
-pub use ingest::{ImportProgress, import_and_structure_local_folder, import_and_structure_youtube};
+pub use ingest::ImportProgress;
 pub use storage::{
     ClusteringAnalytics, ClusteringPerformancePoint, ProcessingTimeStats, QualityDistribution,
     get_clustering_analytics, get_clustering_performance_history,
@@ -54,9 +54,9 @@ pub use ui::{
 
 // Re-export commonly used hooks
 pub use ui::{
-    use_app_state, use_backend, use_course_manager, use_courses_resource, use_export_manager,
-    use_import_manager, use_modal_manager, use_navigation_manager, use_notes_manager,
-    use_plan_manager, use_settings_manager,
+    use_backend, use_course_manager, use_courses_resource, use_export_manager, use_import_manager,
+    use_modal_manager, use_navigation_manager, use_notes_manager, use_plan_manager,
+    use_settings_manager,
 };
 
 // Custom error types

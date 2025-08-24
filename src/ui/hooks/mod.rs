@@ -1,5 +1,5 @@
 pub mod use_analytics;
-pub mod use_app_state;
+
 pub mod use_backend;
 pub mod use_courses;
 pub mod use_export;
@@ -14,7 +14,7 @@ pub mod use_timer_integration;
 
 // Re-export commonly used hooks
 pub use use_analytics::{AnalyticsManager, use_ai_recommendations, use_analytics_manager};
-pub use use_app_state::{use_app_state, use_backend_adapter};
+
 pub use use_backend::{Backend, use_backend};
 pub use use_courses::{
     CourseManager, use_course_management, use_course_manager, use_course_progress,
@@ -24,7 +24,10 @@ pub use use_export::{
     ExportManager, use_export_course_action, use_export_manager, use_export_notes_action,
     use_export_plan_action,
 };
-pub use use_import::{FolderValidation, ImportManager, LocalFolderPreview, use_folder_preview, use_folder_validation, use_import_manager};
+pub use use_import::{
+    FolderValidation, ImportManager, LocalFolderPreview, use_folder_preview, use_folder_validation,
+    use_import_manager,
+};
 pub use use_modals::{use_form_manager, use_modal_manager};
 pub use use_navigation::{BreadcrumbItem, use_navigation_manager};
 pub use use_notes::{

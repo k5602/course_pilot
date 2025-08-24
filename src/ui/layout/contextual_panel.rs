@@ -1,6 +1,6 @@
+use crate::state::{set_contextual_panel_tab_reactive, use_contextual_panel_reactive};
 use crate::types::{ContextualPanelTab, Route, VideoContext};
 use crate::ui::components::GeminiChatbot;
-use crate::ui::use_app_state;
 use crate::ui::{NotesPanel, NotesPanelMode};
 use dioxus::prelude::*;
 use dioxus_motion::prelude::*;
@@ -10,10 +10,10 @@ const CONTEXT_PANEL_BG: &str = "bg-base-100 border-l border-base-300 shadow-lg";
 /// Clean contextual panel component
 #[component]
 pub fn ContextualPanel() -> Element {
-    let mut app_state = use_app_state();
-    let is_open = app_state.read().contextual_panel.is_open;
-    let active_tab = app_state.read().contextual_panel.active_tab;
-    let video_context = app_state.read().contextual_panel.video_context.clone();
+    let contextual_panel = use_contextual_panel_reactive();
+    let is_open = contextual_panel.read().is_open;
+    let active_tab = contextual_panel.read().active_tab;
+    let video_context = contextual_panel.read().video_context.clone();
     let current_route = use_route::<Route>();
 
     // Debug logging
@@ -72,7 +72,7 @@ pub fn ContextualPanel() -> Element {
                     } else {
                         "tab hover:tab-active"
                     },
-                    onclick: move |_| app_state.write().contextual_panel.active_tab = ContextualPanelTab::Notes,
+                    onclick: move |_| set_contextual_panel_tab_reactive(ContextualPanelTab::Notes),
                     "Notes"
                 }
 
@@ -83,7 +83,7 @@ pub fn ContextualPanel() -> Element {
                     } else {
                         "tab hover:tab-active"
                     },
-                    onclick: move |_| app_state.write().contextual_panel.active_tab = ContextualPanelTab::Chatbot,
+                    onclick: move |_| set_contextual_panel_tab_reactive(ContextualPanelTab::Chatbot),
                     "Assistant"
                 }
             }

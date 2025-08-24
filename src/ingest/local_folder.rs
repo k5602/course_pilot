@@ -5,7 +5,9 @@
 //! Enhanced with recursive directory scanning, nested folder support, and sequential pattern detection.
 
 use crate::ImportError;
-use crate::nlp::sequential_detection::{detect_sequential_patterns, ContentTypeAnalysis, ContentType, ProcessingRecommendation};
+use crate::nlp::sequential_detection::{
+    ContentType, ContentTypeAnalysis, ProcessingRecommendation, detect_sequential_patterns,
+};
 use crate::storage::{self, database::Database};
 use crate::types::Course;
 use chrono::Utc;
@@ -310,9 +312,11 @@ pub fn scan_directory(path: &Path) -> Result<Vec<PathBuf>, ImportError> {
 /// # Returns
 /// * `Ok(LocalImportResult)` - Import result with sections and content analysis
 /// * `Err(ImportError)` - Error if import fails
-pub fn import_from_local_folder_with_analysis(path: &Path) -> Result<LocalImportResult, ImportError> {
+pub fn import_from_local_folder_with_analysis(
+    path: &Path,
+) -> Result<LocalImportResult, ImportError> {
     log::info!("Starting local folder analysis for: {}", path.display());
-    
+
     // Validate that the path exists and is a directory
     if !path.exists() {
         return Err(ImportError::FileSystem(format!(
@@ -381,20 +385,23 @@ pub fn import_from_local_folder_with_analysis(path: &Path) -> Result<LocalImport
     }
 
     // Extract titles first for sequential pattern detection
-    let raw_titles: Vec<String> = video_files.iter().map(|file_info| {
-        extract_title_from_path(&file_info.path).unwrap_or_else(|| {
-            file_info
-                .path
-                .file_stem()
-                .unwrap_or_default()
-                .to_string_lossy()
-                .to_string()
+    let raw_titles: Vec<String> = video_files
+        .iter()
+        .map(|file_info| {
+            extract_title_from_path(&file_info.path).unwrap_or_else(|| {
+                file_info
+                    .path
+                    .file_stem()
+                    .unwrap_or_default()
+                    .to_string_lossy()
+                    .to_string()
+            })
         })
-    }).collect();
+        .collect();
 
     // Perform content type analysis on raw titles
     let content_analysis = detect_sequential_patterns(&raw_titles);
-    
+
     log::info!(
         "Local folder content analysis: type={:?}, confidence={:.2}, recommendation={:?}",
         content_analysis.content_type,
@@ -404,7 +411,7 @@ pub fn import_from_local_folder_with_analysis(path: &Path) -> Result<LocalImport
 
     // Determine sorting method based on content analysis
     let sorting_method = determine_sorting_method(&content_analysis);
-    
+
     // Apply appropriate sorting based on content analysis
     match sorting_method {
         SortingMethod::PreservedOrder => {
@@ -439,8 +446,8 @@ pub fn import_from_local_folder_with_analysis(path: &Path) -> Result<LocalImport
         });
         let duration = probe_video_duration(&file_info.path)
             .unwrap_or_else(|| std::time::Duration::from_secs(0));
-        sections.push(LocalVideoSection { 
-            title, 
+        sections.push(LocalVideoSection {
+            title,
             duration,
             file_path: Some(file_info.path.to_string_lossy().to_string()),
             original_index: index, // Preserve order for sequential content
@@ -467,23 +474,6 @@ struct VideoFileInfo {
 
 /// Probe video duration using rust-ffmpeg, fallback to ffprobe CLI if needed
 fn probe_video_duration(path: &std::path::Path) -> Option<std::time::Duration> {
-    // Try rust-ffmpeg first
-    #[cfg(feature = "ffmpeg")]
-    {
-        if let Ok(_) = ffmpeg_next::init() {
-            if let Ok(ictx) = ffmpeg_next::format::input(&path) {
-                if let Some(stream) = ictx.streams().best(ffmpeg_next::media::Type::Video) {
-                    let duration = stream.duration();
-                    let time_base = stream.time_base();
-                    if duration >= 0 {
-                        let secs = duration as f64 * f64::from(time_base);
-                        return Some(std::time::Duration::from_secs_f64(secs));
-                    }
-                }
-            }
-        }
-    }
-    // Fallback to ffprobe CLI
     use std::process::Command;
     let output = Command::new("ffprobe")
         .args([
@@ -662,7 +652,7 @@ fn determine_sorting_method(analysis: &ContentTypeAnalysis) -> SortingMethod {
 }
 
 /// Import video titles and durations from a local folder containing video files
-/// 
+///
 /// Legacy function for backward compatibility - returns only sections
 ///
 /// # Arguments
@@ -743,21 +733,32 @@ pub fn import_from_folder(
     folder_path: &Path,
     course_title: &str,
 ) -> Result<Course, ImportError> {
-    log::info!("Starting import from folder: {} with title: {}", folder_path.display(), course_title);
-    
+    log::info!(
+        "Starting import from folder: {} with title: {}",
+        folder_path.display(),
+        course_title
+    );
+
     // Use the enhanced import with content analysis
     let import_result = import_from_local_folder_with_analysis(folder_path)?;
-    
-    log::info!("Import analysis completed with {} sections", import_result.sections.len());
-    
+
+    log::info!(
+        "Import analysis completed with {} sections",
+        import_result.sections.len()
+    );
+
     if import_result.sections.is_empty() {
         return Err(ImportError::NoContent);
     }
 
     // Extract raw titles and create sections
-    let raw_titles: Vec<String> = import_result.sections.iter().map(|s| s.title.clone()).collect();
+    let raw_titles: Vec<String> = import_result
+        .sections
+        .iter()
+        .map(|s| s.title.clone())
+        .collect();
     let mut sections = Vec::new();
-    
+
     for (index, local_section) in import_result.sections.iter().enumerate() {
         let section = crate::types::Section {
             title: local_section.title.clone(),
@@ -771,24 +772,45 @@ pub fn import_from_folder(
     let total_duration: std::time::Duration = sections.iter().map(|section| section.duration).sum();
 
     // Determine content type and processing strategy from analysis
-    let (content_type_detected, processing_strategy, original_order_preserved) = match import_result.content_analysis.content_type {
-        ContentType::Sequential => {
-            log::info!("Local content detected as Sequential with confidence {:.2}", import_result.content_analysis.confidence_score);
-            ("Sequential".to_string(), "PreserveOrder".to_string(), true)
-        }
-        ContentType::Thematic => {
-            log::info!("Local content detected as Thematic with confidence {:.2}", import_result.content_analysis.confidence_score);
-            ("Thematic".to_string(), "ApplyClustering".to_string(), false)
-        }
-        ContentType::Mixed => {
-            log::info!("Local content detected as Mixed with confidence {:.2}", import_result.content_analysis.confidence_score);
-            ("Mixed".to_string(), "UserChoice".to_string(), import_result.sorting_applied == SortingMethod::PreservedOrder)
-        }
-        ContentType::Ambiguous => {
-            log::info!("Local content type ambiguous with confidence {:.2}", import_result.content_analysis.confidence_score);
-            ("Ambiguous".to_string(), "FallbackProcessing".to_string(), import_result.sorting_applied == SortingMethod::PreservedOrder)
-        }
-    };
+    let (content_type_detected, processing_strategy, original_order_preserved) =
+        match import_result.content_analysis.content_type {
+            ContentType::Sequential => {
+                log::info!(
+                    "Local content detected as Sequential with confidence {:.2}",
+                    import_result.content_analysis.confidence_score
+                );
+                ("Sequential".to_string(), "PreserveOrder".to_string(), true)
+            }
+            ContentType::Thematic => {
+                log::info!(
+                    "Local content detected as Thematic with confidence {:.2}",
+                    import_result.content_analysis.confidence_score
+                );
+                ("Thematic".to_string(), "ApplyClustering".to_string(), false)
+            }
+            ContentType::Mixed => {
+                log::info!(
+                    "Local content detected as Mixed with confidence {:.2}",
+                    import_result.content_analysis.confidence_score
+                );
+                (
+                    "Mixed".to_string(),
+                    "UserChoice".to_string(),
+                    import_result.sorting_applied == SortingMethod::PreservedOrder,
+                )
+            }
+            ContentType::Ambiguous => {
+                log::info!(
+                    "Local content type ambiguous with confidence {:.2}",
+                    import_result.content_analysis.confidence_score
+                );
+                (
+                    "Ambiguous".to_string(),
+                    "FallbackProcessing".to_string(),
+                    import_result.sorting_applied == SortingMethod::PreservedOrder,
+                )
+            }
+        };
 
     // Create a single module containing all videos
     let module = crate::types::Module {
@@ -818,7 +840,8 @@ pub fn import_from_folder(
     };
 
     // Create video metadata from local sections with preserved indices
-    let videos: Vec<crate::types::VideoMetadata> = import_result.sections
+    let videos: Vec<crate::types::VideoMetadata> = import_result
+        .sections
         .iter()
         .map(|local_section| {
             let mut video_metadata = crate::types::VideoMetadata::new_local_with_index(
@@ -956,15 +979,23 @@ mod tests {
         File::create(temp_dir.path().join("Lesson 3 - Advanced.mp4"))?;
 
         let result = import_from_local_folder_with_analysis(temp_dir.path())?;
-        
+
         // Should detect sequential pattern
-        assert_eq!(result.content_analysis.content_type, ContentType::Sequential);
+        assert_eq!(
+            result.content_analysis.content_type,
+            ContentType::Sequential
+        );
         assert!(result.content_analysis.confidence_score > 0.5);
         assert_eq!(result.sorting_applied, SortingMethod::PreservedOrder);
-        
+
         // Should have 3 videos with preserved indices
         assert_eq!(result.sections.len(), 3);
-        assert!(result.sections.iter().any(|s| s.title.contains("Introduction")));
+        assert!(
+            result
+                .sections
+                .iter()
+                .any(|s| s.title.contains("Introduction"))
+        );
         assert!(result.sections.iter().any(|s| s.title.contains("Basics")));
         assert!(result.sections.iter().any(|s| s.title.contains("Advanced")));
 
@@ -981,9 +1012,12 @@ mod tests {
         File::create(temp_dir.path().join("React Components.mp4"))?;
 
         let result = import_from_local_folder_with_analysis(temp_dir.path())?;
-        
+
         // Should not detect strong sequential pattern
-        assert_ne!(result.content_analysis.content_type, ContentType::Sequential);
+        assert_ne!(
+            result.content_analysis.content_type,
+            ContentType::Sequential
+        );
         assert_eq!(result.sorting_applied, SortingMethod::Natural);
 
         Ok(())

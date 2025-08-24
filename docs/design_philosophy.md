@@ -28,10 +28,10 @@ Implementation Details:
     Architectural Implication: A strict separation between the UI (ui module) and the core backend logic (state, database, ingest, nlp, planner) is mandatory. The core logic must be pure, portable Rust, avoiding direct dependencies on desktop-only APIs. For example, instead of using a function that directly writes a file in a way that only works on desktop, we would define a trait for "storage" that can be implemented differently for desktop (writing to a file) and web (using browser localStorage or a server). This ensures the core engine can be reused across all future platforms without a major rewrite.
 
 This strategy will be executed in three distinct phases, leveraging the dioxus-daisyui component library and the broader Dioxus ecosystem.
-Phase 1: The Foundation - Global Design System
+ The Foundation - Global Design System
 
 This phase establishes the global rules, themes, and layouts that will govern the entire application, ensuring a consistent and polished feel.
-1.1. Theming System
+ Theming System
 
 Objective: Implement a robust, beautiful, and instantly switchable light/dark mode.
 
@@ -45,7 +45,7 @@ Implementation Details:
 
     Mechanism: The root App component will manage a shared state that controls the data-theme attribute on the main HTML element. This will allow for seamless theme switching that instantly propagates through all DaisyUI components, ensuring a consistent and predictable look.
 
-1.2. Application Layout
+ Application Layout
 
 Objective: Create a modern, responsive, multi-panel layout that intelligently adapts to different screen sizes and workflows.
 
@@ -61,7 +61,7 @@ Implementation Details:
 
     Styling: The sidebar will use a "glassmorphism" effect (a semi-transparent, blurred background). This creates a subtle sense of depth and visual hierarchy, making the main content area feel like the primary layer of focus.
 
-1.3. Motion & Interactivity
+. Motion & Interactivity
 
 Objective: Breathe life into the application with purposeful, non-jarring animations.
 
@@ -74,8 +74,7 @@ Implementation Details:
     Layout Animations: When items are added or removed from a list (e.g., a new course on the dashboard), the grid will gracefully animate the re-flow using <AnimateLayout>. This avoids disorienting jumps and helps the user maintain their mental model of the interface.
 
     Hover & Focus Effects: Interactive elements like cards and buttons will have subtle "lift" and "scale" transitions on hover, implemented with the <Motion> component. This provides tactile feedback, acknowledging the user's interaction and making the UI feel more tangible and engaging.
-
-Phase 2: Core Component Implementation
+ Core Component Implementation
 
 This phase focuses on building the key screens and components that form the core user experience.
 2.1. The Dashboard Screen
@@ -88,7 +87,7 @@ Implementation Details:
 
     Header: A clean header containing the application title, a global search bar (for a future phase), and a prominent primary Button for "Add New Course," making the most common action immediately accessible.
 
-2.2. The CourseCard Component
+ The CourseCard Component
 
 Objective: Design a visually rich and data-dense card that represents a single course.
 
@@ -108,7 +107,7 @@ Implementation Details:
 
         CardActions: Buttons for primary actions like "Continue Learning" will be right-aligned at the bottom. A three-dot menu icon will trigger a Dropdown for secondary actions like "Export" or "Delete", keeping the card clean.
 
-2.3. The Course View Screen
+ The Course View Screen
 
 Objective: Design the main learning interface, combining the checklist, player, and notes.
 
@@ -122,10 +121,9 @@ Implementation Details:
 
     Feedback: Use dioxus-toast for non-intrusive notifications. When a plan is saved or a course is imported, a sleek toast will slide in from a screen corner, confirming the action was successful without interrupting the user's flow.
 
-Phase 3: The Futuristic Polish & UX Enhancements
 
 This phase adds the final layer of polish that elevates the application from functional to delightful.
-3.1. Command Palette
+ Command Palette
 
 Objective: Implement a fast, keyboard-driven interface for power users.
 
@@ -135,7 +133,7 @@ Implementation Details:
 
     It will contain a single Input field that searches and filters a list of actions (e.g., "Go to course: Advanced Rust," "Add New Course," "Toggle Theme"). This provides an incredibly fast way to navigate and operate the app, making users feel proficient and in control.
 
-3.2. Advanced Visual Effects
+ Advanced Visual Effects
 
 Objective: Use subtle visual effects to reinforce the futuristic aesthetic.
 
@@ -145,7 +143,7 @@ Implementation Details:
 
     Glow Effects: Primary action buttons and active elements (like a selected navigation item) will have a soft box-shadow using the theme's accent color. This creates a subtle "glow" that draws the user's eye, provides clear affordance for interactive elements, and enhances the futuristic feel, especially in dark mode.
 
-3.3. Data-Rich, Minimal UI Principle
+ Data-Rich, Minimal UI Principle
 
 Objective: Keep the UI clean by showing complexity only when necessary.
 

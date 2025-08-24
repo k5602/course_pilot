@@ -2,7 +2,9 @@ use dioxus::prelude::*;
 use dioxus_desktop::use_window;
 use uuid::Uuid;
 
-use crate::video_player::{VideoSource, PlaybackState, use_video_player, VideoPlayerError, VideoControls};
+use crate::video_player::{
+    PlaybackState, VideoControls, VideoPlayerError, VideoSource, use_video_player,
+};
 
 #[derive(Props, PartialEq, Clone)]
 pub struct VideoPlayerProps {
@@ -21,7 +23,7 @@ pub struct VideoPlayerProps {
 pub fn VideoPlayer(props: VideoPlayerProps) -> Element {
     let state = use_video_player();
     let window = use_window();
-    
+
     // Clone the current video for use in closures
     let current_video = state.current_video.clone();
     let player_id = use_signal(|| format!("cp-video-{}", Uuid::new_v4().simple()));
@@ -61,7 +63,8 @@ pub fn VideoPlayer(props: VideoPlayerProps) -> Element {
         let execute_script = execute_script.clone();
         let id = player_id();
         move || {
-            let init_script = format!(r#"
+            let init_script = format!(
+                r#"
                 if (!window.cpVideoState) {{
                     window.cpVideoState = {{}};
                 }}
@@ -72,7 +75,9 @@ pub fn VideoPlayer(props: VideoPlayerProps) -> Element {
                     muted: false,
                     paused: true
                 }};
-            "#, id);
+            "#,
+                id
+            );
             execute_script(init_script);
         }
     });
@@ -87,11 +92,12 @@ pub fn VideoPlayer(props: VideoPlayerProps) -> Element {
             let mut interval = tokio::time::interval(tokio::time::Duration::from_millis(500));
             loop {
                 interval.tick().await;
-                let sync_script = format!(r#"
+                let sync_script = format!(
+                    r#"
                         (function() {{
                             const videoState = window.cpVideoState['{}'];
                             if (!videoState) return null;
-                            
+
                             const el = document.getElementById('cp-video-{}');
                             if (el) {{
                                 videoState.currentTime = el.currentTime || 0;
@@ -100,10 +106,12 @@ pub fn VideoPlayer(props: VideoPlayerProps) -> Element {
                                 videoState.muted = !!el.muted;
                                 videoState.paused = !!el.paused;
                             }}
-                            
+
                             return JSON.stringify(videoState);
                         }})()
-                    "#, id, id);
+                    "#,
+                    id, id
+                );
 
                 execute_script(sync_script);
             }
@@ -115,7 +123,8 @@ pub fn VideoPlayer(props: VideoPlayerProps) -> Element {
         let execute_script = execute_script.clone();
         let id = player_id();
         move |_: ()| {
-            let script = format!(r#"
+            let script = format!(
+                r#"
                 (function() {{
                     const el = document.getElementById('cp-video-{}');
                     if (!el) return;
@@ -125,7 +134,9 @@ pub fn VideoPlayer(props: VideoPlayerProps) -> Element {
                         el.pause();
                     }}
                 }})()
-            "#, id);
+            "#,
+                id
+            );
             execute_script(script);
         }
     });
@@ -136,13 +147,16 @@ pub fn VideoPlayer(props: VideoPlayerProps) -> Element {
         let mut state = state.clone();
         move |position: f64| {
             let pos = position.max(0.0);
-            let script = format!(r#"
+            let script = format!(
+                r#"
                 (function() {{
                     const el = document.getElementById('cp-video-{}');
                     if (!el) return;
                     el.currentTime = {};
                 }})()
-            "#, id, pos);
+            "#,
+                id, pos
+            );
             execute_script(script);
             state.position.set(pos);
         }
@@ -154,14 +168,17 @@ pub fn VideoPlayer(props: VideoPlayerProps) -> Element {
         let mut state = state.clone();
         move |new_volume: f64| {
             let vol = new_volume.clamp(0.0, 1.0);
-            let script = format!(r#"
+            let script = format!(
+                r#"
                 (function() {{
                     const el = document.getElementById('cp-video-{}');
                     if (!el) return;
                     el.volume = {};
                     el.muted = ({} <= 0);
                 }})()
-            "#, id, vol, vol);
+            "#,
+                id, vol, vol
+            );
             execute_script(script);
             state.set_volume(vol);
         }
@@ -416,17 +433,17 @@ fn LocalVideoPlayer(
 ) -> Element {
     // Convert file path to custom protocol URL
     let video_url = format!("local-video://file/{}", path.display());
-    
+
     rsx! {
         div { class: "flex-1 bg-black relative",
             video {
                 id: "{player_id}",
                 class: "w-full h-full object-contain",
                 autoplay: autoplay,
-                controls: false,
+                controls: true,
                 preload: "metadata",
                 src: "{video_url}",
-                
+
                 // Event handlers
                 onplay: move |_| on_play.call(()),
                 onpause: move |_| on_pause.call(()),
@@ -442,14 +459,7 @@ fn LocalVideoPlayer(
                 },
             }
 
-            // Click overlay for play/pause
-            button {
-                class: "absolute inset-0 bg-transparent hover:bg-black/10 transition-colors duration-200",
-                onclick: move |_| {
-                    // This will be handled by the parent component
-                },
-                "aria-label": "Toggle play/pause"
-            }
+            // Native controls are now enabled, no overlay needed
         }
     }
 }
@@ -493,7 +503,7 @@ fn YouTubeVideoPlayer(
                     tag.src = 'https://www.youtube.com/iframe_api';
                     const firstScriptTag = document.getElementsByTagName('script')[0];
                     firstScriptTag.parentNode.insertBefore(tag, firstScriptTag);
-                    
+
                     // Set up global callback
                     window.onYouTubeIframeAPIReady = function() {
                         console.log('YouTube IFrame Player API ready');
@@ -503,8 +513,9 @@ fn YouTubeVideoPlayer(
                     console.log('YouTube IFrame Player API already loaded');
                     window.ytAPIReady = true;
                 }
-            "#.to_string();
-            
+            "#
+            .to_string();
+
             execute_script(init_script);
         }
     });
@@ -514,14 +525,18 @@ fn YouTubeVideoPlayer(
         let execute_script = execute_script.clone();
         let player_id_val = player_id.clone();
         let video_id_val = video_id.clone();
-        let playlist_param = playlist_id.as_ref().map(|p| format!(", list: '{}'", p)).unwrap_or_default();
-        
+        let playlist_param = playlist_id
+            .as_ref()
+            .map(|p| format!(", list: '{}'", p))
+            .unwrap_or_default();
+
         move || {
-            let create_script = format!(r#"
+            let create_script = format!(
+                r#"
                 function createYouTubePlayer() {{
                     if (window.YT && window.YT.Player) {{
                         console.log('Creating YouTube player for video: {}');
-                        
+
                         try {{
                             window.ytPlayer_{} = new YT.Player('{}', {{
                                 height: '100%',
@@ -547,7 +562,7 @@ fn YouTubeVideoPlayer(
                                     'onStateChange': function(event) {{
                                         console.log('YouTube player state changed: {}', event.data);
                                         window.ytPlayerState_{} = event.data;
-                                        
+
                                         // Update position and duration
                                         if (event.target) {{
                                             try {{
@@ -584,7 +599,7 @@ fn YouTubeVideoPlayer(
                             createYouTubePlayer();
                         }}
                     }}, 100);
-                    
+
                     // Timeout after 10 seconds
                     setTimeout(function() {{
                         if (!window.ytAPIReady) {{
@@ -594,13 +609,25 @@ fn YouTubeVideoPlayer(
                         }}
                     }}, 10000);
                 }}
-            "#, 
-            video_id_val, player_id_val, player_id_val, video_id_val, playlist_param,
-            player_id_val, player_id_val, player_id_val, player_id_val, player_id_val,
-            player_id_val, player_id_val, player_id_val, player_id_val, player_id_val,
-            player_id_val
+            "#,
+                video_id_val,
+                player_id_val,
+                player_id_val,
+                video_id_val,
+                playlist_param,
+                player_id_val,
+                player_id_val,
+                player_id_val,
+                player_id_val,
+                player_id_val,
+                player_id_val,
+                player_id_val,
+                player_id_val,
+                player_id_val,
+                player_id_val,
+                player_id_val
             );
-            
+
             execute_script(create_script);
         }
     });
@@ -619,32 +646,29 @@ fn YouTubeVideoPlayer(
 
 /// Error display component
 #[component]
-fn VideoErrorDisplay(
-    error: VideoPlayerError,
-    on_retry: EventHandler<()>,
-) -> Element {
+fn VideoErrorDisplay(error: VideoPlayerError, on_retry: EventHandler<()>) -> Element {
     rsx! {
         div {
             class: "absolute inset-0 bg-red-900/50 flex items-center justify-center",
             div {
                 class: "text-white text-center p-6 max-w-md",
                 div { class: "text-4xl mb-4", "❌" }
-                div { 
+                div {
                     class: "text-lg font-semibold mb-2",
-                    "Video Error" 
+                    "Video Error"
                 }
-                div { 
+                div {
                     class: "text-sm text-gray-300 mb-4",
-                    "{error.user_message()}" 
+                    "{error.user_message()}"
                 }
-                
+
                 // Recovery suggestions
                 div { class: "text-xs text-gray-400 mb-4",
                     for suggestion in error.recovery_suggestions() {
                         div { "• {suggestion}" }
                     }
                 }
-                
+
                 // Retry button
                 button {
                     class: "btn btn-primary btn-sm",
@@ -673,7 +697,7 @@ mod tests {
             on_complete: None,
             on_error: None,
         };
-        
+
         let cloned_props = props.clone();
         assert_eq!(props.width, cloned_props.width);
         assert_eq!(props.height, cloned_props.height);

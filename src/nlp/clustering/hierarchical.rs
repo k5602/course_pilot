@@ -120,6 +120,11 @@ impl HierarchicalClusterer {
         features: &[FeatureVector],
         distance_matrix: &DistanceMatrix,
     ) -> Result<ClusterNode, ClusteringError> {
+        debug_assert_eq!(
+            distance_matrix.size,
+            features.len(),
+            "DistanceMatrix.size should match features length"
+        );
         let mut active_clusters: Vec<ClusterNode> = features
             .iter()
             .enumerate()

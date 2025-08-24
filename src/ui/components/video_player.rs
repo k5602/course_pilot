@@ -1,6 +1,8 @@
 use dioxus::prelude::*;
 
-use crate::video_player::{VideoPlayer, VideoPlayerProvider, PlaybackState, VideoSource, use_video_keyboard_shortcuts};
+use crate::video_player::{
+    PlaybackState, VideoPlayer, VideoPlayerProvider, VideoSource, use_video_keyboard_shortcuts,
+};
 
 #[derive(Props, PartialEq, Clone)]
 pub struct VideoPlayerProps {
@@ -18,7 +20,7 @@ pub struct VideoPlayerProps {
 #[component]
 pub fn VideoPlayerComponent(props: VideoPlayerProps) -> Element {
     // Set up keyboard shortcuts
-    use_video_keyboard_shortcuts();
+    let _shortcuts = use_video_keyboard_shortcuts();
 
     rsx! {
         VideoPlayerProvider {

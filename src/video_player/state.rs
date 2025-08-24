@@ -1,7 +1,5 @@
+use crate::video_player::{PlaybackState, VideoMetadata, VideoPlayerError, VideoSource};
 use dioxus::prelude::*;
-// Duration import removed as it's not used
-
-use crate::video_player::{PlaybackState, VideoSource, VideoPlayerError, VideoMetadata};
 
 /// Reactive state context for video player
 #[derive(Clone)]
@@ -50,7 +48,7 @@ impl VideoPlayerContext {
         self.duration.set(0.0);
         self.metadata.set(None);
         self.loading.set(true);
-        
+
         // Set new source
         self.current_video.set(Some(source));
         self.playback_state.set(PlaybackState::Stopped);
@@ -136,7 +134,7 @@ impl VideoPlayerContext {
     /// Update position (called by player implementations)
     pub fn update_position(&mut self, position: f64) {
         self.position.set(position);
-        
+
         // Check for completion
         let duration = *self.duration.read();
         if duration > 0.0 && position >= duration - 0.5 {
@@ -201,17 +199,17 @@ impl VideoPlayerContext {
         self.duration.set(state.duration);
         self.volume.set(state.volume);
         self.is_muted.set(state.is_muted);
-        
+
         // Convert YouTube player state to our PlaybackState
         let playback_state = match state.player_state {
-            1 => PlaybackState::Playing,  // Playing
-            2 => PlaybackState::Paused,   // Paused
-            3 => PlaybackState::Buffering, // Buffering  
-            5 => PlaybackState::Paused,   // Video cued
-            _ => PlaybackState::Paused,   // Unstarted, ended, or unknown
+            1 => PlaybackState::Playing,   // Playing
+            2 => PlaybackState::Paused,    // Paused
+            3 => PlaybackState::Buffering, // Buffering
+            5 => PlaybackState::Paused,    // Video cued
+            _ => PlaybackState::Paused,    // Unstarted, ended, or unknown
         };
         self.playback_state.set(playback_state);
-        
+
         // Clear loading and error states if sync is successful
         self.loading.set(false);
         self.error.set(None);
@@ -229,7 +227,7 @@ impl Default for VideoPlayerContext {
 pub fn VideoPlayerProvider(children: Element) -> Element {
     let context = use_signal(VideoPlayerContext::new);
     use_context_provider(|| context());
-    
+
     rsx! {
         {children}
     }
@@ -249,12 +247,12 @@ impl VideoSource {
                 if !path.exists() {
                     return Err(VideoPlayerError::FileNotFound(path.clone()));
                 }
-                
+
                 // Check if file is readable
                 if let Err(_) = std::fs::metadata(path) {
                     return Err(VideoPlayerError::FileAccessDenied(path.clone()));
                 }
-                
+
                 // Check format support
                 if let Some(extension) = path.extension() {
                     let ext = extension.to_string_lossy().to_lowercase();
@@ -264,31 +262,36 @@ impl VideoSource {
                 } else {
                     return Err(VideoPlayerError::UnsupportedFormat("unknown".to_string()));
                 }
-                
+
                 Ok(())
             }
             VideoSource::YouTube { video_id, .. } => {
                 if video_id.trim().is_empty() {
                     return Err(VideoPlayerError::InvalidVideoId("empty".to_string()));
                 }
-                
+
                 if video_id.starts_with("PLACEHOLDER_") {
                     return Err(VideoPlayerError::InvalidVideoId("placeholder".to_string()));
                 }
-                
+
                 // Basic YouTube video ID format validation
-                if video_id.len() != 11 || !video_id.chars().all(|c| c.is_alphanumeric() || c == '_' || c == '-') {
+                if video_id.len() != 11
+                    || !video_id
+                        .chars()
+                        .all(|c| c.is_alphanumeric() || c == '_' || c == '-')
+                {
                     return Err(VideoPlayerError::InvalidVideoId(video_id.clone()));
                 }
-                
+
                 Ok(())
             }
         }
     }
-    
+
     /// Check if a file format is supported
     pub fn is_supported_format(extension: &str) -> bool {
-        matches!(extension.to_lowercase().as_str(), 
+        matches!(
+            extension.to_lowercase().as_str(),
             "mp4" | "webm" | "ogg" | "avi" | "mov" | "mkv" | "m4v" | "3gp"
         )
     }
@@ -308,30 +311,18 @@ impl VideoPlayerError {
             Self::UnsupportedFormat(ext) => {
                 format!("Unsupported video format: .{}", ext)
             }
-            Self::NetworkError(_) => {
-                "Network connection required for online videos".to_string()
-            }
+            Self::NetworkError(_) => "Network connection required for online videos".to_string(),
             Self::YouTubeApiError { message, .. } => {
                 format!("YouTube error: {}", message)
             }
-            Self::InitializationFailed(_) => {
-                "Video player failed to initialize".to_string()
-            }
-            Self::PlaybackError(_) => {
-                "Video playback error occurred".to_string()
-            }
-            Self::WebViewError(_) => {
-                "Browser component error".to_string()
-            }
-            Self::InvalidVideoId(_) => {
-                "Invalid or missing video ID".to_string()
-            }
-            Self::InvalidSource(_) => {
-                "Invalid video source".to_string()
-            }
+            Self::InitializationFailed(_) => "Video player failed to initialize".to_string(),
+            Self::PlaybackError(_) => "Video playback error occurred".to_string(),
+            Self::WebViewError(_) => "Browser component error".to_string(),
+            Self::InvalidVideoId(_) => "Invalid or missing video ID".to_string(),
+            Self::InvalidSource(_) => "Invalid video source".to_string(),
         }
     }
-    
+
     /// Get recovery suggestions
     pub fn recovery_suggestions(&self) -> Vec<String> {
         match self {
@@ -382,7 +373,7 @@ mod tests {
     #[test]
     fn test_play_pause_toggle() {
         let mut context = VideoPlayerContext::new();
-        
+
         // Load a video first
         let source = VideoSource::YouTube {
             video_id: "dQw4w9WgXcQ".to_string(),
@@ -390,15 +381,15 @@ mod tests {
             title: "Test Video".to_string(),
         };
         context.load_video(source);
-        
+
         // Test play
         context.play();
         assert_eq!(*context.playback_state.read(), PlaybackState::Playing);
-        
+
         // Test pause
         context.pause();
         assert_eq!(*context.playback_state.read(), PlaybackState::Paused);
-        
+
         // Test toggle
         context.toggle_play_pause();
         assert_eq!(*context.playback_state.read(), PlaybackState::Playing);
@@ -408,23 +399,23 @@ mod tests {
     fn test_seek_functionality() {
         let mut context = VideoPlayerContext::new();
         context.update_duration(100.0);
-        
+
         // Test absolute seek
         context.seek_to(50.0);
         assert_eq!(*context.position.read(), 50.0);
-        
+
         // Test relative seek
         context.seek_relative(10.0);
         assert_eq!(*context.position.read(), 60.0);
-        
+
         // Test percentage seek
         context.seek_to_percentage(0.25);
         assert_eq!(*context.position.read(), 25.0);
-        
+
         // Test clamping
         context.seek_to(-10.0);
         assert_eq!(*context.position.read(), 0.0);
-        
+
         context.seek_to(150.0);
         assert_eq!(*context.position.read(), 100.0);
     }
@@ -432,17 +423,17 @@ mod tests {
     #[test]
     fn test_volume_control() {
         let mut context = VideoPlayerContext::new();
-        
+
         // Test volume setting
         context.set_volume(0.5);
         assert_eq!(*context.volume.read(), 0.5);
         assert!(!*context.is_muted.read());
-        
+
         // Test mute
         context.toggle_mute();
         assert_eq!(*context.volume.read(), 0.0);
         assert!(*context.is_muted.read());
-        
+
         // Test unmute
         context.toggle_mute();
         assert_eq!(*context.volume.read(), 1.0);
@@ -454,7 +445,7 @@ mod tests {
         let mut context = VideoPlayerContext::new();
         context.update_duration(100.0);
         context.update_position(25.0);
-        
+
         assert_eq!(context.progress_percentage(), 25.0);
         assert_eq!(context.remaining_time(), 75.0);
     }
@@ -468,7 +459,7 @@ mod tests {
             title: "Test Video".to_string(),
         };
         assert!(youtube_source.validate().is_ok());
-        
+
         // Test invalid YouTube source
         let invalid_youtube = VideoSource::YouTube {
             video_id: "PLACEHOLDER_123".to_string(),
@@ -476,7 +467,7 @@ mod tests {
             title: "Invalid Video".to_string(),
         };
         assert!(invalid_youtube.validate().is_err());
-        
+
         // Test empty video ID
         let empty_youtube = VideoSource::YouTube {
             video_id: "".to_string(),

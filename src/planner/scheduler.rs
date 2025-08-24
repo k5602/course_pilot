@@ -2128,6 +2128,53 @@ mod tests {
                 "Setup".to_string(),
                 "Complex Example".to_string(),
             ],
+            videos: vec![
+                crate::types::VideoMetadata {
+                    title: "Welcome".to_string(),
+                    source_url: None,
+                    video_id: None,
+                    playlist_id: None,
+                    original_index: 0,
+                    duration_seconds: Some(600.0),
+                    thumbnail_url: None,
+                    description: None,
+                    upload_date: None,
+                    author: None,
+                    view_count: None,
+                    tags: Vec::new(),
+                    is_local: false,
+                },
+                crate::types::VideoMetadata {
+                    title: "Setup".to_string(),
+                    source_url: None,
+                    video_id: None,
+                    playlist_id: None,
+                    original_index: 1,
+                    duration_seconds: Some(900.0),
+                    thumbnail_url: None,
+                    description: None,
+                    upload_date: None,
+                    author: None,
+                    view_count: None,
+                    tags: Vec::new(),
+                    is_local: false,
+                },
+                crate::types::VideoMetadata {
+                    title: "Complex Example".to_string(),
+                    source_url: None,
+                    video_id: None,
+                    playlist_id: None,
+                    original_index: 2,
+                    duration_seconds: Some(1800.0),
+                    thumbnail_url: None,
+                    description: None,
+                    upload_date: None,
+                    author: None,
+                    view_count: None,
+                    tags: Vec::new(),
+                    is_local: false,
+                },
+            ],
             structure: Some(structure),
         }
     }
@@ -2344,6 +2391,68 @@ mod tests {
                 "Medium Video".to_string(),
                 "Short Video 3".to_string(),
             ],
+            videos: vec![
+                crate::types::VideoMetadata {
+                    title: "Short Video 1".to_string(),
+                    source_url: None,
+                    video_id: None,
+                    playlist_id: None,
+                    original_index: 0,
+                    duration_seconds: Some(600.0),
+                    thumbnail_url: None,
+                    description: None,
+                    upload_date: None,
+                    author: None,
+                    view_count: None,
+                    tags: Vec::new(),
+                    is_local: false,
+                },
+                crate::types::VideoMetadata {
+                    title: "Short Video 2".to_string(),
+                    source_url: None,
+                    video_id: None,
+                    playlist_id: None,
+                    original_index: 1,
+                    duration_seconds: Some(900.0),
+                    thumbnail_url: None,
+                    description: None,
+                    upload_date: None,
+                    author: None,
+                    view_count: None,
+                    tags: Vec::new(),
+                    is_local: false,
+                },
+                crate::types::VideoMetadata {
+                    title: "Medium Video".to_string(),
+                    source_url: None,
+                    video_id: None,
+                    playlist_id: None,
+                    original_index: 2,
+                    duration_seconds: Some(1500.0),
+                    thumbnail_url: None,
+                    description: None,
+                    upload_date: None,
+                    author: None,
+                    view_count: None,
+                    tags: Vec::new(),
+                    is_local: false,
+                },
+                crate::types::VideoMetadata {
+                    title: "Short Video 3".to_string(),
+                    source_url: None,
+                    video_id: None,
+                    playlist_id: None,
+                    original_index: 3,
+                    duration_seconds: Some(720.0),
+                    thumbnail_url: None,
+                    description: None,
+                    upload_date: None,
+                    author: None,
+                    view_count: None,
+                    tags: Vec::new(),
+                    is_local: false,
+                },
+            ],
             structure: Some(structure),
         };
 
@@ -2552,6 +2661,21 @@ mod tests {
             name: "Overflow Test Course".to_string(),
             created_at: Utc::now(),
             raw_titles: vec!["Very Long Video".to_string()],
+            videos: vec![crate::types::VideoMetadata {
+                title: "Very Long Video".to_string(),
+                source_url: None,
+                video_id: None,
+                playlist_id: None,
+                original_index: 0,
+                duration_seconds: Some(5400.0),
+                thumbnail_url: None,
+                description: None,
+                upload_date: None,
+                author: None,
+                view_count: None,
+                tags: Vec::new(),
+                is_local: false,
+            }],
             structure: Some(structure),
         };
 
@@ -2623,6 +2747,53 @@ mod tests {
                 "Normal Video".to_string(),
                 "Very Long Video".to_string(),
                 "Another Normal Video".to_string(),
+            ],
+            videos: vec![
+                crate::types::VideoMetadata {
+                    title: "Normal Video".to_string(),
+                    source_url: None,
+                    video_id: None,
+                    playlist_id: None,
+                    original_index: 0,
+                    duration_seconds: Some(1200.0),
+                    thumbnail_url: None,
+                    description: None,
+                    upload_date: None,
+                    author: None,
+                    view_count: None,
+                    tags: Vec::new(),
+                    is_local: false,
+                },
+                crate::types::VideoMetadata {
+                    title: "Very Long Video".to_string(),
+                    source_url: None,
+                    video_id: None,
+                    playlist_id: None,
+                    original_index: 1,
+                    duration_seconds: Some(5400.0),
+                    thumbnail_url: None,
+                    description: None,
+                    upload_date: None,
+                    author: None,
+                    view_count: None,
+                    tags: Vec::new(),
+                    is_local: false,
+                },
+                crate::types::VideoMetadata {
+                    title: "Another Normal Video".to_string(),
+                    source_url: None,
+                    video_id: None,
+                    playlist_id: None,
+                    original_index: 2,
+                    duration_seconds: Some(900.0),
+                    thumbnail_url: None,
+                    description: None,
+                    upload_date: None,
+                    author: None,
+                    view_count: None,
+                    tags: Vec::new(),
+                    is_local: false,
+                },
             ],
             structure: Some(structure),
         };
@@ -3538,11 +3709,15 @@ fn analyze_raw_titles_for_sequential_patterns(titles: &[String]) -> bool {
 
     for title in titles {
         let title_lower = title.to_lowercase();
-        
+
         // Check for numeric sequences
-        if title_lower.contains("lesson") || title_lower.contains("part") || 
-           title_lower.contains("chapter") || title_lower.contains("module") ||
-           title_lower.contains("step") || title_lower.contains("tutorial") {
+        if title_lower.contains("lesson")
+            || title_lower.contains("part")
+            || title_lower.contains("chapter")
+            || title_lower.contains("module")
+            || title_lower.contains("step")
+            || title_lower.contains("tutorial")
+        {
             // Look for numbers in the title
             if title.chars().any(|c| c.is_ascii_digit()) {
                 sequential_indicators += 1;
@@ -3550,9 +3725,12 @@ fn analyze_raw_titles_for_sequential_patterns(titles: &[String]) -> bool {
         }
 
         // Check for explicit sequential words
-        if title_lower.contains("introduction") || title_lower.contains("getting started") ||
-           title_lower.contains("basics") || title_lower.contains("fundamentals") ||
-           title_lower.contains("overview") {
+        if title_lower.contains("introduction")
+            || title_lower.contains("getting started")
+            || title_lower.contains("basics")
+            || title_lower.contains("fundamentals")
+            || title_lower.contains("overview")
+        {
             sequential_indicators += 1;
         }
     }
@@ -3565,9 +3743,22 @@ fn analyze_raw_titles_for_sequential_patterns(titles: &[String]) -> bool {
 /// Check if topic keywords suggest sequential progression
 fn has_sequential_topic_indicators(topics: &[crate::types::TopicInfo]) -> bool {
     let sequential_keywords = [
-        "introduction", "basic", "fundamentals", "getting started", "overview",
-        "lesson", "part", "chapter", "module", "step", "tutorial", "beginner",
-        "intermediate", "advanced", "final", "conclusion"
+        "introduction",
+        "basic",
+        "fundamentals",
+        "getting started",
+        "overview",
+        "lesson",
+        "part",
+        "chapter",
+        "module",
+        "step",
+        "tutorial",
+        "beginner",
+        "intermediate",
+        "advanced",
+        "final",
+        "conclusion",
     ];
 
     let mut sequential_topic_count = 0;
@@ -3777,10 +3968,12 @@ fn pack_videos_into_sequential_session(
 /// Apply optimization to sequential plan while preserving order
 fn optimize_sequential_plan(plan: &mut Plan) -> Result<(), PlanError> {
     // Apply basic optimizations that don't change video order
-    
+
     // 1. Validate session durations and add warnings
     for item in &mut plan.items {
-        if item.total_duration.as_secs() > (plan.settings.session_length_minutes as u64 * 60 * 120 / 100) {
+        if item.total_duration.as_secs()
+            > (plan.settings.session_length_minutes as u64 * 60 * 120 / 100)
+        {
             // More than 120% of target session length
             item.overflow_warnings.push(format!(
                 "Session duration ({}) significantly exceeds target ({})",

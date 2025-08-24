@@ -12,7 +12,7 @@ pub use crate::state::{
     NotesContext, NotesContextProvider, PlanContext, PlanContextProvider, initialize_global_state,
     use_active_import_reactive, use_contextual_panel_reactive, use_course_reactive,
     use_course_stats_reactive, use_courses_reactive, use_mobile_sidebar_reactive,
-    use_notes_reactive, use_plans_reactive, use_tag_statistics_reactive,
+    use_notes_reactive, use_plans_reactive,
 };
 
 /// Utility hook for managing loading states across contexts

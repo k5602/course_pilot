@@ -51,9 +51,11 @@ impl Database {
             if !parent.exists() {
                 info!("Creating database directory: {}", parent.display());
                 std::fs::create_dir_all(parent)
-                    .with_context(|| format!("Failed to create database directory {}", parent.display()))
-                    .map_err(|e| DatabaseError::ConnectionFailed { 
-                        message: format!("Could not create database directory: {}", e) 
+                    .with_context(|| {
+                        format!("Failed to create database directory {}", parent.display())
+                    })
+                    .map_err(|e| DatabaseError::ConnectionFailed {
+                        message: format!("Could not create database directory: {}", e),
                     })?;
             }
         }
@@ -91,20 +93,20 @@ impl Database {
             .max_size(10) // Maximum number of connections in the pool
             .min_idle(Some(2)) // Minimum idle connections to maintain
             .build(manager)
-            .map_err(|e| DatabaseError::ConnectionFailed { 
-                message: format!("Failed to create connection pool: {}", e) 
+            .map_err(|e| DatabaseError::ConnectionFailed {
+                message: format!("Failed to create connection pool: {}", e),
             })
             .with_context(|| "Failed to create database connection pool")?;
 
         // Initialize database schema
-        let mut conn = pool.get()
-            .map_err(|e| DatabaseError::ConnectionFailed { 
-                message: format!("Failed to get connection for initialization: {}", e) 
+        let mut conn = pool
+            .get()
+            .map_err(|e| DatabaseError::ConnectionFailed {
+                message: format!("Failed to get connection for initialization: {}", e),
             })
             .with_context(|| "Failed to get initial database connection")?;
-        
-        init_tables(&mut conn)
-            .with_context(|| "Failed to initialize database tables")?;
+
+        init_tables(&mut conn).with_context(|| "Failed to initialize database tables")?;
 
         Ok(Database {
             pool: Arc::new(pool),
@@ -113,7 +115,8 @@ impl Database {
 
     /// Get a connection from the pool with error handling
     pub fn get_conn(&self) -> Result<PooledConnection> {
-        self.pool.get()
+        self.pool
+            .get()
             .map_err(|e| DatabaseError::Pool(e))
             .with_context(|| "Failed to get database connection from pool")
             .map_err(Into::into)
@@ -127,7 +130,7 @@ impl Database {
     /// Check connection pool health and return metrics
     pub fn check_pool_health(&self) -> Result<ConnectionPoolHealth> {
         let state = self.pool.state();
-        
+
         // Test a connection to ensure the pool is working
         let test_result = match self.pool.get() {
             Ok(_conn) => true,
@@ -156,29 +159,35 @@ impl Database {
         const INITIAL_DELAY_MS: u64 = 100;
 
         let mut last_error = None;
-        
+
         for attempt in 0..MAX_RETRIES {
             match self.get_conn() {
-                Ok(conn) => {
-                    match operation(&conn) {
-                        Ok(result) => return Ok(result),
-                        Err(e) => {
-                            last_error = Some(e);
-                            if attempt < MAX_RETRIES - 1 {
-                                let delay = INITIAL_DELAY_MS * 2_u64.pow(attempt);
-                                log::warn!("Database operation failed (attempt {}), retrying in {}ms: {}", 
-                                          attempt + 1, delay, last_error.as_ref().unwrap());
-                                std::thread::sleep(std::time::Duration::from_millis(delay));
-                            }
+                Ok(conn) => match operation(&conn) {
+                    Ok(result) => return Ok(result),
+                    Err(e) => {
+                        last_error = Some(e);
+                        if attempt < MAX_RETRIES - 1 {
+                            let delay = INITIAL_DELAY_MS * 2_u64.pow(attempt);
+                            log::warn!(
+                                "Database operation failed (attempt {}), retrying in {}ms: {}",
+                                attempt + 1,
+                                delay,
+                                last_error.as_ref().unwrap()
+                            );
+                            std::thread::sleep(std::time::Duration::from_millis(delay));
                         }
                     }
-                }
+                },
                 Err(e) => {
                     last_error = Some(e);
                     if attempt < MAX_RETRIES - 1 {
                         let delay = INITIAL_DELAY_MS * 2_u64.pow(attempt);
-                        log::warn!("Failed to get database connection (attempt {}), retrying in {}ms: {}", 
-                                  attempt + 1, delay, last_error.as_ref().unwrap());
+                        log::warn!(
+                            "Failed to get database connection (attempt {}), retrying in {}ms: {}",
+                            attempt + 1,
+                            delay,
+                            last_error.as_ref().unwrap()
+                        );
                         std::thread::sleep(std::time::Duration::from_millis(delay));
                     }
                 }
@@ -238,15 +247,15 @@ fn is_youtube_video_title(title: &str) -> bool {
     if title.contains("youtube.com") || title.contains("youtu.be") || title.contains("watch?v=") {
         return true;
     }
-    
+
     // Check if it looks like a typical YouTube video title
     // YouTube titles typically don't have file extensions and are reasonable length
-    let has_video_extension = title.to_lowercase().ends_with(".mp4") || 
-                             title.to_lowercase().ends_with(".avi") || 
-                             title.to_lowercase().ends_with(".mov") || 
-                             title.to_lowercase().ends_with(".mkv") || 
-                             title.to_lowercase().ends_with(".webm");
-    
+    let has_video_extension = title.to_lowercase().ends_with(".mp4")
+        || title.to_lowercase().ends_with(".avi")
+        || title.to_lowercase().ends_with(".mov")
+        || title.to_lowercase().ends_with(".mkv")
+        || title.to_lowercase().ends_with(".webm");
+
     // If it doesn't have a video file extension and is reasonable length, assume YouTube
     !has_video_extension && title.len() > 5 && title.len() < 200
 }
@@ -278,7 +287,8 @@ fn extract_youtube_video_id_from_title(title: &str) -> Option<String> {
             Some(title[id_start..id_start + end].to_string())
         } else {
             let remaining = &title[id_start..];
-            if remaining.len() == 11 { // YouTube video IDs are 11 characters
+            if remaining.len() == 11 {
+                // YouTube video IDs are 11 characters
                 Some(remaining.to_string())
             } else {
                 None
@@ -304,27 +314,38 @@ fn extract_youtube_video_id_from_title(title: &str) -> Option<String> {
 }
 
 /// Validate video metadata to ensure YouTube fields are not lost during database operations
-fn validate_video_metadata(videos: &[crate::types::VideoMetadata]) -> Result<Vec<crate::types::VideoMetadata>> {
+fn validate_video_metadata(
+    videos: &[crate::types::VideoMetadata],
+) -> Result<Vec<crate::types::VideoMetadata>> {
     let mut validated_videos = Vec::new();
-    
+
     for (index, video) in videos.iter().enumerate() {
         // Debug logging to see what we're validating
-        info!("Validating video {}: title='{}', video_id={:?}, source_url={:?}, is_local={}", 
-              index, video.title, video.video_id, video.source_url, video.is_local);
-        
+        info!(
+            "Validating video {}: title='{}', video_id={:?}, source_url={:?}, is_local={}",
+            index, video.title, video.video_id, video.source_url, video.is_local
+        );
+
         let mut validated_video = video.clone();
-        
+
         // Validate YouTube videos have required metadata
         if !video.is_local {
             // Check if this is a YouTube video missing critical metadata
             if video.video_id.is_none() && video.source_url.is_none() {
-                warn!("YouTube video at index {} missing both video_id and source_url: '{}'", index, video.title);
-                
+                warn!(
+                    "YouTube video at index {} missing both video_id and source_url: '{}'",
+                    index, video.title
+                );
+
                 // Try to extract video_id from title if possible
                 if let Some(extracted_id) = extract_youtube_video_id_from_title(&video.title) {
-                    info!("Extracted video_id '{}' from title for video at index {}", extracted_id, index);
+                    info!(
+                        "Extracted video_id '{}' from title for video at index {}",
+                        extracted_id, index
+                    );
                     validated_video.video_id = Some(extracted_id.clone());
-                    validated_video.source_url = Some(format!("https://www.youtube.com/watch?v={}", extracted_id));
+                    validated_video.source_url =
+                        Some(format!("https://www.youtube.com/watch?v={}", extracted_id));
                     // Try to extract playlist_id from source_url if available
                     if let Some(ref url) = validated_video.source_url {
                         validated_video.playlist_id = extract_playlist_id_from_url(url);
@@ -340,7 +361,10 @@ fn validate_video_metadata(videos: &[crate::types::VideoMetadata]) -> Result<Vec
                 // Has video_id but missing source_url, reconstruct it
                 if let Some(ref video_id) = video.video_id {
                     let url = if let Some(ref playlist_id) = video.playlist_id {
-                        format!("https://www.youtube.com/watch?v={}&list={}", video_id, playlist_id)
+                        format!(
+                            "https://www.youtube.com/watch?v={}&list={}",
+                            video_id, playlist_id
+                        )
                     } else {
                         format!("https://www.youtube.com/watch?v={}", video_id)
                     };
@@ -367,7 +391,7 @@ fn validate_video_metadata(videos: &[crate::types::VideoMetadata]) -> Result<Vec
                         ).into());
                     }
                 }
-                
+
                 // Video appears to have valid YouTube metadata, keep as-is
             }
         } else {
@@ -376,65 +400,86 @@ fn validate_video_metadata(videos: &[crate::types::VideoMetadata]) -> Result<Vec
                 validated_video.source_url = Some(video.title.clone());
             }
         }
-        
+
         validated_videos.push(validated_video);
     }
-    
+
     Ok(validated_videos)
 }
 
 /// Run database migrations using the new migration system
 fn run_database_migrations(conn: &mut Connection) -> Result<()> {
     use crate::storage::migrations::MigrationManager;
-    
+
     let migration_manager = MigrationManager::new();
     migration_manager.migrate(conn)?;
-    
+
     // Validate database after migrations
     let validation_report = migration_manager.validate_database(conn)?;
     if !validation_report.is_valid {
-        error!("Database validation failed after migrations: {:?}", validation_report.issues);
-        return Err(anyhow::anyhow!("Database validation failed: {:?}", validation_report.issues));
+        error!(
+            "Database validation failed after migrations: {:?}",
+            validation_report.issues
+        );
+        return Err(anyhow::anyhow!(
+            "Database validation failed: {:?}",
+            validation_report.issues
+        ));
     }
-    
+
     if !validation_report.warnings.is_empty() {
-        warn!("Database validation warnings: {:?}", validation_report.warnings);
+        warn!(
+            "Database validation warnings: {:?}",
+            validation_report.warnings
+        );
     }
-    
+
     Ok(())
 }
 
-
-
 /// Validate and repair loaded metadata to ensure complete VideoMetadata including video_id, playlist_id
 fn validate_and_repair_loaded_metadata(
-    parsed_videos: Vec<crate::types::VideoMetadata>, 
-    raw_titles: &[String]
+    parsed_videos: Vec<crate::types::VideoMetadata>,
+    raw_titles: &[String],
 ) -> Result<Vec<crate::types::VideoMetadata>> {
     let mut repaired_videos = Vec::new();
-    
+
     for (index, video) in parsed_videos.into_iter().enumerate() {
         let mut repaired_video = video.clone();
-        
+
         // Check if this video needs repair
         if !video.is_local && video.video_id.is_none() && video.source_url.is_none() {
             // This is a YouTube video with missing metadata, try to repair it
-            log::warn!("Found YouTube video with missing metadata during load, repairing: '{}'", video.title);
-            
+            log::warn!(
+                "Found YouTube video with missing metadata during load, repairing: '{}'",
+                video.title
+            );
+
             if is_youtube_video_title(&video.title) {
                 if let Some(video_id) = extract_youtube_video_id_from_title(&video.title) {
-                    log::info!("Repaired video_id '{}' from title for video at index {}", video_id, index);
+                    log::info!(
+                        "Repaired video_id '{}' from title for video at index {}",
+                        video_id,
+                        index
+                    );
                     repaired_video.video_id = Some(video_id.clone());
-                    repaired_video.source_url = Some(format!("https://www.youtube.com/watch?v={}", video_id));
+                    repaired_video.source_url =
+                        Some(format!("https://www.youtube.com/watch?v={}", video_id));
                     // Set original_index if not already set
                     if repaired_video.original_index == 0 && index > 0 {
                         repaired_video.original_index = index;
                     }
                 } else {
                     // Create placeholder metadata that will work with title analysis
-                    log::warn!("Could not extract video_id from title, creating placeholder for video at index {}", index);
+                    log::warn!(
+                        "Could not extract video_id from title, creating placeholder for video at index {}",
+                        index
+                    );
                     repaired_video.video_id = Some(format!("PLACEHOLDER_{}", index));
-                    repaired_video.source_url = Some(format!("https://www.youtube.com/watch?v=PLACEHOLDER_{}", index));
+                    repaired_video.source_url = Some(format!(
+                        "https://www.youtube.com/watch?v=PLACEHOLDER_{}",
+                        index
+                    ));
                     repaired_video.playlist_id = None;
                     // Set original_index if not already set
                     if repaired_video.original_index == 0 && index > 0 {
@@ -443,16 +488,26 @@ fn validate_and_repair_loaded_metadata(
                 }
             } else {
                 // Assume local video if it doesn't look like YouTube
-                log::info!("Converting assumed YouTube video to local video at index {}", index);
+                log::info!(
+                    "Converting assumed YouTube video to local video at index {}",
+                    index
+                );
                 repaired_video.is_local = true;
                 repaired_video.source_url = Some(video.title.clone());
             }
         } else if !video.is_local && video.video_id.is_some() && video.source_url.is_none() {
             // Has video_id but missing source_url, reconstruct it
             if let Some(ref video_id) = video.video_id {
-                log::info!("Reconstructing source_url for video_id '{}' at index {}", video_id, index);
+                log::info!(
+                    "Reconstructing source_url for video_id '{}' at index {}",
+                    video_id,
+                    index
+                );
                 let url = if let Some(ref playlist_id) = repaired_video.playlist_id {
-                    format!("https://www.youtube.com/watch?v={}&list={}", video_id, playlist_id)
+                    format!(
+                        "https://www.youtube.com/watch?v={}&list={}",
+                        video_id, playlist_id
+                    )
                 } else {
                     format!("https://www.youtube.com/watch?v={}", video_id)
                 };
@@ -462,7 +517,11 @@ fn validate_and_repair_loaded_metadata(
             // Has source_url but missing video_id, try to extract it
             if let Some(ref url) = video.source_url {
                 if let Some(extracted_id) = extract_youtube_video_id_from_title(url) {
-                    log::info!("Extracted video_id '{}' from source_url at index {}", extracted_id, index);
+                    log::info!(
+                        "Extracted video_id '{}' from source_url at index {}",
+                        extracted_id,
+                        index
+                    );
                     repaired_video.video_id = Some(extracted_id);
                 }
                 // Also try to extract playlist_id
@@ -475,20 +534,23 @@ fn validate_and_repair_loaded_metadata(
             log::info!("Setting source_url for local video at index {}", index);
             repaired_video.source_url = Some(video.title.clone());
         }
-        
+
         // Ensure original_index is set correctly
         if repaired_video.original_index != index {
             repaired_video.original_index = index;
         }
-        
+
         repaired_videos.push(repaired_video);
     }
-    
+
     // If we have fewer videos than raw_titles, pad with fallback metadata
     if repaired_videos.len() < raw_titles.len() {
-        log::warn!("Video metadata count ({}) less than raw_titles count ({}), padding with fallback", 
-                   repaired_videos.len(), raw_titles.len());
-        
+        log::warn!(
+            "Video metadata count ({}) less than raw_titles count ({}), padding with fallback",
+            repaired_videos.len(),
+            raw_titles.len()
+        );
+
         for i in repaired_videos.len()..raw_titles.len() {
             let fallback_video = if is_youtube_video_title(&raw_titles[i]) {
                 if let Some(video_id) = extract_youtube_video_id_from_title(&raw_titles[i]) {
@@ -497,12 +559,15 @@ fn validate_and_repair_loaded_metadata(
                         video_id.clone(),
                         format!("https://www.youtube.com/watch?v={}", video_id),
                         None,
-                        i
+                        i,
                     )
                 } else {
                     crate::types::VideoMetadata {
                         title: raw_titles[i].clone(),
-                        source_url: Some(format!("https://www.youtube.com/watch?v=PLACEHOLDER_{}", i)),
+                        source_url: Some(format!(
+                            "https://www.youtube.com/watch?v=PLACEHOLDER_{}",
+                            i
+                        )),
                         video_id: Some(format!("PLACEHOLDER_{}", i)),
                         playlist_id: None,
                         original_index: i,
@@ -517,62 +582,81 @@ fn validate_and_repair_loaded_metadata(
                     }
                 }
             } else {
-                crate::types::VideoMetadata::new_local_with_index(raw_titles[i].clone(), raw_titles[i].clone(), i)
+                crate::types::VideoMetadata::new_local_with_index(
+                    raw_titles[i].clone(),
+                    raw_titles[i].clone(),
+                    i,
+                )
             };
-            
+
             repaired_videos.push(fallback_video);
         }
     }
-    
+
     Ok(repaired_videos)
 }
 
 /// Create fallback video metadata from raw titles with intelligent detection
 fn create_fallback_video_metadata(raw_titles: &[String]) -> Vec<crate::types::VideoMetadata> {
-    raw_titles.iter().enumerate().map(|(index, title)| {
-        log::info!("Creating fallback metadata for video {}: '{}'", index, title);
-        
-        // Try to detect if this is a YouTube video based on title patterns
-        if is_youtube_video_title(title) {
-            log::info!("Detected as YouTube video: '{}'", title);
-            if let Some(video_id) = extract_youtube_video_id_from_title(title) {
-                log::info!("Extracted video ID '{}' from title: '{}'", video_id, title);
-                crate::types::VideoMetadata::new_youtube_with_playlist(
-                    title.clone(),
-                    video_id.clone(),
-                    format!("https://www.youtube.com/watch?v={}", video_id),
-                    None, // No playlist_id available from title alone
-                    index
-                )
-            } else {
-                log::warn!("YouTube video detected but could not extract ID from title: '{}'", title);
-                // For YouTube videos without extractable ID, create a placeholder that will trigger title analysis
-                crate::types::VideoMetadata {
-                    title: title.clone(),
-                    source_url: Some(format!("https://www.youtube.com/watch?v=PLACEHOLDER_{}", index)),
-                    video_id: Some(format!("PLACEHOLDER_{}", index)),
-                    playlist_id: None,
-                    original_index: index,
-                    duration_seconds: None,
-                    thumbnail_url: None,
-                    description: None,
-                    upload_date: None,
-                    author: None,
-                    view_count: None,
-                    tags: Vec::new(),
-                    is_local: false,
-                }
-            }
-        } else {
-            log::info!("Detected as local video: '{}'", title);
-            // Assume local video
-            crate::types::VideoMetadata::new_local_with_index(title.clone(), title.clone(), index)
-        }
-    }).collect()
-}
+    raw_titles
+        .iter()
+        .enumerate()
+        .map(|(index, title)| {
+            log::info!(
+                "Creating fallback metadata for video {}: '{}'",
+                index,
+                title
+            );
 
-/// Database version for migration tracking (now handled by migrations.rs)
-const DATABASE_VERSION: i32 = 3;
+            // Try to detect if this is a YouTube video based on title patterns
+            if is_youtube_video_title(title) {
+                log::info!("Detected as YouTube video: '{}'", title);
+                if let Some(video_id) = extract_youtube_video_id_from_title(title) {
+                    log::info!("Extracted video ID '{}' from title: '{}'", video_id, title);
+                    crate::types::VideoMetadata::new_youtube_with_playlist(
+                        title.clone(),
+                        video_id.clone(),
+                        format!("https://www.youtube.com/watch?v={}", video_id),
+                        None, // No playlist_id available from title alone
+                        index,
+                    )
+                } else {
+                    log::warn!(
+                        "YouTube video detected but could not extract ID from title: '{}'",
+                        title
+                    );
+                    // For YouTube videos without extractable ID, create a placeholder that will trigger title analysis
+                    crate::types::VideoMetadata {
+                        title: title.clone(),
+                        source_url: Some(format!(
+                            "https://www.youtube.com/watch?v=PLACEHOLDER_{}",
+                            index
+                        )),
+                        video_id: Some(format!("PLACEHOLDER_{}", index)),
+                        playlist_id: None,
+                        original_index: index,
+                        duration_seconds: None,
+                        thumbnail_url: None,
+                        description: None,
+                        upload_date: None,
+                        author: None,
+                        view_count: None,
+                        tags: Vec::new(),
+                        is_local: false,
+                    }
+                }
+            } else {
+                log::info!("Detected as local video: '{}'", title);
+                // Assume local video
+                crate::types::VideoMetadata::new_local_with_index(
+                    title.clone(),
+                    title.clone(),
+                    index,
+                )
+            }
+        })
+        .collect()
+}
 
 /// Initialize database tables
 fn init_tables(conn: &mut Connection) -> Result<()> {
@@ -686,14 +770,16 @@ pub fn optimize_database(db: &Database) -> Result<()> {
     info!("Optimized database file structure");
 
     // Check for integrity issues
-    let integrity_check: String = conn.query_row("PRAGMA integrity_check", [], |row| row.get(0))
+    let integrity_check: String = conn
+        .query_row("PRAGMA integrity_check", [], |row| row.get(0))
         .with_context(|| "Failed to run database integrity check")?;
     if integrity_check != "ok" {
         warn!("Database integrity check failed: {integrity_check}");
-        return Err(DatabaseError::CorruptionDetected { 
-            table: "database".to_string(), 
-            message: format!("Integrity check failed: {integrity_check}") 
-        }.into());
+        return Err(DatabaseError::CorruptionDetected {
+            table: "database".to_string(),
+            message: format!("Integrity check failed: {integrity_check}"),
+        }
+        .into());
     }
 
     info!("Database optimization completed successfully");
@@ -701,9 +787,7 @@ pub fn optimize_database(db: &Database) -> Result<()> {
 }
 
 /// Get database performance metrics
-pub fn get_database_performance_metrics(
-    db: &Database,
-) -> Result<DatabasePerformanceMetrics> {
+pub fn get_database_performance_metrics(db: &Database) -> Result<DatabasePerformanceMetrics> {
     let conn = db.get_conn()?;
 
     // Get basic database info
@@ -802,9 +886,17 @@ pub fn save_course(db: &Database, course: &Course) -> Result<()> {
     info!("Saving course: {} (ID: {})", course.name, course.id);
 
     let raw_titles_json = serde_json::to_string(&course.raw_titles)
-        .with_context(|| format!("Failed to serialize raw_titles for course '{}'", course.name))
+        .with_context(|| {
+            format!(
+                "Failed to serialize raw_titles for course '{}'",
+                course.name
+            )
+        })
         .map_err(|e| {
-            error!("Failed to serialize raw_titles for course '{}': {}", course.name, e);
+            error!(
+                "Failed to serialize raw_titles for course '{}': {}",
+                course.name, e
+            );
             e
         })?;
 
@@ -813,17 +905,29 @@ pub fn save_course(db: &Database, course: &Course) -> Result<()> {
     let videos_json = serde_json::to_string(&validated_videos)
         .with_context(|| format!("Failed to serialize videos for course '{}'", course.name))
         .map_err(|e| {
-            error!("Failed to serialize videos for course '{}': {}", course.name, e);
+            error!(
+                "Failed to serialize videos for course '{}': {}",
+                course.name, e
+            );
             e
         })?;
-    
+
     // Debug logging to see what we're saving
-    log::info!("Saving course '{}' with {} videos", course.name, validated_videos.len());
+    log::info!(
+        "Saving course '{}' with {} videos",
+        course.name,
+        validated_videos.len()
+    );
     if !validated_videos.is_empty() {
         let first_video = &validated_videos[0];
-        log::info!("First video: title='{}', video_id={:?}, source_url={:?}, is_local={}", 
-                   first_video.title, first_video.video_id, first_video.source_url, first_video.is_local);
-        
+        log::info!(
+            "First video: title='{}', video_id={:?}, source_url={:?}, is_local={}",
+            first_video.title,
+            first_video.video_id,
+            first_video.source_url,
+            first_video.is_local
+        );
+
         // Validate YouTube metadata is not lost
         if !first_video.is_local && first_video.video_id.is_none() {
             warn!("YouTube video missing video_id: '{}'", first_video.title);
@@ -926,17 +1030,25 @@ pub fn load_courses(db: &Database) -> Result<Vec<Course>> {
             })?;
 
             // Load videos with fallback to raw_titles for backward compatibility
-            let videos: Vec<crate::types::VideoMetadata> = if let Some(ref videos_json) = videos_json {
-                let parsed_videos: Vec<crate::types::VideoMetadata> = serde_json::from_str(videos_json).unwrap_or_else(|e| {
-                    log::warn!("Failed to deserialize video metadata, using intelligent fallback: {}", e);
-                    create_fallback_video_metadata(&raw_titles)
-                });
-                
+            let videos: Vec<crate::types::VideoMetadata> = if let Some(ref videos_json) =
+                videos_json
+            {
+                let parsed_videos: Vec<crate::types::VideoMetadata> =
+                    serde_json::from_str(videos_json).unwrap_or_else(|e| {
+                        log::warn!(
+                            "Failed to deserialize video metadata, using intelligent fallback: {}",
+                            e
+                        );
+                        create_fallback_video_metadata(&raw_titles)
+                    });
+
                 // Validate and fix any incomplete metadata during loading
-                validate_and_repair_loaded_metadata(parsed_videos, &raw_titles).unwrap_or_else(|e| {
-                    log::error!("Failed to repair loaded metadata: {}", e);
-                    create_fallback_video_metadata(&raw_titles)
-                })
+                validate_and_repair_loaded_metadata(parsed_videos, &raw_titles).unwrap_or_else(
+                    |e| {
+                        log::error!("Failed to repair loaded metadata: {}", e);
+                        create_fallback_video_metadata(&raw_titles)
+                    },
+                )
             } else {
                 log::info!("No video metadata found, creating from raw_titles");
                 create_fallback_video_metadata(&raw_titles)
@@ -1011,7 +1123,7 @@ pub fn get_course_by_id(db: &Database, course_id: &Uuid) -> Result<Option<Course
                     log::warn!("Failed to deserialize video metadata for course {}, using intelligent fallback: {}", id, e);
                     create_fallback_video_metadata(&raw_titles)
                 });
-                
+
                 // Validate and fix any incomplete metadata during loading
                 validate_and_repair_loaded_metadata(parsed_videos, &raw_titles).unwrap_or_else(|e| {
                     log::error!("Failed to repair loaded metadata: {}", e);
@@ -1073,10 +1185,7 @@ pub fn save_plan(db: &Database, plan: &Plan) -> Result<()> {
 }
 
 /// Load a plan by course ID
-pub fn get_plan_by_course_id(
-    db: &Database,
-    course_id: &Uuid,
-) -> Result<Option<Plan>> {
+pub fn get_plan_by_course_id(db: &Database, course_id: &Uuid) -> Result<Option<Plan>> {
     let conn = db.get_conn()?;
     let mut stmt = conn.prepare(
         r#"
@@ -1310,15 +1419,12 @@ pub struct ProcessingTimeStats {
 }
 
 /// Get courses filtered by clustering quality
-pub fn get_courses_by_clustering_quality(
-    db: &Database,
-    min_quality: f32,
-) -> Result<Vec<Course>> {
+pub fn get_courses_by_clustering_quality(db: &Database, min_quality: f32) -> Result<Vec<Course>> {
     let conn = db.get_conn()?;
 
     let mut stmt = conn.prepare(
-        "SELECT id, name, created_at, raw_titles, structure 
-         FROM courses 
+        "SELECT id, name, created_at, raw_titles, structure
+         FROM courses
          WHERE structure IS NOT NULL",
     )?;
 
@@ -1330,7 +1436,12 @@ pub fn get_courses_by_clustering_quality(
         if let Some(clustering_metadata) = &structure.clustering_metadata {
             if clustering_metadata.quality_score >= min_quality {
                 let raw_titles: Vec<String> = parse_json_sqlite(&row.get::<_, String>(3)?)?;
-                let videos = raw_titles.iter().map(|title| crate::types::VideoMetadata::new_local(title.clone(), "".to_string())).collect();
+                let videos = raw_titles
+                    .iter()
+                    .map(|title| {
+                        crate::types::VideoMetadata::new_local(title.clone(), "".to_string())
+                    })
+                    .collect();
                 return Ok(Some(Course {
                     id: parse_uuid_sqlite(&row.get::<_, String>(0)?, 0)?,
                     name: row.get(1)?,
@@ -1479,8 +1590,8 @@ pub fn get_similar_courses_by_clustering(
 
     // Find similar courses
     let mut stmt = conn.prepare(
-        "SELECT id, name, created_at, raw_titles, structure 
-         FROM courses 
+        "SELECT id, name, created_at, raw_titles, structure
+         FROM courses
          WHERE id != ?1 AND structure IS NOT NULL",
     )?;
 
@@ -1495,7 +1606,12 @@ pub fn get_similar_courses_by_clustering(
 
             if similarity >= similarity_threshold {
                 let raw_titles: Vec<String> = parse_json_sqlite(&row.get::<_, String>(3)?)?;
-                let videos = raw_titles.iter().map(|title| crate::types::VideoMetadata::new_local(title.clone(), "".to_string())).collect();
+                let videos = raw_titles
+                    .iter()
+                    .map(|title| {
+                        crate::types::VideoMetadata::new_local(title.clone(), "".to_string())
+                    })
+                    .collect();
                 return Ok(Some(Course {
                     id: parse_uuid_sqlite(&row.get::<_, String>(0)?, 0)?,
                     name: row.get(1)?,
@@ -1537,7 +1653,7 @@ pub fn get_clustering_performance_history(
     let cutoff_date = Utc::now() - chrono::Duration::days(days);
 
     let mut stmt = conn.prepare(
-        "SELECT created_at, structure FROM courses 
+        "SELECT created_at, structure FROM courses
          WHERE structure IS NOT NULL AND created_at >= ?1
          ORDER BY created_at ASC",
     )?;
@@ -1673,12 +1789,16 @@ fn calculate_clustering_similarity(
 }
 
 /// Save video progress tracking information
-pub fn save_video_progress(db: &Database, progress: &crate::types::VideoProgressUpdate) -> Result<(), DatabaseError> {
-    let conn = db.get_conn()
-        .map_err(|e| DatabaseError::ConnectionFailed { message: e.to_string() })?;
-    
+pub fn save_video_progress(
+    db: &Database,
+    progress: &crate::types::VideoProgressUpdate,
+) -> Result<(), DatabaseError> {
+    let conn = db.get_conn().map_err(|e| DatabaseError::ConnectionFailed {
+        message: e.to_string(),
+    })?;
+
     conn.execute(
-        "INSERT OR REPLACE INTO video_progress (plan_id, session_index, video_index, completed, updated_at) 
+        "INSERT OR REPLACE INTO video_progress (plan_id, session_index, video_index, completed, updated_at)
          VALUES (?1, ?2, ?3, ?4, ?5)",
         params![
             progress.plan_id.to_string(),
@@ -1687,67 +1807,81 @@ pub fn save_video_progress(db: &Database, progress: &crate::types::VideoProgress
             progress.completed,
             chrono::Utc::now().to_rfc3339()
         ],
-    ).map_err(|e| DatabaseError::QueryFailed { 
-        query: "INSERT OR REPLACE INTO video_progress".to_string(), 
-        message: e.to_string() 
+    ).map_err(|e| DatabaseError::QueryFailed {
+        query: "INSERT OR REPLACE INTO video_progress".to_string(),
+        message: e.to_string()
     })?;
-    
+
     Ok(())
 }
 
 /// Get video completion status
-pub fn get_video_completion_status(db: &Database, plan_id: &uuid::Uuid, session_index: usize, video_index: usize) -> Result<bool, DatabaseError> {
-    let conn = db.get_conn()
-        .map_err(|e| DatabaseError::ConnectionFailed { message: e.to_string() })?;
-    
+pub fn get_video_completion_status(
+    db: &Database,
+    plan_id: &uuid::Uuid,
+    session_index: usize,
+    video_index: usize,
+) -> Result<bool, DatabaseError> {
+    let conn = db.get_conn().map_err(|e| DatabaseError::ConnectionFailed {
+        message: e.to_string(),
+    })?;
+
     let mut stmt = conn.prepare(
         "SELECT completed FROM video_progress WHERE plan_id = ?1 AND session_index = ?2 AND video_index = ?3"
-    ).map_err(|e| DatabaseError::QueryFailed { 
-        query: "SELECT completed FROM video_progress".to_string(), 
-        message: e.to_string() 
+    ).map_err(|e| DatabaseError::QueryFailed {
+        query: "SELECT completed FROM video_progress".to_string(),
+        message: e.to_string()
     })?;
-    
+
     let result = stmt.query_row(
-        params![plan_id.to_string(), session_index as i64, video_index as i64],
-        |row| Ok(row.get::<_, bool>(0)?)
+        params![
+            plan_id.to_string(),
+            session_index as i64,
+            video_index as i64
+        ],
+        |row| Ok(row.get::<_, bool>(0)?),
     );
-    
+
     match result {
         Ok(completed) => Ok(completed),
         Err(rusqlite::Error::QueryReturnedNoRows) => Ok(false), // Default to not completed
-        Err(e) => Err(DatabaseError::QueryFailed { 
-            query: "SELECT completed FROM video_progress".to_string(), 
-            message: e.to_string() 
+        Err(e) => Err(DatabaseError::QueryFailed {
+            query: "SELECT completed FROM video_progress".to_string(),
+            message: e.to_string(),
         }),
     }
 }
 
 /// Get session progress as percentage (0.0 to 1.0)
-pub fn get_session_progress(db: &Database, plan_id: &uuid::Uuid, session_index: usize) -> Result<f32, DatabaseError> {
-    let conn = db.get_conn()
-        .map_err(|e| DatabaseError::ConnectionFailed { message: e.to_string() })?;
-    
+pub fn get_session_progress(
+    db: &Database,
+    plan_id: &uuid::Uuid,
+    session_index: usize,
+) -> Result<f32, DatabaseError> {
+    let conn = db.get_conn().map_err(|e| DatabaseError::ConnectionFailed {
+        message: e.to_string(),
+    })?;
+
     // Get total videos in the session and completed count
-    let mut stmt = conn.prepare(
-        "SELECT 
+    let mut stmt = conn
+        .prepare(
+            "SELECT
             COUNT(*) as total_videos,
             SUM(CASE WHEN completed = 1 THEN 1 ELSE 0 END) as completed_videos
-         FROM video_progress 
-         WHERE plan_id = ?1 AND session_index = ?2"
-    ).map_err(|e| DatabaseError::QueryFailed { 
-        query: "SELECT COUNT(*) FROM video_progress".to_string(), 
-        message: e.to_string() 
-    })?;
-    
-    let result = stmt.query_row(
-        params![plan_id.to_string(), session_index as i64],
-        |row| {
-            let total: i64 = row.get(0)?;
-            let completed: i64 = row.get(1)?;
-            Ok((total, completed))
-        }
-    );
-    
+         FROM video_progress
+         WHERE plan_id = ?1 AND session_index = ?2",
+        )
+        .map_err(|e| DatabaseError::QueryFailed {
+            query: "SELECT COUNT(*) FROM video_progress".to_string(),
+            message: e.to_string(),
+        })?;
+
+    let result = stmt.query_row(params![plan_id.to_string(), session_index as i64], |row| {
+        let total: i64 = row.get(0)?;
+        let completed: i64 = row.get(1)?;
+        Ok((total, completed))
+    });
+
     match result {
         Ok((total, completed)) => {
             if total > 0 {
@@ -1756,9 +1890,9 @@ pub fn get_session_progress(db: &Database, plan_id: &uuid::Uuid, session_index: 
                 Ok(0.0)
             }
         }
-        Err(e) => Err(DatabaseError::QueryFailed { 
-            query: "SELECT COUNT(*) FROM video_progress".to_string(), 
-            message: e.to_string() 
+        Err(e) => Err(DatabaseError::QueryFailed {
+            query: "SELECT COUNT(*) FROM video_progress".to_string(),
+            message: e.to_string(),
         }),
     }
 }

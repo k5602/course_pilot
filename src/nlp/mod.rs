@@ -7,6 +7,7 @@ pub mod clustering;
 pub mod preference_service;
 pub mod processor;
 pub mod sequential_detection;
+pub mod session_grouper;
 
 // Re-export main processing function
 pub use processor::structure_course;
@@ -15,7 +16,15 @@ pub use processor::structure_course;
 pub use preference_service::{AutoTuningService, PreferenceService};
 
 // Re-export sequential detection
-pub use sequential_detection::{detect_sequential_patterns, ContentTypeAnalysis, ContentType, ProcessingRecommendation};
+pub use sequential_detection::{
+    ContentType, ContentTypeAnalysis, ProcessingRecommendation, detect_sequential_patterns,
+};
+
+// Re-export session grouper types
+pub use session_grouper::{
+    SequentialGrouper, SessionGrouper, SessionGrouperConfig, SessionGrouperFactory,
+    SimilarityGrouper,
+};
 
 // Re-export error types
 pub use crate::NlpError;

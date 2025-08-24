@@ -15,7 +15,7 @@ pub mod notes_panel;
 pub mod plan_view;
 pub mod routes;
 pub mod settings;
-pub mod state;
+
 pub mod state_management;
 pub mod theme_unified;
 
@@ -70,14 +70,14 @@ pub use settings::{APIKeysSettings, CourseDefaultSettings, GeneralSettings, Sett
 // Re-export commonly used hooks
 pub use hooks::{
     AnalyticsManager, CourseManager, ExportManager, ImportManager, NotesManager, PlanManager,
-    SettingsManager, use_app_state, use_backend, use_course_manager, use_course_progress,
-    use_courses_resource, use_export_manager, use_form_manager, use_import_manager,
-    use_modal_manager, use_navigation_manager, use_notes_manager, use_plan_manager,
-    use_plan_resource, use_settings_manager, use_toggle_plan_item_action,
+    SettingsManager, use_backend, use_course_manager, use_course_progress, use_courses_resource,
+    use_export_manager, use_form_manager, use_import_manager, use_modal_manager,
+    use_navigation_manager, use_notes_manager, use_plan_manager, use_plan_resource,
+    use_settings_manager, use_toggle_plan_item_action,
 };
 
 // Re-export state management
-pub use state::{provide_app_contexts, use_sidebar_mobile};
+
 pub use state_management::{
     AsyncOperationState, PaginationState, use_async_operation_state, use_debounced_state,
     use_error_state, use_loading_state, use_pagination_state, use_search_state,
