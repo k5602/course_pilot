@@ -7,6 +7,10 @@
 //! - SQLite-based persistence
 //!
 
+// Suppress warnings that are expected during development
+#![allow(unused_mut)]
+#![allow(unused_comparisons)]
+
 // Main modules
 pub mod app;
 pub mod error_handling;

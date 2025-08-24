@@ -1,5 +1,5 @@
-use crate::types::Note;
 use crate::storage::Database;
+use crate::types::Note;
 use anyhow::{Context, Result};
 use chrono::{DateTime, Utc};
 use rusqlite::{Connection, OptionalExtension, Row, ToSql, params};
@@ -309,7 +309,10 @@ pub struct NoteSearchFilters<'a> {
 }
 
 /// Advanced search for notes with flexible filters using connection pooling.
-pub fn search_notes_advanced_pooled(db: &Database, filters: NoteSearchFilters) -> Result<Vec<Note>> {
+pub fn search_notes_advanced_pooled(
+    db: &Database,
+    filters: NoteSearchFilters,
+) -> Result<Vec<Note>> {
     let conn = db.get_conn()?;
     search_notes_advanced(&conn, filters)
 }
@@ -501,7 +504,7 @@ mod tests {
             id: Uuid::new_v4(),
             course_id,
             video_id,
-            video_index: Some(0), // Default video index for tests
+            video_index: if video_id.is_some() { Some(0) } else { None },
             content: "This is a **test** note.".to_string(),
             timestamp: Some(42),
             created_at: now,

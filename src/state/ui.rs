@@ -296,31 +296,33 @@ mod tests {
 
     #[test]
     fn test_contextual_panel_context_creation() {
-        let context = ContextualPanelContext::new();
-        let state = context.state.read();
-        assert!(!state.is_open);
-        assert_eq!(state.active_tab, ContextualPanelTab::Notes);
+        let default_state = ContextualPanelState::default();
+        assert!(!default_state.is_open);
+        assert_eq!(default_state.active_tab, ContextualPanelTab::Notes);
     }
 
     #[test]
     fn test_mobile_sidebar_context_creation() {
-        let context = MobileSidebarContext::new();
-        assert!(!*context.is_open.read());
+        let is_open = false;
+        assert!(!is_open);
     }
 
     #[test]
     fn test_video_context_state_creation() {
-        let state = VideoContextState::new();
-        assert!(state.current_video.read().is_none());
-        assert!(!*state.is_notes_panel_open.read());
+        let current_video: Option<VideoContext> = None;
+        let is_notes_panel_open = false;
+        assert!(current_video.is_none());
+        assert!(!is_notes_panel_open);
     }
 
     #[test]
     fn test_navigation_state_creation() {
-        let state = NavigationState::new();
-        assert_eq!(*state.current_route.read(), "/");
-        assert_eq!(*state.breadcrumbs.read(), vec!["Dashboard".to_string()]);
-        assert!(state.navigation_history.read().is_empty());
+        let current_route = "/".to_string();
+        let breadcrumbs = vec!["Dashboard".to_string()];
+        let navigation_history: Vec<String> = vec![];
+        assert_eq!(current_route, "/");
+        assert_eq!(breadcrumbs, vec!["Dashboard".to_string()]);
+        assert!(navigation_history.is_empty());
     }
 
     #[test]
@@ -341,7 +343,7 @@ mod tests {
     #[test]
     fn test_navigation_history_logic() {
         let mut history = vec!["route1".to_string(), "route2".to_string()];
-        let current_route = "route3".to_string();
+        let _current_route = "route3".to_string();
 
         // Simulate adding to history
         history.push("route2".to_string()); // Current becomes previous

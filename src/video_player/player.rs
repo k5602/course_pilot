@@ -144,7 +144,7 @@ pub fn VideoPlayer(props: VideoPlayerProps) -> Element {
     let _handle_seek = use_callback({
         let execute_script = execute_script.clone();
         let id = player_id();
-        let mut state = state.clone();
+        let state = state.clone();
         move |position: f64| {
             let pos = position.max(0.0);
             let script = format!(
@@ -158,6 +158,7 @@ pub fn VideoPlayer(props: VideoPlayerProps) -> Element {
                 id, pos
             );
             execute_script(script);
+            let mut state = state.clone();
             state.position.set(pos);
         }
     });
@@ -165,7 +166,7 @@ pub fn VideoPlayer(props: VideoPlayerProps) -> Element {
     let _handle_volume_change = use_callback({
         let execute_script = execute_script.clone();
         let id = player_id();
-        let mut state = state.clone();
+        let state = state.clone();
         move |new_volume: f64| {
             let vol = new_volume.clamp(0.0, 1.0);
             let script = format!(
@@ -180,6 +181,7 @@ pub fn VideoPlayer(props: VideoPlayerProps) -> Element {
                 id, vol, vol
             );
             execute_script(script);
+            let mut state = state.clone();
             state.set_volume(vol);
         }
     });
@@ -216,12 +218,16 @@ pub fn VideoPlayer(props: VideoPlayerProps) -> Element {
                         path: path.clone(),
                         autoplay: props.autoplay.unwrap_or(false),
                         on_play: {
-                            let mut playback_state = state.playback_state;
-                            move |_| playback_state.set(PlaybackState::Playing)
+                            let mut playback_state = state.playback_state.clone();
+                            move |_| {
+                                playback_state.set(PlaybackState::Playing)
+                            }
                         },
                         on_pause: {
-                            let mut playback_state = state.playback_state;
-                            move |_| playback_state.set(PlaybackState::Paused)
+                            let mut playback_state = state.playback_state.clone();
+                            move |_| {
+                                playback_state.set(PlaybackState::Paused)
+                            }
                         },
                         on_ended: {
                             let state = state.clone();
@@ -245,7 +251,7 @@ pub fn VideoPlayer(props: VideoPlayerProps) -> Element {
                             }
                         },
                         on_loadedmetadata: {
-                            let mut loading = state.loading;
+                            let mut loading = state.loading.clone();
                             move |_| {
                                 loading.set(false);
                             }
@@ -265,25 +271,24 @@ pub fn VideoPlayer(props: VideoPlayerProps) -> Element {
                         video_id: video_id.clone(),
                         playlist_id: playlist_id.clone(),
                         on_state_change: {
-                            let mut playback_state = state.playback_state;
+                            let mut playback_state = state.playback_state.clone();
                             move |new_playback_state| {
                                 // Update the state with the new playback state
                                 playback_state.set(new_playback_state);
                             }
                         },
                         on_progress: {
-                            let state = state.clone();
+                            let mut state_position = state.position.clone();
                             let on_progress = props.on_progress.clone();
                             move |position| {
-                                let mut state = state.clone();
-                                state.position.set(position);
+                                state_position.set(position);
                                 if let Some(on_progress) = &on_progress {
                                     on_progress.call(position);
                                 }
                             }
                         },
                         on_duration: {
-                            let mut duration = state.duration;
+                            let mut duration = state.duration.clone();
                             move |duration_value| {
                                 duration.set(duration_value);
                             }

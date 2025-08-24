@@ -44,7 +44,10 @@ impl MigrationManager {
         self.ensure_migration_table(conn)?;
 
         let current_version = self.get_current_version(conn)?;
-        info!("Current database version: {}, target version: {}", current_version, CURRENT_SCHEMA_VERSION);
+        info!(
+            "Current database version: {}, target version: {}",
+            current_version, CURRENT_SCHEMA_VERSION
+        );
 
         if current_version >= CURRENT_SCHEMA_VERSION {
             info!("Database is up to date, no migrations needed");
@@ -54,8 +57,12 @@ impl MigrationManager {
         // Run migrations in sequence
         for version in (current_version + 1)..=CURRENT_SCHEMA_VERSION {
             if let Some(migration) = self.migrations.get(&version) {
-                info!("Applying migration to version {}: {}", version, migration.name());
-                
+                info!(
+                    "Applying migration to version {}: {}",
+                    version,
+                    migration.name()
+                );
+
                 // Create a savepoint for rollback capability
                 let savepoint_name = format!("migration_v{}", version);
                 conn.execute(&format!("SAVEPOINT {}", savepoint_name), [])?;
@@ -72,7 +79,9 @@ impl MigrationManager {
                         error!("Migration to version {} failed: {}", version, e);
                         conn.execute(&format!("ROLLBACK TO {}", savepoint_name), [])?;
                         conn.execute(&format!("RELEASE {}", savepoint_name), [])?;
-                        return Err(e).with_context(|| format!("Failed to apply migration to version {}", version));
+                        return Err(e).with_context(|| {
+                            format!("Failed to apply migration to version {}", version)
+                        });
                     }
                 }
             } else {
@@ -87,19 +96,30 @@ impl MigrationManager {
     /// Rollback to a specific version (if supported)
     pub fn rollback_to_version(&self, conn: &mut Connection, target_version: i32) -> Result<()> {
         let current_version = self.get_current_version(conn)?;
-        
+
         if target_version >= current_version {
-            return Err(anyhow::anyhow!("Cannot rollback to version {} from version {}", target_version, current_version));
+            return Err(anyhow::anyhow!(
+                "Cannot rollback to version {} from version {}",
+                target_version,
+                current_version
+            ));
         }
 
-        info!("Rolling back from version {} to version {}", current_version, target_version);
+        info!(
+            "Rolling back from version {} to version {}",
+            current_version, target_version
+        );
 
         // Rollback migrations in reverse order
         for version in ((target_version + 1)..=current_version).rev() {
             if let Some(migration) = self.migrations.get(&version) {
                 if migration.supports_rollback() {
-                    info!("Rolling back migration version {}: {}", version, migration.name());
-                    
+                    info!(
+                        "Rolling back migration version {}: {}",
+                        version,
+                        migration.name()
+                    );
+
                     let savepoint_name = format!("rollback_v{}", version);
                     conn.execute(&format!("SAVEPOINT {}", savepoint_name), [])?;
 
@@ -113,24 +133,32 @@ impl MigrationManager {
                             error!("Rollback of version {} failed: {}", version, e);
                             conn.execute(&format!("ROLLBACK TO {}", savepoint_name), [])?;
                             conn.execute(&format!("RELEASE {}", savepoint_name), [])?;
-                            return Err(e).with_context(|| format!("Failed to rollback migration version {}", version));
+                            return Err(e).with_context(|| {
+                                format!("Failed to rollback migration version {}", version)
+                            });
                         }
                     }
                 } else {
                     warn!("Migration version {} does not support rollback", version);
-                    return Err(anyhow::anyhow!("Migration version {} does not support rollback", version));
+                    return Err(anyhow::anyhow!(
+                        "Migration version {} does not support rollback",
+                        version
+                    ));
                 }
             }
         }
 
-        info!("Rollback to version {} completed successfully", target_version);
+        info!(
+            "Rollback to version {} completed successfully",
+            target_version
+        );
         Ok(())
     }
 
     /// Get list of applied migrations
     pub fn get_migration_history(&self, conn: &Connection) -> Result<Vec<MigrationRecord>> {
         let mut stmt = conn.prepare(
-            "SELECT version, name, applied_at, checksum FROM migration_history ORDER BY version"
+            "SELECT version, name, applied_at, checksum FROM migration_history ORDER BY version",
         )?;
 
         let migration_iter = stmt.query_map([], |row| {
@@ -138,9 +166,13 @@ impl MigrationManager {
                 version: row.get(0)?,
                 name: row.get(1)?,
                 applied_at: DateTime::parse_from_rfc3339(&row.get::<_, String>(2)?)
-                    .map_err(|e| rusqlite::Error::FromSqlConversionFailure(
-                        2, rusqlite::types::Type::Text, Box::new(e)
-                    ))?
+                    .map_err(|e| {
+                        rusqlite::Error::FromSqlConversionFailure(
+                            2,
+                            rusqlite::types::Type::Text,
+                            Box::new(e),
+                        )
+                    })?
                     .with_timezone(&Utc),
                 checksum: row.get(3)?,
             })
@@ -163,21 +195,27 @@ impl MigrationManager {
         };
 
         // Check database integrity
-        let integrity_check: String = conn.query_row("PRAGMA integrity_check", [], |row| row.get(0))?;
+        let integrity_check: String =
+            conn.query_row("PRAGMA integrity_check", [], |row| row.get(0))?;
         if integrity_check != "ok" {
             report.is_valid = false;
-            report.issues.push(format!("Database integrity check failed: {}", integrity_check));
+            report.issues.push(format!(
+                "Database integrity check failed: {}",
+                integrity_check
+            ));
         }
 
         // Check foreign key constraints
         let fk_check: Vec<String> = {
             let mut stmt = conn.prepare("PRAGMA foreign_key_check")?;
             let rows = stmt.query_map([], |row| {
-                Ok(format!("Foreign key violation in table {}: {}", 
-                    row.get::<_, String>(0)?, 
-                    row.get::<_, String>(3)?))
+                Ok(format!(
+                    "Foreign key violation in table {}: {}",
+                    row.get::<_, String>(0)?,
+                    row.get::<_, String>(3)?
+                ))
             })?;
-            
+
             let mut violations = Vec::new();
             for row in rows {
                 violations.push(row?);
@@ -221,26 +259,33 @@ impl MigrationManager {
 
     /// Get the current database version
     fn get_current_version(&self, conn: &Connection) -> Result<i32> {
-        let version = conn.query_row(
-            "SELECT COALESCE(MAX(version), 0) FROM migration_history",
-            [],
-            |row| row.get::<_, i32>(0),
-        ).unwrap_or(0);
-        
+        let version = conn
+            .query_row(
+                "SELECT COALESCE(MAX(version), 0) FROM migration_history",
+                [],
+                |row| row.get::<_, i32>(0),
+            )
+            .unwrap_or(0);
+
         Ok(version)
     }
 
     /// Apply a single migration
-    fn apply_migration(&self, conn: &Connection, migration: &dyn Migration, _version: i32) -> Result<()> {
+    fn apply_migration(
+        &self,
+        conn: &Connection,
+        migration: &dyn Migration,
+        _version: i32,
+    ) -> Result<()> {
         // Validate migration before applying
         migration.validate(conn)?;
-        
+
         // Apply the migration
         migration.apply(conn)?;
-        
+
         // Verify migration was applied correctly
         migration.verify(conn)?;
-        
+
         Ok(())
     }
 
@@ -267,7 +312,7 @@ impl MigrationManager {
     fn calculate_migration_checksum(&self, version: i32, name: &str) -> String {
         use std::collections::hash_map::DefaultHasher;
         use std::hash::{Hash, Hasher};
-        
+
         let mut hasher = DefaultHasher::new();
         version.hash(&mut hasher);
         name.hash(&mut hasher);
@@ -277,7 +322,7 @@ impl MigrationManager {
     /// Check for missing indexes on foreign key columns
     fn check_missing_foreign_key_indexes(&self, conn: &Connection) -> Result<Vec<String>> {
         let mut warnings = Vec::new();
-        
+
         // This is a simplified check - in a real implementation, you'd parse
         // the schema to find all foreign key relationships
         let foreign_keys = vec![
@@ -306,27 +351,32 @@ impl MigrationManager {
         let mut warnings = Vec::new();
 
         // Check if ANALYZE has been run recently
-        let analyze_info: Option<String> = conn.query_row(
-            "SELECT sql FROM sqlite_master WHERE name = 'sqlite_stat1'",
-            [],
-            |row| row.get(0),
-        ).optional()?;
+        let analyze_info: Option<String> = conn
+            .query_row(
+                "SELECT sql FROM sqlite_master WHERE name = 'sqlite_stat1'",
+                [],
+                |row| row.get(0),
+            )
+            .optional()?;
 
         if analyze_info.is_none() {
-            warnings.push("Database statistics are missing - run ANALYZE for better query performance".to_string());
+            warnings.push(
+                "Database statistics are missing - run ANALYZE for better query performance"
+                    .to_string(),
+            );
         }
 
         // Check for large tables without proper indexes
         let large_tables: Vec<(String, i64)> = {
             let mut stmt = conn.prepare(
-                "SELECT name, (SELECT COUNT(*) FROM sqlite_master WHERE type = 'index' AND tbl_name = m.name) as index_count 
+                "SELECT name, (SELECT COUNT(*) FROM sqlite_master WHERE type = 'index' AND tbl_name = m.name) as index_count
                  FROM sqlite_master m WHERE type = 'table' AND name NOT LIKE 'sqlite_%'"
             )?;
-            
+
             let rows = stmt.query_map([], |row| {
                 Ok((row.get::<_, String>(0)?, row.get::<_, i64>(1)?))
             })?;
-            
+
             let mut tables = Vec::new();
             for row in rows {
                 tables.push(row?);
@@ -335,8 +385,12 @@ impl MigrationManager {
         };
 
         for (table_name, index_count) in large_tables {
-            if index_count < 2 { // Assuming at least primary key + one other index
-                warnings.push(format!("Table '{}' has only {} indexes - consider adding more for better performance", table_name, index_count));
+            if index_count < 2 {
+                // Assuming at least primary key + one other index
+                warnings.push(format!(
+                    "Table '{}' has only {} indexes - consider adding more for better performance",
+                    table_name, index_count
+                ));
             }
         }
 
@@ -348,21 +402,21 @@ impl MigrationManager {
 pub trait Migration: Send + Sync {
     /// Get the migration name
     fn name(&self) -> &str;
-    
+
     /// Validate that the migration can be applied
     fn validate(&self, conn: &Connection) -> Result<()>;
-    
+
     /// Apply the migration
     fn apply(&self, conn: &Connection) -> Result<()>;
-    
+
     /// Verify the migration was applied correctly
     fn verify(&self, conn: &Connection) -> Result<()>;
-    
+
     /// Whether this migration supports rollback
     fn supports_rollback(&self) -> bool {
         false
     }
-    
+
     /// Rollback the migration (if supported)
     fn rollback(&self, _conn: &Connection) -> Result<()> {
         Err(anyhow::anyhow!("Rollback not supported for this migration"))
@@ -419,6 +473,42 @@ impl Migration for InitialVersionTracking {
             return Err(anyhow::anyhow!("migration_history table was not created"));
         }
 
+        // Ensure baseline schema exists for subsequent migrations on a fresh DB
+        // Create minimal tables required by later migrations and tests.
+        conn.execute(
+            "CREATE TABLE IF NOT EXISTS courses (
+                id TEXT PRIMARY KEY,
+                name TEXT NOT NULL,
+                created_at INTEGER NOT NULL,
+                raw_titles TEXT NOT NULL,
+                videos TEXT,
+                structure TEXT
+            )",
+            [],
+        )?;
+
+        conn.execute(
+            "CREATE TABLE IF NOT EXISTS plans (
+                id TEXT PRIMARY KEY,
+                course_id TEXT NOT NULL,
+                settings TEXT NOT NULL,
+                items TEXT NOT NULL,
+                created_at INTEGER NOT NULL
+            )",
+            [],
+        )?;
+
+        conn.execute(
+            "CREATE TABLE IF NOT EXISTS notes (
+                id TEXT PRIMARY KEY,
+                course_id TEXT NOT NULL,
+                video_id INTEGER,
+                content TEXT NOT NULL,
+                created_at INTEGER NOT NULL
+            )",
+            [],
+        )?;
+
         Ok(())
     }
 }
@@ -448,12 +538,11 @@ impl Migration for VideoMetadataEnhancement {
 
     fn apply(&self, conn: &Connection) -> Result<()> {
         info!("Updating VideoMetadata to include playlist_id and original_index");
-        
+
         // Get all courses that need migration
-        let mut stmt = conn.prepare(
-            "SELECT id, name, videos FROM courses WHERE videos IS NOT NULL"
-        )?;
-        
+        let mut stmt =
+            conn.prepare("SELECT id, name, videos FROM courses WHERE videos IS NOT NULL")?;
+
         let courses_to_migrate: Vec<(String, String, String)> = stmt
             .query_map([], |row| {
                 Ok((
@@ -463,21 +552,24 @@ impl Migration for VideoMetadataEnhancement {
                 ))
             })?
             .collect::<Result<Vec<_>, _>>()?;
-        
+
         info!("Found {} courses to migrate", courses_to_migrate.len());
-        
+
         for (course_id, course_name, videos_json) in courses_to_migrate {
             info!("Migrating course: {} ({})", course_name, course_id);
-            
+
             // Parse existing video metadata
             let existing_videos: Vec<serde_json::Value> = match serde_json::from_str(&videos_json) {
                 Ok(videos) => videos,
                 Err(e) => {
-                    warn!("Failed to parse video metadata for course {}: {}", course_name, e);
+                    warn!(
+                        "Failed to parse video metadata for course {}: {}",
+                        course_name, e
+                    );
                     continue;
                 }
             };
-            
+
             // Migrate each video metadata
             let mut migrated_videos = Vec::new();
             for (index, mut video) in existing_videos.into_iter().enumerate() {
@@ -485,43 +577,51 @@ impl Migration for VideoMetadataEnhancement {
                 if !video.as_object().unwrap().contains_key("playlist_id") {
                     video["playlist_id"] = serde_json::Value::Null;
                 }
-                
+
                 // Add original_index field if missing
                 if !video.as_object().unwrap().contains_key("original_index") {
                     video["original_index"] = serde_json::Value::from(index);
                 }
-                
+
                 migrated_videos.push(video);
             }
-            
+
             // Serialize updated video metadata
             let updated_videos_json = serde_json::to_string(&migrated_videos)?;
-            
+
             // Update the course in the database
             conn.execute(
                 "UPDATE courses SET videos = ?1 WHERE id = ?2",
                 params![updated_videos_json, course_id],
             )?;
-            
+
             info!("Successfully migrated course: {}", course_name);
         }
-        
+
         Ok(())
     }
 
     fn verify(&self, conn: &Connection) -> Result<()> {
         // Verify that at least one course has the new fields
-        let sample_course: Option<String> = conn.query_row(
-            "SELECT videos FROM courses WHERE videos IS NOT NULL LIMIT 1",
-            [],
-            |row| row.get(0),
-        ).optional()?;
+        let sample_course: Option<String> = conn
+            .query_row(
+                "SELECT videos FROM courses WHERE videos IS NOT NULL LIMIT 1",
+                [],
+                |row| row.get(0),
+            )
+            .optional()?;
 
         if let Some(videos_json) = sample_course {
             let videos: Vec<serde_json::Value> = serde_json::from_str(&videos_json)?;
             if let Some(first_video) = videos.first() {
-                if !first_video.as_object().unwrap().contains_key("original_index") {
-                    return Err(anyhow::anyhow!("Migration verification failed: original_index field missing"));
+                if !first_video
+                    .as_object()
+                    .unwrap()
+                    .contains_key("original_index")
+                {
+                    return Err(anyhow::anyhow!(
+                        "Migration verification failed: original_index field missing"
+                    ));
                 }
             }
         }
@@ -575,7 +675,9 @@ impl Migration for PerformanceIndexes {
         )?;
 
         if index_count < 2 {
-            return Err(anyhow::anyhow!("Migration verification failed: expected indexes not found"));
+            return Err(anyhow::anyhow!(
+                "Migration verification failed: expected indexes not found"
+            ));
         }
 
         Ok(())
@@ -589,8 +691,14 @@ impl Migration for PerformanceIndexes {
         info!("Rolling back performance indexes");
 
         conn.execute("DROP INDEX IF EXISTS idx_courses_name_search;", [])?;
-        conn.execute("DROP INDEX IF EXISTS idx_notes_content_search_improved;", [])?;
-        conn.execute("DROP INDEX IF EXISTS idx_plans_course_created_covering;", [])?;
+        conn.execute(
+            "DROP INDEX IF EXISTS idx_notes_content_search_improved;",
+            [],
+        )?;
+        conn.execute(
+            "DROP INDEX IF EXISTS idx_plans_course_created_covering;",
+            [],
+        )?;
 
         info!("Performance indexes rolled back successfully");
         Ok(())
@@ -612,7 +720,7 @@ impl Migration for VideoProgressTracking {
 
     fn apply(&self, conn: &Connection) -> Result<()> {
         info!("Creating video progress tracking table...");
-        
+
         // Create video_progress table
         conn.execute(
             "CREATE TABLE IF NOT EXISTS video_progress (
@@ -625,15 +733,17 @@ impl Migration for VideoProgressTracking {
                 UNIQUE(plan_id, session_index, video_index)
             )",
             [],
-        ).context("Failed to create video_progress table")?;
-        
+        )
+        .context("Failed to create video_progress table")?;
+
         // Create index for efficient lookups
         conn.execute(
-            "CREATE INDEX IF NOT EXISTS idx_video_progress_plan_session 
+            "CREATE INDEX IF NOT EXISTS idx_video_progress_plan_session
              ON video_progress(plan_id, session_index)",
             [],
-        ).context("Failed to create video progress index")?;
-        
+        )
+        .context("Failed to create video progress index")?;
+
         info!("Video progress tracking migration completed successfully");
         Ok(())
     }
@@ -641,27 +751,39 @@ impl Migration for VideoProgressTracking {
     fn verify(&self, conn: &Connection) -> Result<()> {
         // Verify table exists
         let mut stmt = conn.prepare(
-            "SELECT name FROM sqlite_master WHERE type='table' AND name='video_progress'"
+            "SELECT name FROM sqlite_master WHERE type='table' AND name='video_progress'",
         )?;
-        
+
         let table_exists = stmt.query_row([], |_| Ok(())).is_ok();
-        
+
         if !table_exists {
             return Err(anyhow::anyhow!("video_progress table was not created"));
         }
-        
+
         // Verify index exists
         let mut stmt = conn.prepare(
             "SELECT name FROM sqlite_master WHERE type='index' AND name='idx_video_progress_plan_session'"
         )?;
-        
+
         let index_exists = stmt.query_row([], |_| Ok(())).is_ok();
-        
+
         if !index_exists {
             return Err(anyhow::anyhow!("video_progress index was not created"));
         }
-        
+
         info!("Video progress tracking migration verification completed successfully");
+        Ok(())
+    }
+
+    fn supports_rollback(&self) -> bool {
+        true
+    }
+
+    fn rollback(&self, conn: &Connection) -> Result<()> {
+        info!("Rolling back video progress tracking");
+        // Drop index first, then table
+        conn.execute("DROP INDEX IF EXISTS idx_video_progress_plan_session", [])?;
+        conn.execute("DROP TABLE IF EXISTS video_progress", [])?;
         Ok(())
     }
 }

@@ -659,7 +659,7 @@ fn create_fallback_video_metadata(raw_titles: &[String]) -> Vec<crate::types::Vi
 }
 
 /// Initialize database tables
-fn init_tables(conn: &mut Connection) -> Result<()> {
+pub fn init_tables(conn: &mut Connection) -> Result<()> {
     let tx = conn.transaction()?;
 
     // Create database version table for migration tracking

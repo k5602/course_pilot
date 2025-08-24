@@ -24,19 +24,21 @@ pub fn VideoPlayerComponent(props: VideoPlayerProps) -> Element {
 
     rsx! {
         VideoPlayerProvider {
-            VideoPlayer {
-                source: props.video_source,
-                width: props.width,
-                height: props.height,
-                show_controls: props.show_controls,
-                autoplay: props.autoplay,
-                on_progress: props.on_position_change,
-                on_complete: move |_| {
-                    if let Some(on_state_change) = &props.on_state_change {
-                        on_state_change.call(PlaybackState::Stopped);
-                    }
-                },
-                on_error: props.on_error,
+            children: rsx! {
+                VideoPlayer {
+                    source: props.video_source,
+                    width: props.width,
+                    height: props.height,
+                    show_controls: props.show_controls,
+                    autoplay: props.autoplay,
+                    on_progress: props.on_position_change,
+                    on_complete: move |_| {
+                        if let Some(on_state_change) = &props.on_state_change {
+                            on_state_change.call(PlaybackState::Stopped);
+                        }
+                    },
+                    on_error: props.on_error,
+                }
             }
         }
     }

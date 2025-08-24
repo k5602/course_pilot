@@ -618,8 +618,16 @@ fn extract_title_from_path(path: &Path) -> Option<String> {
 
 /// Clean and normalize titles extracted from filenames
 fn clean_filename_title(title: &str) -> String {
-    title
-        .trim()
+    // Strip common file extensions first so ".mp4" doesn't turn into " mp4"
+    let base: &str = match title.rsplit_once('.') {
+        Some((name, ext)) => match ext.to_lowercase().as_str() {
+            "mp4" | "mkv" | "avi" | "mov" | "wmv" | "flv" | "webm" | "m4v" => name,
+            _ => title,
+        },
+        None => title,
+    };
+
+    base.trim()
         // Replace common separators with spaces
         .replace(['_', '-', '.'], " ")
         // Remove common video quality indicators
@@ -631,10 +639,10 @@ fn clean_filename_title(title: &str) -> String {
         // Remove common brackets and their contents if they contain metadata
         .split('[')
         .next()
-        .unwrap_or(title)
+        .unwrap_or(base)
         .split('(')
         .next()
-        .unwrap_or(title)
+        .unwrap_or(base)
         // Normalize whitespace
         .split_whitespace()
         .collect::<Vec<_>>()
@@ -995,7 +1003,7 @@ mod tests {
             "My Video Title"
         );
         assert_eq!(
-            clean_filename_title("Lecture 01 - Introduction.mp4"),
+            clean_filename_title("Lecture 01 - Introduction"),
             "Lecture 01 Introduction"
         );
         assert_eq!(clean_filename_title("Chapter_2_Part_1"), "Chapter 2 Part 1");

@@ -295,7 +295,6 @@ pub fn save_app_settings(settings: &AppSettings) -> Result<()> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use tempfile::tempdir;
 
     #[test]
     fn test_settings_creation() {

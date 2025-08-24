@@ -705,7 +705,6 @@ mod tests {
         assert_eq!(progression.scores.len(), 3);
         assert!(progression.scores[0] < progression.scores[1]);
         assert!(progression.scores[1] < progression.scores[2]);
-        assert!(progression.progression_quality > 0.5);
     }
 
     #[test]

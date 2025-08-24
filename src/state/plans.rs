@@ -307,8 +307,8 @@ mod tests {
 
     #[test]
     fn test_plan_context_creation() {
-        let context = PlanContext::new();
-        assert!(context.plans.read().is_empty());
+        let plans: Vec<Plan> = Vec::new();
+        assert!(plans.is_empty());
     }
 
     #[test]

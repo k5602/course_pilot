@@ -2074,15 +2074,63 @@ fn add_review_sessions(plan: &mut Plan) -> Result<(), PlanError> {
 
 /// Generate a plan from precomputed session groups (indices into the course videos).
 /// This stable API allows upstream NLP grouping to drive planning directly.
-/// For now, it delegates to generate_plan to preserve existing behavior while keeping
-/// a clear entrypoint for group-driven planning.
+/// Group-aware behavior:
+/// - Videos are ordered by their group position (groups[0], then groups[1], ...).
+/// - Existing packed sessions (from the base strategy) are reordered to respect group order.
+/// - Session dates are recomputed according to settings to keep a valid schedule.
+///
+/// Notes:
+/// - This preserves the base packing (durations, session composition) while enforcing group order.
+/// - Future enhancement can split/pack strictly within each group using `pack_videos_into_session`.
 pub fn generate_plan_from_groups(
     course: &crate::types::Course,
     groups: Vec<Vec<usize>>,
     settings: &crate::types::PlanSettings,
 ) -> std::result::Result<crate::types::Plan, crate::PlanError> {
-    let _ = groups; // reserved for specialized packing logic
-    generate_plan(course, settings)
+    // Start from a baseline plan (respects session length, durations, etc.)
+    let mut plan = generate_plan(course, settings)?;
+
+    // Build a mapping of video index -> group order (lower = earlier)
+    let mut group_order: std::collections::HashMap<usize, usize> = std::collections::HashMap::new();
+    for (g_idx, group) in groups.iter().enumerate() {
+        for &vid in group {
+            group_order.insert(vid, g_idx);
+        }
+    }
+
+    // Reorder existing plan items by the minimum group index of their contained videos.
+    // Items with no videos in any group are placed at the end.
+    let mut reordered_items = plan.items.clone();
+    reordered_items.sort_by_key(|item| {
+        let mut min_g = usize::MAX;
+        for &vid in item.video_indices.iter() {
+            if let Some(&g) = group_order.get(&vid) {
+                if g < min_g {
+                    min_g = g;
+                }
+            }
+        }
+        min_g
+    });
+
+    // Recompute dates based on settings, preserving a consistent schedule.
+    let mut current_date = if let Some(first) = plan.items.first() {
+        first.date
+    } else {
+        chrono::Utc::now()
+    };
+
+    for it in reordered_items.iter_mut() {
+        it.date = current_date;
+        current_date = crate::planner::get_next_session_date(
+            current_date,
+            settings.sessions_per_week,
+            settings.include_weekends,
+        );
+    }
+
+    plan.items = reordered_items;
+    Ok(plan)
 }
 
 #[cfg(test)]
@@ -3036,6 +3084,260 @@ mod tests {
 // ============================================================================
 // CLUSTERING-AWARE PLANNING FUNCTIONS
 // ============================================================================
+
+#[cfg(test)]
+mod tests_plan_from_groups {
+    use super::*;
+    use crate::types::{Course, CourseStructure, Module, PlanSettings, Section, StructureMetadata};
+    use chrono::Utc;
+    use std::time::Duration;
+    use uuid::Uuid;
+
+    fn make_course() -> Course {
+        let structure = CourseStructure::new_basic(
+            vec![
+                Module::new_basic(
+                    "Introduction".to_string(),
+                    vec![
+                        Section {
+                            title: "Welcome".to_string(),
+                            video_index: 0,
+                            duration: Duration::from_secs(600),
+                        },
+                        Section {
+                            title: "Setup".to_string(),
+                            video_index: 1,
+                            duration: Duration::from_secs(900),
+                        },
+                    ],
+                ),
+                Module::new_basic(
+                    "Advanced Topics".to_string(),
+                    vec![Section {
+                        title: "Complex Example".to_string(),
+                        video_index: 2,
+                        duration: Duration::from_secs(1800),
+                    }],
+                ),
+            ],
+            StructureMetadata {
+                total_videos: 3,
+                total_duration: Duration::from_secs(600 + 900 + 1800),
+                estimated_duration_hours: Some(1.0),
+                difficulty_level: Some("Intermediate".to_string()),
+                structure_quality_score: None,
+                content_coherence_score: None,
+                content_type_detected: Some("Sequential".to_string()),
+                original_order_preserved: Some(true),
+                processing_strategy_used: Some("PreserveOrder".to_string()),
+            },
+        );
+
+        Course {
+            id: Uuid::new_v4(),
+            name: "Test Course".to_string(),
+            created_at: Utc::now(),
+            raw_titles: vec![
+                "Welcome".to_string(),
+                "Setup".to_string(),
+                "Complex Example".to_string(),
+            ],
+            videos: vec![
+                crate::types::VideoMetadata {
+                    title: "Welcome".to_string(),
+                    source_url: None,
+                    video_id: None,
+                    playlist_id: None,
+                    original_index: 0,
+                    duration_seconds: Some(600.0),
+                    thumbnail_url: None,
+                    description: None,
+                    upload_date: None,
+                    author: None,
+                    view_count: None,
+                    tags: Vec::new(),
+                    is_local: false,
+                },
+                crate::types::VideoMetadata {
+                    title: "Setup".to_string(),
+                    source_url: None,
+                    video_id: None,
+                    playlist_id: None,
+                    original_index: 1,
+                    duration_seconds: Some(900.0),
+                    thumbnail_url: None,
+                    description: None,
+                    upload_date: None,
+                    author: None,
+                    view_count: None,
+                    tags: Vec::new(),
+                    is_local: false,
+                },
+                crate::types::VideoMetadata {
+                    title: "Complex Example".to_string(),
+                    source_url: None,
+                    video_id: None,
+                    playlist_id: None,
+                    original_index: 2,
+                    duration_seconds: Some(1800.0),
+                    thumbnail_url: None,
+                    description: None,
+                    upload_date: None,
+                    author: None,
+                    view_count: None,
+                    tags: Vec::new(),
+                    is_local: false,
+                },
+            ],
+            structure: Some(structure),
+        }
+    }
+
+    fn make_settings() -> PlanSettings {
+        PlanSettings {
+            start_date: Utc::now() + chrono::Duration::days(1),
+            sessions_per_week: 3,
+            session_length_minutes: 60,
+            include_weekends: false,
+            advanced_settings: None,
+        }
+    }
+
+    fn flatten_plan_video_indices(plan: &Plan) -> Vec<usize> {
+        let mut out = Vec::new();
+        for item in &plan.items {
+            out.extend_from_slice(&item.video_indices);
+        }
+        out
+    }
+
+    #[test]
+    fn test_generate_plan_from_groups_empty_groups() {
+        let course = make_course();
+        let settings = make_settings();
+
+        let base = generate_plan(&course, &settings).expect("base plan");
+        let grp = generate_plan_from_groups(&course, vec![], &settings).expect("groups plan");
+
+        // Should not change number of sessions
+        assert_eq!(base.items.len(), grp.items.len());
+
+        // Should cover the same set of videos
+        let mut base_all = flatten_plan_video_indices(&base);
+        let mut grp_all = flatten_plan_video_indices(&grp);
+        base_all.sort_unstable();
+        grp_all.sort_unstable();
+        assert_eq!(base_all, grp_all);
+    }
+
+    #[test]
+    fn test_generate_plan_from_groups_non_overlapping() {
+        let course = make_course();
+        let settings = make_settings();
+
+        // Group 0: video 2 should come before Group 1: videos 0 and 1
+        let groups = vec![vec![2usize], vec![0usize, 1usize]];
+        let grp_plan = generate_plan_from_groups(&course, groups, &settings).expect("grouped plan");
+
+        // Find earliest dates for sessions containing videos by group
+        let mut earliest_g0 = None;
+        let mut earliest_g1 = None;
+
+        for item in &grp_plan.items {
+            if item.video_indices.iter().any(|&v| v == 2) {
+                earliest_g0 = Some(item.date);
+            }
+            if item.video_indices.iter().any(|&v| v == 0 || v == 1) {
+                earliest_g1 = Some(
+                    earliest_g1.map_or(item.date, |d: chrono::DateTime<chrono::Utc>| {
+                        d.min(item.date)
+                    }),
+                );
+            }
+        }
+
+        assert!(earliest_g0.is_some() && earliest_g1.is_some());
+        assert!(earliest_g0.unwrap() <= earliest_g1.unwrap());
+    }
+
+    #[test]
+    fn test_generate_plan_from_groups_uneven_group_sizes() {
+        let course = make_course();
+        let settings = make_settings();
+
+        // Group 0: videos [1,2] should come before Group 1: [0]
+        let groups = vec![vec![1usize, 2usize], vec![0usize]];
+        let grp_plan = generate_plan_from_groups(&course, groups, &settings).expect("grouped plan");
+
+        let mut earliest_g0 = None;
+        let mut earliest_g1 = None;
+
+        for item in &grp_plan.items {
+            if item.video_indices.iter().any(|&v| v == 1 || v == 2) {
+                earliest_g0 = Some(
+                    earliest_g0.map_or(item.date, |d: chrono::DateTime<chrono::Utc>| {
+                        d.min(item.date)
+                    }),
+                );
+            }
+            if item.video_indices.iter().any(|&v| v == 0) {
+                earliest_g1 = Some(
+                    earliest_g1.map_or(item.date, |d: chrono::DateTime<chrono::Utc>| {
+                        d.min(item.date)
+                    }),
+                );
+            }
+        }
+
+        assert!(earliest_g0.is_some() && earliest_g1.is_some());
+        assert!(earliest_g0.unwrap() <= earliest_g1.unwrap());
+    }
+
+    #[test]
+    fn test_generate_plan_from_groups_out_of_bounds_indices() {
+        let course = make_course();
+        let settings = make_settings();
+
+        // Include an out-of-bounds index; it should be ignored gracefully.
+        let groups = vec![vec![999usize], vec![0usize]];
+        let grp_plan = generate_plan_from_groups(&course, groups, &settings).expect("grouped plan");
+
+        // Ensure plan still includes all valid videos
+        let grp_all = flatten_plan_video_indices(&grp_plan);
+        let mut sorted = grp_all.clone();
+        sorted.sort_unstable();
+        assert_eq!(sorted, vec![0, 1, 2]);
+
+        // Sessions with valid group (video 0) should sort before ungrouped items
+        let mut earliest_g_valid = None;
+        let mut earliest_ungrouped = None;
+
+        for item in &grp_plan.items {
+            let has_valid = item.video_indices.iter().any(|&v| v == 0);
+            let has_any_group = item.video_indices.iter().any(|&v| v == 0 || v == 999); // 999 doesn't exist in plan items
+
+            // Items with no valid group mapping will be considered ungrouped (usize::MAX)
+            if has_valid {
+                earliest_g_valid = Some(
+                    earliest_g_valid.map_or(item.date, |d: chrono::DateTime<chrono::Utc>| {
+                        d.min(item.date)
+                    }),
+                );
+            } else if !has_any_group {
+                earliest_ungrouped = Some(
+                    earliest_ungrouped.map_or(item.date, |d: chrono::DateTime<chrono::Utc>| {
+                        d.min(item.date)
+                    }),
+                );
+            }
+        }
+
+        // If there are ungrouped items, valid grouped items should not come after them
+        if let (Some(g_valid), Some(ungrouped)) = (earliest_g_valid, earliest_ungrouped) {
+            assert!(g_valid <= ungrouped);
+        }
+    }
+}
 
 use crate::types::ClusteringMetadata;
 
