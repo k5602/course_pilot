@@ -1,28 +1,24 @@
-
 use crate::planner::scheduler::{PlanAnalysis, VelocityCategory};
-use crate::storage::{ClusteringAnalytics, Database, get_clustering_analytics};
+use crate::storage::ClusteringAnalytics;
 use crate::ui::hooks::use_analytics_manager;
+use crate::ui::hooks::use_backend;
 use dioxus::prelude::*;
-use std::sync::Arc;
 
 #[component]
 pub fn LearningAnalytics() -> Element {
+    let backend = use_backend();
     let analytics_manager = use_analytics_manager();
-    let db = use_context::<Arc<Database>>();
 
     let learning_analytics_resource = use_resource(move || {
         let analytics_manager = analytics_manager.clone();
         async move { analytics_manager.get_learning_analytics().await }
     });
 
-    let clustering_analytics_resource = use_resource(move || {
-        let db_clone = db.clone();
-        async move {
-            tokio::task::spawn_blocking(move || get_clustering_analytics(&db_clone))
-                .await
-                .unwrap_or_else(|_| {
-                    Err(anyhow::anyhow!("Failed to load analytics"))
-                })
+    let clustering_analytics_resource = use_resource({
+        let backend = backend.clone();
+        move || {
+            let value = backend.clone();
+            async move { value.get_clustering_analytics().await }
         }
     });
 

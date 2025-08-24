@@ -10,6 +10,7 @@
 
 // Submodules
 pub mod courses;
+pub mod export_progress;
 pub mod imports;
 pub mod notes;
 pub mod plans;
@@ -47,6 +48,7 @@ impl std::error::Error for StateError {}
 
 // Re-export all submodule functionality for backward compatibility
 pub use courses::*;
+pub use export_progress::*;
 pub use imports::*;
 pub use notes::*;
 pub use plans::*;

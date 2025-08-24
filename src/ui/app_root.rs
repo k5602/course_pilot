@@ -43,7 +43,9 @@ pub fn AppRoot() -> Element {
                     ImportContextProvider {
                         ContextualPanelContextProvider {
                             MobileSidebarContextProvider {
-                                AppWithContexts { app_state: services.app_state }
+                                crate::state::ExportProgressProvider {
+                                    AppWithContexts { app_state: services.app_state }
+                                }
                             }
                         }
                     }

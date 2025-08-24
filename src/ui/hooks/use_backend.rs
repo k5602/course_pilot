@@ -5,7 +5,9 @@ use crate::types::{
     PlanSettings,
 };
 use anyhow::Result;
+use dioxus::prelude::*;
 use std::path::PathBuf;
+use std::sync::Arc;
 use uuid::Uuid;
 
 use super::{
@@ -24,6 +26,7 @@ use super::use_settings::SettingsManager;
 /// Unified backend interface that combines all the specialized hooks
 #[derive(Clone)]
 pub struct Backend {
+    db: Arc<crate::storage::database::Database>,
     pub courses: CourseManager,
     pub plans: PlanManager,
     pub notes: NotesManager,
@@ -189,20 +192,36 @@ impl Backend {
     }
 
     // --- Video Progress Tracking ---
-    pub async fn mark_video_completed(&self, plan_id: Uuid, session_index: usize, video_index: usize, completed: bool) -> Result<()> {
+    pub async fn mark_video_completed(
+        &self,
+        plan_id: Uuid,
+        session_index: usize,
+        video_index: usize,
+        completed: bool,
+    ) -> Result<()> {
         // Create video progress update
-        let progress_update = crate::types::VideoProgressUpdate::new(plan_id, session_index, video_index, completed);
-        
+        let progress_update =
+            crate::types::VideoProgressUpdate::new(plan_id, session_index, video_index, completed);
+
         // Store in database via analytics manager (which handles progress tracking)
         self.analytics.update_video_progress(progress_update).await
     }
 
-    pub async fn get_video_completion_status(&self, plan_id: Uuid, session_index: usize, video_index: usize) -> Result<bool> {
-        self.analytics.get_video_completion_status(plan_id, session_index, video_index).await
+    pub async fn get_video_completion_status(
+        &self,
+        plan_id: Uuid,
+        session_index: usize,
+        video_index: usize,
+    ) -> Result<bool> {
+        self.analytics
+            .get_video_completion_status(plan_id, session_index, video_index)
+            .await
     }
 
     pub async fn get_session_progress(&self, plan_id: Uuid, session_index: usize) -> Result<f32> {
-        self.analytics.get_session_progress(plan_id, session_index).await
+        self.analytics
+            .get_session_progress(plan_id, session_index)
+            .await
     }
 
     // --- Analytics ---
@@ -293,11 +312,33 @@ impl Backend {
     pub async fn reset_settings(&self) -> Result<()> {
         self.settings.reset_settings().await
     }
+
+    // --- Clustering analytics & quality ---
+    pub async fn get_clustering_analytics(&self) -> Result<crate::storage::ClusteringAnalytics> {
+        let db = self.db.clone();
+        tokio::task::spawn_blocking(move || crate::storage::get_clustering_analytics(&db))
+            .await
+            .unwrap_or_else(|e| Err(anyhow::anyhow!("Join error: {}", e)))
+    }
+
+    pub async fn get_courses_by_clustering_quality(
+        &self,
+        min_quality: f32,
+    ) -> Result<Vec<crate::types::Course>> {
+        let db = self.db.clone();
+        tokio::task::spawn_blocking(move || {
+            crate::storage::get_courses_by_clustering_quality(&db, min_quality)
+        })
+        .await
+        .unwrap_or_else(|e| Err(anyhow::anyhow!("Join error: {}", e)))
+    }
 }
 
 /// Hook for accessing the unified backend interface
 pub fn use_backend() -> Backend {
+    let db = use_context::<Arc<crate::storage::database::Database>>();
     Backend {
+        db,
         courses: use_course_manager(),
         plans: use_plan_manager(),
         notes: use_notes_manager(),

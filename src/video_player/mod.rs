@@ -4,7 +4,7 @@ pub mod controls;
 pub mod hooks;
 pub mod player;
 pub mod protocol;
-pub mod state;
+
 pub mod types;
 pub mod utils;
 
@@ -12,7 +12,8 @@ pub use controls::*;
 pub use hooks::*;
 pub use player::*;
 pub use protocol::*;
-pub use state::*;
+
+pub use crate::state::video_player::*;
 pub use types::*;
 pub use utils::*;
 

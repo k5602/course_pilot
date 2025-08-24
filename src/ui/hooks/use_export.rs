@@ -16,6 +16,7 @@ pub struct ExportManager {
         crate::export::ExportFormat,
         Box<dyn Fn(f32, String) + Send + Sync>,
     )>,
+    pub export_course_with_ui_progress: Callback<(Uuid, crate::export::ExportFormat)>,
     pub save_export_data: Callback<crate::export::ExportResult>,
 }
 
@@ -227,9 +228,89 @@ pub fn use_export_manager() -> ExportManager {
         // Return () to match expected callback type
     });
 
+    let export_course_with_ui_progress = use_callback({
+        let db = db.clone();
+        move |(course_id, format): (Uuid, crate::export::ExportFormat)| {
+            let mut progress_ctx = crate::state::use_export_progress();
+            let reporter =
+                progress_ctx.start_task(crate::state::ExportKind::Course(course_id), format, None);
+
+            spawn({
+                let db = db.clone();
+                let reporter = reporter.clone();
+                async move {
+                    let reporter_for_cb = reporter.clone();
+                    let result = tokio::task::spawn_blocking(move || {
+                        use crate::export::Exportable;
+
+                        // Load course data
+                        let course = crate::storage::get_course_by_id(&db, &course_id)?
+                            .ok_or_else(|| anyhow::anyhow!("Course not found: {}", course_id))?;
+
+                        // Create export options with centralized progress callback
+                        let options = crate::export::ExportOptions {
+                            format,
+                            include_metadata: true,
+                            include_progress: true,
+                            include_timestamps: true,
+                            progress_callback: Some(reporter_for_cb.as_callback()),
+                        };
+
+                        // Export with progress tracking
+                        course
+                            .export_with_options(options)
+                            .map_err(|e| anyhow::anyhow!("Course export failed: {}", e))
+                    })
+                    .await;
+
+                    match result {
+                        Ok(Ok(export_result)) => {
+                            reporter.update(90.0, "Saving exported data...");
+                            let file_path =
+                                crate::export::io::default_output_path(&export_result.filename);
+                            match crate::export::io::save_bytes_atomic(
+                                &file_path,
+                                &export_result.data,
+                            )
+                            .await
+                            {
+                                Ok(saved_path) => {
+                                    reporter.complete(Some(saved_path.clone()));
+                                    crate::ui::toast_helpers::success(format!(
+                                        "Export saved to: {}",
+                                        saved_path.display()
+                                    ));
+                                }
+                                Err(e) => {
+                                    reporter.fail(format!("Failed to save export: {e}"));
+                                    crate::ui::toast_helpers::error(format!(
+                                        "Failed to save export: {e}"
+                                    ));
+                                }
+                            }
+                        }
+                        Ok(Err(e)) => {
+                            reporter.fail(format!("{e}"));
+                            crate::ui::toast_helpers::error(format!(
+                                "Failed to export course: {e}"
+                            ));
+                        }
+                        Err(e) => {
+                            reporter.fail(format!("Join error: {e}"));
+                            crate::ui::toast_helpers::error(format!(
+                                "Failed to export course: {e}"
+                            ));
+                        }
+                    }
+                }
+            });
+        }
+    });
+
     ExportManager {
         db,
         export_course_with_progress,
+        export_course_with_ui_progress,
         save_export_data,
     }
 }

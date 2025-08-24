@@ -1,36 +1,26 @@
-use crate::storage::{
-    ClusteringAnalytics, Database, get_clustering_analytics, get_courses_by_clustering_quality,
-};
+use crate::storage::ClusteringAnalytics;
 use crate::types::{ClusteringAlgorithm, ClusteringStrategy, Course, TopicInfo};
+use crate::ui::hooks::use_backend;
 use dioxus::prelude::*;
 use std::collections::HashMap;
-use std::sync::Arc;
 
 #[component]
 pub fn ClusteringInsights() -> Element {
-    let db = use_context::<Arc<Database>>();
-    let db_for_analytics = db.clone();
-    let db_for_courses = db.clone();
+    let backend = use_backend();
 
-    let clustering_analytics_resource = use_resource(move || {
-        let db_clone = db_for_analytics.clone();
-        async move {
-            tokio::task::spawn_blocking(move || get_clustering_analytics(&db_clone))
-                .await
-                .unwrap_or_else(|_| {
-                    Err(anyhow::anyhow!("Failed to load clustering analytics"))
-                })
+    let clustering_analytics_resource = use_resource({
+        let backend = backend.clone();
+        move || {
+            let value = backend.clone();
+            async move { value.get_clustering_analytics().await }
         }
     });
 
-    let high_quality_courses_resource = use_resource(move || {
-        let db_clone = db_for_courses.clone();
-        async move {
-            tokio::task::spawn_blocking(move || get_courses_by_clustering_quality(&db_clone, 0.8))
-                .await
-                .unwrap_or_else(|_| {
-                    Err(anyhow::anyhow!("Failed to load high quality courses"))
-                })
+    let high_quality_courses_resource = use_resource({
+        let backend = backend.clone();
+        move || {
+            let value = backend.clone();
+            async move { value.get_courses_by_clustering_quality(0.8).await }
         }
     });
 

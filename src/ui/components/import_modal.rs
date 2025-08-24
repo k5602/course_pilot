@@ -1,5 +1,5 @@
-use crate::ui::{Badge, BaseModal, toast_helpers};
 use crate::ui::hooks::LocalFolderPreview;
+use crate::ui::{Badge, BaseModal, toast_helpers};
 use dioxus::prelude::*;
 use dioxus_free_icons::Icon;
 use dioxus_free_icons::icons::fa_brands_icons::FaYoutube;
@@ -153,10 +153,12 @@ pub fn ImportModal(props: ImportModalProps) -> Element {
                                     toast_helpers::info("Starting local folder import...");
 
                                     // Use the async method directly instead of the callback
-                                    let result = import_manager.import_from_local_folder(
-                                        std::path::PathBuf::from(&path),
-                                        None, // Let it auto-generate title from folder name
-                                    ).await;
+                                    let result = import_manager
+                                        .import_from_local_folder(
+                                            std::path::PathBuf::from(&path),
+                                            None, // Let it auto-generate title from folder name
+                                        )
+                                        .await;
 
                                     match result {
                                         Ok(course) => {
@@ -246,18 +248,18 @@ pub fn ImportModal(props: ImportModalProps) -> Element {
                 is_generating_preview.set(true);
                 folder_validation.set(None);
                 local_folder_preview.set(None);
-                
+
                 let import_manager = import_manager.clone();
                 let path = path.clone();
                 spawn(async move {
                     let path_buf = std::path::PathBuf::from(&path);
-                    
+
                     // First validate the folder
                     match import_manager.validate_folder(path_buf.clone()).await {
                         Ok(validation) => {
                             folder_validation.set(Some(validation.clone()));
                             is_validating.set(false);
-                            
+
                             // If validation is successful, generate preview
                             if validation.is_valid {
                                 match import_manager.generate_folder_preview(path_buf).await {
@@ -266,7 +268,10 @@ pub fn ImportModal(props: ImportModalProps) -> Element {
                                     }
                                     Err(e) => {
                                         log::error!("Failed to generate preview: {}", e);
-                                        crate::ui::toast_helpers::error(format!("Failed to generate preview: {}", e));
+                                        crate::ui::toast_helpers::error(format!(
+                                            "Failed to generate preview: {}",
+                                            e
+                                        ));
                                     }
                                 }
                             }
@@ -283,7 +288,7 @@ pub fn ImportModal(props: ImportModalProps) -> Element {
                             is_validating.set(false);
                         }
                     }
-                    
+
                     is_generating_preview.set(false);
                 });
             } else {
@@ -440,8 +445,14 @@ fn YouTubeImportForm(
     let backend = crate::ui::hooks::use_backend();
     let navigator = use_navigator();
 
-    // Load settings and initialize API key from storage
-    let settings = use_resource(|| async { crate::storage::AppSettings::load() });
+    // Load settings and initialize API key from storage (via backend)
+    let settings = use_resource({
+        let backend = backend.clone();
+        move || {
+            let value = backend.clone();
+            async move { value.load_settings().await }
+        }
+    });
 
     // Form state
     let url = use_signal(String::new);
@@ -633,6 +644,7 @@ fn YouTubeImportForm(
         let mut api_key_validation_status = api_key_validation_status;
         let url = url;
         let mut handle_url_change = handle_url_change;
+        let backend = backend.clone();
 
         move |new_api_key: String| {
             api_key.set(new_api_key.clone());
@@ -646,14 +658,16 @@ fn YouTubeImportForm(
             // Auto-save API key to settings when user enters it manually
             if !api_key_from_settings() && !new_api_key.trim().is_empty() {
                 let key_to_save = new_api_key.trim().to_string();
+                let backend = backend.clone();
                 spawn(async move {
-                    if let Ok(mut settings) = crate::storage::AppSettings::load() {
-                        if let Err(e) = settings.set_youtube_api_key(Some(key_to_save)) {
-                            log::error!("Failed to save API key: {e}");
-                            toast_helpers::error("Failed to save API key to settings");
-                        } else {
+                    match backend.set_youtube_api_key(Some(key_to_save)).await {
+                        Ok(()) => {
                             log::info!("YouTube API key saved to settings");
                             toast_helpers::success("API key saved to settings");
+                        }
+                        Err(e) => {
+                            log::error!("Failed to save API key: {e}");
+                            toast_helpers::error("Failed to save API key to settings");
                         }
                     }
                 });
@@ -749,19 +763,20 @@ fn YouTubeImportForm(
 
                         // Convert to course with proper structure
                         let course_name = metadata.title;
-                        
+
                         // Convert YoutubeSection objects to VideoMetadata with proper video_id and URLs
                         let videos: Vec<crate::types::VideoMetadata> = sections
                             .iter()
                             .enumerate()
                             .map(|(_index, section)| {
-                                let mut video = crate::types::VideoMetadata::new_youtube_with_playlist(
-                                    section.title.clone(),
-                                    section.video_id.clone(),
-                                    section.url.clone(),
-                                    section.playlist_id.clone(),
-                                    section.original_index,
-                                );
+                                let mut video =
+                                    crate::types::VideoMetadata::new_youtube_with_playlist(
+                                        section.title.clone(),
+                                        section.video_id.clone(),
+                                        section.url.clone(),
+                                        section.playlist_id.clone(),
+                                        section.original_index,
+                                    );
                                 video.duration_seconds = Some(section.duration.as_secs_f64());
                                 video.thumbnail_url = section.thumbnail_url.clone();
                                 video.description = section.description.clone();
@@ -770,12 +785,19 @@ fn YouTubeImportForm(
                             })
                             .collect();
 
-                        log::info!("Created {} VideoMetadata objects from YoutubeSection data", videos.len());
+                        log::info!(
+                            "Created {} VideoMetadata objects from YoutubeSection data",
+                            videos.len()
+                        );
                         if !videos.is_empty() {
-                            log::info!("First video: title='{}', video_id={:?}, source_url={:?}", 
-                                       videos[0].title, videos[0].video_id, videos[0].source_url);
+                            log::info!(
+                                "First video: title='{}', video_id={:?}, source_url={:?}",
+                                videos[0].title,
+                                videos[0].video_id,
+                                videos[0].source_url
+                            );
                         }
-                        
+
                         let mut course = crate::types::Course::new_with_videos(course_name, videos);
 
                         // Create course structure with durations
@@ -790,7 +812,8 @@ fn YouTubeImportForm(
                             .collect();
 
                         // Create a single module containing all videos (basic structure)
-                        let total_duration: std::time::Duration = sections.iter().map(|s| s.duration).sum();
+                        let total_duration: std::time::Duration =
+                            sections.iter().map(|s| s.duration).sum();
                         let module = crate::types::Module::new_basic(
                             "All Videos".to_string(),
                             course_sections,
@@ -949,7 +972,7 @@ fn YouTubeImportForm(
                                     Err(e) => {
                                         let error_msg = format!("Failed to save course: {e}");
                                         log::error!("{}", error_msg);
-                                        
+
                                         if let Some(mut job) = import_job() {
                                             job.fail_stage(
                                                 crate::types::ImportStage::Saving,

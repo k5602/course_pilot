@@ -1,8 +1,8 @@
 use crate::types::{Course, Route};
 use crate::ui::components::ProgressRing;
+use crate::ui::hooks::use_backend;
 use crate::ui::hooks::use_course_manager;
 use dioxus::prelude::*;
-use std::sync::Arc;
 
 #[component]
 pub fn LastAccessedCourse() -> Element {
@@ -44,19 +44,13 @@ struct CourseQuickAccessProps {
 #[component]
 fn CourseQuickAccess(props: CourseQuickAccessProps) -> Element {
     let course = props.course.clone();
-    let db = use_context::<Arc<crate::storage::Database>>();
+    let backend = use_backend();
 
     // Find plan for this course using resource
     let course_plan_resource = use_resource(move || {
-        let db = db.clone();
+        let backend = backend.clone();
         let course_id = course.id;
-        async move {
-            tokio::task::spawn_blocking(move || {
-                crate::storage::get_plan_by_course_id(&db, &course_id)
-            })
-            .await
-            .unwrap_or_else(|_| Ok(None))
-        }
+        async move { backend.get_plan_by_course(course_id).await }
     });
 
     let course_plan = course_plan_resource

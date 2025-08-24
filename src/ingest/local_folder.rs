@@ -74,7 +74,7 @@ impl EnhancedLocalIngest {
     pub fn scan_directory_recursive(
         &self,
         root_path: &Path,
-        progress_callback: Option<&dyn Fn(f32, String)>,
+        mut progress_callback: Option<&mut dyn FnMut(crate::ingest::ImportProgress)>,
     ) -> Result<Vec<VideoFile>, ImportError> {
         log::info!("Recursively scanning directory: {}", root_path.display());
 
@@ -95,7 +95,14 @@ impl EnhancedLocalIngest {
         // First pass: count total files for progress reporting
         let mut total_files = 0;
         if progress_callback.is_some() {
-            progress_callback.unwrap()(0.0, "Counting video files...".to_string());
+            if let Some(cb) = progress_callback.as_mut() {
+                cb(crate::ingest::ImportProgress {
+                    stage: crate::types::ImportStage::Fetching,
+                    progress: 0.0,
+                    message: "Counting video files...".to_string(),
+                    clustering_stage: None,
+                });
+            }
 
             for entry in WalkDir::new(root_path)
                 .follow_links(false)
@@ -108,7 +115,14 @@ impl EnhancedLocalIngest {
                 }
             }
 
-            progress_callback.unwrap()(0.0, format!("Found {total_files} video files"));
+            if let Some(cb) = progress_callback.as_mut() {
+                cb(crate::ingest::ImportProgress {
+                    stage: crate::types::ImportStage::Fetching,
+                    progress: 0.0,
+                    message: format!("Found {total_files} video files"),
+                    clustering_stage: None,
+                });
+            }
         }
 
         // Second pass: process files
@@ -130,14 +144,19 @@ impl EnhancedLocalIngest {
             if self.is_video_file(entry.path()) {
                 processed_files += 1;
 
-                if let Some(cb) = progress_callback {
+                if let Some(cb) = progress_callback.as_mut() {
                     let progress = if total_files > 0 {
                         (processed_files as f32 / total_files as f32) * 100.0
                     } else {
                         0.0
                     };
 
-                    cb(progress, format!("Processing: {}", entry.path().display()));
+                    cb(crate::ingest::ImportProgress {
+                        stage: crate::types::ImportStage::Processing,
+                        progress,
+                        message: format!("Processing: {}", entry.path().display()),
+                        clustering_stage: None,
+                    });
                 }
 
                 let video_file = VideoFile {
@@ -171,7 +190,9 @@ impl EnhancedLocalIngest {
     pub async fn scan_directory_recursive_async(
         &self,
         root_path: PathBuf,
-        progress_callback: impl Fn(f32, String) + Send + 'static,
+        mut progress_callback: Option<
+            Box<dyn FnMut(crate::ingest::ImportProgress) + Send + 'static>,
+        >,
         batch_size: Option<usize>,
         cancel_token: Option<tokio_util::sync::CancellationToken>,
     ) -> Result<Vec<VideoFile>, ImportError> {
@@ -184,7 +205,14 @@ impl EnhancedLocalIngest {
             let mut video_files = Vec::new();
 
             // First pass: count total files
-            progress_callback(0.0, "Counting video files...".to_string());
+            if let Some(cb) = progress_callback.as_mut() {
+                cb(crate::ingest::ImportProgress {
+                    stage: crate::types::ImportStage::Fetching,
+                    progress: 0.0,
+                    message: "Counting video files...".to_string(),
+                    clustering_stage: None,
+                });
+            }
 
             for entry in WalkDir::new(&root_path)
                 .follow_links(false)
@@ -200,7 +228,14 @@ impl EnhancedLocalIngest {
                 }
             }
 
-            progress_callback(0.0, format!("Found {total_files} video files"));
+            if let Some(cb) = progress_callback.as_mut() {
+                cb(crate::ingest::ImportProgress {
+                    stage: crate::types::ImportStage::Fetching,
+                    progress: 0.0,
+                    message: format!("Found {total_files} video files"),
+                    clustering_stage: None,
+                });
+            }
 
             // Second pass: process files in batches if requested
             let batch_size = batch_size.unwrap_or(usize::MAX); // Default to processing all at once
@@ -239,10 +274,14 @@ impl EnhancedLocalIngest {
                                 0.0
                             };
 
-                            progress_callback(
-                                progress,
-                                format!("Processing: {}", entry.path().display()),
-                            );
+                            if let Some(cb) = progress_callback.as_mut() {
+                                cb(crate::ingest::ImportProgress {
+                                    stage: crate::types::ImportStage::Processing,
+                                    progress,
+                                    message: format!("Processing: {}", entry.path().display()),
+                                    clustering_stage: None,
+                                });
+                            }
 
                             let video_file = VideoFile {
                                 path: entry.path().to_path_buf(),

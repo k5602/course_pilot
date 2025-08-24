@@ -2,9 +2,9 @@ use crate::gemini::{
     ChatMessage, ConversationHistory, CourseContext, CourseSourceType, GeminiClient,
 };
 use crate::state::use_video_context_reactive;
-use crate::storage::database::Database;
 use crate::types::{Route, VideoContext};
 use crate::ui::components::ChatMarkdownRenderer;
+use crate::ui::hooks::use_backend;
 use dioxus::prelude::*;
 
 #[component]
@@ -18,6 +18,7 @@ pub fn GeminiChatbot() -> Element {
     let mut is_initialized = use_signal(|| false);
 
     let current_route = use_route::<Route>();
+    let backend = use_backend();
     let video_context_signal = use_video_context_reactive();
     let video_context = video_context_signal.read().clone();
 
@@ -26,6 +27,7 @@ pub fn GeminiChatbot() -> Element {
         if !is_initialized() {
             let route = current_route.clone();
             let video_ctx = video_context.clone();
+            let value = backend.clone();
             spawn(async move {
                 let mut client = gemini_client.write();
                 match client.initialize().await {
@@ -35,8 +37,11 @@ pub fn GeminiChatbot() -> Element {
                         // Set up course context based on current route
                         if let Route::PlanView { course_id } = route {
                             if let Ok(course_uuid) = uuid::Uuid::parse_str(&course_id) {
+                                let backend = value.clone();
                                 spawn(async move {
-                                    match setup_course_context(course_uuid, video_ctx).await {
+                                    match setup_course_context(backend, course_uuid, video_ctx)
+                                        .await
+                                    {
                                         Ok(context) => {
                                             conversation_history
                                                 .write()
@@ -296,14 +301,14 @@ fn ChatMessageBubble(message: ChatMessage) -> Element {
 }
 
 async fn setup_course_context(
+    backend: crate::ui::hooks::Backend,
     course_id: uuid::Uuid,
     video_context: Option<VideoContext>,
 ) -> anyhow::Result<CourseContext> {
-    let db_path = std::path::PathBuf::from("course_pilot.db");
-    let db = Database::new(&db_path)?;
-
     // Get course information
-    let course = crate::storage::get_course_by_id(&db, &course_id)?
+    let course = backend
+        .get_course(course_id)
+        .await?
         .ok_or_else(|| anyhow::anyhow!("Course not found"))?;
 
     // For now, we'll create a generic source type since we don't store source URLs

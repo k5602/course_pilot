@@ -2072,6 +2072,19 @@ fn add_review_sessions(plan: &mut Plan) -> Result<(), PlanError> {
     Ok(())
 }
 
+/// Generate a plan from precomputed session groups (indices into the course videos).
+/// This stable API allows upstream NLP grouping to drive planning directly.
+/// For now, it delegates to generate_plan to preserve existing behavior while keeping
+/// a clear entrypoint for group-driven planning.
+pub fn generate_plan_from_groups(
+    course: &crate::types::Course,
+    groups: Vec<Vec<usize>>,
+    settings: &crate::types::PlanSettings,
+) -> std::result::Result<crate::types::Plan, crate::PlanError> {
+    let _ = groups; // reserved for specialized packing logic
+    generate_plan(course, settings)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
