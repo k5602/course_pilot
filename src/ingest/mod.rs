@@ -246,11 +246,3 @@ pub enum ProcessingStrategy {
     ApplyClusteringAnalysis, // Use clustering algorithms for thematic content
     RequestUserChoice,       // Present user with choice dialog (fallback to sequential for now)
 }
-
-// Functions removed: import_and_structure_youtube, import_and_structure_local_folder,
-// structure_course_with_progress, create_import_job, update_import_job_progress
-// These functions violated the ingest contract by mixing import, structuring, and saving.
-// Use ingest_only functions instead for clean separation of concerns.
-//
-// The ProcessingStrategy enum remains for potential future use by other modules
-// that need to determine how to process course content after ingest.

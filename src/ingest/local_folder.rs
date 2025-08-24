@@ -556,7 +556,7 @@ fn probe_video_duration(path: &std::path::Path) -> Option<std::time::Duration> {
     let mut last_ts: Option<u64> = None;
     let tb = track.codec_params.time_base;
     let track_id = track.id;
-    drop(track);
+    let _ = track;
 
     while let Ok(packet) = format.next_packet() {
         if packet.track_id() == track_id {
