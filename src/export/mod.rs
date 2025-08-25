@@ -190,6 +190,6 @@ pub enum ExportError {
 }
 
 pub mod course;
+pub mod io;
 pub mod notes;
 pub mod plan;
-pub mod io;

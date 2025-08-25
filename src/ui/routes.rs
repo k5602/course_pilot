@@ -183,13 +183,24 @@ pub fn AddCourse() -> Element {
         navigator.push(Route::Dashboard {});
     };
 
-    let handle_import = EventHandler::new(move |data: (crate::ui::components::import_modal::ImportSource, String, crate::ui::components::import_modal::ImportSettings)| {
-        let (source, url, settings) = data;
-        // Import logic will be handled by the ImportModal component
-        log::info!("Import requested: {:?} with URL: {} and settings: {:?}", source, url, settings);
-        show_import_modal.set(false);
-        navigator.push(Route::Dashboard {});
-    });
+    let handle_import = EventHandler::new(
+        move |data: (
+            crate::ui::components::import_modal::ImportSource,
+            String,
+            crate::ui::components::import_modal::ImportSettings,
+        )| {
+            let (source, url, settings) = data;
+            // Import logic will be handled by the ImportModal component
+            log::info!(
+                "Import requested: {:?} with URL: {} and settings: {:?}",
+                source,
+                url,
+                settings
+            );
+            show_import_modal.set(false);
+            navigator.push(Route::Dashboard {});
+        },
+    );
 
     rsx! {
         LayoutWrapper {
@@ -197,7 +208,7 @@ pub fn AddCourse() -> Element {
                 class: "p-8",
                 h1 { class: "text-3xl font-bold mb-4", "Import Course" }
                 p { class: "text-base-content/70 mb-6", "Import a new course from YouTube or a local folder." }
-                
+
                 // Show import modal
                 crate::ui::components::ImportModal {
                     open: show_import_modal(),

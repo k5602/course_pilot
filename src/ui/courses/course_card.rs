@@ -6,7 +6,7 @@ use crate::ui::{
 };
 use dioxus::prelude::*;
 
-use super::{CourseActions, ContentReorganizationModals};
+use super::{ContentReorganizationModals, CourseActions};
 
 #[derive(Props, PartialEq, Clone)]
 pub struct CourseCardProps {
@@ -146,7 +146,7 @@ pub fn CourseCard(props: CourseCardProps) -> Element {
             "Mixed" => Some("warning".to_string()),
             _ => Some("ghost".to_string()),
         };
-        
+
         badges.push(BadgeData {
             label: content_type,
             color: content_badge_color,

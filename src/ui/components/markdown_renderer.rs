@@ -2,9 +2,7 @@ use dioxus::prelude::*;
 
 #[component]
 pub fn MarkdownRenderer(content: String) -> Element {
-    let html_content = use_memo(move || {
-        markdown::to_html(&content)
-    });
+    let html_content = use_memo(move || markdown::to_html(&content));
 
     rsx! {
         div {
@@ -20,7 +18,7 @@ pub fn ChatMarkdownRenderer(content: String) -> Element {
     let html_content = use_memo(move || {
         // Convert markdown to HTML
         let mut html = markdown::to_html(&content);
-        
+
         // Apply custom styling for chat context
         html = html
             // Style code blocks
@@ -42,7 +40,7 @@ pub fn ChatMarkdownRenderer(content: String) -> Element {
             .replace("<p>", "<p class=\"text-base-content mb-2\">")
             // Style links
             .replace("<a ", "<a class=\"text-primary hover:text-primary-focus underline\" ");
-        
+
         html
     });
 

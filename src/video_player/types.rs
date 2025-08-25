@@ -1,4 +1,3 @@
-
 use serde::{Deserialize, Serialize};
 use std::path::PathBuf;
 
@@ -6,10 +5,7 @@ use std::path::PathBuf;
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub enum VideoSource {
     /// Local video file
-    Local {
-        path: PathBuf,
-        title: String,
-    },
+    Local { path: PathBuf, title: String },
     /// YouTube video
     YouTube {
         video_id: String,
@@ -268,16 +264,16 @@ pub enum VideoPlayerError {
     FileNotFound(std::path::PathBuf),
     FileAccessDenied(std::path::PathBuf),
     UnsupportedFormat(String),
-    
+
     // Network-related errors
     NetworkError(String),
     YouTubeApiError { code: i32, message: String },
-    
+
     // Player-related errors
     InitializationFailed(String),
     PlaybackError(String),
     WebViewError(String),
-    
+
     // Validation errors
     InvalidVideoId(String),
     InvalidSource(String),
@@ -286,8 +282,12 @@ pub enum VideoPlayerError {
 impl std::fmt::Display for VideoPlayerError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            VideoPlayerError::FileNotFound(path) => write!(f, "Video file not found: {}", path.display()),
-            VideoPlayerError::FileAccessDenied(path) => write!(f, "Cannot access video file: {}", path.display()),
+            VideoPlayerError::FileNotFound(path) => {
+                write!(f, "Video file not found: {}", path.display())
+            }
+            VideoPlayerError::FileAccessDenied(path) => {
+                write!(f, "Cannot access video file: {}", path.display())
+            }
             VideoPlayerError::UnsupportedFormat(format) => {
                 write!(f, "Unsupported video format: {format}")
             }
@@ -380,7 +380,6 @@ impl Default for YouTubePlayerState {
         Self::new()
     }
 }
-
 
 /// Video metadata extracted from files or URLs
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]

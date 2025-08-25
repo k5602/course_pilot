@@ -15,7 +15,7 @@ pub struct Course {
     pub id: Uuid,
     pub name: String,
     pub created_at: DateTime<Utc>,
-    pub raw_titles: Vec<String>, // Keep for backward compatibility
+    pub raw_titles: Vec<String>,    // Keep for backward compatibility
     pub videos: Vec<VideoMetadata>, // New structured video data
     pub structure: Option<CourseStructure>,
 }
@@ -24,10 +24,10 @@ pub struct Course {
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub struct VideoMetadata {
     pub title: String,
-    pub source_url: Option<String>, // YouTube URL or local file path
-    pub video_id: Option<String>, // YouTube video ID
+    pub source_url: Option<String>,  // YouTube URL or local file path
+    pub video_id: Option<String>,    // YouTube video ID
     pub playlist_id: Option<String>, // YouTube playlist ID for preserving playlist context
-    pub original_index: usize, // Preserve import order for sequential content detection
+    pub original_index: usize,       // Preserve import order for sequential content detection
     pub duration_seconds: Option<f64>,
     pub thumbnail_url: Option<String>,
     pub description: Option<String>,
@@ -805,21 +805,25 @@ pub struct Note {
 impl Course {
     pub fn new(name: String, raw_titles: Vec<String>) -> Self {
         // Create basic video metadata from raw titles for backward compatibility
-        let videos = raw_titles.iter().enumerate().map(|(index, title)| VideoMetadata {
-            title: title.clone(),
-            source_url: None,
-            video_id: None,
-            playlist_id: None,
-            original_index: index,
-            duration_seconds: None,
-            thumbnail_url: None,
-            description: None,
-            upload_date: None,
-            author: None,
-            view_count: None,
-            tags: Vec::new(),
-            is_local: false,
-        }).collect();
+        let videos = raw_titles
+            .iter()
+            .enumerate()
+            .map(|(index, title)| VideoMetadata {
+                title: title.clone(),
+                source_url: None,
+                video_id: None,
+                playlist_id: None,
+                original_index: index,
+                duration_seconds: None,
+                thumbnail_url: None,
+                description: None,
+                upload_date: None,
+                author: None,
+                view_count: None,
+                tags: Vec::new(),
+                is_local: false,
+            })
+            .collect();
 
         Self {
             id: Uuid::new_v4(),
@@ -856,7 +860,8 @@ impl Course {
     }
 
     pub fn get_video_title(&self, index: usize) -> Option<&str> {
-        self.videos.get(index)
+        self.videos
+            .get(index)
             .map(|v| v.title.as_str())
             .or_else(|| self.raw_titles.get(index).map(|s| s.as_str()))
     }
@@ -881,7 +886,13 @@ impl VideoMetadata {
         }
     }
 
-    pub fn new_youtube_with_playlist(title: String, video_id: String, url: String, playlist_id: Option<String>, original_index: usize) -> Self {
+    pub fn new_youtube_with_playlist(
+        title: String,
+        video_id: String,
+        url: String,
+        playlist_id: Option<String>,
+        original_index: usize,
+    ) -> Self {
         Self {
             title,
             source_url: Some(url),
@@ -966,7 +977,11 @@ impl VideoMetadata {
                         title: self.title.clone(),
                     })
                 } else {
-                    log::error!("YouTube video has invalid video_id '{}': {}", video_id, self.title);
+                    log::error!(
+                        "YouTube video has invalid video_id '{}': {}",
+                        video_id,
+                        self.title
+                    );
                     None
                 }
             } else {
@@ -980,13 +995,21 @@ impl VideoMetadata {
     pub fn is_metadata_complete(&self) -> bool {
         if self.is_local {
             // Local videos need at least title and source_url (file path)
-            !self.title.trim().is_empty() && 
-            self.source_url.as_ref().map_or(false, |url| !url.trim().is_empty())
+            !self.title.trim().is_empty()
+                && self
+                    .source_url
+                    .as_ref()
+                    .map_or(false, |url| !url.trim().is_empty())
         } else {
             // YouTube videos need at least title, video_id, and source_url
-            !self.title.trim().is_empty() && 
-            self.video_id.as_ref().map_or(false, |id| !id.trim().is_empty() && !id.starts_with("PLACEHOLDER_")) &&
-            self.source_url.as_ref().map_or(false, |url| !url.trim().is_empty())
+            !self.title.trim().is_empty()
+                && self.video_id.as_ref().map_or(false, |id| {
+                    !id.trim().is_empty() && !id.starts_with("PLACEHOLDER_")
+                })
+                && self
+                    .source_url
+                    .as_ref()
+                    .map_or(false, |url| !url.trim().is_empty())
         }
     }
 
@@ -999,20 +1022,28 @@ impl VideoMetadata {
         if self.is_local {
             match &self.source_url {
                 None => return Err("Local video missing file path".to_string()),
-                Some(path) if path.trim().is_empty() => return Err("Local video has empty file path".to_string()),
+                Some(path) if path.trim().is_empty() => {
+                    return Err("Local video has empty file path".to_string());
+                }
                 Some(_) => {} // Valid
             }
         } else {
             match &self.video_id {
                 None => return Err("YouTube video missing video_id".to_string()),
-                Some(id) if id.trim().is_empty() => return Err("YouTube video has empty video_id".to_string()),
-                Some(id) if id.starts_with("PLACEHOLDER_") => return Err("YouTube video has placeholder video_id".to_string()),
+                Some(id) if id.trim().is_empty() => {
+                    return Err("YouTube video has empty video_id".to_string());
+                }
+                Some(id) if id.starts_with("PLACEHOLDER_") => {
+                    return Err("YouTube video has placeholder video_id".to_string());
+                }
                 Some(_) => {} // Valid
             }
 
             match &self.source_url {
                 None => return Err("YouTube video missing source URL".to_string()),
-                Some(url) if url.trim().is_empty() => return Err("YouTube video has empty source URL".to_string()),
+                Some(url) if url.trim().is_empty() => {
+                    return Err("YouTube video has empty source URL".to_string());
+                }
                 Some(_) => {} // Valid
             }
         }

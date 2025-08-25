@@ -21,7 +21,7 @@ impl VideoPlayerUtils {
     /// Parse time string (MM:SS or HH:MM:SS) to seconds
     pub fn parse_time_string(time_str: &str) -> Result<f64, String> {
         let parts: Vec<&str> = time_str.split(':').collect();
-        
+
         match parts.len() {
             2 => {
                 // MM:SS format
@@ -70,12 +70,12 @@ impl VideoPlayerUtils {
     /// Get common aspect ratio name
     pub fn get_aspect_ratio_name(width: u32, height: u32) -> String {
         let ratio = Self::calculate_aspect_ratio(width, height);
-        
-        if (ratio - 16.0/9.0).abs() < 0.1 {
+
+        if (ratio - 16.0 / 9.0).abs() < 0.1 {
             "16:9".to_string()
-        } else if (ratio - 4.0/3.0).abs() < 0.1 {
+        } else if (ratio - 4.0 / 3.0).abs() < 0.1 {
             "4:3".to_string()
-        } else if (ratio - 21.0/9.0).abs() < 0.1 {
+        } else if (ratio - 21.0 / 9.0).abs() < 0.1 {
             "21:9".to_string()
         } else if (ratio - 1.0).abs() < 0.1 {
             "1:1".to_string()
@@ -86,17 +86,21 @@ impl VideoPlayerUtils {
 
     /// Validate YouTube video ID format
     pub fn is_valid_youtube_id(video_id: &str) -> bool {
-        video_id.len() == 11 && 
-        video_id.chars().all(|c| c.is_alphanumeric() || c == '_' || c == '-') &&
-        !video_id.starts_with("PLACEHOLDER_")
+        video_id.len() == 11
+            && video_id
+                .chars()
+                .all(|c| c.is_alphanumeric() || c == '_' || c == '-')
+            && !video_id.starts_with("PLACEHOLDER_")
     }
 
     /// Extract YouTube video ID from URL
     pub fn extract_youtube_id(url: &str) -> Option<String> {
         // Handle various YouTube URL formats
-        if let Some(captures) = regex::Regex::new(r"(?:youtube\.com/watch\?v=|youtu\.be/|youtube\.com/embed/)([a-zA-Z0-9_-]{11})")
-            .ok()?
-            .captures(url) 
+        if let Some(captures) = regex::Regex::new(
+            r"(?:youtube\.com/watch\?v=|youtu\.be/|youtube\.com/embed/)([a-zA-Z0-9_-]{11})",
+        )
+        .ok()?
+        .captures(url)
         {
             captures.get(1).map(|m| m.as_str().to_string())
         } else {
@@ -113,13 +117,17 @@ impl VideoPlayerUtils {
             ThumbnailQuality::Standard => "sddefault",
             ThumbnailQuality::MaxRes => "maxresdefault",
         };
-        
-        format!("https://img.youtube.com/vi/{}/{}.jpg", video_id, quality_str)
+
+        format!(
+            "https://img.youtube.com/vi/{}/{}.jpg",
+            video_id, quality_str
+        )
     }
 
     /// Check if file extension is supported
     pub fn is_supported_video_format(extension: &str) -> bool {
-        matches!(extension.to_lowercase().as_str(), 
+        matches!(
+            extension.to_lowercase().as_str(),
             "mp4" | "webm" | "ogg" | "avi" | "mov" | "mkv" | "m4v" | "3gp" | "flv" | "wmv"
         )
     }
@@ -165,14 +173,14 @@ impl VideoPlayerUtils {
         Fut: std::future::Future<Output = ()> + Send + 'static,
     {
         let delay = std::sync::Arc::new(std::sync::Mutex::new(None::<tokio::task::JoinHandle<()>>));
-        
+
         move || {
             // Cancel existing task
             if let Ok(mut guard) = delay.lock() {
                 if let Some(handle) = guard.take() {
                     handle.abort();
                 }
-                
+
                 // Start new task
                 let handle = tokio::spawn({
                     let func = func();
@@ -181,7 +189,7 @@ impl VideoPlayerUtils {
                         func.await;
                     }
                 });
-                
+
                 *guard = Some(handle);
             }
         }
@@ -193,7 +201,7 @@ impl VideoPlayerUtils {
         F: Fn() + Send + 'static,
     {
         let last_call = std::sync::Arc::new(std::sync::Mutex::new(None::<std::time::Instant>));
-        
+
         move || {
             let now = std::time::Instant::now();
             let should_call = {
@@ -216,7 +224,7 @@ impl VideoPlayerUtils {
                     false
                 }
             };
-            
+
             if should_call {
                 func();
             }
@@ -227,20 +235,20 @@ impl VideoPlayerUtils {
 /// YouTube thumbnail quality options
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub enum ThumbnailQuality {
-    Default,    // 120x90
-    Medium,     // 320x180
-    High,       // 480x360
-    Standard,   // 640x480
-    MaxRes,     // 1280x720
+    Default,  // 120x90
+    Medium,   // 320x180
+    High,     // 480x360
+    Standard, // 640x480
+    MaxRes,   // 1280x720
 }
 
 /// Video quality presets
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub enum VideoQuality {
-    Low,        // 480p
-    Medium,     // 720p
-    High,       // 1080p
-    Ultra,      // 4K
+    Low,    // 480p
+    Medium, // 720p
+    High,   // 1080p
+    Ultra,  // 4K
 }
 
 impl VideoQuality {
@@ -278,7 +286,8 @@ impl PerformanceMonitor {
     }
 
     pub fn checkpoint(&mut self, name: &str) {
-        self.checkpoints.push((name.to_string(), std::time::Instant::now()));
+        self.checkpoints
+            .push((name.to_string(), std::time::Instant::now()));
     }
 
     pub fn get_elapsed(&self) -> Duration {
@@ -299,11 +308,11 @@ impl PerformanceMonitor {
 
     pub fn report(&self) -> String {
         let mut report = format!("Total elapsed: {:?}\n", self.get_elapsed());
-        
+
         for (name, duration) in self.get_checkpoint_durations() {
             report.push_str(&format!("  {}: {:?}\n", name, duration));
         }
-        
+
         report
     }
 }
@@ -329,7 +338,10 @@ mod tests {
     #[test]
     fn test_parse_time_string() {
         assert_eq!(VideoPlayerUtils::parse_time_string("01:30").unwrap(), 90.0);
-        assert_eq!(VideoPlayerUtils::parse_time_string("01:01:01").unwrap(), 3661.0);
+        assert_eq!(
+            VideoPlayerUtils::parse_time_string("01:01:01").unwrap(),
+            3661.0
+        );
         assert_eq!(VideoPlayerUtils::parse_time_string("00:00").unwrap(), 0.0);
         assert!(VideoPlayerUtils::parse_time_string("invalid").is_err());
     }
@@ -344,7 +356,7 @@ mod tests {
 
     #[test]
     fn test_aspect_ratio() {
-        assert!((VideoPlayerUtils::calculate_aspect_ratio(1920, 1080) - 16.0/9.0).abs() < 0.01);
+        assert!((VideoPlayerUtils::calculate_aspect_ratio(1920, 1080) - 16.0 / 9.0).abs() < 0.01);
         assert_eq!(VideoPlayerUtils::get_aspect_ratio_name(1920, 1080), "16:9");
         assert_eq!(VideoPlayerUtils::get_aspect_ratio_name(1280, 960), "4:3");
         assert_eq!(VideoPlayerUtils::get_aspect_ratio_name(1920, 1920), "1:1");
@@ -370,8 +382,14 @@ mod tests {
 
     #[test]
     fn test_mime_types() {
-        assert_eq!(VideoPlayerUtils::get_video_mime_type("mp4"), Some("video/mp4"));
-        assert_eq!(VideoPlayerUtils::get_video_mime_type("webm"), Some("video/webm"));
+        assert_eq!(
+            VideoPlayerUtils::get_video_mime_type("mp4"),
+            Some("video/mp4")
+        );
+        assert_eq!(
+            VideoPlayerUtils::get_video_mime_type("webm"),
+            Some("video/webm")
+        );
         assert_eq!(VideoPlayerUtils::get_video_mime_type("unknown"), None);
     }
 
@@ -394,7 +412,7 @@ mod tests {
         let mut monitor = PerformanceMonitor::new();
         std::thread::sleep(std::time::Duration::from_millis(10));
         monitor.checkpoint("test");
-        
+
         let durations = monitor.get_checkpoint_durations();
         assert_eq!(durations.len(), 1);
         assert_eq!(durations[0].0, "test");
@@ -405,7 +423,7 @@ mod tests {
     fn test_player_id_generation() {
         let id1 = VideoPlayerUtils::generate_player_id();
         let id2 = VideoPlayerUtils::generate_player_id();
-        
+
         assert_ne!(id1, id2);
         assert!(id1.starts_with("cp-video-"));
         assert!(id2.starts_with("cp-video-"));

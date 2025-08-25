@@ -151,7 +151,7 @@ pub fn Card(props: CardProps) -> Element {
                             // Render badges
                             if let Some(badges) = &props.badges {
                                 for (index, badge) in badges.iter().enumerate() {
-                                    // Add tooltip for content type badges 
+                                    // Add tooltip for content type badges
                                     if index == 1 && (badge.label == "Sequential" || badge.label == "Clustered" || badge.label == "Mixed") {
                                         div {
                                             class: "tooltip tooltip-bottom ml-2",
