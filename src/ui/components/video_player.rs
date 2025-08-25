@@ -15,15 +15,21 @@ pub struct VideoPlayerProps {
     pub on_error: Option<EventHandler<String>>,
 }
 
+#[component]
+fn VideoPlayerShortcutsInit() -> Element {
+    let _shortcuts = use_video_keyboard_shortcuts();
+    rsx! { div {} }
+}
+
 /// Cross-platform video player component wrapper
 #[component]
 pub fn VideoPlayerComponent(props: VideoPlayerProps) -> Element {
-    // Set up keyboard shortcuts
-    let _shortcuts = use_video_keyboard_shortcuts();
+    // Keyboard shortcuts are initialized under VideoPlayerProvider via VideoPlayerShortcutsInit
 
     rsx! {
         VideoPlayerProvider {
             children: rsx! {
+                VideoPlayerShortcutsInit {}
                 VideoPlayer {
                     source: props.video_source,
                     width: props.width,

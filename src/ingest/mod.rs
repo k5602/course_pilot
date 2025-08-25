@@ -17,7 +17,14 @@ pub use crate::ImportError;
 
 // Import basic types needed for ingest operations
 use crate::types::{Course, ImportStage};
+use once_cell::sync::Lazy;
+use std::collections::HashMap;
 use std::path::Path;
+use std::sync::Mutex;
+
+static VIDEO_DURATION_CACHE: Lazy<
+    Mutex<HashMap<std::path::PathBuf, (u64, Option<std::time::SystemTime>, std::time::Duration)>>,
+> = Lazy::new(|| Mutex::new(HashMap::new()));
 
 // Common validation utilities
 
@@ -33,7 +40,9 @@ pub fn is_valid_directory(path: &Path) -> bool {
 
 /// Common video file extensions
 pub const VIDEO_EXTENSIONS: &[&str] = &[
-    "mp4", "avi", "mkv", "mov", "wmv", "flv", "webm", "m4v", "mpg", "mpeg",
+    "mp4", "avi", "mkv", "mov", "wmv", "flv", "webm", "m4v", "mpg", "mpeg", "mp2", "mpe", "mpv",
+    "m2v", "3gp", "3g2", "ts", "mts", "m2ts", "ogv", "qt", "yuv", "drc", "svi", "mxf", "roq",
+    "nsv", "f4v", "f4p", "f4a", "f4b", "asf", "rm", "rmvb", "vob",
 ];
 
 /// Check if a file has a video extension
@@ -48,12 +57,96 @@ pub fn is_video_file(path: &Path) -> bool {
 
 /// Clean and normalize video titles
 pub fn clean_title(title: &str) -> String {
-    title
+    // Normalize separators and strip common noise
+    let base = title
         .trim()
-        .replace(['_', '-'], " ")
-        .split_whitespace()
+        .replace(['_', '-', '.'], " ")
+        .replace("1080p", "")
+        .replace("720p", "")
+        .replace("480p", "")
+        .replace("2160p", "")
+        .replace("1440p", "")
+        .replace("4K", "")
+        .replace("HD", "");
+
+    // Remove bracketed metadata like [Official], (2021), etc.
+    let base = base
+        .split('[')
+        .next()
+        .unwrap_or(&base)
+        .split('(')
+        .next()
+        .unwrap_or(&base)
+        .to_string();
+
+    base.split_whitespace()
         .collect::<Vec<_>>()
         .join(" ")
+        .trim()
+        .to_string()
+}
+
+/// Probe video duration using mp4 and matroska crates. Returns None if not determinable quickly.
+pub fn probe_video_duration(path: &std::path::Path) -> Option<std::time::Duration> {
+    use std::fs::File;
+    use std::io::BufReader;
+
+    // Build a lightweight fingerprint from metadata for cache validation.
+    let (len, mtime) = std::fs::metadata(path)
+        .map(|m| (m.len(), m.modified().ok()))
+        .unwrap_or((0, None));
+
+    // Fast path: return cached duration if file is unchanged.
+    if let Ok(cache) = VIDEO_DURATION_CACHE.lock() {
+        if let Some((cached_len, cached_mtime, dur)) = cache.get(path) {
+            if *cached_len == len && *cached_mtime == mtime {
+                return Some(*dur);
+            }
+        }
+    }
+
+    let ext = path
+        .extension()
+        .and_then(|e| e.to_str())
+        .map(|s| s.to_lowercase())?;
+
+    let computed = match ext.as_str() {
+        // ISO Base Media File Format (mp4/m4v/mov)
+        "mp4" | "m4v" | "mov" => {
+            let f = File::open(path).ok()?;
+            let size = f.metadata().ok()?.len();
+            let reader = BufReader::new(f);
+            // mp4::Mp4Reader provides duration if available.
+            let mp4 = mp4::Mp4Reader::read_header(reader, size).ok()?;
+            Some(mp4.duration())
+        }
+
+        // Matroska containers (mkv/webm)
+        "mkv" | "webm" => {
+            // Use matroska::get_from to read Info with duration.
+            let info = matroska::get_from::<_, matroska::Info>(path).ok()??;
+            if let Some(dur) = info.duration {
+                let d = std::time::Duration::from_secs(dur.as_secs())
+                    + std::time::Duration::from_nanos(dur.subsec_nanos() as u64);
+                Some(d)
+            } else {
+                None
+            }
+        }
+
+        // Others not handled by these parsers.
+        _ => None,
+    };
+
+    // Update cache on success and return.
+    if let Some(d) = computed {
+        if let Ok(mut cache) = VIDEO_DURATION_CACHE.lock() {
+            cache.insert(path.to_path_buf(), (len, mtime, d));
+        }
+        Some(d)
+    } else {
+        None
+    }
 }
 
 /// Progress tracking for integrated import operations
@@ -67,7 +160,6 @@ pub struct ImportProgress {
 
 /// Ingest-only service (order-preserving, metadata-complete, no structuring, no DB I/O)
 /// NOTE: Intentionally free functions for now to avoid introducing async-trait; callers can wrap
-/// them behind their own service objects. These functions build a Course with videos populated and
 /// preserve original_index; they DO NOT call NLP or save to storage.
 pub mod ingest_only {
     use super::*;

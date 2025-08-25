@@ -9,6 +9,7 @@ use log::{debug, error, info, warn};
 use std::borrow::Cow;
 
 pub mod mime_types;
+pub use crate::ingest::is_video_file;
 pub mod range;
 
 pub use mime_types::*;
@@ -78,7 +79,33 @@ pub fn handle_video_request(uri: &str, headers: &HeaderMap) -> Response<Cow<'sta
 /// Extract file path from the custom protocol URI
 fn extract_file_path(uri: &str) -> Result<std::path::PathBuf> {
     if let Some(path_part) = uri.strip_prefix("local-video://file/") {
-        Ok(std::path::PathBuf::from(path_part))
+        // Percent-decode the path segment to handle spaces and other encoded characters
+        let bytes = path_part.as_bytes();
+        let mut decoded_bytes: Vec<u8> = Vec::with_capacity(bytes.len());
+        let mut i = 0usize;
+
+        while i < bytes.len() {
+            if bytes[i] == b'%' && i + 2 < bytes.len() {
+                let h1 = bytes[i + 1] as char;
+                let h2 = bytes[i + 2] as char;
+                let v1 = h1
+                    .to_digit(16)
+                    .ok_or_else(|| anyhow!("Invalid percent-encoding in URI: {}", uri))?;
+                let v2 = h2
+                    .to_digit(16)
+                    .ok_or_else(|| anyhow!("Invalid percent-encoding in URI: {}", uri))?;
+                decoded_bytes.push(((v1 << 4) as u8) | (v2 as u8));
+                i += 3;
+            } else {
+                decoded_bytes.push(bytes[i]);
+                i += 1;
+            }
+        }
+
+        let decoded = String::from_utf8(decoded_bytes)
+            .map_err(|_| anyhow!("Decoded path is not valid UTF-8 in URI: {}", uri))?;
+
+        Ok(std::path::PathBuf::from(decoded))
     } else {
         Err(anyhow!("URI does not match expected format: {}", uri))
     }

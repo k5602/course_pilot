@@ -6,6 +6,7 @@
 use crate::ImportError;
 use serde::Deserialize;
 use std::time::Duration;
+use tokio_util::sync::CancellationToken;
 
 /// Create a properly configured HTTP client for YouTube API requests
 fn create_http_client() -> Result<reqwest::Client, ImportError> {
@@ -23,13 +24,13 @@ fn create_http_client() -> Result<reqwest::Client, ImportError> {
 pub struct YoutubeSection {
     pub title: String,
     pub duration: Duration,
-    pub video_id: String, // Always present for YouTube videos
-    pub url: String, // Always present for YouTube videos
-    pub playlist_id: Option<String>, // Playlist ID for preserving playlist context
+    pub video_id: String,              // Always present for YouTube videos
+    pub url: String,                   // Always present for YouTube videos
+    pub playlist_id: Option<String>,   // Playlist ID for preserving playlist context
     pub thumbnail_url: Option<String>, // Video thumbnail URL
-    pub description: Option<String>, // Video description
-    pub author: Option<String>, // Channel name/author
-    pub original_index: usize, // Preserve import order
+    pub description: Option<String>,   // Video description
+    pub author: Option<String>,        // Channel name/author
+    pub original_index: usize,         // Preserve import order
 }
 
 /// YouTube playlist metadata
@@ -173,7 +174,7 @@ pub async fn import_from_youtube(
         let videos_resp: VideosResponse = resp.json().await.map_err(|e| {
             ImportError::Network(format!("Failed to parse video details response: {e}"))
         })?;
-        
+
         // Validate that we got responses for all requested videos
         if videos_resp.items.len() != chunk.len() {
             log::warn!(
@@ -182,34 +183,48 @@ pub async fn import_from_youtube(
                 chunk.len()
             );
         }
-        for (video_index, (item, video_id)) in videos_resp.items.iter().zip(chunk.iter()).enumerate() {
+        for (video_index, (item, video_id)) in
+            videos_resp.items.iter().zip(chunk.iter()).enumerate()
+        {
             // Debug log the raw YouTube API data
-            log::info!("YouTube API response for video {}: title='{}', requested_id='{}', response_title='{}'", 
-                       video_index, item.snippet.title, video_id, item.snippet.title);
-            
+            log::info!(
+                "YouTube API response for video {}: title='{}', requested_id='{}', response_title='{}'",
+                video_index,
+                item.snippet.title,
+                video_id,
+                item.snippet.title
+            );
+
             let title = clean_video_title(&item.snippet.title);
             let duration = parse_iso8601_duration(&item.content_details.duration)
                 .unwrap_or_else(|| Duration::from_secs(0));
             let url = format!("https://www.youtube.com/watch?v={}", video_id);
-            
+
             // Debug log what we're creating
-            log::info!("Creating YoutubeSection: title='{}', video_id='{}', url='{}'", title, video_id, url);
-            
+            log::info!(
+                "Creating YoutubeSection: title='{}', video_id='{}', url='{}'",
+                title,
+                video_id,
+                url
+            );
+
             // Extract best available thumbnail
             let thumbnail_url = item.snippet.thumbnails.as_ref().and_then(|thumbs| {
-                thumbs.maxres.as_ref()
+                thumbs
+                    .maxres
+                    .as_ref()
                     .or(thumbs.high.as_ref())
                     .or(thumbs.medium.as_ref())
                     .or(thumbs.default.as_ref())
                     .map(|thumb| thumb.url.clone())
             });
-            
+
             // Calculate original index across all chunks
             let original_index = chunk_index * 50 + video_index;
-            
-            let section = YoutubeSection { 
-                title, 
-                duration, 
+
+            let section = YoutubeSection {
+                title,
+                duration,
                 video_id: video_id.to_string(),
                 url,
                 playlist_id: Some(playlist_id.clone()),
@@ -218,7 +233,7 @@ pub async fn import_from_youtube(
                 author: item.snippet.channel_title.clone(),
                 original_index,
             };
-            
+
             // Validate section completeness
             validate_youtube_section(&section)?;
             sections.push(section);
@@ -391,22 +406,24 @@ fn clean_video_title(title: &str) -> String {
 fn validate_youtube_section(section: &YoutubeSection) -> Result<(), ImportError> {
     if section.title.is_empty() {
         return Err(ImportError::Network(
-            "YouTube video has empty title".to_string()
+            "YouTube video has empty title".to_string(),
         ));
     }
-    
+
     if section.video_id.is_empty() {
-        return Err(ImportError::Network(
-            format!("YouTube video '{}' has empty video_id", section.title)
-        ));
+        return Err(ImportError::Network(format!(
+            "YouTube video '{}' has empty video_id",
+            section.title
+        )));
     }
-    
+
     if section.url.is_empty() {
-        return Err(ImportError::Network(
-            format!("YouTube video '{}' has empty URL", section.title)
-        ));
+        return Err(ImportError::Network(format!(
+            "YouTube video '{}' has empty URL",
+            section.title
+        )));
     }
-    
+
     Ok(())
 }
 
@@ -427,6 +444,361 @@ pub fn extract_playlist_id(url: &str) -> Option<String> {
 /// Get playlist metadata without downloading all videos (for quick validation)
 /// Validate a YouTube playlist URL using the YouTube Data API v3.
 /// Returns true if the playlist exists and is accessible (public or unlisted).
+/// Cancellable YouTube import that threads a CancellationToken through all HTTP calls.
+pub async fn import_from_youtube_with_cancel(
+    url: &str,
+    api_key: &str,
+    cancel: &CancellationToken,
+) -> Result<(Vec<YoutubeSection>, YoutubePlaylistMetadata), ImportError> {
+    if !is_valid_youtube_playlist_url(url) {
+        return Err(ImportError::InvalidUrl(format!(
+            "Invalid YouTube playlist URL: {url}"
+        )));
+    }
+
+    if cancel.is_cancelled() {
+        return Err(ImportError::Network("Operation cancelled".to_string()));
+    }
+
+    let playlist_id = extract_playlist_id(url).unwrap_or_default();
+    if playlist_id.is_empty() {
+        return Err(ImportError::InvalidUrl(
+            "Could not extract playlist ID".to_string(),
+        ));
+    }
+
+    // Create a configured HTTP client with proper TLS settings
+    let client = create_http_client()?;
+
+    // Step 1: Get all video IDs in the playlist (cancellable)
+    let mut video_ids = Vec::new();
+    let mut next_page_token = None;
+    loop {
+        if cancel.is_cancelled() {
+            return Err(ImportError::Network("Operation cancelled".to_string()));
+        }
+
+        let api_url = format!(
+            "https://www.googleapis.com/youtube/v3/playlistItems?part=contentDetails&maxResults=50&playlistId={playlist_id}&key={api_key}"
+        );
+        let url_with_page = if let Some(token) = &next_page_token {
+            format!("{api_url}&pageToken={token}")
+        } else {
+            api_url.clone()
+        };
+
+        let resp = tokio::select! {
+            _ = cancel.cancelled() => {
+                return Err(ImportError::Network("Operation cancelled".to_string()));
+            }
+            res = client.get(&url_with_page).send() => {
+                res.map_err(|e| ImportError::Network(format!("Failed to fetch playlist items: {e}")))?
+            }
+        };
+
+        #[derive(Deserialize)]
+        struct PlaylistItemsResponse {
+            items: Vec<PlaylistItem>,
+            #[serde(rename = "nextPageToken")]
+            next_page_token: Option<String>,
+        }
+        #[derive(Deserialize)]
+        struct PlaylistItem {
+            #[serde(rename = "contentDetails")]
+            content_details: ContentDetails,
+        }
+        #[derive(Deserialize)]
+        struct ContentDetails {
+            #[serde(rename = "videoId")]
+            video_id: String,
+        }
+
+        let playlist_resp: PlaylistItemsResponse = tokio::select! {
+            _ = cancel.cancelled() => {
+                return Err(ImportError::Network("Operation cancelled".to_string()));
+            }
+            parsed = resp.json() => {
+                parsed.map_err(|e| ImportError::Network(format!("Failed to parse playlist items response: {e}")))?
+            }
+        };
+
+        for item in playlist_resp.items {
+            video_ids.push(item.content_details.video_id);
+        }
+        if let Some(token) = playlist_resp.next_page_token {
+            next_page_token = Some(token);
+        } else {
+            break;
+        }
+    }
+
+    if cancel.is_cancelled() {
+        return Err(ImportError::Network("Operation cancelled".to_string()));
+    }
+
+    if video_ids.is_empty() {
+        return Err(ImportError::NoContent);
+    }
+
+    // Step 1.5: Fetch playlist metadata (cancellable)
+    let playlist_metadata =
+        fetch_playlist_metadata_with_cancel(playlist_id.clone(), api_key, &client, cancel).await?;
+
+    // Step 2: Fetch video details (title, duration, thumbnails, description) in batches of 50 (cancellable)
+    let mut sections = Vec::new();
+    for (chunk_index, chunk) in video_ids.chunks(50).enumerate() {
+        if cancel.is_cancelled() {
+            return Err(ImportError::Network("Operation cancelled".to_string()));
+        }
+
+        let ids = chunk.join(",");
+        let api_url = format!(
+            "https://www.googleapis.com/youtube/v3/videos?part=contentDetails,snippet&id={ids}&key={api_key}"
+        );
+        let resp = tokio::select! {
+            _ = cancel.cancelled() => {
+                return Err(ImportError::Network("Operation cancelled".to_string()));
+            }
+            res = client.get(&api_url).send() => {
+                res.map_err(|e| ImportError::Network(format!("Failed to fetch video details: {e}")))?
+            }
+        };
+
+        #[derive(Deserialize)]
+        struct VideosResponse {
+            items: Vec<VideoItem>,
+        }
+        #[derive(Deserialize)]
+        struct VideoItem {
+            snippet: Snippet,
+            #[serde(rename = "contentDetails")]
+            content_details: VideoContentDetails,
+        }
+        #[derive(Deserialize)]
+        struct Snippet {
+            title: String,
+            description: Option<String>,
+            #[serde(rename = "channelTitle")]
+            channel_title: Option<String>,
+            thumbnails: Option<Thumbnails>,
+        }
+        #[derive(Deserialize)]
+        struct Thumbnails {
+            #[serde(rename = "maxres")]
+            maxres: Option<ThumbnailInfo>,
+            high: Option<ThumbnailInfo>,
+            medium: Option<ThumbnailInfo>,
+            #[serde(rename = "default")]
+            default: Option<ThumbnailInfo>,
+        }
+        #[derive(Deserialize)]
+        struct ThumbnailInfo {
+            url: String,
+        }
+        #[derive(Deserialize)]
+        struct VideoContentDetails {
+            duration: String,
+        }
+
+        let videos_resp: VideosResponse = tokio::select! {
+            _ = cancel.cancelled() => {
+                return Err(ImportError::Network("Operation cancelled".to_string()));
+            }
+            parsed = resp.json() => {
+                parsed.map_err(|e| ImportError::Network(format!("Failed to parse video details response: {e}")))?
+            }
+        };
+
+        if videos_resp.items.len() != chunk.len() {
+            log::warn!(
+                "YouTube API returned {} videos but requested {}. Some videos may be private or deleted.",
+                videos_resp.items.len(),
+                chunk.len()
+            );
+        }
+
+        for (video_index, (item, video_id)) in
+            videos_resp.items.iter().zip(chunk.iter()).enumerate()
+        {
+            if cancel.is_cancelled() {
+                return Err(ImportError::Network("Operation cancelled".to_string()));
+            }
+
+            let title = clean_video_title(&item.snippet.title);
+            let duration = parse_iso8601_duration(&item.content_details.duration)
+                .unwrap_or_else(|| Duration::from_secs(0));
+            let url = format!("https://www.youtube.com/watch?v={}", video_id);
+
+            // Extract best available thumbnail
+            let thumbnail_url = item.snippet.thumbnails.as_ref().and_then(|thumbs| {
+                thumbs
+                    .maxres
+                    .as_ref()
+                    .or(thumbs.high.as_ref())
+                    .or(thumbs.medium.as_ref())
+                    .or(thumbs.default.as_ref())
+                    .map(|thumb| thumb.url.clone())
+            });
+
+            // Calculate original index across all chunks
+            let original_index = chunk_index * 50 + video_index;
+
+            let section = YoutubeSection {
+                title,
+                duration,
+                video_id: video_id.to_string(),
+                url,
+                playlist_id: Some(playlist_id.clone()),
+                thumbnail_url,
+                description: item.snippet.description.clone(),
+                author: item.snippet.channel_title.clone(),
+                original_index,
+            };
+
+            validate_youtube_section(&section)?;
+            sections.push(section);
+        }
+    }
+
+    Ok((sections, playlist_metadata))
+}
+
+/// Cancellable metadata fetch for playlists
+async fn fetch_playlist_metadata_with_cancel(
+    playlist_id: String,
+    api_key: &str,
+    client: &reqwest::Client,
+    cancel: &CancellationToken,
+) -> Result<YoutubePlaylistMetadata, ImportError> {
+    let api_url = format!(
+        "https://www.googleapis.com/youtube/v3/playlists?part=snippet,contentDetails&id={playlist_id}&key={api_key}"
+    );
+
+    let resp = tokio::select! {
+        _ = cancel.cancelled() => {
+            return Err(ImportError::Network("Operation cancelled".to_string()));
+        }
+        res = client.get(&api_url).send() => {
+            res.map_err(|e| ImportError::Network(format!("Failed to fetch playlist metadata: {e}")))?
+        }
+    };
+
+    #[derive(Deserialize)]
+    struct PlaylistResponse {
+        items: Vec<PlaylistItem>,
+    }
+    #[derive(Deserialize)]
+    struct PlaylistItem {
+        snippet: PlaylistSnippet,
+        #[serde(rename = "contentDetails")]
+        content_details: PlaylistContentDetails,
+    }
+    #[derive(Deserialize)]
+    struct PlaylistSnippet {
+        title: String,
+        description: String,
+        #[serde(rename = "channelTitle")]
+        channel_title: String,
+    }
+    #[derive(Deserialize)]
+    struct PlaylistContentDetails {
+        #[serde(rename = "itemCount")]
+        item_count: usize,
+    }
+
+    let playlist_resp: PlaylistResponse = tokio::select! {
+        _ = cancel.cancelled() => {
+            return Err(ImportError::Network("Operation cancelled".to_string()));
+        }
+        parsed = resp.json() => {
+            parsed.map_err(|e| ImportError::Network(format!("Failed to parse playlist metadata response: {e}")))?
+        }
+    };
+
+    if let Some(item) = playlist_resp.items.first() {
+        Ok(YoutubePlaylistMetadata {
+            title: item.snippet.title.clone(),
+            description: Some(item.snippet.description.clone()),
+            channel_title: Some(item.snippet.channel_title.clone()),
+            video_count: item.content_details.item_count,
+        })
+    } else {
+        Ok(YoutubePlaylistMetadata {
+            title: format!(
+                "YouTube Playlist {}",
+                &playlist_id[..8.min(playlist_id.len())]
+            ),
+            description: None,
+            channel_title: None,
+            video_count: 0,
+        })
+    }
+}
+
+/// Cancellable real validation of a playlist with YouTube Data API
+async fn validate_playlist_real_with_cancel(
+    url: &str,
+    api_key: &str,
+    cancel: &CancellationToken,
+) -> Result<bool, ImportError> {
+    let client = create_http_client()?;
+    let playlist_id = extract_playlist_id(url)
+        .ok_or_else(|| ImportError::InvalidUrl("Could not extract playlist ID".to_string()))?;
+    let api_url = format!(
+        "https://www.googleapis.com/youtube/v3/playlists?part=status&id={playlist_id}&key={api_key}"
+    );
+
+    let resp = tokio::select! {
+        _ = cancel.cancelled() => {
+            return Err(ImportError::Network("Operation cancelled".to_string()));
+        }
+        res = client.get(&api_url).send() => {
+            res.map_err(|e| ImportError::Network(format!("Failed to fetch playlist: {e}")))?
+        }
+    };
+
+    #[derive(serde::Deserialize)]
+    struct PlaylistStatusResponse {
+        items: Vec<PlaylistStatusItem>,
+    }
+    #[derive(serde::Deserialize)]
+    struct PlaylistStatusItem {
+        status: PlaylistPrivacyStatus,
+    }
+    #[derive(serde::Deserialize)]
+    struct PlaylistPrivacyStatus {
+        #[serde(rename = "privacyStatus")]
+        privacy_status: String,
+    }
+
+    let playlist_resp: PlaylistStatusResponse = tokio::select! {
+        _ = cancel.cancelled() => {
+            return Err(ImportError::Network("Operation cancelled".to_string()));
+        }
+        parsed = resp.json() => {
+            parsed.map_err(|e| ImportError::Network(format!("Failed to parse playlist status response: {e}")))?
+        }
+    };
+
+    if let Some(item) = playlist_resp.items.first() {
+        Ok(item.status.privacy_status == "public" || item.status.privacy_status == "unlisted")
+    } else {
+        Ok(false)
+    }
+}
+
+/// Cancellable validation wrapper
+pub async fn validate_playlist_url_with_cancel(
+    url: &str,
+    api_key: &str,
+    cancel: &CancellationToken,
+) -> Result<bool, ImportError> {
+    if !is_valid_youtube_playlist_url(url) {
+        return Ok(false);
+    }
+    validate_playlist_real_with_cancel(url, api_key, cancel).await
+}
+
 pub async fn validate_playlist_url(url: &str, api_key: &str) -> Result<bool, ImportError> {
     if !is_valid_youtube_playlist_url(url) {
         return Ok(false);

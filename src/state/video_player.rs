@@ -81,7 +81,7 @@ impl VideoPlayerContext {
 
     /// Toggle play/pause state
     pub fn toggle_play_pause(&mut self) {
-        let current_state = self.playback_state.read().clone();
+        let current_state = { *self.playback_state.read() };
         match current_state {
             PlaybackState::Playing => self.pause(),
             PlaybackState::Paused | PlaybackState::Stopped => self.play(),
@@ -91,14 +91,20 @@ impl VideoPlayerContext {
 
     /// Start playback
     pub fn play(&mut self) {
-        if self.current_video.read().is_some() && self.playback_state.read().can_resume() {
+        let can_play = {
+            let has_video = self.current_video.read().is_some();
+            let can_resume = self.playback_state.read().can_resume();
+            has_video && can_resume
+        };
+        if can_play {
             self.playback_state.set(PlaybackState::Playing);
         }
     }
 
     /// Pause playback
     pub fn pause(&mut self) {
-        if self.playback_state.read().can_pause() {
+        let can_pause = { self.playback_state.read().can_pause() };
+        if can_pause {
             self.playback_state.set(PlaybackState::Paused);
         }
     }
@@ -111,14 +117,17 @@ impl VideoPlayerContext {
 
     /// Seek to absolute position in seconds
     pub fn seek_to(&mut self, position: f64) {
-        let duration = *self.duration.read();
+        let duration = { *self.duration.read() };
         let clamped_position = position.clamp(0.0, duration);
         self.position.set(clamped_position);
     }
 
     /// Seek relative to current position
     pub fn seek_relative(&mut self, delta: f64) {
-        let new_position = *self.position.read() + delta;
+        let new_position = {
+            let pos = *self.position.read();
+            pos + delta
+        };
         self.seek_to(new_position);
     }
 
@@ -138,7 +147,8 @@ impl VideoPlayerContext {
 
     /// Toggle mute state
     pub fn toggle_mute(&mut self) {
-        if *self.is_muted.read() {
+        let is_muted_now = { *self.is_muted.read() };
+        if is_muted_now {
             self.set_volume(1.0);
         } else {
             self.set_volume(0.0);
@@ -147,8 +157,8 @@ impl VideoPlayerContext {
 
     /// Toggle fullscreen mode
     pub fn toggle_fullscreen(&mut self) {
-        let is_fullscreen = !*self.is_fullscreen.read();
-        self.is_fullscreen.set(is_fullscreen);
+        let is_fullscreen_now = { *self.is_fullscreen.read() };
+        self.is_fullscreen.set(!is_fullscreen_now);
     }
 
     /// Set fullscreen mode

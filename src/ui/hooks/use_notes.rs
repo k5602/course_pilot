@@ -102,6 +102,7 @@ impl NotesManager {
                 created_before: None,
                 updated_after: None,
                 updated_before: None,
+                tag_match_mode: None,
             };
             crate::storage::notes::search_notes_advanced(&conn, filters)
         })
@@ -120,29 +121,173 @@ impl NotesManager {
     }
 
     pub async fn save_note(&self, note: Note) -> Result<()> {
-        let db = self.db.clone();
-        tokio::task::spawn_blocking(move || {
-            let conn = db.get_conn()?;
-            // If note exists, update; else, create
-            let exists = crate::storage::notes::get_note_by_id(&conn, note.id)?.is_some();
-            if exists {
-                crate::storage::notes::update_note(&conn, &note)
-            } else {
-                crate::storage::notes::create_note(&conn, &note)
-            }
-        })
-        .await
-        .unwrap_or_else(|e| Err(anyhow::anyhow!("Join error: {e}")))
+        // Use pooled async wrappers for DB writes with spawn_blocking for existence check
+        let db_arc = self.db.clone();
+        let note_id = note.id;
+        let exists = {
+            let db = db_arc.clone();
+            tokio::task::spawn_blocking(move || {
+                let conn = db.get_conn()?;
+                crate::storage::notes::get_note_by_id(&conn, note_id)
+            })
+            .await
+            .map_err(|e| anyhow::anyhow!("Join error: {e}"))??
+            .is_some()
+        };
+
+        // Clone inner Database (Database implements Clone; we hold Arc<Database>)
+        let db_owned = (*db_arc).clone();
+
+        if exists {
+            crate::storage::notes::update_note_pooled_async(db_owned, note).await
+        } else {
+            crate::storage::notes::create_note_pooled_async(db_owned, note).await
+        }
     }
 
     pub async fn delete_note(&self, note_id: Uuid) -> Result<()> {
+        let db_arc = self.db.clone();
+        let db_owned = (*db_arc).clone();
+        crate::storage::notes::delete_note_pooled_async(db_owned, note_id).await
+    }
+
+    // New: unified ranked or LIKE search with pagination
+    pub async fn search_notes_unified_paginated(
+        &self,
+        query: String,
+        backend: crate::storage::notes::NotesSearchBackend,
+        limit: i64,
+        offset: i64,
+    ) -> Result<Vec<Note>> {
         let db = self.db.clone();
         tokio::task::spawn_blocking(move || {
             let conn = db.get_conn()?;
-            crate::storage::notes::delete_note(&conn, note_id)
+            crate::storage::notes::search_notes_unified(&conn, &query, backend, limit, offset)
         })
         .await
-        .unwrap_or_else(|e| Err(anyhow::anyhow!("Join error: {e}")))
+        .map_err(|e| anyhow::anyhow!("Join error: {e}"))?
+    }
+
+    // New: simple LIKE search with pagination
+    pub async fn search_notes_paginated(
+        &self,
+        query: String,
+        limit: i64,
+        offset: i64,
+    ) -> Result<Vec<Note>> {
+        let db = self.db.clone();
+        tokio::task::spawn_blocking(move || {
+            let conn = db.get_conn()?;
+            crate::storage::notes::search_notes_paginated(&conn, &query, limit, offset)
+        })
+        .await
+        .map_err(|e| anyhow::anyhow!("Join error: {e}"))?
+    }
+
+    // New: keyset pagination for LIKE search (stable, scalable pagination)
+    pub async fn search_notes_keyset(
+        &self,
+        query: String,
+        before_updated_at: Option<chrono::DateTime<chrono::Utc>>,
+        before_id: Option<Uuid>,
+        limit: i64,
+    ) -> Result<Vec<Note>> {
+        let db = self.db.clone();
+        tokio::task::spawn_blocking(move || {
+            let conn = db.get_conn()?;
+            crate::storage::notes::search_notes_keyset(
+                &conn,
+                &query,
+                before_updated_at,
+                before_id,
+                limit,
+            )
+        })
+        .await
+        .map_err(|e| anyhow::anyhow!("Join error: {e}"))?
+    }
+
+    // New: advanced search with pagination (supports Any/All tag match)
+    pub async fn search_notes_advanced_paginated(
+        &self,
+        course_id: Option<Uuid>,
+        video_id: Option<Option<Uuid>>,
+        content: Option<String>,
+        tags: Vec<String>,
+        tag_match_mode: Option<crate::storage::notes::TagMatchMode>,
+        limit: i64,
+        offset: i64,
+    ) -> Result<Vec<Note>> {
+        let db = self.db.clone();
+        tokio::task::spawn_blocking(move || {
+            let conn = db.get_conn()?;
+            let tag_refs: Vec<&str> = tags.iter().map(|t| t.as_str()).collect();
+            let filters = crate::storage::notes::NoteSearchFilters {
+                course_id,
+                video_id,
+                content: content.as_deref(),
+                tags: if tag_refs.is_empty() {
+                    None
+                } else {
+                    Some(&tag_refs)
+                },
+                timestamp_min: None,
+                timestamp_max: None,
+                created_after: None,
+                created_before: None,
+                updated_after: None,
+                updated_before: None,
+                tag_match_mode,
+            };
+            crate::storage::notes::search_notes_advanced_paginated(&conn, filters, limit, offset)
+        })
+        .await
+        .map_err(|e| anyhow::anyhow!("Join error: {e}"))?
+    }
+
+    // New: advanced search with keyset pagination (supports Any/All tag match)
+    pub async fn search_notes_advanced_keyset(
+        &self,
+        course_id: Option<Uuid>,
+        video_id: Option<Option<Uuid>>,
+        content: Option<String>,
+        tags: Vec<String>,
+        tag_match_mode: Option<crate::storage::notes::TagMatchMode>,
+        before_updated_at: Option<chrono::DateTime<chrono::Utc>>,
+        before_id: Option<Uuid>,
+        limit: i64,
+    ) -> Result<Vec<Note>> {
+        let db = self.db.clone();
+        tokio::task::spawn_blocking(move || {
+            let conn = db.get_conn()?;
+            let tag_refs: Vec<&str> = tags.iter().map(|t| t.as_str()).collect();
+            let filters = crate::storage::notes::NoteSearchFilters {
+                course_id,
+                video_id,
+                content: content.as_deref(),
+                tags: if tag_refs.is_empty() {
+                    None
+                } else {
+                    Some(&tag_refs)
+                },
+                timestamp_min: None,
+                timestamp_max: None,
+                created_after: None,
+                created_before: None,
+                updated_after: None,
+                updated_before: None,
+                tag_match_mode,
+            };
+            crate::storage::notes::search_notes_advanced_keyset(
+                &conn,
+                filters,
+                before_updated_at,
+                before_id,
+                limit,
+            )
+        })
+        .await
+        .map_err(|e| anyhow::anyhow!("Join error: {e}"))?
     }
 }
 

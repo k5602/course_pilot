@@ -1,47 +1,49 @@
+#![allow(dead_code)]
 //! Storage module for Course Pilot
 //!
-//! This module provides database operations and persistence functionality
-//! using SQLite for reliable data storage.
+//! This module wires together the storage submodules and exposes the public
+//! API surface for database access, CRUD, analytics, and notes/settings
+//! integrations. The storage is split into focused submodules:
+//! - core: DB pool, schema init, optimization, metrics (no migrations)
+//! - utils: common SQLite parsing helpers
+//! - courses: course CRUD and queries
+//! - plans: plan CRUD and queries
+//! - progress: video progress tracking CRUD/queries
+//! - analytics: clustering analytics and similarity utilities
+//! - notes: notes persistence and search
+//! - preference_storage: clustering preferences and A/B data
+//! - settings: app settings
 
-pub mod connection_manager;
+pub mod analytics;
+pub mod core;
+pub mod courses;
 pub mod database;
-pub mod maintenance;
-pub mod migrations;
+pub mod plans;
+pub mod progress;
+pub mod utils;
+
 pub mod notes;
-pub mod optimized_queries;
 pub mod preference_storage;
 pub mod settings;
 
-// Re-export main database functions
-pub use database::{
-    ClusteringAnalytics,
-    ClusteringPerformancePoint,
-    ConnectionPoolHealth,
-    Database,
-    DatabasePerformanceMetrics,
-    ProcessingTimeStats,
-    QualityDistribution,
-    delete_course,
-    delete_plan,
-    get_clustering_analytics,
-    get_clustering_performance_history,
-    get_course_by_id,
-    // Enhanced clustering functions
-    get_courses_by_clustering_quality,
-    get_database_performance_metrics,
-    get_plan_by_course_id,
-    get_session_progress,
-    get_similar_courses_by_clustering,
-    get_video_completion_status,
-    init_db,
-    load_courses,
-    load_plan,
-    optimize_database,
-    save_course,
-    save_plan,
-    save_video_progress,
+// Re-export main storage API (kept compatible with previous callers)
+pub use analytics::{
+    ClusteringAnalytics, ClusteringPerformancePoint, ProcessingTimeStats, QualityDistribution,
+    get_clustering_analytics, get_clustering_performance_history,
+    get_courses_by_clustering_quality, get_similar_courses_by_clustering,
     update_clustering_metadata,
 };
+
+pub use core::{
+    ConnectionPoolHealth, Database, DatabasePerformanceMetrics, get_database_performance_metrics,
+    init_db, optimize_database,
+};
+
+pub use courses::{delete_course, get_course_by_id, load_courses, save_course};
+
+pub use plans::{delete_plan, get_plan_by_course_id, load_plan, save_plan};
+
+pub use progress::{get_session_progress, get_video_completion_status, save_video_progress};
 
 // Re-export error types
 pub use crate::error_handling::DatabaseError;
@@ -72,22 +74,5 @@ pub use settings::{
     use_app_settings,
 };
 
-// Re-export preference storage functions for convenience
+// Re-export preference storage for convenience
 pub use preference_storage::PreferenceStorage;
-
-// Re-export optimized queries for convenience
-pub use optimized_queries::{
-    ActivityItem, ActivityType, CourseStatistics, DatabasePerformanceStats, IndexInfo,
-    OptimizedQueries, QueryAnalysis, QueryPlanStep, SearchResult, SearchResultType, TableCounts,
-};
-
-// Re-export connection manager for convenience
-pub use connection_manager::{ConnectionManager, DatabaseStats, IndexUsage};
-
-// Re-export maintenance utilities for convenience
-pub use maintenance::{
-    DatabaseMaintenance, HealthReport, HealthStatus, MaintenanceReport, MaintenanceSchedule,
-};
-
-// Re-export migration utilities for convenience
-pub use migrations::{CURRENT_SCHEMA_VERSION, MigrationManager, MigrationRecord, ValidationReport};

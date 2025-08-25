@@ -62,6 +62,12 @@ pub struct ImportPreferences {
     pub preserve_playlist_order: bool,
     pub extract_timestamps: bool,
     pub download_thumbnails: bool,
+
+    // Ingest/Preview performance and UX
+    /// Max number of parallel threads for duration probing in previews/import (bounded)
+    pub preview_probe_max_concurrency: usize,
+    /// Enable cancellation UI for long-running previews/import scans
+    pub preview_cancellation_enabled: bool,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
@@ -141,6 +147,10 @@ impl Default for ImportPreferences {
             preserve_playlist_order: false,
             extract_timestamps: true,
             download_thumbnails: true,
+
+            // Ingest/Preview performance and UX
+            preview_probe_max_concurrency: 8,
+            preview_cancellation_enabled: true,
         }
     }
 }

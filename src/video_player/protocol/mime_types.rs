@@ -82,8 +82,12 @@ pub fn is_supported_video_extension(extension: &str) -> bool {
 /// Get a list of all supported video file extensions
 pub fn supported_video_extensions() -> Vec<&'static str> {
     vec![
+        // Common and previously supported
         "mp4", "m4v", "webm", "ogg", "ogv", "mov", "qt", "avi", "mkv", "3gp", "3g2", "flv", "wmv",
         "asf", "rm", "rmvb", "mpg", "mpeg", "mpe", "ts", "m2v", "divx", "xvid",
+        // Unified with ingest module coverage
+        "mp2", "mpv", "mts", "m2ts", "yuv", "drc", "svi", "mxf", "roq", "nsv", "f4v", "f4p", "f4a",
+        "f4b", "vob",
     ]
 }
 

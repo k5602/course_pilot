@@ -373,6 +373,7 @@ fn SessionAccordion(props: SessionAccordionProps) -> Element {
                                     session_item_index: session_item_idx,
                                     course_id: props.course_id,
                                     is_session_expanded: is_expanded,
+                                    open_video: video_player_modal.open_video.clone(),
                                 }
                             }
                         } else {
@@ -387,6 +388,7 @@ fn SessionAccordion(props: SessionAccordionProps) -> Element {
                                 session_item_index: session_item_idx,
                                 course_id: props.course_id,
                                 is_session_expanded: is_expanded,
+                                open_video: video_player_modal.open_video.clone(),
                             }
                         }
                     }
@@ -420,6 +422,7 @@ pub struct VideoContentItemProps {
     pub session_item_index: usize,
     pub course_id: Uuid,
     pub is_session_expanded: bool,
+    pub open_video: Callback<(VideoSource, Option<String>)>,
 }
 
 /// Individual video content item component with DaisyUI styling and individual video completion tracking
@@ -427,7 +430,6 @@ pub struct VideoContentItemProps {
 fn VideoContentItem(props: VideoContentItemProps) -> Element {
     let courses_signal = use_courses_reactive();
     let backend = use_backend();
-    let video_player_modal = use_video_player_modal();
 
     // Individual video completion tracking
     let video_completed = use_signal(|| {
@@ -497,14 +499,14 @@ fn VideoContentItem(props: VideoContentItemProps) -> Element {
         let course_id = props.course_id;
         let video_index = props.video_index;
         let video_title = video_title.clone();
-        let video_player_modal = video_player_modal.clone();
+        let open_video = props.open_video.clone();
         let db = use_context::<std::sync::Arc<crate::storage::Database>>();
 
         move |_| {
             let course_id = course_id;
             let video_index = video_index;
             let video_title = video_title();
-            let video_player_modal = video_player_modal.clone();
+            let open_video = open_video.clone();
             let db = db.clone();
 
             spawn(async move {
@@ -580,9 +582,7 @@ fn VideoContentItem(props: VideoContentItemProps) -> Element {
                             &video_title,
                             video_source.title()
                         );
-                        video_player_modal
-                            .open_video
-                            .call((video_source, Some(video_title.clone())));
+                        open_video.call((video_source, Some(video_title.clone())));
                         toast_helpers::success(format!("Opening video player: {}", video_title));
                     }
                     Ok(Ok(None)) => {

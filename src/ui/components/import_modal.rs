@@ -93,6 +93,7 @@ pub fn ImportModal(props: ImportModalProps) -> Element {
     let mut folder_validation = use_signal(|| None::<crate::ui::hooks::FolderValidation>);
     let mut is_generating_preview = use_signal(|| false);
     let mut local_folder_preview = use_signal(|| None::<LocalFolderPreview>);
+    let mut preview_cancel_token = use_signal(|| None::<tokio_util::sync::CancellationToken>);
 
     let import_manager = crate::ui::hooks::use_import_manager();
     let _course_manager = crate::ui::hooks::use_course_manager();
@@ -240,6 +241,7 @@ pub fn ImportModal(props: ImportModalProps) -> Element {
         let mut is_validating = is_validating;
         let mut is_generating_preview = is_generating_preview;
         let mut local_folder_preview = local_folder_preview;
+        let mut preview_cancel_token = preview_cancel_token;
 
         move || {
             let path = local_path();
@@ -262,9 +264,15 @@ pub fn ImportModal(props: ImportModalProps) -> Element {
 
                             // If validation is successful, generate preview
                             if validation.is_valid {
-                                match import_manager.generate_folder_preview(path_buf).await {
+                                let token = tokio_util::sync::CancellationToken::new();
+                                preview_cancel_token.set(Some(token.clone()));
+                                match import_manager
+                                    .generate_folder_preview_with_cancel(path_buf, token)
+                                    .await
+                                {
                                     Ok(preview) => {
                                         local_folder_preview.set(Some(preview));
+                                        preview_cancel_token.set(None);
                                     }
                                     Err(e) => {
                                         log::error!("Failed to generate preview: {}", e);
@@ -272,6 +280,7 @@ pub fn ImportModal(props: ImportModalProps) -> Element {
                                             "Failed to generate preview: {}",
                                             e
                                         ));
+                                        preview_cancel_token.set(None);
                                     }
                                 }
                             }
@@ -308,6 +317,7 @@ pub fn ImportModal(props: ImportModalProps) -> Element {
             folder_validation.set(None);
             is_generating_preview.set(false);
             local_folder_preview.set(None);
+            preview_cancel_token.set(None);
         }
     });
 
@@ -323,8 +333,22 @@ pub fn ImportModal(props: ImportModalProps) -> Element {
                     onclick: move |_| props.on_close.call(()),
                     "Cancel"
                 }
-                // Only show import button for non-YouTube tabs (YouTube has its own button)
-                if current_source != ImportSource::YouTube {
+                // Cancel preview if a long-running preview is in progress (Local Folder only)
+                                if current_source == ImportSource::LocalFolder && is_generating_preview() {
+                                    button {
+                                        class: "btn btn-warning btn-sm",
+                                        disabled: preview_cancel_token().is_none(),
+                                        onclick: move |_| {
+                                            if let Some(token) = preview_cancel_token() {
+                                                token.cancel();
+                                                crate::ui::toast_helpers::info("Cancelling preview...");
+                                            }
+                                        },
+                                        "Cancel Preview"
+                                    }
+                                }
+                                // Only show import button for non-YouTube tabs (YouTube has its own button)
+                                if current_source != ImportSource::YouTube {
                     button {
                         class: "btn btn-primary btn-sm",
                         disabled: !is_valid || is_validating() || props.preview_loading,
@@ -459,6 +483,11 @@ fn YouTubeImportForm(
     let mut api_key = use_signal(String::new);
     let mut api_key_from_settings = use_signal(|| false);
     let api_key_validation_status = use_signal(|| None::<bool>);
+    let mut youtube_preview_cancel_token =
+        use_signal(|| None::<tokio_util::sync::CancellationToken>);
+    let mut _youtube_import_cancelled = use_signal(|| false);
+    let mut youtube_import_cancel_token =
+        use_signal(|| None::<tokio_util::sync::CancellationToken>);
 
     // Initialize API key from settings when settings load
     use_effect({
@@ -516,6 +545,8 @@ fn YouTubeImportForm(
 
             // If we have an API key, validate the playlist and load preview
             if !api_key().trim().is_empty() {
+                let token = tokio_util::sync::CancellationToken::new();
+                youtube_preview_cancel_token.set(Some(token.clone()));
                 is_validating.set(true);
                 is_loading_preview.set(true);
 
@@ -526,15 +557,32 @@ fn YouTubeImportForm(
                 let mut is_loading_preview = is_loading_preview;
 
                 spawn(async move {
-                    // First validate the playlist exists
-                    match crate::ingest::youtube::validate_playlist_url(&new_url, &api_key_val)
-                        .await
+                    // First validate the playlist exists (honor cancellation)
+                    if token.is_cancelled() {
+                        is_validating.set(false);
+                        is_loading_preview.set(false);
+                        youtube_preview_cancel_token.set(None);
+                        return;
+                    }
+                    match crate::ingest::youtube::validate_playlist_url_with_cancel(
+                        &new_url,
+                        &api_key_val,
+                        &token,
+                    )
+                    .await
                     {
                         Ok(true) => {
-                            // Load preview data
-                            match crate::ingest::youtube::import_from_youtube(
+                            // Load preview data (honor cancellation)
+                            if token.is_cancelled() {
+                                is_validating.set(false);
+                                is_loading_preview.set(false);
+                                youtube_preview_cancel_token.set(None);
+                                return;
+                            }
+                            match crate::ingest::youtube::import_from_youtube_with_cancel(
                                 &new_url,
                                 &api_key_val,
+                                &token,
                             )
                             .await
                             {
@@ -562,6 +610,7 @@ fn YouTubeImportForm(
                                     };
 
                                     preview.set(Some(preview_data));
+                                    youtube_preview_cancel_token.set(None);
                                 }
                                 Err(crate::ImportError::Network(msg)) => {
                                     validation_error.set(Some(format!("Network error: {msg}")));
@@ -597,6 +646,7 @@ fn YouTubeImportForm(
 
                     is_validating.set(false);
                     is_loading_preview.set(false);
+                    youtube_preview_cancel_token.set(None);
                 });
             }
         }
@@ -689,6 +739,7 @@ fn YouTubeImportForm(
         let url = url;
         let api_key = api_key;
         let preview = preview;
+        let mut youtube_import_cancel_token = youtube_import_cancel_token;
 
         move |_| {
             let url_val = url().trim().to_string();
@@ -746,7 +797,15 @@ fn YouTubeImportForm(
                     "Fetching playlist data...".to_string(),
                 );
 
-                match crate::ingest::youtube::import_from_youtube(&url_val, &api_key_val).await {
+                let token = tokio_util::sync::CancellationToken::new();
+                youtube_import_cancel_token.set(Some(token.clone()));
+                match crate::ingest::youtube::import_from_youtube_with_cancel(
+                    &url_val,
+                    &api_key_val,
+                    &token,
+                )
+                .await
+                {
                     Ok((sections, metadata)) => {
                         complete_stage(
                             crate::types::ImportStage::Fetching,
@@ -1285,6 +1344,18 @@ fn YouTubeImportForm(
                         div { class: "mt-2",
                             progress { class: "progress progress-primary w-full" }
                         }
+                        div { class: "mt-3 flex justify-end",
+                            button {
+                                class: "btn btn-warning btn-sm",
+                                onclick: move |_| {
+                                    if let Some(token) = youtube_preview_cancel_token() {
+                                        token.cancel();
+                                        crate::ui::toast_helpers::info("Cancelling YouTube preview...");
+                                    }
+                                },
+                                "Cancel Preview"
+                            }
+                        }
                     }
                 }
             }
@@ -1292,6 +1363,18 @@ fn YouTubeImportForm(
             // Enhanced import progress
             if let Some(job) = import_job() {
                 YouTubeImportProgressPanel { job }
+                div { class: "mt-2 flex justify-end",
+                    button {
+                        class: "btn btn-warning btn-sm",
+                        onclick: move |_| {
+                            if let Some(token) = youtube_import_cancel_token() {
+                                token.cancel();
+                                crate::ui::toast_helpers::info("Cancelling YouTube import...");
+                            }
+                        },
+                        "Cancel Import"
+                    }
+                }
             }
 
             // Enhanced import button
