@@ -1,4 +1,4 @@
-use crate::planner::scheduler::PlanAnalysis;
+use crate::planner::PlanAnalysis;
 
 use crate::types::{AdvancedSchedulerSettings, Course, DifficultyLevel};
 use crate::ui::hooks::{use_analytics_manager, use_backend};

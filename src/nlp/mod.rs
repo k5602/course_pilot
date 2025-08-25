@@ -7,7 +7,7 @@
 //!   "Session N" modules from the original order with zero-duration sections.
 //!
 //! Planner integration:
-//! - Feed the groups into `planner::scheduler::generate_plan_from_groups(...)`.
+//! - Feed the groups into `planner::generate_plan_from_groups(...)`.
 //! - The planner is responsible for packing by duration, spacing, difficulty progression,
 //!   and all scheduling optimizations. NLP does not influence timing.
 //!

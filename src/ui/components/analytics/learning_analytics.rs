@@ -1,4 +1,4 @@
-use crate::planner::scheduler::{PlanAnalysis, VelocityCategory};
+use crate::planner::{PlanAnalysis, VelocityCategory};
 use crate::storage::ClusteringAnalytics;
 use crate::ui::hooks::use_analytics_manager;
 use crate::ui::hooks::use_backend;

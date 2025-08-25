@@ -1,9 +1,11 @@
-use crate::planner::scheduler::{
+use crate::planner::{
     LearningVelocityAnalysis, LoadDistribution as SchedulerLoadDistribution, PlanAnalysis,
     analyze_plan_effectiveness,
 };
 use crate::storage::database::Database;
-use crate::types::{AdvancedSchedulerSettings, Course, DifficultyLevel, DistributionStrategy, VideoProgressUpdate};
+use crate::types::{
+    AdvancedSchedulerSettings, Course, DifficultyLevel, DistributionStrategy, VideoProgressUpdate,
+};
 use crate::ui::toast_helpers;
 use anyhow::Result;
 use dioxus::prelude::*;
@@ -369,7 +371,12 @@ impl AnalyticsManager {
     }
 
     /// Get video completion status
-    pub async fn get_video_completion_status(&self, plan_id: Uuid, session_index: usize, video_index: usize) -> Result<bool> {
+    pub async fn get_video_completion_status(
+        &self,
+        plan_id: Uuid,
+        session_index: usize,
+        video_index: usize,
+    ) -> Result<bool> {
         let db = self.db.clone();
         tokio::task::spawn_blocking(move || {
             crate::storage::get_video_completion_status(&db, &plan_id, session_index, video_index)

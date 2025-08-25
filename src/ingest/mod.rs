@@ -138,15 +138,12 @@ pub fn probe_video_duration(path: &std::path::Path) -> Option<std::time::Duratio
         _ => None,
     };
 
-    // Update cache on success and return.
-    if let Some(d) = computed {
-        if let Ok(mut cache) = VIDEO_DURATION_CACHE.lock() {
-            cache.insert(path.to_path_buf(), (len, mtime, d));
-        }
-        Some(d)
-    } else {
-        None
+    // Update cache and return (fallback to 0s when unknown)
+    let d = computed.unwrap_or(std::time::Duration::from_secs(0));
+    if let Ok(mut cache) = VIDEO_DURATION_CACHE.lock() {
+        cache.insert(path.to_path_buf(), (len, mtime, d));
     }
+    Some(d)
 }
 
 /// Progress tracking for integrated import operations

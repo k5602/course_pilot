@@ -30,7 +30,7 @@ pub struct LocalVideoSection {
     pub original_index: usize, // Preserve import order for sequential detection
 }
 
-/// Enhanced import result with content type analysis
+/// import result with content type analysis
 #[derive(Debug, Clone)]
 pub struct LocalImportResult {
     pub sections: Vec<LocalVideoSection>,
@@ -599,7 +599,7 @@ fn is_ignored_directory(path: &Path) -> bool {
             ".trash",
             ".trashes",
         ];
-        if ignored.contains(&name_lower.as_str()) || name.starts_with('.') {
+        if ignored.contains(&name_lower.as_str()) {
             return true;
         }
     }

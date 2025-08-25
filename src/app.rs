@@ -12,7 +12,7 @@ pub fn initialize_app() -> Result<(), Box<dyn std::error::Error>> {
             .filter_module("symphonia_core::probe", log::LevelFilter::Off)
             .format_timestamp_secs()
             .init();
-        log::info!("Course Pilot application starting in debug mode with enhanced logging");
+        log::info!("Course Pilot application starting in debug mode with  logging");
     }
 
     #[cfg(not(debug_assertions))]

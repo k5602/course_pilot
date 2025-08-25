@@ -346,7 +346,7 @@ mod tests {
         let _current_route = "route3".to_string();
 
         // Simulate adding to history
-        history.push("route2".to_string()); // Current becomes previous
+        history.push("route2".to_string());
 
         // Simulate going back
         if let Some(previous) = history.pop() {
@@ -358,13 +358,13 @@ mod tests {
 
     // UI/state integration test: toggling contextual panel via hooks in a minimal component
     #[test]
-    #[ignore]
     fn test_contextual_panel_toggle_via_hooks() {
         use dioxus::prelude::*;
-        let dom = VirtualDom::new(TestPanelRoot);
+        let mut dom = VirtualDom::new(TestPanelRoot);
+        let mut mutations = dioxus_core::NoOpMutations;
+        dom.rebuild(&mut mutations);
         let rendered = dioxus_ssr::render(&dom);
 
-        // Initially closed, after calling set_contextual_panel_tab_reactive it should be open
         assert!(rendered.contains("before=false"));
         assert!(rendered.contains("after=true"));
     }
@@ -374,7 +374,6 @@ mod tests {
         let panel = use_contextual_panel_reactive();
         let before = panel.read().is_open;
 
-        // Use hook-driven setter to open and set tab; should set is_open = true
         set_contextual_panel_tab_reactive(ContextualPanelTab::Notes);
 
         let after = panel.read().is_open;
