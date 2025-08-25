@@ -40,6 +40,9 @@ pub fn APIKeysSettings(props: APIKeysSettingsProps) -> Element {
     let gemini_status = use_signal(|| ApiKeyStatus::NotSet);
     let is_saving = use_signal(|| false);
 
+    let backend = crate::ui::hooks::use_backend();
+    let gemini_manager = backend.gemini.clone();
+
     // Initialize status based on existing keys
     use_effect({
         let youtube_key = youtube_key();
@@ -109,7 +112,7 @@ pub fn APIKeysSettings(props: APIKeysSettingsProps) -> Element {
 
             spawn(async move {
                 // Test the API key by making a simple request
-                match test_gemini_api_key(&key).await {
+                match crate::gemini::GeminiClient::validate_api_key(&key).await {
                     Ok(true) => {
                         gemini_status.set(ApiKeyStatus::Valid);
                         toast_helpers::success("Gemini API key is valid!");
@@ -136,6 +139,7 @@ pub fn APIKeysSettings(props: APIKeysSettingsProps) -> Element {
         let youtube_key = youtube_key();
         let gemini_key = gemini_key();
         let mut is_saving = is_saving;
+        let gemini = gemini_manager.clone();
 
         move |_| {
             let settings_manager = settings_manager.clone();
@@ -143,6 +147,7 @@ pub fn APIKeysSettings(props: APIKeysSettingsProps) -> Element {
             let youtube_key = youtube_key.trim().to_string();
             let gemini_key = gemini_key.trim().to_string();
 
+            let gem = gemini.clone();
             spawn(async move {
                 is_saving.set(true);
 
@@ -165,12 +170,17 @@ pub fn APIKeysSettings(props: APIKeysSettingsProps) -> Element {
                 } else {
                     Some(gemini_key)
                 };
+                let gemini_key_opt_clone = gemini_key_opt.clone();
                 if let Err(e) = settings_manager.set_gemini_api_key(gemini_key_opt).await {
                     toast_helpers::error(format!("Failed to save Gemini API key: {e}"));
                     success = false;
                 }
 
                 if success {
+                    // Reinitialize Gemini manager with the new key so changes take effect immediately
+                    let _ = gem.set_api_key(gemini_key_opt_clone).await;
+                    let _ = gem.initialize().await;
+
                     toast_helpers::success("API keys saved successfully!");
                     on_settings_updated.call(());
                 }
@@ -419,14 +429,3 @@ pub fn APIKeysSettings(props: APIKeysSettingsProps) -> Element {
 }
 
 // Helper function to test Gemini API key
-async fn test_gemini_api_key(api_key: &str) -> anyhow::Result<bool> {
-    // This is a placeholder - in a real implementation, you would make a test request to Gemini API
-    // For now, we'll just check if the key looks valid (starts with expected prefix)
-    if api_key.starts_with("AIza") && api_key.len() > 20 {
-        // Simulate API call delay
-        tokio::time::sleep(std::time::Duration::from_millis(1000)).await;
-        Ok(true)
-    } else {
-        Ok(false)
-    }
-}

@@ -3,6 +3,7 @@ pub mod use_analytics;
 pub mod use_backend;
 pub mod use_courses;
 pub mod use_export;
+pub mod use_gemini;
 pub mod use_import;
 pub mod use_modals;
 pub mod use_navigation;
@@ -25,6 +26,7 @@ pub use use_export::{
     ExportManager, use_export_course_action, use_export_manager, use_export_notes_action,
     use_export_plan_action,
 };
+pub use use_gemini::{GeminiManager, use_gemini_manager};
 pub use use_import::{
     FolderValidation, ImportManager, LocalFolderPreview, use_folder_preview, use_folder_validation,
     use_import_manager,

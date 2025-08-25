@@ -1,8 +1,8 @@
-use anyhow::{anyhow, Result};
+use anyhow::{Result, anyhow};
 use reqwest::Client;
 
 use super::types::*;
-use crate::storage::settings::AppSettings;
+// API key is provided externally via SettingsManager/Backend; no direct settings access here.
 
 #[derive(Clone)]
 pub struct GeminiClient {
@@ -20,15 +20,28 @@ impl GeminiClient {
         }
     }
 
-    pub async fn initialize(&mut self) -> Result<()> {
-        // Load API key from database settings
-        let settings = AppSettings::load()?;
-        self.api_key = settings.get_gemini_api_key().map(|s| s.to_string());
-        
-        if self.api_key.is_none() {
-            return Err(anyhow!("Gemini API key not configured. Please set it in Settings."));
+    pub fn with_api_key(api_key: impl Into<String>) -> Self {
+        Self {
+            client: Client::new(),
+            api_key: Some(api_key.into()),
+            base_url: "https://generativelanguage.googleapis.com/v1beta".to_string(),
         }
-        
+    }
+
+    pub fn set_api_key(&mut self, api_key: impl Into<String>) {
+        self.api_key = Some(api_key.into());
+    }
+
+    pub fn clear_api_key(&mut self) {
+        self.api_key = None;
+    }
+
+    pub async fn initialize(&mut self) -> Result<()> {
+        if self.api_key.is_none() {
+            return Err(anyhow!(
+                "Gemini API key not configured. Please set it in Settings."
+            ));
+        }
         Ok(())
     }
 
@@ -41,7 +54,9 @@ impl GeminiClient {
         message: &str,
         conversation_history: &ConversationHistory,
     ) -> Result<ChatbotResponse> {
-        let api_key = self.api_key.as_ref()
+        let api_key = self
+            .api_key
+            .as_ref()
             .ok_or_else(|| anyhow!("Gemini API key not configured"))?;
 
         // Build the request with conversation history
@@ -65,7 +80,8 @@ impl GeminiClient {
         }
 
         // Add conversation history (limit to last 10 messages to avoid token limits)
-        let recent_messages = conversation_history.messages
+        let recent_messages = conversation_history
+            .messages
             .iter()
             .rev()
             .take(10)
@@ -117,10 +133,13 @@ impl GeminiClient {
             ]),
         };
 
-        let url = format!("{}/models/gemini-1.5-flash-latest:generateContent?key={}", 
-                         self.base_url, api_key);
+        let url = format!(
+            "{}/models/gemini-1.5-flash-latest:generateContent?key={}",
+            self.base_url, api_key
+        );
 
-        let response = self.client
+        let response = self
+            .client
             .post(&url)
             .json(&request)
             .send()
@@ -128,15 +147,21 @@ impl GeminiClient {
             .map_err(|e| anyhow!("Failed to send request to Gemini API: {}", e))?;
 
         if !response.status().is_success() {
-            let error_text = response.text().await.unwrap_or_else(|_| "Unknown error".to_string());
+            let error_text = response
+                .text()
+                .await
+                .unwrap_or_else(|_| "Unknown error".to_string());
             return Err(anyhow!("Gemini API error: {}", error_text));
         }
 
-        let gemini_response: GeminiResponse = response.json().await
+        let gemini_response: GeminiResponse = response
+            .json()
+            .await
             .map_err(|e| anyhow!("Failed to parse Gemini API response: {}", e))?;
 
         // Extract the response text
-        let response_text = gemini_response.candidates
+        let response_text = gemini_response
+            .candidates
             .first()
             .and_then(|candidate| candidate.content.parts.first())
             .map(|part| part.text.clone())
@@ -154,9 +179,9 @@ impl GeminiClient {
 
     fn generate_system_prompt(&self, context: &CourseContext) -> Result<String> {
         let mut prompt = String::from("You are an AI assistant helping with course learning. ");
-        
+
         prompt.push_str(&format!("Course: {}\n", context.course_name));
-        
+
         if let Some(structure) = &context.course_structure {
             prompt.push_str("Course Structure:\n");
             for (i, module) in structure.modules.iter().enumerate() {
@@ -166,7 +191,7 @@ impl GeminiClient {
                 }
             }
         }
-        
+
         match &context.source_type {
             CourseSourceType::YouTube { playlist_url } => {
                 prompt.push_str(&format!("YouTube Playlist: {}\n", playlist_url));
@@ -177,13 +202,14 @@ impl GeminiClient {
         }
 
         if let Some(video_context) = &context.current_video_context {
-            prompt.push_str(&format!("Current Video: {} (Module: {})\n", 
-                                   video_context.video_title, 
-                                   video_context.module_title));
+            prompt.push_str(&format!(
+                "Current Video: {} (Module: {})\n",
+                video_context.video_title, video_context.module_title
+            ));
         }
-        
+
         prompt.push_str("\nHelp the user understand the course content, answer questions about the material, and provide learning guidance. Be concise and helpful.");
-        
+
         Ok(prompt)
     }
 
@@ -199,7 +225,7 @@ impl GeminiClient {
                 suggestions.push("Summarize this video".to_string());
                 suggestions.push("What are the key points?".to_string());
             }
-            
+
             if ctx.course_structure.is_some() {
                 suggestions.push("What's next in the course?".to_string());
                 suggestions.push("Show course progress".to_string());
@@ -211,11 +237,17 @@ impl GeminiClient {
 
     pub async fn validate_api_key(api_key: &str) -> Result<bool> {
         let client = Client::new();
-        let url = format!("https://generativelanguage.googleapis.com/v1beta/models?key={}", api_key);
-        
-        let response = client.get(&url).send().await
+        let url = format!(
+            "https://generativelanguage.googleapis.com/v1beta/models?key={}",
+            api_key
+        );
+
+        let response = client
+            .get(&url)
+            .send()
+            .await
             .map_err(|e| anyhow!("Failed to validate API key: {}", e))?;
-        
+
         Ok(response.status().is_success())
     }
 }

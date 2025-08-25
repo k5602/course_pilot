@@ -1,6 +1,4 @@
-use crate::gemini::{
-    ChatMessage, ConversationHistory, CourseContext, CourseSourceType, GeminiClient,
-};
+use crate::gemini::{ChatMessage, ConversationHistory, CourseContext, CourseSourceType};
 use crate::state::use_video_context_reactive;
 use crate::types::{Route, VideoContext};
 use crate::ui::components::ChatMarkdownRenderer;
@@ -14,26 +12,26 @@ pub fn GeminiChatbot() -> Element {
     let mut is_loading = use_signal(|| false);
     let mut error_message = use_signal(|| None::<String>);
     let mut conversation_history = use_signal(ConversationHistory::new);
-    let mut gemini_client = use_signal(GeminiClient::new);
-    let mut is_initialized = use_signal(|| false);
 
     let current_route = use_route::<Route>();
     let backend = use_backend();
+    let gemini = backend.gemini.clone();
+    let is_initialized = gemini.initialized_signal();
+    let last_error = gemini.last_error_signal();
     let video_context_signal = use_video_context_reactive();
     let video_context = video_context_signal.read().clone();
 
     // Initialize the Gemini client and set up course context
+    let gemini_for_effect = gemini.clone();
     use_effect(move || {
-        if !is_initialized() {
+        if !gemini_for_effect.is_initialized() {
             let route = current_route.clone();
             let video_ctx = video_context.clone();
             let value = backend.clone();
+            let gem = gemini_for_effect.clone();
             spawn(async move {
-                let mut client = gemini_client.write();
-                match client.initialize().await {
+                match gem.initialize().await {
                     Ok(()) => {
-                        is_initialized.set(true);
-
                         // Set up course context based on current route
                         if let Route::PlanView { course_id } = route {
                             if let Ok(course_uuid) = uuid::Uuid::parse_str(&course_id) {
@@ -64,67 +62,115 @@ pub fn GeminiChatbot() -> Element {
         }
     });
 
-    let mut send_message = move |message: String| {
-        if message.trim().is_empty() || is_loading() {
-            return;
-        }
+    let handle_send = {
+        let mut messages = messages.clone();
+        let mut is_loading = is_loading.clone();
+        let mut error_message = error_message.clone();
+        let mut conversation_history = conversation_history.clone();
+        let mut input_text_signal = input_text.clone();
+        let gem = gemini.clone();
 
-        let message = message.trim().to_string();
-        is_loading.set(true);
-        error_message.set(None);
-
-        // Add user message to display
-        messages.write().push(ChatMessage {
-            role: "user".to_string(),
-            content: message.clone(),
-            timestamp: chrono::Utc::now(),
-        });
-
-        // Add to conversation history
-        conversation_history
-            .write()
-            .add_message("user".to_string(), message.clone());
-
-        let client = gemini_client.read().clone();
-        let history = conversation_history.read().clone();
-
-        spawn(async move {
-            match client.send_message(&message, &history).await {
-                Ok(response) => {
-                    // Add assistant response to display
-                    messages.write().push(ChatMessage {
-                        role: "assistant".to_string(),
-                        content: response.message.clone(),
-                        timestamp: chrono::Utc::now(),
-                    });
-
-                    // Add to conversation history
-                    conversation_history
-                        .write()
-                        .add_message("assistant".to_string(), response.message);
-                }
-                Err(e) => {
-                    error_message.set(Some(format!("Failed to get response: {}", e)));
-                }
+        move |_| {
+            let current = input_text_signal();
+            if current.trim().is_empty() || is_loading() {
+                return;
             }
-            is_loading.set(false);
-        });
 
-        input_text.set(String::new());
+            let message = current.trim().to_string();
+            is_loading.set(true);
+            error_message.set(None);
+
+            messages.write().push(ChatMessage {
+                role: "user".to_string(),
+                content: message.clone(),
+                timestamp: chrono::Utc::now(),
+            });
+
+            conversation_history
+                .write()
+                .add_message("user".to_string(), message.clone());
+
+            let history = conversation_history.read().clone();
+            let gem_clone = gem.clone();
+            spawn(async move {
+                match gem_clone.send_message(&message, &history).await {
+                    Ok(response) => {
+                        messages.write().push(ChatMessage {
+                            role: "assistant".to_string(),
+                            content: response.message.clone(),
+                            timestamp: chrono::Utc::now(),
+                        });
+
+                        conversation_history
+                            .write()
+                            .add_message("assistant".to_string(), response.message);
+                    }
+                    Err(e) => {
+                        error_message.set(Some(format!("Failed to get response: {}", e)));
+                    }
+                }
+                is_loading.set(false);
+            });
+
+            input_text_signal.set(String::new());
+        }
     };
 
-    let mut handle_suggestion_click = move |suggestion: String| {
-        send_message(suggestion);
-    };
+    let handle_key_down = {
+        let mut messages = messages.clone();
+        let mut is_loading = is_loading.clone();
+        let mut error_message = error_message.clone();
+        let mut conversation_history = conversation_history.clone();
+        let mut input_text_signal = input_text.clone();
+        let gem = gemini.clone();
 
-    let handle_send = move |_| {
-        send_message(input_text());
-    };
+        move |e: KeyboardEvent| {
+            if e.key() == dioxus::events::Key::Enter && !e.modifiers().shift() {
+                e.prevent_default();
 
-    let handle_key_down = move |e: KeyboardEvent| {
-        if e.key() == dioxus::events::Key::Enter && !e.modifiers().shift() {
-            e.prevent_default();
-            send_message(input_text());
+                let current = input_text_signal();
+                if current.trim().is_empty() || is_loading() {
+                    return;
+                }
+
+                let message = current.trim().to_string();
+                is_loading.set(true);
+                error_message.set(None);
+
+                messages.write().push(ChatMessage {
+                    role: "user".to_string(),
+                    content: message.clone(),
+                    timestamp: chrono::Utc::now(),
+                });
+
+                conversation_history
+                    .write()
+                    .add_message("user".to_string(), message.clone());
+
+                let history = conversation_history.read().clone();
+                let gem_clone = gem.clone();
+                spawn(async move {
+                    match gem_clone.send_message(&message, &history).await {
+                        Ok(response) => {
+                            messages.write().push(ChatMessage {
+                                role: "assistant".to_string(),
+                                content: response.message.clone(),
+                                timestamp: chrono::Utc::now(),
+                            });
+
+                            conversation_history
+                                .write()
+                                .add_message("assistant".to_string(), response.message);
+                        }
+                        Err(e) => {
+                            error_message.set(Some(format!("Failed to get response: {}", e)));
+                        }
+                    }
+                    is_loading.set(false);
+                });
+
+                input_text_signal.set(String::new());
+            }
         }
     };
 
@@ -146,7 +192,13 @@ pub fn GeminiChatbot() -> Element {
                     }
                 }
 
-                div { class: "flex-none",
+                div { class: "flex-none flex items-center gap-2",
+                    if !is_initialized() {
+                        div { class: "badge badge-warning badge-sm", "Initializing..." }
+                    }
+                    if let Some(err) = last_error() {
+                        div { class: "text-error text-xs", "{err}" }
+                    }
                     div { class: "badge badge-primary badge-sm",
                         "🤖 Gemini"
                     }
@@ -174,17 +226,149 @@ pub fn GeminiChatbot() -> Element {
                             div { class: "flex flex-wrap gap-2 justify-center mt-4",
                                 button {
                                     class: "btn btn-sm btn-outline btn-primary",
-                                    onclick: move |_| handle_suggestion_click("Tell me about this course".to_string()),
+                                    onclick: {
+                                        let mut messages = messages.clone();
+                                        let mut is_loading = is_loading.clone();
+                                        let mut error_message = error_message.clone();
+                                        let mut conversation_history = conversation_history.clone();
+                                        let mut input_text_signal = input_text.clone();
+                                        let gem = gemini.clone();
+                                        move |_| {
+                                            let suggestion = "Tell me about this course".to_string();
+                                            if suggestion.trim().is_empty() || is_loading() {
+                                                return;
+                                            }
+                                            is_loading.set(true);
+                                            error_message.set(None);
+                                            messages.write().push(ChatMessage {
+                                                role: "user".to_string(),
+                                                content: suggestion.clone(),
+                                                timestamp: chrono::Utc::now(),
+                                            });
+                                            conversation_history
+                                                .write()
+                                                .add_message("user".to_string(), suggestion.clone());
+                                            let history = conversation_history.read().clone();
+                                            let gem_clone = gem.clone();
+                                            spawn(async move {
+                                                match gem_clone.send_message(&suggestion, &history).await {
+                                                    Ok(response) => {
+                                                        messages.write().push(ChatMessage {
+                                                            role: "assistant".to_string(),
+                                                            content: response.message.clone(),
+                                                            timestamp: chrono::Utc::now(),
+                                                        });
+                                                        conversation_history
+                                                            .write()
+                                                            .add_message("assistant".to_string(), response.message);
+                                                    }
+                                                    Err(e) => {
+                                                        error_message.set(Some(format!("Failed to get response: {}", e)));
+                                                    }
+                                                }
+                                                is_loading.set(false);
+                                            });
+                                            input_text_signal.set(String::new());
+                                        }
+                                    },
                                     "Tell me about this course"
                                 }
                                 button {
                                     class: "btn btn-sm btn-outline btn-primary",
-                                    onclick: move |_| handle_suggestion_click("What should I study first?".to_string()),
+                                    onclick: {
+                                        let mut messages = messages.clone();
+                                        let mut is_loading = is_loading.clone();
+                                        let mut error_message = error_message.clone();
+                                        let mut conversation_history = conversation_history.clone();
+                                        let mut input_text_signal = input_text.clone();
+                                        let gem = gemini.clone();
+                                        move |_| {
+                                            let suggestion = "What should I study first?".to_string();
+                                            if suggestion.trim().is_empty() || is_loading() {
+                                                return;
+                                            }
+                                            is_loading.set(true);
+                                            error_message.set(None);
+                                            messages.write().push(ChatMessage {
+                                                role: "user".to_string(),
+                                                content: suggestion.clone(),
+                                                timestamp: chrono::Utc::now(),
+                                            });
+                                            conversation_history
+                                                .write()
+                                                .add_message("user".to_string(), suggestion.clone());
+                                            let history = conversation_history.read().clone();
+                                            let gem_clone = gem.clone();
+                                            spawn(async move {
+                                                match gem_clone.send_message(&suggestion, &history).await {
+                                                    Ok(response) => {
+                                                        messages.write().push(ChatMessage {
+                                                            role: "assistant".to_string(),
+                                                            content: response.message.clone(),
+                                                            timestamp: chrono::Utc::now(),
+                                                        });
+                                                        conversation_history
+                                                            .write()
+                                                            .add_message("assistant".to_string(), response.message);
+                                                    }
+                                                    Err(e) => {
+                                                        error_message.set(Some(format!("Failed to get response: {}", e)));
+                                                    }
+                                                }
+                                                is_loading.set(false);
+                                            });
+                                            input_text_signal.set(String::new());
+                                        }
+                                    },
                                     "What should I study first?"
                                 }
                                 button {
                                     class: "btn btn-sm btn-outline btn-primary",
-                                    onclick: move |_| handle_suggestion_click("Explain the course structure".to_string()),
+                                    onclick: {
+                                        let mut messages = messages.clone();
+                                        let mut is_loading = is_loading.clone();
+                                        let mut error_message = error_message.clone();
+                                        let mut conversation_history = conversation_history.clone();
+                                        let mut input_text_signal = input_text.clone();
+                                        let gem = gemini.clone();
+                                        move |_| {
+                                            let suggestion = "Explain the course structure".to_string();
+                                            if suggestion.trim().is_empty() || is_loading() {
+                                                return;
+                                            }
+                                            is_loading.set(true);
+                                            error_message.set(None);
+                                            messages.write().push(ChatMessage {
+                                                role: "user".to_string(),
+                                                content: suggestion.clone(),
+                                                timestamp: chrono::Utc::now(),
+                                            });
+                                            conversation_history
+                                                .write()
+                                                .add_message("user".to_string(), suggestion.clone());
+                                            let history = conversation_history.read().clone();
+                                            let gem_clone = gem.clone();
+                                            spawn(async move {
+                                                match gem_clone.send_message(&suggestion, &history).await {
+                                                    Ok(response) => {
+                                                        messages.write().push(ChatMessage {
+                                                            role: "assistant".to_string(),
+                                                            content: response.message.clone(),
+                                                            timestamp: chrono::Utc::now(),
+                                                        });
+                                                        conversation_history
+                                                            .write()
+                                                            .add_message("assistant".to_string(), response.message);
+                                                    }
+                                                    Err(e) => {
+                                                        error_message.set(Some(format!("Failed to get response: {}", e)));
+                                                    }
+                                                }
+                                                is_loading.set(false);
+                                            });
+                                            input_text_signal.set(String::new());
+                                        }
+                                    },
                                     "Explain the course structure"
                                 }
                             }
@@ -198,9 +382,12 @@ pub fn GeminiChatbot() -> Element {
 
                 if is_loading() {
                     div { class: "flex justify-start",
+                        // Live region for screen readers announcing typing state
+                        div { class: "sr-only", aria_live: "polite", "Assistant is typing..." }
                         div { class: "chat chat-start",
-                            div { class: "chat-bubble chat-bubble-secondary",
+                            div { class: "chat-bubble chat-bubble-secondary items-center gap-2",
                                 span { class: "loading loading-dots loading-sm" }
+                                span { class: "text-xs opacity-70", "Assistant is typing..." }
                             }
                         }
                     }

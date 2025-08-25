@@ -12,12 +12,14 @@ use uuid::Uuid;
 
 use super::{
     FolderValidation, ProgressInfo, use_analytics_manager, use_course_manager, use_export_manager,
-    use_import_manager, use_notes_manager, use_plan_manager, use_settings_manager,
+    use_gemini_manager, use_import_manager, use_notes_manager, use_plan_manager,
+    use_settings_manager,
 };
 
 use super::use_analytics::AnalyticsManager;
 use super::use_courses::CourseManager;
 use super::use_export::ExportManager;
+use super::use_gemini::GeminiManager;
 use super::use_import::ImportManager;
 use super::use_notes::NotesManager;
 use super::use_plans::PlanManager;
@@ -34,6 +36,7 @@ pub struct Backend {
     pub import: ImportManager,
     pub export: ExportManager,
     pub settings: SettingsManager,
+    pub gemini: GeminiManager,
 }
 
 impl Backend {
@@ -346,5 +349,6 @@ pub fn use_backend() -> Backend {
         import: use_import_manager(),
         export: use_export_manager(),
         settings: use_settings_manager(),
+        gemini: use_gemini_manager(),
     }
 }
