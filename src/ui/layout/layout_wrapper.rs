@@ -23,14 +23,9 @@ pub fn LayoutWrapper(children: Element) -> Element {
 
     // Animate main content entrance
     use_effect(move || {
-        main_opacity.animate_to(
-            1.0,
-            AnimationConfig::new(AnimationMode::Spring(Spring::default())),
-        );
-        main_y.animate_to(
-            0.0,
-            AnimationConfig::new(AnimationMode::Spring(Spring::default())),
-        );
+        main_opacity
+            .animate_to(1.0, AnimationConfig::new(AnimationMode::Spring(Spring::default())));
+        main_y.animate_to(0.0, AnimationConfig::new(AnimationMode::Spring(Spring::default())));
     });
 
     let main_content_style = use_memo(move || {
@@ -42,11 +37,7 @@ pub fn LayoutWrapper(children: Element) -> Element {
     });
 
     // Calculate margins for main content area
-    let sidebar_margin = if is_sidebar_hovered() {
-        "ml-45"
-    } else {
-        "ml-20"
-    };
+    let sidebar_margin = if is_sidebar_hovered() { "ml-45" } else { "ml-20" };
     let panel_margin = if panel_is_open { "md:mr-96" } else { "md:mr-0" };
 
     let main_class = format!(

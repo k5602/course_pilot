@@ -38,10 +38,7 @@ impl Exportable for Course {
                 exported_at: chrono::Utc::now(),
                 export_version: "1.0".to_string(),
                 total_videos: self.video_count(),
-                total_duration: self
-                    .structure
-                    .as_ref()
-                    .map(|s| s.aggregate_total_duration()),
+                total_duration: self.structure.as_ref().map(|s| s.aggregate_total_duration()),
             },
         };
 
@@ -120,9 +117,7 @@ impl Exportable for Course {
                 }
             }
 
-            writer
-                .flush()
-                .map_err(|e| anyhow::anyhow!("Failed to flush CSV writer: {}", e))?;
+            writer.flush().map_err(|e| anyhow::anyhow!("Failed to flush CSV writer: {}", e))?;
         }
 
         String::from_utf8(buffer)
@@ -142,18 +137,12 @@ impl Exportable for Course {
         doc.set_page_decorator(decorator);
 
         // Header
-        doc.push(genpdf::elements::Paragraph::new(format!(
-            "Course: {}",
-            self.name
-        )));
+        doc.push(genpdf::elements::Paragraph::new(format!("Course: {}", self.name)));
         doc.push(genpdf::elements::Paragraph::new(format!(
             "Created At: {}",
             crate::export::utils::format_timestamp(self.created_at)
         )));
-        doc.push(genpdf::elements::Paragraph::new(format!(
-            "Total Videos: {}",
-            self.video_count()
-        )));
+        doc.push(genpdf::elements::Paragraph::new(format!("Total Videos: {}", self.video_count())));
         doc.push(genpdf::elements::Paragraph::new(" "));
 
         // Content
@@ -175,21 +164,15 @@ impl Exportable for Course {
                 }
             }
         } else {
-            doc.push(genpdf::elements::Paragraph::new(
-                "Raw Video Titles (Unstructured):",
-            ));
+            doc.push(genpdf::elements::Paragraph::new("Raw Video Titles (Unstructured):"));
             for (idx, title) in self.raw_titles.iter().enumerate() {
-                doc.push(genpdf::elements::Paragraph::new(format!(
-                    "• {:>3}. {}",
-                    idx, title
-                )));
+                doc.push(genpdf::elements::Paragraph::new(format!("• {:>3}. {}", idx, title)));
             }
         }
 
         // Render to bytes
         let mut bytes = Vec::new();
-        doc.render(&mut bytes)
-            .map_err(|e| anyhow::anyhow!("Failed to render PDF: {}", e))?;
+        doc.render(&mut bytes).map_err(|e| anyhow::anyhow!("Failed to render PDF: {}", e))?;
         Ok(bytes)
     }
 
@@ -204,19 +187,19 @@ impl Exportable for Course {
                     callback(25.0, "Generating JSON data...".to_string());
                 }
                 self.export_json()?.into_bytes()
-            }
+            },
             ExportFormat::Csv => {
                 if let Some(ref callback) = options.progress_callback {
                     callback(25.0, "Generating CSV data...".to_string());
                 }
                 self.export_csv()?.into_bytes()
-            }
+            },
             ExportFormat::Pdf => {
                 if let Some(ref callback) = options.progress_callback {
                     callback(25.0, "Generating PDF document...".to_string());
                 }
                 self.export_pdf()?
-            }
+            },
         };
 
         if let Some(ref callback) = options.progress_callback {
@@ -242,13 +225,7 @@ impl Exportable for Course {
         let safe_name = self
             .name
             .chars()
-            .map(|c| {
-                if c.is_alphanumeric() || c == ' ' {
-                    c
-                } else {
-                    '_'
-                }
-            })
+            .map(|c| if c.is_alphanumeric() || c == ' ' { c } else { '_' })
             .collect::<String>()
             .replace(' ', "_");
         utils::generate_filename(&format!("course_{safe_name}"), format)
@@ -290,7 +267,7 @@ pub mod course_utils {
                     .collect();
 
                 serde_json::to_string_pretty(&export_data)?.into_bytes()
-            }
+            },
             ExportFormat::Csv => {
                 let mut csv_data = String::new();
                 csv_data.push_str(
@@ -310,7 +287,7 @@ pub mod course_utils {
                 }
 
                 csv_data.into_bytes()
-            }
+            },
             ExportFormat::Pdf => {
                 // Build a batch PDF containing all courses
                 let font_family = genpdf::fonts::from_files("./fonts", "LiberationSans", None)
@@ -335,10 +312,7 @@ pub mod course_utils {
                         "==================== Course {} ====================",
                         i + 1
                     )));
-                    doc.push(genpdf::elements::Paragraph::new(format!(
-                        "Name: {}",
-                        course.name
-                    )));
+                    doc.push(genpdf::elements::Paragraph::new(format!("Name: {}", course.name)));
                     doc.push(genpdf::elements::Paragraph::new(format!(
                         "Created At: {}",
                         crate::export::utils::format_timestamp(course.created_at)
@@ -385,7 +359,7 @@ pub mod course_utils {
                 doc.render(&mut data)
                     .map_err(|e| anyhow::anyhow!("Failed to render PDF: {}", e))?;
                 data
-            }
+            },
         };
 
         if let Some(ref callback) = options.progress_callback {

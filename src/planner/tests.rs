@@ -50,11 +50,7 @@ fn create_test_course() -> Course {
         id: Uuid::new_v4(),
         name: "Test Course".to_string(),
         created_at: Utc::now(),
-        raw_titles: vec![
-            "Welcome".to_string(),
-            "Setup".to_string(),
-            "Complex Example".to_string(),
-        ],
+        raw_titles: vec!["Welcome".to_string(), "Setup".to_string(), "Complex Example".to_string()],
         videos: vec![
             crate::types::VideoMetadata {
                 title: "Welcome".to_string(),
@@ -498,28 +494,13 @@ fn test_duration_formatting_utilities() {
     assert_eq!(format_duration(Duration::from_secs(3690)), "1h 1m");
 
     // Test verbose formatting
-    assert_eq!(
-        format_duration_verbose(Duration::from_secs(90)),
-        "1 minutes"
-    );
-    assert_eq!(
-        format_duration_verbose(Duration::from_secs(3600)),
-        "1 hours"
-    );
-    assert_eq!(
-        format_duration_verbose(Duration::from_secs(3690)),
-        "1 hours 1 minutes"
-    );
+    assert_eq!(format_duration_verbose(Duration::from_secs(90)), "1 minutes");
+    assert_eq!(format_duration_verbose(Duration::from_secs(3600)), "1 hours");
+    assert_eq!(format_duration_verbose(Duration::from_secs(3690)), "1 hours 1 minutes");
 
     // Test decimal hours formatting
-    assert_eq!(
-        format_duration_decimal_hours(Duration::from_secs(3600)),
-        "1.0 hours"
-    );
-    assert_eq!(
-        format_duration_decimal_hours(Duration::from_secs(1800)),
-        "30 minutes"
-    );
+    assert_eq!(format_duration_decimal_hours(Duration::from_secs(3600)), "1.0 hours");
+    assert_eq!(format_duration_decimal_hours(Duration::from_secs(1800)), "30 minutes");
 
     // Test excessive duration check
     assert!(is_duration_excessive(Duration::from_secs(90 * 60), 60)); // 90 min > 60 min
@@ -824,14 +805,8 @@ fn test_user_experience_inference() {
         advanced_settings: None,
     };
 
-    assert_eq!(
-        infer_user_experience_level(&beginner_settings),
-        DifficultyLevel::Beginner
-    );
-    assert_eq!(
-        infer_user_experience_level(&expert_settings),
-        DifficultyLevel::Expert
-    );
+    assert_eq!(infer_user_experience_level(&beginner_settings), DifficultyLevel::Beginner);
+    assert_eq!(infer_user_experience_level(&expert_settings), DifficultyLevel::Expert);
 }
 
 #[test]
@@ -848,7 +823,7 @@ fn test_enhanced_strategy_selection() {
         | DistributionStrategy::Hybrid
         | DistributionStrategy::DifficultyBased
         | DistributionStrategy::SpacedRepetition
-        | DistributionStrategy::Adaptive => {}
+        | DistributionStrategy::Adaptive => {},
     }
 }
 
@@ -1089,9 +1064,8 @@ mod tests_plan_from_groups {
             }
             if item.video_indices.iter().any(|&v| v == 0 || v == 1) {
                 earliest_g1 = Some(
-                    earliest_g1.map_or(item.date, |d: chrono::DateTime<chrono::Utc>| {
-                        d.min(item.date)
-                    }),
+                    earliest_g1
+                        .map_or(item.date, |d: chrono::DateTime<chrono::Utc>| d.min(item.date)),
                 );
             }
         }
@@ -1115,16 +1089,14 @@ mod tests_plan_from_groups {
         for item in &grp_plan.items {
             if item.video_indices.iter().any(|&v| v == 1 || v == 2) {
                 earliest_g0 = Some(
-                    earliest_g0.map_or(item.date, |d: chrono::DateTime<chrono::Utc>| {
-                        d.min(item.date)
-                    }),
+                    earliest_g0
+                        .map_or(item.date, |d: chrono::DateTime<chrono::Utc>| d.min(item.date)),
                 );
             }
             if item.video_indices.iter().any(|&v| v == 0) {
                 earliest_g1 = Some(
-                    earliest_g1.map_or(item.date, |d: chrono::DateTime<chrono::Utc>| {
-                        d.min(item.date)
-                    }),
+                    earliest_g1
+                        .map_or(item.date, |d: chrono::DateTime<chrono::Utc>| d.min(item.date)),
                 );
             }
         }
@@ -1159,15 +1131,13 @@ mod tests_plan_from_groups {
             // Items with no valid group mapping will be considered ungrouped (usize::MAX)
             if has_valid {
                 earliest_g_valid = Some(
-                    earliest_g_valid.map_or(item.date, |d: chrono::DateTime<chrono::Utc>| {
-                        d.min(item.date)
-                    }),
+                    earliest_g_valid
+                        .map_or(item.date, |d: chrono::DateTime<chrono::Utc>| d.min(item.date)),
                 );
             } else if !has_any_group {
                 earliest_ungrouped = Some(
-                    earliest_ungrouped.map_or(item.date, |d: chrono::DateTime<chrono::Utc>| {
-                        d.min(item.date)
-                    }),
+                    earliest_ungrouped
+                        .map_or(item.date, |d: chrono::DateTime<chrono::Utc>| d.min(item.date)),
                 );
             }
         }

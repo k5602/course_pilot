@@ -160,9 +160,6 @@ pub fn load_plan(db: &Database, plan_id: &uuid::Uuid) -> Result<Option<Plan>> {
 /// Delete a plan by id.
 pub fn delete_plan(db: &Database, plan_id: &uuid::Uuid) -> Result<()> {
     let conn = db.get_conn()?;
-    conn.execute(
-        "DELETE FROM plans WHERE id = ?1",
-        params![plan_id.to_string()],
-    )?;
+    conn.execute("DELETE FROM plans WHERE id = ?1", params![plan_id.to_string()])?;
     Ok(())
 }

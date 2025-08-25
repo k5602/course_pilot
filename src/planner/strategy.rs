@@ -47,19 +47,13 @@ pub fn choose_distribution_strategy(
     course: &Course,
     settings: &PlanSettings,
 ) -> Result<DistributionStrategy, PlanError> {
-    let structure = course
-        .structure
-        .as_ref()
-        .ok_or(PlanError::CourseNotStructured)?;
+    let structure = course.structure.as_ref().ok_or(PlanError::CourseNotStructured)?;
 
     // Analyze course characteristics
     let total_videos = total_video_count(course);
     let module_count = structure.modules.len();
-    let average_module_size = if module_count > 0 {
-        total_videos / module_count
-    } else {
-        total_videos
-    };
+    let average_module_size =
+        if module_count > 0 { total_videos / module_count } else { total_videos };
 
     // Capacity and heuristics
     let estimated_videos_per_session = estimate_videos_per_session(course, settings);
@@ -80,17 +74,17 @@ pub fn choose_distribution_strategy(
                 && average_module_size <= estimated_videos_per_session.saturating_mul(2) =>
         {
             DistributionStrategy::ModuleBased
-        }
+        },
 
         // Very large courses: emphasize difficulty progression
         (_, _, _) if total_videos > estimated_videos_per_session.saturating_mul(15) => {
             DistributionStrategy::DifficultyBased
-        }
+        },
 
         // Large courses: emphasize time-based distribution
         (_, _, _) if total_videos > estimated_videos_per_session.saturating_mul(10) => {
             DistributionStrategy::TimeBased
-        }
+        },
 
         // Default: hybrid strikes a balance
         _ => DistributionStrategy::Hybrid,
@@ -293,22 +287,10 @@ mod tests {
 
     #[test]
     fn test_infer_user_experience_level() {
-        assert_eq!(
-            infer_user_experience_level(&settings(5, 90)),
-            DifficultyLevel::Expert
-        );
-        assert_eq!(
-            infer_user_experience_level(&settings(4, 60)),
-            DifficultyLevel::Advanced
-        );
-        assert_eq!(
-            infer_user_experience_level(&settings(3, 45)),
-            DifficultyLevel::Intermediate
-        );
-        assert_eq!(
-            infer_user_experience_level(&settings(2, 30)),
-            DifficultyLevel::Beginner
-        );
+        assert_eq!(infer_user_experience_level(&settings(5, 90)), DifficultyLevel::Expert);
+        assert_eq!(infer_user_experience_level(&settings(4, 60)), DifficultyLevel::Advanced);
+        assert_eq!(infer_user_experience_level(&settings(3, 45)), DifficultyLevel::Intermediate);
+        assert_eq!(infer_user_experience_level(&settings(2, 30)), DifficultyLevel::Beginner);
     }
 
     #[test]
@@ -323,7 +305,7 @@ mod tests {
             | DistributionStrategy::Hybrid
             | DistributionStrategy::DifficultyBased
             | DistributionStrategy::SpacedRepetition
-            | DistributionStrategy::Adaptive => {}
+            | DistributionStrategy::Adaptive => {},
         }
     }
 }

@@ -104,16 +104,16 @@ pub fn AllCoursesView() -> Element {
                     CourseFilter::NotStarted => {
                         // For now, consider courses without structure as not started
                         course.structure.is_none()
-                    }
+                    },
                     CourseFilter::InProgress => {
                         // For now, consider structured courses as in progress
                         course.structure.is_some()
-                    }
+                    },
                     CourseFilter::Completed => {
                         // For now, no courses are considered completed
                         // This would need actual progress tracking
                         false
-                    }
+                    },
                     CourseFilter::Structured => course.structure.is_some(),
                     CourseFilter::Unstructured => course.structure.is_none(),
                 }
@@ -131,7 +131,7 @@ pub fn AllCoursesView() -> Element {
                         SortOrder::Descending => cmp.reverse(),
                     }
                 });
-            }
+            },
             CourseSortBy::DateCreated => {
                 filtered_courses.sort_by(|a, b| {
                     let cmp = a.created_at.cmp(&b.created_at);
@@ -140,7 +140,7 @@ pub fn AllCoursesView() -> Element {
                         SortOrder::Descending => cmp.reverse(),
                     }
                 });
-            }
+            },
             CourseSortBy::Progress => {
                 // Sort by structure status as a proxy for progress
                 // Structured courses are considered more progressed
@@ -153,7 +153,7 @@ pub fn AllCoursesView() -> Element {
                         SortOrder::Descending => cmp.reverse(),
                     }
                 });
-            }
+            },
             CourseSortBy::LastAccessed => {
                 // Sort by creation date as fallback for last accessed
                 filtered_courses.sort_by(|a, b| {
@@ -163,7 +163,7 @@ pub fn AllCoursesView() -> Element {
                         SortOrder::Descending => cmp.reverse(),
                     }
                 });
-            }
+            },
         }
 
         filtered_courses

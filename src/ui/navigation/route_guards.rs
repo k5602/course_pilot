@@ -40,7 +40,7 @@ impl RouteGuard for CourseExistenceGuard {
                     Ok(uuid) => uuid,
                     Err(_) => {
                         return RouteGuardResult::Block("Invalid course ID format".to_string());
-                    }
+                    },
                 };
 
                 // Check if course exists
@@ -49,7 +49,7 @@ impl RouteGuard for CourseExistenceGuard {
                 } else {
                     RouteGuardResult::Redirect(Route::AllCourses {})
                 }
-            }
+            },
             _ => RouteGuardResult::Allow,
         }
     }
@@ -61,9 +61,7 @@ pub fn use_route_guard() -> RouteGuardManager {
     let navigator = use_navigator();
 
     RouteGuardManager {
-        guards: vec![Box::new(CourseExistenceGuard::new(
-            course_manager.courses.clone(),
-        ))],
+        guards: vec![Box::new(CourseExistenceGuard::new(course_manager.courses.clone()))],
         navigator,
     }
 }
@@ -91,18 +89,18 @@ impl RouteGuardManager {
         match self.can_navigate_to(&route) {
             RouteGuardResult::Allow => {
                 self.navigator.push(route);
-            }
+            },
             RouteGuardResult::Redirect(redirect_route) => {
                 log::warn!(
                     "Route guard redirected navigation from {route:?} to {redirect_route:?}"
                 );
                 self.navigator.push(redirect_route);
-            }
+            },
             RouteGuardResult::Block(reason) => {
                 log::error!("Route guard blocked navigation to {route:?}: {reason}");
                 // Could show a toast notification here
                 crate::ui::toast_helpers::error(format!("Navigation blocked: {reason}"));
-            }
+            },
         }
     }
 }
@@ -117,7 +115,7 @@ pub fn RouteGuardProvider(children: Element) -> Element {
     match route_guard.can_navigate_to(&current_route) {
         RouteGuardResult::Allow => {
             rsx! { {children} }
-        }
+        },
         RouteGuardResult::Redirect(redirect_route) => {
             // Redirect to allowed route
             let navigator = route_guard.navigator;
@@ -133,7 +131,7 @@ pub fn RouteGuardProvider(children: Element) -> Element {
                     p { "Redirecting..." }
                 }
             }
-        }
+        },
         RouteGuardResult::Block(reason) => {
             rsx! {
                 div { class: "min-h-screen flex items-center justify-center bg-base-100",
@@ -154,6 +152,6 @@ pub fn RouteGuardProvider(children: Element) -> Element {
                     }
                 }
             }
-        }
+        },
     }
 }

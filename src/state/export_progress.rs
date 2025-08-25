@@ -94,19 +94,9 @@ impl ExportTask {
 #[derive(Debug, Clone)]
 pub enum ProgressEvent {
     Start(ExportTask),
-    Update {
-        id: Uuid,
-        percentage: f32,
-        message: String,
-    },
-    Complete {
-        id: Uuid,
-        saved_path: Option<PathBuf>,
-    },
-    Fail {
-        id: Uuid,
-        error: String,
-    },
+    Update { id: Uuid, percentage: f32, message: String },
+    Complete { id: Uuid, saved_path: Option<PathBuf> },
+    Fail { id: Uuid, error: String },
     ClearAll,
 }
 
@@ -207,18 +197,12 @@ impl ExportProgressReporter {
 
     /// Mark the task as completed (optionally with a saved file path)
     pub fn complete(&self, saved_path: Option<PathBuf>) {
-        let _ = self.sender.send(ProgressEvent::Complete {
-            id: self.id,
-            saved_path,
-        });
+        let _ = self.sender.send(ProgressEvent::Complete { id: self.id, saved_path });
     }
 
     /// Mark the task as failed with an error message
     pub fn fail(&self, error: impl Into<String>) {
-        let _ = self.sender.send(ProgressEvent::Fail {
-            id: self.id,
-            error: error.into(),
-        });
+        let _ = self.sender.send(ProgressEvent::Fail { id: self.id, error: error.into() });
     }
 
     /// Get a boxed closure compatible with `ExportOptions::progress_callback`
@@ -242,16 +226,11 @@ pub fn ExportProgressProvider(children: Element) -> Element {
     let mut tasks = use_signal(|| Vec::<ExportTask>::new());
 
     // Cross-thread event channel
-    let (tx, mut rx): (
-        UnboundedSender<ProgressEvent>,
-        UnboundedReceiver<ProgressEvent>,
-    ) = mpsc_unbounded_channel();
+    let (tx, mut rx): (UnboundedSender<ProgressEvent>, UnboundedReceiver<ProgressEvent>) =
+        mpsc_unbounded_channel();
 
     // Install context
-    let ctx = ExportProgressContext {
-        tasks: tasks.clone(),
-        sender: tx.clone(),
-    };
+    let ctx = ExportProgressContext { tasks: tasks.clone(), sender: tx.clone() };
     use_context_provider(|| ctx);
 
     // Async event loop to safely mutate UI signals from mpsc channel
@@ -265,12 +244,8 @@ pub fn ExportProgressProvider(children: Element) -> Element {
                         list.push(task);
                         tasks.set(list);
                     }
-                }
-                ProgressEvent::Update {
-                    id,
-                    percentage,
-                    message,
-                } => {
+                },
+                ProgressEvent::Update { id, percentage, message } => {
                     let mut list = tasks.read().clone();
                     if let Some(t) = list.iter_mut().find(|t| t.id == id) {
                         t.percentage = percentage.clamp(0.0, 100.0);
@@ -278,7 +253,7 @@ pub fn ExportProgressProvider(children: Element) -> Element {
                         t.updated_at = Utc::now();
                     }
                     tasks.set(list);
-                }
+                },
                 ProgressEvent::Complete { id, saved_path } => {
                     let mut list = tasks.read().clone();
                     if let Some(t) = list.iter_mut().find(|t| t.id == id) {
@@ -288,7 +263,7 @@ pub fn ExportProgressProvider(children: Element) -> Element {
                         t.status = ExportTaskStatus::Completed { saved_path };
                     }
                     tasks.set(list);
-                }
+                },
                 ProgressEvent::Fail { id, error } => {
                     let mut list = tasks.read().clone();
                     if let Some(t) = list.iter_mut().find(|t| t.id == id) {
@@ -297,10 +272,10 @@ pub fn ExportProgressProvider(children: Element) -> Element {
                         t.status = ExportTaskStatus::Failed { error };
                     }
                     tasks.set(list);
-                }
+                },
                 ProgressEvent::ClearAll => {
                     tasks.set(Vec::new());
-                }
+                },
             }
         }
     });

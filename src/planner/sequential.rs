@@ -40,7 +40,7 @@ pub fn should_use_sequential_planning(course: &Course) -> bool {
         Some(s) => s,
         None => {
             return analyze_raw_titles_for_sequential_patterns(&course.raw_titles);
-        }
+        },
     };
 
     // If clustering metadata exists and quality is low, prefer sequential
@@ -109,10 +109,7 @@ pub fn generate_sequential_plan(
     // Apply basic optimization that preserves order
     optimize_sequential_plan(&mut plan)?;
 
-    info!(
-        "Generated sequential plan with {} sessions (order preserved)",
-        plan.items.len()
-    );
+    info!("Generated sequential plan with {} sessions (order preserved)", plan.items.len());
 
     Ok(plan)
 }
@@ -271,19 +268,13 @@ pub(crate) fn optimize_sequential_plan(plan: &mut Plan) -> Result<(), PlanError>
 
 /// Helper: create a PlanItem from packed videos and a target date.
 fn create_plan_item_from_videos(videos: Vec<VideoItem>, date: chrono::DateTime<Utc>) -> PlanItem {
-    let module_title = videos
-        .first()
-        .map(|v| v.module_title.clone())
-        .unwrap_or_else(|| "Unknown".to_string());
+    let module_title =
+        videos.first().map(|v| v.module_title.clone()).unwrap_or_else(|| "Unknown".to_string());
 
     let section_title = if videos.len() == 1 {
         videos[0].section_title.clone()
     } else {
-        format!(
-            "{} + {} more",
-            videos[0].section_title,
-            videos.len().saturating_sub(1)
-        )
+        format!("{} + {} more", videos[0].section_title, videos.len().saturating_sub(1))
     };
 
     let video_indices: Vec<usize> = videos.iter().map(|v| v.video_index).collect();

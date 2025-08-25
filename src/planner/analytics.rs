@@ -35,22 +35,14 @@ pub enum VelocityCategory {
 
 /// Analyze learning velocity and suggest adjustments
 pub fn analyze_learning_velocity(plan: &Plan) -> LearningVelocityAnalysis {
-    let total_videos = plan
-        .items
-        .iter()
-        .map(|item| item.video_indices.len())
-        .sum::<usize>();
+    let total_videos = plan.items.iter().map(|item| item.video_indices.len()).sum::<usize>();
     let total_days = if let (Some(first), Some(last)) = (plan.items.first(), plan.items.last()) {
         (last.date - first.date).num_days()
     } else {
         0
     };
 
-    let videos_per_day = if total_days > 0 {
-        total_videos as f32 / total_days as f32
-    } else {
-        0.0
-    };
+    let videos_per_day = if total_days > 0 { total_videos as f32 / total_days as f32 } else { 0.0 };
 
     let velocity_category = match videos_per_day {
         v if v < 0.5 => VelocityCategory::Slow,
@@ -160,20 +152,11 @@ pub fn analyze_cognitive_load_distribution(plan: &Plan) -> LoadDistribution {
     }
 
     let average_load = loads.iter().sum::<f32>() / loads.len() as f32;
-    let variance = loads
-        .iter()
-        .map(|&load| (load - average_load).powi(2))
-        .sum::<f32>()
-        / loads.len() as f32;
+    let variance =
+        loads.iter().map(|&load| (load - average_load).powi(2)).sum::<f32>() / loads.len() as f32;
 
-    let overloaded = loads
-        .iter()
-        .filter(|&&load| load > average_load * 1.5)
-        .count();
-    let underloaded = loads
-        .iter()
-        .filter(|&&load| load < average_load * 0.5)
-        .count();
+    let overloaded = loads.iter().filter(|&&load| load > average_load * 1.5).count();
+    let underloaded = loads.iter().filter(|&&load| load < average_load * 0.5).count();
 
     LoadDistribution {
         average_load,
@@ -211,11 +194,8 @@ pub fn analyze_temporal_distribution(plan: &Plan) -> TemporalDistribution {
     let weekend_util = weekend_sessions as f32 / plan.items.len() as f32;
 
     // Consistency score based on gap variance
-    let gap_variance = gaps
-        .iter()
-        .map(|&gap| (gap as f32 - average_gap).powi(2))
-        .sum::<f32>()
-        / gaps.len() as f32;
+    let gap_variance =
+        gaps.iter().map(|&gap| (gap as f32 - average_gap).powi(2)).sum::<f32>() / gaps.len() as f32;
     let consistency = (1.0f32 / (1.0 + gap_variance)).clamp(0.0, 1.0);
 
     TemporalDistribution {
@@ -244,9 +224,7 @@ pub fn calculate_plan_score(plan: &Plan) -> f32 {
     let temporal_score = temporal_dist.consistency_score;
 
     // Weighted average
-    (velocity_score * 0.4 + load_score * 0.3 + temporal_score * 0.3)
-        .max(0.0)
-        .min(1.0)
+    (velocity_score * 0.4 + load_score * 0.3 + temporal_score * 0.3).max(0.0).min(1.0)
 }
 
 /// Generate improvement suggestions for the plan
@@ -260,12 +238,12 @@ pub fn generate_improvement_suggestions(plan: &Plan) -> Vec<String> {
     match analysis.velocity_category {
         VelocityCategory::Intensive => {
             suggestions.push("Consider reducing session frequency to prevent burnout".to_string());
-        }
+        },
         VelocityCategory::Slow => {
             suggestions
                 .push("Consider increasing session frequency for better momentum".to_string());
-        }
-        _ => {}
+        },
+        _ => {},
     }
 
     // Load distribution suggestions

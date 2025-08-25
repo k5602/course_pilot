@@ -129,12 +129,8 @@ pub fn get_clustering_analytics(db: &Database) -> Result<ClusteringAnalytics> {
             quality_scores.push(clustering_metadata.quality_score);
             processing_times.push(clustering_metadata.processing_time_ms);
 
-            *algorithm_counts
-                .entry(clustering_metadata.algorithm_used)
-                .or_insert(0) += 1;
-            *strategy_counts
-                .entry(clustering_metadata.strategy_used)
-                .or_insert(0) += 1;
+            *algorithm_counts.entry(clustering_metadata.algorithm_used).or_insert(0) += 1;
+            *strategy_counts.entry(clustering_metadata.strategy_used).or_insert(0) += 1;
         }
     }
 
@@ -179,10 +175,8 @@ pub fn update_clustering_metadata(
     )?;
 
     // Update clustering metadata
-    let updated_structure = CourseStructure {
-        clustering_metadata: Some(metadata),
-        ..current_structure
-    };
+    let updated_structure =
+        CourseStructure { clustering_metadata: Some(metadata), ..current_structure };
 
     // Save updated structure
     let structure_json = serde_json::to_string(&updated_structure)?;
@@ -323,22 +317,12 @@ fn calculate_quality_distribution(quality_scores: &[f32]) -> QualityDistribution
         }
     }
 
-    QualityDistribution {
-        excellent,
-        good,
-        fair,
-        poor,
-    }
+    QualityDistribution { excellent, good, fair, poor }
 }
 
 fn calculate_processing_time_stats(processing_times: &[u64]) -> ProcessingTimeStats {
     if processing_times.is_empty() {
-        return ProcessingTimeStats {
-            average_ms: 0.0,
-            median_ms: 0.0,
-            min_ms: 0,
-            max_ms: 0,
-        };
+        return ProcessingTimeStats { average_ms: 0.0, median_ms: 0.0, min_ms: 0, max_ms: 0 };
     }
 
     let mut sorted_times = processing_times.to_vec();

@@ -69,9 +69,7 @@ pub struct SequentialGrouper {
 impl SequentialGrouper {
     /// Create a new sequential grouper with default configuration
     pub fn new() -> Self {
-        Self {
-            config: SessionGrouperConfig::default(),
-        }
+        Self { config: SessionGrouperConfig::default() }
     }
 
     /// Create a new sequential grouper with custom session size
@@ -126,11 +124,7 @@ impl SessionGrouper for SequentialGrouper {
 
         // Add remaining videos as the last group
         if !current_group.is_empty() {
-            debug!(
-                "Final session {} with {} videos",
-                groups.len() + 1,
-                current_group.len()
-            );
+            debug!("Final session {} with {} videos", groups.len() + 1, current_group.len());
             groups.push(current_group);
         }
 
@@ -199,11 +193,7 @@ impl SimilarityGrouper {
         let intersection = words1.intersection(&words2).count();
         let union = words1.union(&words2).count();
 
-        if union == 0 {
-            0.0
-        } else {
-            intersection as f32 / union as f32
-        }
+        if union == 0 { 0.0 } else { intersection as f32 / union as f32 }
     }
 }
 
@@ -378,10 +368,7 @@ mod tests {
         let grouper = SimilarityGrouper::new();
 
         // Identical titles
-        assert_eq!(
-            grouper.calculate_similarity("Hello World", "Hello World"),
-            1.0
-        );
+        assert_eq!(grouper.calculate_similarity("Hello World", "Hello World"), 1.0);
 
         // Completely different titles
         assert_eq!(grouper.calculate_similarity("Hello", "Goodbye"), 0.0);

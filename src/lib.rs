@@ -132,10 +132,7 @@ pub enum Phase3Error {
     Backend(#[from] anyhow::Error),
 
     #[error("Plan item not found: plan_id={plan_id}, item_index={item_index}")]
-    PlanItemNotFound {
-        plan_id: uuid::Uuid,
-        item_index: usize,
-    },
+    PlanItemNotFound { plan_id: uuid::Uuid, item_index: usize },
 
     #[error("Ingest operation failed: {0}")]
     Ingest(String),
@@ -151,12 +148,12 @@ pub fn handle_async_error(error: anyhow::Error, operation: &str) {
     let user_message = match error.downcast_ref::<Phase3Error>() {
         Some(Phase3Error::PlanItemNotFound { .. }) => {
             "The item you're trying to update no longer exists. Please refresh the page."
-        }
+        },
         Some(Phase3Error::Backend(_)) => "A server error occurred. Please try again in a moment.",
         Some(Phase3Error::Ingest(msg)) => &format!("Import failed: {msg}"),
         Some(Phase3Error::StateSyncError(_)) => {
             "UI state synchronization failed. Please refresh the page."
-        }
+        },
         _ => "An unexpected error occurred. Please try again.",
     };
 

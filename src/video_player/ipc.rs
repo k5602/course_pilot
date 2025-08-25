@@ -440,9 +440,7 @@ pub mod youtube {
         let vid = escape_js_str(video_id);
         let plist = playlist_id.map(escape_js_str);
 
-        let playlist_param = plist
-            .map(|p| format!(", list: '{}'", p))
-            .unwrap_or_default();
+        let playlist_param = plist.map(|p| format!(", list: '{}'", p)).unwrap_or_default();
 
         format!(
             r#"
@@ -625,11 +623,7 @@ pub mod youtube {
     /// Seek relative to the current time (seconds).
     pub fn seek_relative(player_div_id: &str, delta_seconds: f64) -> String {
         let pid = escape_js_str(player_div_id);
-        let d = if delta_seconds.is_finite() {
-            delta_seconds
-        } else {
-            0.0
-        };
+        let d = if delta_seconds.is_finite() { delta_seconds } else { 0.0 };
         format!(
             r#"(function() {{
                 var p = window.ytPlayerInstance_{pid};

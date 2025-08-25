@@ -405,10 +405,7 @@ mod tests {
     #[test]
     fn test_clustering_metadata_default() {
         let metadata = ClusteringMetadata::default();
-        assert_eq!(
-            metadata.algorithm_used,
-            crate::types::ClusteringAlgorithm::Fallback
-        );
+        assert_eq!(metadata.algorithm_used, crate::types::ClusteringAlgorithm::Fallback);
         assert_eq!(metadata.similarity_threshold, 0.6);
         assert_eq!(metadata.cluster_count, 0);
     }

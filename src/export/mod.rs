@@ -148,20 +148,18 @@ pub mod utils {
                 // Validate JSON structure
                 serde_json::from_slice::<serde_json::Value>(data)
                     .map_err(|e| anyhow::anyhow!("Invalid JSON export data: {}", e))?;
-            }
+            },
             ExportFormat::Csv => {
                 // Basic CSV validation - check for valid UTF-8
                 std::str::from_utf8(data)
                     .map_err(|e| anyhow::anyhow!("Invalid CSV export data: {}", e))?;
-            }
+            },
             ExportFormat::Pdf => {
                 // Basic PDF validation - check for PDF header
                 if !data.starts_with(b"%PDF-") {
-                    return Err(anyhow::anyhow!(
-                        "Invalid PDF export data: missing PDF header"
-                    ));
+                    return Err(anyhow::anyhow!("Invalid PDF export data: missing PDF header"));
                 }
-            }
+            },
         }
         Ok(())
     }
@@ -193,3 +191,68 @@ pub mod course;
 pub mod io;
 pub mod notes;
 pub mod plan;
+
+#[cfg(test)]
+mod tests {
+    use super::utils;
+    use super::*;
+    use chrono::{TimeZone, Utc};
+
+    #[test]
+    fn export_format_display() {
+        assert_eq!(ExportFormat::Json.to_string(), "JSON");
+        assert_eq!(ExportFormat::Csv.to_string(), "CSV");
+        assert_eq!(ExportFormat::Pdf.to_string(), "PDF");
+    }
+
+    #[test]
+    fn format_duration_various() {
+        assert_eq!(utils::format_duration(std::time::Duration::from_secs(45)), "45s");
+        assert_eq!(utils::format_duration(std::time::Duration::from_secs(75)), "1m 15s");
+        assert_eq!(utils::format_duration(std::time::Duration::from_secs(3661)), "1h 1m 1s");
+    }
+
+    #[test]
+    fn sanitize_csv_field_escapes() {
+        assert_eq!(utils::sanitize_csv_field("plain"), "plain");
+        assert_eq!(utils::sanitize_csv_field("a,b"), "\"a,b\"");
+        assert_eq!(utils::sanitize_csv_field("a\"b"), "\"a\"\"b\"");
+        assert_eq!(utils::sanitize_csv_field("line1\nline2"), "\"line1\nline2\"");
+    }
+
+    #[test]
+    fn generate_filename_shape() {
+        let f_json = utils::generate_filename("base", ExportFormat::Json);
+        assert!(f_json.starts_with("base_"));
+        assert!(f_json.ends_with(".json"));
+        let mid = &f_json["base_".len()..f_json.len() - ".json".len()];
+        assert_eq!(mid.len(), 15, "timestamp should be YYYYMMDD_HHMMSS");
+    }
+
+    #[test]
+    fn validate_export_data_json_csv_pdf() {
+        // JSON valid
+        assert!(utils::validate_export_data(br#"{"k":1}"#, ExportFormat::Json).is_ok());
+        // JSON invalid
+        assert!(utils::validate_export_data(br#"{k:1}"#, ExportFormat::Json).is_err());
+
+        // CSV valid (UTF-8)
+        assert!(utils::validate_export_data(b"a,b\nc,d\n", ExportFormat::Csv).is_ok());
+        // CSV invalid (non-UTF8)
+        let bad = vec![0xff, 0xfe, 0x00];
+        assert!(utils::validate_export_data(&bad, ExportFormat::Csv).is_err());
+
+        // PDF valid
+        assert!(utils::validate_export_data(b"%PDF-1.4\n...", ExportFormat::Pdf).is_ok());
+        // PDF invalid
+        assert!(utils::validate_export_data(b"Not a PDF", ExportFormat::Pdf).is_err());
+    }
+
+    #[test]
+    fn format_timestamp_matches_pattern() {
+        let dt = Utc.timestamp_opt(1_700_000_000, 0).single().unwrap();
+        let got = utils::format_timestamp(dt);
+        let expected = dt.format("%Y-%m-%d %H:%M:%S UTC").to_string();
+        assert_eq!(got, expected);
+    }
+}

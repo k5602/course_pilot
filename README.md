@@ -1,5 +1,7 @@
 # Course Pilot 🎓
 
+[![Rust CI](https://github.com/k5602/course_pilot/actions/workflows/rust.yml/badge.svg?branch=main)](https://github.com/k5602/course_pilot/actions/workflows/rust.yml) [![Clippy](https://img.shields.io/github/actions/workflow/status/k5602/course_pilot/rust.yml?branch=main&label=clippy)](https://github.com/k5602/course_pilot/actions/workflows/rust.yml)
+
 > Transform YouTube playlists and video folders into structured, intelligent study plans
 
 A modern Rust desktop application that automatically analyzes video-based courses, creates logical learning structures, and generates personalized study schedules. Built with performance, accessibility, and user experience at its core.
@@ -806,6 +808,13 @@ cargo doc --open
 - **Documentation**: Comprehensive inline and external docs
 
 ## 🤝 Contributing
+
+- Test subsets (CI-friendly):
+  - Fast local default: run `cargo test` (only non-ignored tests).
+  - Mark slow/integration/system tests with `#[ignore]` or `#[ignore = "slow"]` so they don’t run locally by default.
+  - CI slow suite: run `cargo test -- --ignored` to execute ignored tests in pipelines.
+  - Feature-gated integration tests: wrap with `#[cfg(feature = "integration")]` and run with `cargo test --features integration` when needed.
+  - Filter by module to iterate faster: `cargo test ingest::`, `cargo test nlp::`, `cargo test planner::`, etc.
 
 I welcome contributions! Here's how to get involved:
 

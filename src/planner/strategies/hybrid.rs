@@ -10,10 +10,7 @@ pub fn generate_hybrid_plan(
     course: &Course,
     settings: &PlanSettings,
 ) -> Result<Vec<PlanItem>, PlanError> {
-    let structure = course
-        .structure
-        .as_ref()
-        .expect("Course must be structured for hybrid plan");
+    let structure = course.structure.as_ref().expect("Course must be structured for hybrid plan");
     let mut plan_items = Vec::new();
     let mut current_date = settings.start_date;
 

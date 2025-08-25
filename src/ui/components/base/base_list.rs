@@ -11,11 +11,7 @@ pub struct BaseListItem<T: Clone + PartialEq> {
 
 impl<T: Clone + PartialEq> BaseListItem<T> {
     pub fn new(id: impl Into<String>, data: T) -> Self {
-        Self {
-            id: id.into(),
-            data,
-            disabled: false,
-        }
+        Self { id: id.into(), data, disabled: false }
     }
 
     pub fn disabled(mut self) -> Self {
@@ -75,12 +71,10 @@ impl<T: Clone + PartialEq + 'static> PartialEq for BaseListProps<T> {
 pub fn BaseList<T: Clone + PartialEq + 'static>(props: BaseListProps<T>) -> Element {
     let list_classes = match props.variant {
         "grid" => {
-            let cols = props
-                .grid_cols
-                .as_deref()
-                .unwrap_or("grid-cols-1 md:grid-cols-2 lg:grid-cols-3");
+            let cols =
+                props.grid_cols.as_deref().unwrap_or("grid-cols-1 md:grid-cols-2 lg:grid-cols-3");
             format!("grid {} gap-4 {}", cols, props.class)
-        }
+        },
         "menu" => format!("menu w-full {}", props.class),
         "list" => format!("space-y-2 {}", props.class),
         _ => format!("{} {}", props.variant, props.class),
@@ -91,14 +85,9 @@ pub fn BaseList<T: Clone + PartialEq + 'static>(props: BaseListProps<T>) -> Elem
     let mut container_y = use_motion(20.0f32);
 
     use_effect(move || {
-        container_opacity.animate_to(
-            1.0,
-            AnimationConfig::new(AnimationMode::Tween(Tween::default())),
-        );
-        container_y.animate_to(
-            0.0,
-            AnimationConfig::new(AnimationMode::Spring(Spring::default())),
-        );
+        container_opacity
+            .animate_to(1.0, AnimationConfig::new(AnimationMode::Tween(Tween::default())));
+        container_y.animate_to(0.0, AnimationConfig::new(AnimationMode::Spring(Spring::default())));
     });
 
     let container_style = if props.animated {
@@ -177,10 +166,8 @@ fn AnimatedListItem(index: usize, disabled: bool, children: Element) -> Element 
                 tokio::time::sleep(tokio::time::Duration::from_millis((delay * 1000.0) as u64))
                     .await;
 
-                item_opacity.animate_to(
-                    1.0,
-                    AnimationConfig::new(AnimationMode::Tween(Tween::default())),
-                );
+                item_opacity
+                    .animate_to(1.0, AnimationConfig::new(AnimationMode::Tween(Tween::default())));
                 item_x.animate_to(
                     0.0,
                     AnimationConfig::new(AnimationMode::Spring(Spring::default())),

@@ -63,9 +63,7 @@ pub struct ThemeContext {
 
 impl ThemeContext {
     pub fn new() -> Self {
-        Self {
-            theme: AppTheme::from_storage(),
-        }
+        Self { theme: AppTheme::from_storage() }
     }
 
     /// Toggle between light and dark themes and save the new state
@@ -96,15 +94,9 @@ pub fn ThemeToggleButton(icon_only: bool) -> Element {
     let is_corporate = theme_ctx.read().theme == AppTheme::Corporate;
     let theme_label = if is_corporate { "Light" } else { "Dark" };
     let theme_icon = if is_corporate {
-        rsx!(Icon {
-            icon: FaSun,
-            class: "w-5 h-5"
-        })
+        rsx!(Icon { icon: FaSun, class: "w-5 h-5" })
     } else {
-        rsx!(Icon {
-            icon: FaMoon,
-            class: "w-5 h-5"
-        })
+        rsx!(Icon { icon: FaMoon, class: "w-5 h-5" })
     };
 
     rsx! {

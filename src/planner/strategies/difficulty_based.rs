@@ -19,10 +19,8 @@ pub fn generate_difficulty_based_plan(
     course: &Course,
     settings: &PlanSettings,
 ) -> Result<Vec<PlanItem>, PlanError> {
-    let structure = course
-        .structure
-        .as_ref()
-        .expect("Course must be structured for difficulty-based plan");
+    let structure =
+        course.structure.as_ref().expect("Course must be structured for difficulty-based plan");
     let mut plan_items = Vec::new();
     let mut current_date = settings.start_date;
 
@@ -60,12 +58,7 @@ pub fn generate_difficulty_based_plan(
     }
 
     // Create sessions with progressive difficulty using duration-based grouping
-    let all_content = [
-        beginner_content,
-        intermediate_content,
-        advanced_content,
-        expert_content,
-    ];
+    let all_content = [beginner_content, intermediate_content, advanced_content, expert_content];
 
     for (phase, content) in all_content.iter().enumerate() {
         if content.is_empty() {

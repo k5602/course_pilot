@@ -26,10 +26,7 @@ pub fn VideoPlayerModal(props: VideoPlayerModalProps) -> Element {
     // Initialize video when source changes
     let video_source_clone = props.video_source.clone();
     use_effect(move || {
-        log::info!(
-            "VideoPlayerModal: Source changed to: {:?}",
-            video_source_clone
-        );
+        log::info!("VideoPlayerModal: Source changed to: {:?}", video_source_clone);
         if let Some(source) = &video_source_clone {
             if props.is_open {
                 log::info!(
@@ -65,12 +62,12 @@ pub fn VideoPlayerModal(props: VideoPlayerModalProps) -> Element {
             PlaybackState::Playing => {
                 playback_state.set(PlaybackState::Paused);
                 log::info!("Video paused");
-            }
+            },
             PlaybackState::Paused | PlaybackState::Stopped => {
                 playback_state.set(PlaybackState::Playing);
                 log::info!("Video playing");
-            }
-            _ => {}
+            },
+            _ => {},
         }
     };
 

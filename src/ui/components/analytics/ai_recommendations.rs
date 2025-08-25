@@ -49,7 +49,7 @@ pub fn AIRecommendationsPanel(props: AIRecommendationsPanelProps) -> Element {
                             settings,
                             user_experience,
                         })
-                    }
+                    },
                     (Ok(Some(course)), Err(_), Ok(settings)) => {
                         // Course exists but no plan yet
                         Ok(AIRecommendationData {
@@ -58,7 +58,7 @@ pub fn AIRecommendationsPanel(props: AIRecommendationsPanelProps) -> Element {
                             settings,
                             user_experience,
                         })
-                    }
+                    },
                     (_, _, Ok(settings)) => {
                         // Fallback to basic settings
                         Ok(AIRecommendationData {
@@ -67,7 +67,7 @@ pub fn AIRecommendationsPanel(props: AIRecommendationsPanelProps) -> Element {
                             settings,
                             user_experience,
                         })
-                    }
+                    },
                     (_, _, Err(e)) => Err(e),
                 }
             } else {
@@ -142,16 +142,16 @@ fn StrategyRecommendations(props: StrategyRecommendationsProps) -> Element {
         match (&settings.strategy, video_count, has_structure) {
             (crate::types::DistributionStrategy::SpacedRepetition, _, _) => {
                 "Recommended for beginners to optimize long-term retention through spaced intervals"
-            }
+            },
             (crate::types::DistributionStrategy::Adaptive, videos, _) if videos > 50 => {
                 "Large course detected - adaptive scheduling will balance cognitive load dynamically"
-            }
+            },
             (crate::types::DistributionStrategy::ModuleBased, _, true) => {
                 "Well-structured course - module-based approach respects content organization"
-            }
+            },
             (crate::types::DistributionStrategy::Hybrid, _, _) => {
                 "Balanced approach combining multiple strategies for optimal learning"
-            }
+            },
             _ => "Strategy selected based on course characteristics and user experience level",
         }
     } else {

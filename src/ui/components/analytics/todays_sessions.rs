@@ -76,7 +76,7 @@ pub fn TodaysSessions() -> Element {
                     })}
                 }
             }
-        }
+        },
         Some(Err(e)) => rsx! {
             div { class: "alert alert-error",
                 "Failed to load today's sessions: {e}"
@@ -103,12 +103,7 @@ struct SessionCardProps {
 #[component]
 fn SessionCard(props: SessionCardProps) -> Element {
     let toggle_completion = use_toggle_plan_item_action();
-    let time_str = props
-        .item
-        .date
-        .with_timezone(&Local)
-        .format("%H:%M")
-        .to_string();
+    let time_str = props.item.date.with_timezone(&Local).format("%H:%M").to_string();
     let duration_str = crate::types::duration_utils::format_duration(props.item.total_duration);
 
     let handle_toggle_completion = {

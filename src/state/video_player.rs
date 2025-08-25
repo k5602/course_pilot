@@ -85,7 +85,7 @@ impl VideoPlayerContext {
         match current_state {
             PlaybackState::Playing => self.pause(),
             PlaybackState::Paused | PlaybackState::Stopped => self.play(),
-            _ => {} // Don't toggle in other states
+            _ => {}, // Don't toggle in other states
         }
     }
 
@@ -304,7 +304,7 @@ impl VideoSource {
                 }
 
                 Ok(())
-            }
+            },
             VideoSource::YouTube { video_id, .. } => {
                 if video_id.trim().is_empty() {
                     return Err(VideoPlayerError::InvalidVideoId("empty".to_string()));
@@ -316,15 +316,13 @@ impl VideoSource {
 
                 // Basic YouTube video ID format validation
                 if video_id.len() != 11
-                    || !video_id
-                        .chars()
-                        .all(|c| c.is_alphanumeric() || c == '_' || c == '-')
+                    || !video_id.chars().all(|c| c.is_alphanumeric() || c == '_' || c == '-')
                 {
                     return Err(VideoPlayerError::InvalidVideoId(video_id.clone()));
                 }
 
                 Ok(())
-            }
+            },
         }
     }
 
@@ -344,17 +342,17 @@ impl VideoPlayerError {
         match self {
             Self::FileNotFound(path) => {
                 format!("Video file not found: {}", path.display())
-            }
+            },
             Self::FileAccessDenied(path) => {
                 format!("Cannot access video file: {}", path.display())
-            }
+            },
             Self::UnsupportedFormat(ext) => {
                 format!("Unsupported video format: .{}", ext)
-            }
+            },
             Self::NetworkError(_) => "Network connection required for online videos".to_string(),
             Self::YouTubeApiError { message, .. } => {
                 format!("YouTube error: {}", message)
-            }
+            },
             Self::InitializationFailed(_) => "Video player failed to initialize".to_string(),
             Self::PlaybackError(_) => "Video playback error occurred".to_string(),
             Self::WebViewError(_) => "Browser component error".to_string(),
@@ -374,18 +372,16 @@ impl VideoPlayerError {
                 "Check file permissions".to_string(),
                 "Try running as administrator".to_string(),
             ],
-            Self::NetworkError(_) => vec![
-                "Check internet connection".to_string(),
-                "Try again later".to_string(),
-            ],
+            Self::NetworkError(_) => {
+                vec!["Check internet connection".to_string(), "Try again later".to_string()]
+            },
             Self::UnsupportedFormat(_ext) => vec![
                 "Convert to supported format (MP4, WebM, etc.)".to_string(),
                 "Use a different video file".to_string(),
             ],
-            Self::YouTubeApiError { .. } => vec![
-                "Check internet connection".to_string(),
-                "Try refreshing the page".to_string(),
-            ],
+            Self::YouTubeApiError { .. } => {
+                vec!["Check internet connection".to_string(), "Try refreshing the page".to_string()]
+            },
             Self::InvalidVideoId(_) => vec![
                 "Check the video URL or ID".to_string(),
                 "Ensure the video is public".to_string(),

@@ -65,11 +65,9 @@ pub fn parse_datetime_rfc3339_sqlite(
     s: &str,
     idx: usize,
 ) -> Result<DateTime<Utc>, rusqlite::Error> {
-    chrono::DateTime::parse_from_rfc3339(s)
-        .map(|dt| dt.with_timezone(&Utc))
-        .map_err(|_| {
-            rusqlite::Error::InvalidColumnType(idx, "rfc3339-datetime".to_string(), Type::Text)
-        })
+    chrono::DateTime::parse_from_rfc3339(s).map(|dt| dt.with_timezone(&Utc)).map_err(|_| {
+        rusqlite::Error::InvalidColumnType(idx, "rfc3339-datetime".to_string(), Type::Text)
+    })
 }
 
 /// Convert INTEGER epoch seconds (commonly stored in SQLite) to `DateTime<Utc>`.
@@ -123,10 +121,7 @@ mod tests {
     #[test]
     fn test_parse_optional_uuid() {
         let u = Uuid::new_v4();
-        assert_eq!(
-            parse_optional_uuid_sqlite(Some(u.to_string()), 1).unwrap(),
-            Some(u)
-        );
+        assert_eq!(parse_optional_uuid_sqlite(Some(u.to_string()), 1).unwrap(), Some(u));
         assert_eq!(parse_optional_uuid_sqlite(None, 1).unwrap(), None);
     }
 
@@ -140,13 +135,7 @@ mod tests {
     fn test_parse_json_ok() {
         let json = r#"{"a": 1, "b": "x"}"#;
         let val: Foo = parse_json_sqlite_at(json, 3).unwrap();
-        assert_eq!(
-            val,
-            Foo {
-                a: 1,
-                b: "x".into()
-            }
-        );
+        assert_eq!(val, Foo { a: 1, b: "x".into() });
     }
 
     #[test]
@@ -157,7 +146,7 @@ mod tests {
             rusqlite::Error::InvalidColumnType(idx, msg, _) => {
                 assert_eq!(idx, 7);
                 assert!(msg.starts_with("json:"));
-            }
+            },
             _ => panic!("unexpected error variant"),
         }
     }
@@ -170,9 +159,7 @@ mod tests {
 
     #[test]
     fn test_parse_rfc3339_datetime_err() {
-        let err = parse_datetime_rfc3339_sqlite("02-01-2024 03:04:05", 4)
-            .err()
-            .unwrap();
+        let err = parse_datetime_rfc3339_sqlite("02-01-2024 03:04:05", 4).err().unwrap();
         match err {
             rusqlite::Error::InvalidColumnType(idx, _, _) => assert_eq!(idx, 4),
             _ => panic!("unexpected error variant"),

@@ -29,10 +29,10 @@ impl GeminiManager {
             match key {
                 Some(k) if !k.trim().is_empty() => {
                     client.set_api_key(k);
-                }
+                },
                 _ => {
                     client.clear_api_key();
-                }
+                },
             }
         }
         // Validate local configuration state; client just checks presence for now
@@ -48,14 +48,14 @@ impl GeminiManager {
                 let mut last = self.last_error;
                 last.set(None);
                 Ok(())
-            }
+            },
             Err(e) => {
                 let mut is_init = self.is_initialized;
                 is_init.set(false);
                 let mut last = self.last_error;
                 last.set(Some(format!("Gemini initialization failed: {}", e)));
                 Err(e)
-            }
+            },
         }
     }
 
@@ -125,10 +125,5 @@ pub fn use_gemini_manager() -> GeminiManager {
     let last_error = use_signal(|| None::<String>);
     let settings = crate::ui::hooks::use_settings_manager();
 
-    GeminiManager {
-        client,
-        is_initialized,
-        last_error,
-        settings,
-    }
+    GeminiManager { client, is_initialized, last_error, settings }
 }

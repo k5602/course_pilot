@@ -92,16 +92,12 @@ fn LearningVelocityChart(props: LearningVelocityChartProps) -> Element {
         })
         .sum();
 
-    let avg_videos_per_day: f32 = plan_analyses
-        .iter()
-        .map(|analysis| analysis.velocity_analysis.videos_per_day)
-        .sum::<f32>()
-        / plan_analyses.len() as f32;
+    let avg_videos_per_day: f32 =
+        plan_analyses.iter().map(|analysis| analysis.velocity_analysis.videos_per_day).sum::<f32>()
+            / plan_analyses.len() as f32;
 
-    let total_study_days: i64 = plan_analyses
-        .iter()
-        .map(|analysis| analysis.velocity_analysis.total_duration_days)
-        .sum();
+    let total_study_days: i64 =
+        plan_analyses.iter().map(|analysis| analysis.velocity_analysis.total_duration_days).sum();
 
     // Categorize velocity distribution
     let velocity_counts = plan_analyses.iter().fold([0; 4], |mut acc, analysis| {
@@ -217,21 +213,15 @@ fn CognitiveLoadDistribution(props: CognitiveLoadDistributionProps) -> Element {
     }
 
     // Calculate aggregate cognitive load metrics
-    let avg_load: f32 = plan_analyses
-        .iter()
-        .map(|analysis| analysis.load_distribution.average_load)
-        .sum::<f32>()
-        / plan_analyses.len() as f32;
+    let avg_load: f32 =
+        plan_analyses.iter().map(|analysis| analysis.load_distribution.average_load).sum::<f32>()
+            / plan_analyses.len() as f32;
 
-    let total_overloaded: usize = plan_analyses
-        .iter()
-        .map(|analysis| analysis.load_distribution.overloaded_sessions)
-        .sum();
+    let total_overloaded: usize =
+        plan_analyses.iter().map(|analysis| analysis.load_distribution.overloaded_sessions).sum();
 
-    let total_underloaded: usize = plan_analyses
-        .iter()
-        .map(|analysis| analysis.load_distribution.underloaded_sessions)
-        .sum();
+    let total_underloaded: usize =
+        plan_analyses.iter().map(|analysis| analysis.load_distribution.underloaded_sessions).sum();
 
     let total_sessions: usize = plan_analyses
         .iter()
@@ -241,11 +231,9 @@ fn CognitiveLoadDistribution(props: CognitiveLoadDistributionProps) -> Element {
         })
         .sum();
 
-    let avg_variance: f32 = plan_analyses
-        .iter()
-        .map(|analysis| analysis.load_distribution.load_variance)
-        .sum::<f32>()
-        / plan_analyses.len() as f32;
+    let avg_variance: f32 =
+        plan_analyses.iter().map(|analysis| analysis.load_distribution.load_variance).sum::<f32>()
+            / plan_analyses.len() as f32;
 
     // Categorize load balance quality
     let balance_quality = match avg_variance {

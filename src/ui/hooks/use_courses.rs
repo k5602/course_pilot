@@ -110,9 +110,7 @@ pub fn use_course_manager() -> CourseManager {
     let navigate_to_course = use_callback({
         let navigator = use_navigator();
         move |course_id: Uuid| {
-            navigator.push(crate::types::Route::PlanView {
-                course_id: course_id.to_string(),
-            });
+            navigator.push(crate::types::Route::PlanView { course_id: course_id.to_string() });
         }
     });
 
@@ -151,7 +149,7 @@ pub fn use_course_manager() -> CourseManager {
                             .await
                             .unwrap_or_else(|e| Err(anyhow::anyhow!("Join error: {}", e)))?;
                             Ok(())
-                        }
+                        },
                         None => Err(anyhow::anyhow!("Course not found")),
                     }
                 }
@@ -160,10 +158,10 @@ pub fn use_course_manager() -> CourseManager {
                 match result {
                     Ok(_) => {
                         toast_helpers::success("Course updated successfully");
-                    }
+                    },
                     Err(e) => {
                         toast_helpers::error(format!("Failed to update course: {e}"));
-                    }
+                    },
                 }
             });
         }
@@ -188,10 +186,10 @@ pub fn use_course_manager() -> CourseManager {
                         toast_helpers::success("Course deleted successfully");
                         // Refresh the courses list
                         courses_resource.restart();
-                    }
+                    },
                     Err(e) => {
                         toast_helpers::error(format!("Failed to delete course: {e}"));
-                    }
+                    },
                 }
             });
         }
@@ -258,7 +256,7 @@ pub fn use_course_progress(course_id: Uuid) -> (f32, String, Option<String>) {
                 Some("neutral".to_string())
             };
             (progress, status, badge_color)
-        }
+        },
         Some(Ok(None)) => (0.0, "Not Started".to_string(), Some("neutral".to_string())),
         Some(Err(_)) => (0.0, "Error".to_string(), Some("error".to_string())),
         None => (0.0, "Loading...".to_string(), Some("neutral".to_string())),

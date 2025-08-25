@@ -11,10 +11,7 @@ pub fn generate_adaptive_plan(
     course: &Course,
     settings: &PlanSettings,
 ) -> Result<Vec<PlanItem>, PlanError> {
-    let structure = course
-        .structure
-        .as_ref()
-        .expect("Course must be structured for adaptive plan");
+    let structure = course.structure.as_ref().expect("Course must be structured for adaptive plan");
     let mut plan_items = Vec::new();
     let mut current_date = settings.start_date;
 
@@ -267,11 +264,7 @@ pub fn optimize_session_sequence(sessions: &mut Vec<EnhancedSessionPlan>) {
         type_order_a
             .cmp(&type_order_b)
             .then(diff_order_a.cmp(&diff_order_b))
-            .then(
-                a.estimated_cognitive_load
-                    .partial_cmp(&b.estimated_cognitive_load)
-                    .unwrap(),
-            )
+            .then(a.estimated_cognitive_load.partial_cmp(&b.estimated_cognitive_load).unwrap())
     });
 }
 

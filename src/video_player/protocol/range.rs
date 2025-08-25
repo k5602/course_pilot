@@ -36,11 +36,7 @@ fn serve_range(
     mime_type: &str,
     range_str: &str,
 ) -> Result<Response<Cow<'static, [u8]>>> {
-    debug!(
-        "Processing range request: {} for file: {}",
-        range_str,
-        file_path.display()
-    );
+    debug!("Processing range request: {} for file: {}", range_str, file_path.display());
 
     // Parse the Range header
     let ranges = match HttpRange::parse(range_str, file_size) {
@@ -48,15 +44,12 @@ fn serve_range(
         Err(e) => {
             warn!("Invalid range header '{}': {:?}", range_str, e);
             return Err(anyhow!("Invalid range header: {:?}", e));
-        }
+        },
     };
 
     // We only support single range requests for now
     if ranges.len() != 1 {
-        warn!(
-            "Multiple ranges not supported: {} ranges requested",
-            ranges.len()
-        );
+        warn!("Multiple ranges not supported: {} ranges requested", ranges.len());
         return serve_entire_file(file_path, file_size, mime_type);
     }
 
@@ -67,19 +60,13 @@ fn serve_range(
 
     // Validate range bounds
     if start >= file_size || end >= file_size {
-        warn!(
-            "Range out of bounds: {}-{} for file size {}",
-            start, end, file_size
-        );
+        warn!("Range out of bounds: {}-{} for file size {}", start, end, file_size);
         return Err(anyhow!("Range out of bounds"));
     }
 
     // Limit chunk size for memory efficiency
     let actual_length = if content_length > MAX_CHUNK_SIZE {
-        warn!(
-            "Range too large ({}), limiting to {}",
-            content_length, MAX_CHUNK_SIZE
-        );
+        warn!("Range too large ({}), limiting to {}", content_length, MAX_CHUNK_SIZE);
         MAX_CHUNK_SIZE
     } else {
         content_length
@@ -103,12 +90,7 @@ fn serve_range(
         .header(header::CONTENT_LENGTH, actual_length.to_string())
         .header(
             header::CONTENT_RANGE,
-            format!(
-                "bytes {}-{}/{}",
-                start,
-                start + actual_length - 1,
-                file_size
-            ),
+            format!("bytes {}-{}/{}", start, start + actual_length - 1, file_size),
         )
         .header(header::ACCEPT_RANGES, "bytes")
         .header(header::CACHE_CONTROL, "public, max-age=3600")
@@ -122,18 +104,11 @@ fn serve_entire_file(
     file_size: u64,
     mime_type: &str,
 ) -> Result<Response<Cow<'static, [u8]>>> {
-    debug!(
-        "Serving entire file: {} ({} bytes)",
-        file_path.display(),
-        file_size
-    );
+    debug!("Serving entire file: {} ({} bytes)", file_path.display(), file_size);
 
     // For large files, we might want to stream instead of loading everything
     if file_size > MAX_CHUNK_SIZE * 10 {
-        warn!(
-            "Large file ({} bytes), consider implementing streaming",
-            file_size
-        );
+        warn!("Large file ({} bytes), consider implementing streaming", file_size);
     }
 
     let content = read_entire_file(file_path)?;
@@ -187,7 +162,7 @@ pub fn get_range_length(range_str: &str, file_size: u64) -> Option<u64> {
         Ok(ranges) if ranges.len() == 1 => {
             let range = &ranges[0];
             Some(std::cmp::min(range.length, MAX_CHUNK_SIZE))
-        }
+        },
         _ => None,
     }
 }
@@ -259,13 +234,8 @@ mod tests {
         let content = b"0123456789abcdefghijklmnopqrstuvwxyz";
         let file = create_test_file(content);
 
-        let response = serve_range(
-            file.path(),
-            content.len() as u64,
-            "video/mp4",
-            "bytes=10-19",
-        )
-        .unwrap();
+        let response =
+            serve_range(file.path(), content.len() as u64, "video/mp4", "bytes=10-19").unwrap();
 
         assert_eq!(response.status(), StatusCode::PARTIAL_CONTENT);
         assert_eq!(response.body().as_ref(), b"abcdefghij");

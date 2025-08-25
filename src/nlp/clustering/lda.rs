@@ -69,14 +69,7 @@ impl LdaClusterer {
         num_iterations: usize,
         random_seed: Option<u64>,
     ) -> Self {
-        Self {
-            num_topics,
-            alpha,
-            beta,
-            num_iterations,
-            random_seed,
-            min_topic_probability: 0.1,
-        }
+        Self { num_topics, alpha, beta, num_iterations, random_seed, min_topic_probability: 0.1 }
     }
 
     /// Perform LDA topic modeling on documents (video titles)
@@ -135,12 +128,7 @@ impl LdaClusterer {
             &topic_counts,
         );
 
-        Ok(LdaModel {
-            topics,
-            document_topics,
-            vocabulary,
-            log_likelihood,
-        })
+        Ok(LdaModel { topics, document_topics, vocabulary, log_likelihood })
     }
 
     /// Cluster videos based on LDA topic modeling
@@ -154,10 +142,7 @@ impl LdaClusterer {
         // Group documents by dominant topic
         let mut topic_groups: HashMap<usize, Vec<usize>> = HashMap::new();
         for doc_topics in &lda_model.document_topics {
-            topic_groups
-                .entry(doc_topics.dominant_topic)
-                .or_default()
-                .push(doc_topics.document_id);
+            topic_groups.entry(doc_topics.dominant_topic).or_default().push(doc_topics.document_id);
         }
 
         // Create clusters from topic groups
@@ -178,12 +163,8 @@ impl LdaClusterer {
             );
 
             // Extract topic keywords
-            let topic_keywords = topic
-                .top_words
-                .iter()
-                .take(5)
-                .map(|(word, _)| word.clone())
-                .collect();
+            let topic_keywords =
+                topic.top_words.iter().take(5).map(|(word, _)| word.clone()).collect();
 
             clusters.push(VideoCluster {
                 videos: video_indices,
@@ -234,9 +215,7 @@ impl LdaClusterer {
             .split_whitespace()
             .map(|word| {
                 // Remove punctuation and numbers
-                word.chars()
-                    .filter(|c| c.is_alphabetic())
-                    .collect::<String>()
+                word.chars().filter(|c| c.is_alphabetic()).collect::<String>()
             })
             .filter(|word| word.len() > 2 && !stop_words.contains(word))
             .collect()
@@ -284,10 +263,8 @@ impl LdaClusterer {
         topic_word_counts: &mut [Vec<usize>],
         topic_counts: &mut [usize],
     ) {
-        for (doc_id, (doc, assignments)) in processed_docs
-            .iter()
-            .zip(topic_assignments.iter())
-            .enumerate()
+        for (doc_id, (doc, assignments)) in
+            processed_docs.iter().zip(topic_assignments.iter()).enumerate()
         {
             for (&word_id, &topic) in doc.iter().zip(assignments.iter()) {
                 doc_topic_counts[doc_id][topic] += 1;
@@ -310,10 +287,8 @@ impl LdaClusterer {
     ) -> Result<(), ClusteringError> {
         let mut rng_state = self.create_rng() + iteration as u64;
 
-        for (doc_id, (doc, assignments)) in processed_docs
-            .iter()
-            .zip(topic_assignments.iter_mut())
-            .enumerate()
+        for (doc_id, (doc, assignments)) in
+            processed_docs.iter().zip(topic_assignments.iter_mut()).enumerate()
         {
             for (&word_id, topic) in doc.iter().zip(assignments.iter_mut()) {
                 // Remove current assignment from counts
@@ -397,11 +372,7 @@ impl LdaClusterer {
                 .sort_by(|a, b| b.1.partial_cmp(&a.1).unwrap_or(std::cmp::Ordering::Equal));
             let top_words = word_prob_pairs.into_iter().take(10).collect();
 
-            topics.push(Topic {
-                id: topic_id,
-                word_probabilities,
-                top_words,
-            });
+            topics.push(Topic { id: topic_id, word_probabilities, top_words });
         }
 
         topics
@@ -474,11 +445,7 @@ impl LdaClusterer {
             }
         }
 
-        if count > 0 {
-            total_similarity / count as f32
-        } else {
-            1.0
-        }
+        if count > 0 { total_similarity / count as f32 } else { 1.0 }
     }
 
     /// Calculate similarity between two topic distributions
@@ -564,16 +531,10 @@ impl LdaClusterer {
                 topic_probs
                     .sort_by(|a, b| b.1.partial_cmp(&a.1).unwrap_or(std::cmp::Ordering::Equal));
 
-                let secondary_topic = if topic_probs.len() > 1 {
-                    topic_probs[1].0
-                } else {
-                    topic_probs[0].0
-                };
+                let secondary_topic =
+                    if topic_probs.len() > 1 { topic_probs[1].0 } else { topic_probs[0].0 };
 
-                secondary_groups
-                    .entry(secondary_topic)
-                    .or_default()
-                    .push(video_id);
+                secondary_groups.entry(secondary_topic).or_default().push(video_id);
             }
         }
 
@@ -583,12 +544,8 @@ impl LdaClusterer {
             if video_indices.len() >= 2 {
                 let topic = &lda_model.topics[topic_id];
                 let centroid = self.topic_to_feature_vector(topic);
-                let topic_keywords = topic
-                    .top_words
-                    .iter()
-                    .take(5)
-                    .map(|(word, _)| word.clone())
-                    .collect();
+                let topic_keywords =
+                    topic.top_words.iter().take(5).map(|(word, _)| word.clone()).collect();
 
                 split_clusters.push(VideoCluster {
                     videos: video_indices,
@@ -599,11 +556,7 @@ impl LdaClusterer {
             }
         }
 
-        if split_clusters.is_empty() {
-            Ok(vec![cluster.clone()])
-        } else {
-            Ok(split_clusters)
-        }
+        if split_clusters.is_empty() { Ok(vec![cluster.clone()]) } else { Ok(split_clusters) }
     }
 
     /// Calculate log likelihood of the model
@@ -841,10 +794,7 @@ mod tests {
         let documents = vec!["test document".to_string(), "another test".to_string()];
 
         let result = clusterer.fit_lda(&documents);
-        assert!(matches!(
-            result,
-            Err(ClusteringError::InsufficientContent(2))
-        ));
+        assert!(matches!(result, Err(ClusteringError::InsufficientContent(2))));
     }
 
     #[test]

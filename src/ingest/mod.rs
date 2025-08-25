@@ -70,20 +70,10 @@ pub fn clean_title(title: &str) -> String {
         .replace("HD", "");
 
     // Remove bracketed metadata like [Official], (2021), etc.
-    let base = base
-        .split('[')
-        .next()
-        .unwrap_or(&base)
-        .split('(')
-        .next()
-        .unwrap_or(&base)
-        .to_string();
+    let base =
+        base.split('[').next().unwrap_or(&base).split('(').next().unwrap_or(&base).to_string();
 
-    base.split_whitespace()
-        .collect::<Vec<_>>()
-        .join(" ")
-        .trim()
-        .to_string()
+    base.split_whitespace().collect::<Vec<_>>().join(" ").trim().to_string()
 }
 
 /// Probe video duration using mp4 and matroska crates. Returns None if not determinable quickly.
@@ -92,9 +82,8 @@ pub fn probe_video_duration(path: &std::path::Path) -> Option<std::time::Duratio
     use std::io::BufReader;
 
     // Build a lightweight fingerprint from metadata for cache validation.
-    let (len, mtime) = std::fs::metadata(path)
-        .map(|m| (m.len(), m.modified().ok()))
-        .unwrap_or((0, None));
+    let (len, mtime) =
+        std::fs::metadata(path).map(|m| (m.len(), m.modified().ok())).unwrap_or((0, None));
 
     // Fast path: return cached duration if file is unchanged.
     if let Ok(cache) = VIDEO_DURATION_CACHE.lock() {
@@ -105,10 +94,7 @@ pub fn probe_video_duration(path: &std::path::Path) -> Option<std::time::Duratio
         }
     }
 
-    let ext = path
-        .extension()
-        .and_then(|e| e.to_str())
-        .map(|s| s.to_lowercase())?;
+    let ext = path.extension().and_then(|e| e.to_str()).map(|s| s.to_lowercase())?;
 
     let computed = match ext.as_str() {
         // ISO Base Media File Format (mp4/m4v/mov)
@@ -119,7 +105,7 @@ pub fn probe_video_duration(path: &std::path::Path) -> Option<std::time::Duratio
             // mp4::Mp4Reader provides duration if available.
             let mp4 = mp4::Mp4Reader::read_header(reader, size).ok()?;
             Some(mp4.duration())
-        }
+        },
 
         // Matroska containers (mkv/webm)
         "mkv" | "webm" => {
@@ -132,7 +118,7 @@ pub fn probe_video_duration(path: &std::path::Path) -> Option<std::time::Duratio
             } else {
                 None
             }
-        }
+        },
 
         // Others not handled by these parsers.
         _ => None,

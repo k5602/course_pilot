@@ -47,16 +47,16 @@ impl PlanManager {
                         );
                         let user_message = ErrorMessageMapper::map_error(e);
                         toast_helpers::error(user_message);
-                    }
+                    },
                 }
                 plan_result
-            }
+            },
             Err(join_error) => {
                 let error = anyhow::anyhow!("Task join error: {}", join_error);
                 ErrorLogger::log_error(&error, "get_plan_by_course", Some("Task execution failed"));
                 toast_helpers::error("Failed to load study plan. Please try again.".to_string());
                 Err(error)
-            }
+            },
         }
     }
 
@@ -77,7 +77,7 @@ impl PlanManager {
                     Ok(_) => {
                         info!("Successfully saved plan (ID: {plan_id})");
                         toast_helpers::success("Study plan saved successfully".to_string());
-                    }
+                    },
                     Err(e) => {
                         ErrorLogger::log_error(
                             e,
@@ -86,16 +86,16 @@ impl PlanManager {
                         );
                         let user_message = ErrorMessageMapper::map_error(e);
                         toast_helpers::error(format!("Failed to save study plan: {user_message}"));
-                    }
+                    },
                 }
                 save_result
-            }
+            },
             Err(join_error) => {
                 let error = anyhow::anyhow!("Task join error: {}", join_error);
                 ErrorLogger::log_error(&error, "save_plan", Some("Task execution failed"));
                 toast_helpers::error("Failed to save study plan. Please try again.".to_string());
                 Err(error)
-            }
+            },
         }
     }
 
@@ -163,12 +163,7 @@ impl PlanManager {
                 None
             };
 
-            Ok(ProgressInfo {
-                completed_count,
-                total_count,
-                percentage,
-                estimated_time_remaining,
-            })
+            Ok(ProgressInfo { completed_count, total_count, percentage, estimated_time_remaining })
         })
         .await
         .unwrap_or_else(|e| Err(anyhow::anyhow!("Join error: {}", e)))
@@ -291,13 +286,13 @@ pub fn use_plan_manager() -> PlanManager {
                 match result {
                     Ok(Ok(_)) => {
                         toast_helpers::success("Study plan created successfully");
-                    }
+                    },
                     Ok(Err(e)) => {
                         toast_helpers::error(format!("Failed to create plan: {e}"));
-                    }
+                    },
                     Err(e) => {
                         toast_helpers::error(format!("Failed to create plan: {e}"));
-                    }
+                    },
                 }
             });
             // Return () to match expected callback type

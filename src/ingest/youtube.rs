@@ -56,16 +56,12 @@ pub async fn import_from_youtube(
     api_key: &str,
 ) -> Result<(Vec<YoutubeSection>, YoutubePlaylistMetadata), ImportError> {
     if !is_valid_youtube_playlist_url(url) {
-        return Err(ImportError::InvalidUrl(format!(
-            "Invalid YouTube playlist URL: {url}"
-        )));
+        return Err(ImportError::InvalidUrl(format!("Invalid YouTube playlist URL: {url}")));
     }
 
     let playlist_id = extract_playlist_id(url).unwrap_or_default();
     if playlist_id.is_empty() {
-        return Err(ImportError::InvalidUrl(
-            "Could not extract playlist ID".to_string(),
-        ));
+        return Err(ImportError::InvalidUrl("Could not extract playlist ID".to_string()));
     }
 
     // Create a configured HTTP client with proper TLS settings
@@ -256,18 +252,18 @@ fn parse_iso8601_duration(s: &str) -> Option<Duration> {
                 'H' => {
                     secs += num.parse::<u64>().ok()? * 3600;
                     num.clear();
-                }
+                },
                 'M' => {
                     secs += num.parse::<u64>().ok()? * 60;
                     num.clear();
-                }
+                },
                 'S' => {
                     secs += num.parse::<u64>().ok()?;
                     num.clear();
-                }
+                },
                 _ => {
                     num.clear();
-                }
+                },
             }
         }
     }
@@ -342,10 +338,7 @@ async fn fetch_playlist_metadata(
         })
     } else {
         Ok(YoutubePlaylistMetadata {
-            title: format!(
-                "YouTube Playlist {}",
-                &playlist_id[..8.min(playlist_id.len())]
-            ),
+            title: format!("YouTube Playlist {}", &playlist_id[..8.min(playlist_id.len())]),
             description: None,
             channel_title: None,
             video_count: 0,
@@ -405,9 +398,7 @@ fn clean_video_title(title: &str) -> String {
 /// Validate that a YoutubeSection has complete metadata
 fn validate_youtube_section(section: &YoutubeSection) -> Result<(), ImportError> {
     if section.title.is_empty() {
-        return Err(ImportError::Network(
-            "YouTube video has empty title".to_string(),
-        ));
+        return Err(ImportError::Network("YouTube video has empty title".to_string()));
     }
 
     if section.video_id.is_empty() {
@@ -451,9 +442,7 @@ pub async fn import_from_youtube_with_cancel(
     cancel: &CancellationToken,
 ) -> Result<(Vec<YoutubeSection>, YoutubePlaylistMetadata), ImportError> {
     if !is_valid_youtube_playlist_url(url) {
-        return Err(ImportError::InvalidUrl(format!(
-            "Invalid YouTube playlist URL: {url}"
-        )));
+        return Err(ImportError::InvalidUrl(format!("Invalid YouTube playlist URL: {url}")));
     }
 
     if cancel.is_cancelled() {
@@ -462,9 +451,7 @@ pub async fn import_from_youtube_with_cancel(
 
     let playlist_id = extract_playlist_id(url).unwrap_or_default();
     if playlist_id.is_empty() {
-        return Err(ImportError::InvalidUrl(
-            "Could not extract playlist ID".to_string(),
-        ));
+        return Err(ImportError::InvalidUrl("Could not extract playlist ID".to_string()));
     }
 
     // Create a configured HTTP client with proper TLS settings
@@ -724,10 +711,7 @@ async fn fetch_playlist_metadata_with_cancel(
         })
     } else {
         Ok(YoutubePlaylistMetadata {
-            title: format!(
-                "YouTube Playlist {}",
-                &playlist_id[..8.min(playlist_id.len())]
-            ),
+            title: format!("YouTube Playlist {}", &playlist_id[..8.min(playlist_id.len())]),
             description: None,
             channel_title: None,
             video_count: 0,
@@ -829,10 +813,7 @@ pub async fn validate_api_key(api_key: &str) -> Result<bool, ImportError> {
         Ok(false)
     } else {
         // Other error - treat as network error
-        Err(ImportError::Network(format!(
-            "API validation failed with status: {}",
-            resp.status()
-        )))
+        Err(ImportError::Network(format!("API validation failed with status: {}", resp.status())))
     }
 }
 
@@ -852,18 +833,13 @@ mod tests {
 
         // Invalid URLs
         assert!(!is_valid_youtube_playlist_url("https://example.com"));
-        assert!(!is_valid_youtube_playlist_url(
-            "https://youtube.com/watch?v=abc"
-        ));
+        assert!(!is_valid_youtube_playlist_url("https://youtube.com/watch?v=abc"));
         assert!(!is_valid_youtube_playlist_url("not a url"));
     }
 
     #[test]
     fn test_title_cleaning() {
-        assert_eq!(
-            clean_video_title("  My Video Title - YouTube  "),
-            "My Video Title"
-        );
+        assert_eq!(clean_video_title("  My Video Title - YouTube  "), "My Video Title");
         assert_eq!(clean_video_title("Tutorial   Part   1"), "Tutorial Part 1");
     }
 

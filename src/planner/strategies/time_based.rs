@@ -18,10 +18,8 @@ pub fn generate_time_based_plan(
     course: &Course,
     settings: &PlanSettings,
 ) -> Result<Vec<PlanItem>, PlanError> {
-    let structure = course
-        .structure
-        .as_ref()
-        .expect("Course must be structured for time-based plan");
+    let structure =
+        course.structure.as_ref().expect("Course must be structured for time-based plan");
 
     // Flatten all sections into a queue
     let mut video_queue: VecDeque<VideoItem> = VecDeque::new();

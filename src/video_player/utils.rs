@@ -28,14 +28,14 @@ impl VideoPlayerUtils {
                 let minutes = parts[0].parse::<u64>().map_err(|_| "Invalid minutes")?;
                 let seconds = parts[1].parse::<u64>().map_err(|_| "Invalid seconds")?;
                 Ok((minutes * 60 + seconds) as f64)
-            }
+            },
             3 => {
                 // HH:MM:SS format
                 let hours = parts[0].parse::<u64>().map_err(|_| "Invalid hours")?;
                 let minutes = parts[1].parse::<u64>().map_err(|_| "Invalid minutes")?;
                 let seconds = parts[2].parse::<u64>().map_err(|_| "Invalid seconds")?;
                 Ok((hours * 3600 + minutes * 60 + seconds) as f64)
-            }
+            },
             _ => Err("Invalid time format".to_string()),
         }
     }
@@ -87,9 +87,7 @@ impl VideoPlayerUtils {
     /// Validate YouTube video ID format
     pub fn is_valid_youtube_id(video_id: &str) -> bool {
         video_id.len() == 11
-            && video_id
-                .chars()
-                .all(|c| c.is_alphanumeric() || c == '_' || c == '-')
+            && video_id.chars().all(|c| c.is_alphanumeric() || c == '_' || c == '-')
             && !video_id.starts_with("PLACEHOLDER_")
     }
 
@@ -118,10 +116,7 @@ impl VideoPlayerUtils {
             ThumbnailQuality::MaxRes => "maxresdefault",
         };
 
-        format!(
-            "https://img.youtube.com/vi/{}/{}.jpg",
-            video_id, quality_str
-        )
+        format!("https://img.youtube.com/vi/{}/{}.jpg", video_id, quality_str)
     }
 
     /// Check if file extension is supported
@@ -214,11 +209,11 @@ impl VideoPlayerUtils {
                             } else {
                                 false
                             }
-                        }
+                        },
                         None => {
                             *last = Some(now);
                             true
-                        }
+                        },
                     }
                 } else {
                     false
@@ -279,15 +274,11 @@ pub struct PerformanceMonitor {
 
 impl PerformanceMonitor {
     pub fn new() -> Self {
-        Self {
-            start_time: std::time::Instant::now(),
-            checkpoints: Vec::new(),
-        }
+        Self { start_time: std::time::Instant::now(), checkpoints: Vec::new() }
     }
 
     pub fn checkpoint(&mut self, name: &str) {
-        self.checkpoints
-            .push((name.to_string(), std::time::Instant::now()));
+        self.checkpoints.push((name.to_string(), std::time::Instant::now()));
     }
 
     pub fn get_elapsed(&self) -> Duration {
@@ -338,10 +329,7 @@ mod tests {
     #[test]
     fn test_parse_time_string() {
         assert_eq!(VideoPlayerUtils::parse_time_string("01:30").unwrap(), 90.0);
-        assert_eq!(
-            VideoPlayerUtils::parse_time_string("01:01:01").unwrap(),
-            3661.0
-        );
+        assert_eq!(VideoPlayerUtils::parse_time_string("01:01:01").unwrap(), 3661.0);
         assert_eq!(VideoPlayerUtils::parse_time_string("00:00").unwrap(), 0.0);
         assert!(VideoPlayerUtils::parse_time_string("invalid").is_err());
     }
@@ -382,14 +370,8 @@ mod tests {
 
     #[test]
     fn test_mime_types() {
-        assert_eq!(
-            VideoPlayerUtils::get_video_mime_type("mp4"),
-            Some("video/mp4")
-        );
-        assert_eq!(
-            VideoPlayerUtils::get_video_mime_type("webm"),
-            Some("video/webm")
-        );
+        assert_eq!(VideoPlayerUtils::get_video_mime_type("mp4"), Some("video/mp4"));
+        assert_eq!(VideoPlayerUtils::get_video_mime_type("webm"), Some("video/webm"));
         assert_eq!(VideoPlayerUtils::get_video_mime_type("unknown"), None);
     }
 

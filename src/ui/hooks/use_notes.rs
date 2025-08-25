@@ -226,11 +226,7 @@ impl NotesManager {
                 course_id,
                 video_id,
                 content: content.as_deref(),
-                tags: if tag_refs.is_empty() {
-                    None
-                } else {
-                    Some(&tag_refs)
-                },
+                tags: if tag_refs.is_empty() { None } else { Some(&tag_refs) },
                 timestamp_min: None,
                 timestamp_max: None,
                 created_after: None,
@@ -265,11 +261,7 @@ impl NotesManager {
                 course_id,
                 video_id,
                 content: content.as_deref(),
-                tags: if tag_refs.is_empty() {
-                    None
-                } else {
-                    Some(&tag_refs)
-                },
+                tags: if tag_refs.is_empty() { None } else { Some(&tag_refs) },
                 timestamp_min: None,
                 timestamp_max: None,
                 created_after: None,
@@ -306,11 +298,7 @@ pub fn use_notes_with_video_index_resource(
 
     use_resource(move || {
         let notes_manager = notes_manager.clone();
-        async move {
-            notes_manager
-                .list_notes_by_course_and_video_index(course_id, video_index)
-                .await
-        }
+        async move { notes_manager.list_notes_by_course_and_video_index(course_id, video_index).await }
     })
 }
 
@@ -332,10 +320,10 @@ pub fn use_save_note_action() -> impl Fn(Note) {
         let notes_manager = notes_manager.clone();
         spawn(async move {
             match notes_manager.save_note(note).await {
-                Ok(_) => {}
+                Ok(_) => {},
                 Err(e) => {
                     eprintln!("Failed to save note: {e}");
-                }
+                },
             }
         });
     }
@@ -349,10 +337,10 @@ pub fn use_delete_note_action() -> impl Fn(Uuid) {
         let notes_manager = notes_manager.clone();
         spawn(async move {
             match notes_manager.delete_note(note_id).await {
-                Ok(_) => {}
+                Ok(_) => {},
                 Err(e) => {
                     eprintln!("Failed to delete note: {e}");
-                }
+                },
             }
         });
     }

@@ -75,10 +75,7 @@ pub fn Modal(
                 velocity: 0.0,
             })),
         );
-        opacity.animate_to(
-            1.0,
-            AnimationConfig::new(AnimationMode::Spring(Spring::default())),
-        );
+        opacity.animate_to(1.0, AnimationConfig::new(AnimationMode::Spring(Spring::default())));
     });
 
     let animation_style = format!(
@@ -91,7 +88,7 @@ pub fn Modal(
     let modal_box_class = match &variant {
         ModalVariant::Fullscreen => {
             "modal-box w-full h-full max-w-none max-h-none bg-base-100 shadow-xl"
-        }
+        },
         _ => {
             let size_class = match size.as_deref().unwrap_or("md") {
                 "sm" => "max-w-sm",
@@ -102,7 +99,7 @@ pub fn Modal(
                 _ => "max-w-lg",
             };
             &format!("modal-box bg-base-100 shadow-xl relative {size_class} w-full mx-4")
-        }
+        },
     };
 
     let extra_class = class.as_deref().unwrap_or("");
@@ -152,7 +149,7 @@ fn render_modal_content(
                     {children}
                 }
             }
-        }
+        },
         ModalVariant::Confirmation {
             message,
             confirm_label,
@@ -190,7 +187,7 @@ fn render_modal_content(
                     }
                 }
             }
-        }
+        },
         ModalVariant::Form { actions } => {
             rsx! {
                 {if let Some(title) = title {
@@ -210,7 +207,7 @@ fn render_modal_content(
                     {actions}
                 }
             }
-        }
+        },
         ModalVariant::Fullscreen => {
             rsx! {
                 {if let Some(title) = title {
@@ -234,13 +231,8 @@ fn render_modal_content(
                     {children}
                 }
             }
-        }
-        ModalVariant::Alert {
-            message,
-            action_label,
-            action_color,
-            on_action,
-        } => {
+        },
+        ModalVariant::Alert { message, action_label, action_color, on_action } => {
             rsx! {
                 h3 { class: "font-bold text-lg flex items-center gap-2 mb-4",
                     Icon { icon: FaExclamation, class: "text-info w-5 h-5" }
@@ -259,7 +251,7 @@ fn render_modal_content(
                     }
                 }
             }
-        }
+        },
     }
 }
 

@@ -23,20 +23,14 @@ pub struct TopicExtractor {
 
 impl Default for TopicExtractor {
     fn default() -> Self {
-        Self {
-            min_frequency: 2,
-            min_relevance: 0.1,
-        }
+        Self { min_frequency: 2, min_relevance: 0.1 }
     }
 }
 
 impl TopicExtractor {
     /// Create a new topic extractor with custom parameters
     pub fn new(min_frequency: usize, min_relevance: f32) -> Self {
-        Self {
-            min_frequency,
-            min_relevance,
-        }
+        Self { min_frequency, min_relevance }
     }
 
     /// Extract topics from TF-IDF analysis results
@@ -66,9 +60,7 @@ impl TopicExtractor {
 
         // Sort by relevance score descending
         topics.sort_by(|a, b| {
-            b.relevance_score
-                .partial_cmp(&a.relevance_score)
-                .unwrap_or(std::cmp::Ordering::Equal)
+            b.relevance_score.partial_cmp(&a.relevance_score).unwrap_or(std::cmp::Ordering::Equal)
         });
         topics
     }
@@ -108,17 +100,11 @@ impl TopicExtractor {
     /// Analyze topic distribution across clusters
     pub fn analyze_topic_distribution(&self, topics: &[TopicInfo]) -> TopicDistributionAnalysis {
         let total_videos: usize = topics.iter().map(|t| t.related_videos.len()).sum();
-        let unique_videos: std::collections::HashSet<usize> = topics
-            .iter()
-            .flat_map(|t| &t.related_videos)
-            .copied()
-            .collect();
+        let unique_videos: std::collections::HashSet<usize> =
+            topics.iter().flat_map(|t| &t.related_videos).copied().collect();
 
-        let coverage = if total_videos > 0 {
-            unique_videos.len() as f32 / total_videos as f32
-        } else {
-            0.0
-        };
+        let coverage =
+            if total_videos > 0 { unique_videos.len() as f32 / total_videos as f32 } else { 0.0 };
 
         let average_relevance = if !topics.is_empty() {
             topics.iter().map(|t| t.relevance_score).sum::<f32>() / topics.len() as f32
@@ -209,9 +195,6 @@ mod tests {
         let analysis = extractor.analyze_topic_distribution(&topics);
         assert_eq!(analysis.total_topics, 2);
         assert_eq!(analysis.total_video_coverage, 4);
-        assert_eq!(
-            analysis.most_relevant_topic,
-            Some("programming".to_string())
-        );
+        assert_eq!(analysis.most_relevant_topic, Some("programming".to_string()));
     }
 }

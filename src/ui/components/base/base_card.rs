@@ -44,10 +44,8 @@ pub struct BaseCardProps {
 /// Provides consistent card structure with configurable content
 #[component]
 pub fn BaseCard(props: BaseCardProps) -> Element {
-    let card_classes = format!(
-        "{} {} bg-base-100 shadow-xl border border-base-300",
-        props.variant, props.class
-    );
+    let card_classes =
+        format!("{} {} bg-base-100 shadow-xl border border-base-300", props.variant, props.class);
 
     // Animation setup for hover effects
     let mut scale = use_motion(1.0f32);
@@ -56,10 +54,7 @@ pub fn BaseCard(props: BaseCardProps) -> Element {
 
     // Mount animation
     use_effect(move || {
-        opacity.animate_to(
-            1.0,
-            AnimationConfig::new(AnimationMode::Spring(Spring::default())),
-        );
+        opacity.animate_to(1.0, AnimationConfig::new(AnimationMode::Spring(Spring::default())));
     });
 
     let card_style = use_memo(move || {

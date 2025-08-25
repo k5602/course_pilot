@@ -77,8 +77,7 @@ impl ImportManager {
     }
 
     pub async fn generate_folder_preview(&self, path: PathBuf) -> Result<LocalFolderPreview> {
-        self.generate_folder_preview_with_cancel(path, CancellationToken::new())
-            .await
+        self.generate_folder_preview_with_cancel(path, CancellationToken::new()).await
     }
 
     pub async fn generate_folder_preview_with_cancel(
@@ -97,9 +96,7 @@ impl ImportManager {
         if !validation.is_valid {
             return Err(anyhow::anyhow!(
                 "Cannot generate preview for invalid folder: {}",
-                validation
-                    .error_message
-                    .unwrap_or_else(|| "Unknown error".to_string())
+                validation.error_message.unwrap_or_else(|| "Unknown error".to_string())
             ));
         }
 
@@ -177,9 +174,8 @@ impl ImportManager {
                 if effective_token.is_cancelled() {
                     return Err(anyhow::anyhow!("Preview generation cancelled"));
                 }
-                let duration = handle
-                    .await
-                    .map_err(|e| anyhow::anyhow!(format!("Join error: {}", e)))?;
+                let duration =
+                    handle.await.map_err(|e| anyhow::anyhow!(format!("Join error: {}", e)))?;
 
                 let (index, _path, title, size, format) = &chunk[i];
 
@@ -273,9 +269,7 @@ pub fn use_import_manager() -> ImportManager {
                     if !validation.is_valid {
                         return Err(anyhow::anyhow!(
                             "Invalid folder: {}",
-                            validation
-                                .error_message
-                                .unwrap_or_else(|| "Unknown error".to_string())
+                            validation.error_message.unwrap_or_else(|| "Unknown error".to_string())
                         ));
                     }
 
@@ -301,13 +295,13 @@ pub fn use_import_manager() -> ImportManager {
                 match result {
                     Ok(Ok(_)) => {
                         toast_helpers::success("Course imported successfully");
-                    }
+                    },
                     Ok(Err(e)) => {
                         toast_helpers::error(format!("Failed to import course: {e}"));
-                    }
+                    },
                     Err(e) => {
                         toast_helpers::error(format!("Failed to import course: {e}"));
-                    }
+                    },
                 }
             });
             // Return () to match expected callback type
@@ -321,13 +315,13 @@ pub fn use_import_manager() -> ImportManager {
             match result {
                 Ok(Ok(_)) => {
                     // Validation successful - the UI will handle the result
-                }
+                },
                 Ok(Err(e)) => {
                     toast_helpers::error(format!("Folder validation failed: {e}"));
-                }
+                },
                 Err(e) => {
                     toast_helpers::error(format!("Folder validation failed: {e}"));
-                }
+                },
             }
         });
         // Return () to match expected callback type
@@ -340,21 +334,16 @@ pub fn use_import_manager() -> ImportManager {
             match result {
                 Ok(_) => {
                     // Preview generation successful - the UI will handle the result
-                }
+                },
                 Err(e) => {
                     toast_helpers::error(format!("Preview generation failed: {e}"));
-                }
+                },
             }
         });
         // Return () to match expected callback type
     });
 
-    ImportManager {
-        db,
-        import_from_local_folder,
-        validate_folder,
-        generate_folder_preview,
-    }
+    ImportManager { db, import_from_local_folder, validate_folder, generate_folder_preview }
 }
 
 /// Hook for reactive folder validation
@@ -481,18 +470,13 @@ async fn generate_folder_preview_async(path: PathBuf) -> Result<LocalFolderPrevi
     if !validation.is_valid {
         return Err(anyhow::anyhow!(
             "Cannot generate preview for invalid folder: {}",
-            validation
-                .error_message
-                .unwrap_or_else(|| "Unknown error".to_string())
+            validation.error_message.unwrap_or_else(|| "Unknown error".to_string())
         ));
     }
 
     // Generate course title from folder name
-    let title = path
-        .file_name()
-        .and_then(|name| name.to_str())
-        .unwrap_or("Imported Course")
-        .to_string();
+    let title =
+        path.file_name().and_then(|name| name.to_str()).unwrap_or("Imported Course").to_string();
 
     // Async, cancellable recursive scan with batching
     let cancel_token = tokio_util::sync::CancellationToken::new();
@@ -553,9 +537,8 @@ async fn generate_folder_preview_async(path: PathBuf) -> Result<LocalFolderPrevi
             if cancel_token.is_cancelled() {
                 return Err(anyhow::anyhow!("Preview generation cancelled"));
             }
-            let duration = handle
-                .await
-                .map_err(|e| anyhow::anyhow!(format!("Join error: {}", e)))?;
+            let duration =
+                handle.await.map_err(|e| anyhow::anyhow!(format!("Join error: {}", e)))?;
 
             let (index, _path, title, size, format) = &chunk[i];
 

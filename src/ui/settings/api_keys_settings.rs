@@ -80,17 +80,17 @@ pub fn APIKeysSettings(props: APIKeysSettingsProps) -> Element {
                     Ok(true) => {
                         youtube_status.set(ApiKeyStatus::Valid);
                         toast_helpers::success("YouTube API key is valid!");
-                    }
+                    },
                     Ok(false) => {
                         youtube_status.set(ApiKeyStatus::Invalid(
                             "API key is invalid or has insufficient permissions".to_string(),
                         ));
                         toast_helpers::error("YouTube API key is invalid");
-                    }
+                    },
                     Err(e) => {
                         youtube_status.set(ApiKeyStatus::Invalid(format!("Test failed: {e}")));
                         toast_helpers::error("Failed to test YouTube API key");
-                    }
+                    },
                 }
             });
         }
@@ -116,17 +116,17 @@ pub fn APIKeysSettings(props: APIKeysSettingsProps) -> Element {
                     Ok(true) => {
                         gemini_status.set(ApiKeyStatus::Valid);
                         toast_helpers::success("Gemini API key is valid!");
-                    }
+                    },
                     Ok(false) => {
                         gemini_status.set(ApiKeyStatus::Invalid(
                             "API key is invalid or has insufficient permissions".to_string(),
                         ));
                         toast_helpers::error("Gemini API key is invalid");
-                    }
+                    },
                     Err(e) => {
                         gemini_status.set(ApiKeyStatus::Invalid(format!("Test failed: {e}")));
                         toast_helpers::error("Failed to test Gemini API key");
-                    }
+                    },
                 }
             });
         }
@@ -154,22 +154,14 @@ pub fn APIKeysSettings(props: APIKeysSettingsProps) -> Element {
                 let mut success = true;
 
                 // Save YouTube API key
-                let youtube_key_opt = if youtube_key.is_empty() {
-                    None
-                } else {
-                    Some(youtube_key)
-                };
+                let youtube_key_opt = if youtube_key.is_empty() { None } else { Some(youtube_key) };
                 if let Err(e) = settings_manager.set_youtube_api_key(youtube_key_opt).await {
                     toast_helpers::error(format!("Failed to save YouTube API key: {e}"));
                     success = false;
                 }
 
                 // Save Gemini API key
-                let gemini_key_opt = if gemini_key.is_empty() {
-                    None
-                } else {
-                    Some(gemini_key)
-                };
+                let gemini_key_opt = if gemini_key.is_empty() { None } else { Some(gemini_key) };
                 let gemini_key_opt_clone = gemini_key_opt.clone();
                 if let Err(e) = settings_manager.set_gemini_api_key(gemini_key_opt).await {
                     toast_helpers::error(format!("Failed to save Gemini API key: {e}"));

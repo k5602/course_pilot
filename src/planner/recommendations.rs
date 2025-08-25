@@ -55,15 +55,15 @@ impl StudyRecommendations {
                     "Take notes during each session for better retention".to_string(),
                     "Don't hesitate to pause and replay difficult sections".to_string(),
                 ]);
-            }
+            },
             DifficultyLevel::Expert => {
                 self.time_management_tips.extend(vec![
                     "Focus on practical application over passive watching".to_string(),
                     "Create projects to reinforce learning".to_string(),
                     "Consider teaching concepts to others for deeper understanding".to_string(),
                 ]);
-            }
-            _ => {}
+            },
+            _ => {},
         }
 
         if complexity > 0.7 {
@@ -108,11 +108,11 @@ fn recommend_study_strategy(complexity: f32, user_level: DifficultyLevel) -> Str
         (true, DifficultyLevel::Beginner) => {
             "Spaced Repetition: This complex course benefits from frequent review sessions"
                 .to_string()
-        }
+        },
         (true, _) => "Adaptive Learning: Adjust pace based on topic difficulty".to_string(),
         (false, DifficultyLevel::Expert) => {
             "Accelerated Learning: Focus on practical application and projects".to_string()
-        }
+        },
         _ => "Balanced Approach: Steady progress with regular reviews".to_string(),
     }
 }
@@ -152,7 +152,7 @@ fn analyze_difficulty_progression(course: &Course) -> DifficultyProgression {
                 complexity_peaks: Vec::new(),
                 recommended_break_points: Vec::new(),
             };
-        }
+        },
     };
 
     let mut module_difficulties = Vec::new();
@@ -183,10 +183,7 @@ fn analyze_difficulty_progression(course: &Course) -> DifficultyProgression {
         // Identify complexity peaks
         if module_complexity > 0.7 {
             complexity_peaks.push(module.title.clone());
-            recommended_breaks.push(format!(
-                "Consider a break after completing: {}",
-                module.title
-            ));
+            recommended_breaks.push(format!("Consider a break after completing: {}", module.title));
         }
     }
 

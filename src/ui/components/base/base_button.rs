@@ -83,10 +83,7 @@ pub fn BaseButton(props: BaseButtonProps) -> Element {
         );
     });
 
-    let style = format!(
-        "transform: scale({}); transition: transform 0.2s;",
-        scale.get_value()
-    );
+    let style = format!("transform: scale({}); transition: transform 0.2s;", scale.get_value());
 
     rsx! {
         button {

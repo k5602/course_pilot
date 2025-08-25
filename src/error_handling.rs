@@ -36,19 +36,13 @@ pub enum CourseError {
 #[derive(Error, Debug)]
 pub enum ImportError {
     #[error("Import source invalid: {source_name} - {message}")]
-    InvalidSource {
-        source_name: String,
-        message: String,
-    },
+    InvalidSource { source_name: String, message: String },
 
     #[error("Import authentication failed: {service}")]
     AuthenticationFailed { service: String },
 
     #[error("Import rate limited: {service} - retry after {retry_after_seconds}s")]
-    RateLimited {
-        service: String,
-        retry_after_seconds: u64,
-    },
+    RateLimited { service: String, retry_after_seconds: u64 },
 
     #[error("Import parsing failed: {message}")]
     ParsingFailed { message: String },
@@ -78,10 +72,7 @@ pub enum NlpError {
     ClusteringFailed { algorithm: String, message: String },
 
     #[error("NLP content analysis failed: {content_type} - {message}")]
-    ContentAnalysisFailed {
-        content_type: String,
-        message: String,
-    },
+    ContentAnalysisFailed { content_type: String, message: String },
 
     #[error("NLP insufficient data: need at least {required} items, got {actual}")]
     InsufficientData { required: usize, actual: usize },
@@ -138,10 +129,7 @@ pub enum DatabaseError {
     LockTimeout { timeout_seconds: u64 },
 
     #[error("Database pool exhausted: {active_connections}/{max_connections}")]
-    PoolExhausted {
-        active_connections: u32,
-        max_connections: u32,
-    },
+    PoolExhausted { active_connections: u32, max_connections: u32 },
 
     // Legacy compatibility variants
     #[error("SQLite error: {0}")]
@@ -179,37 +167,22 @@ pub enum CoursePilotError {
     Database(#[from] DatabaseError),
 
     #[error("File operation failed: {message}")]
-    FileSystem {
-        message: String,
-        path: Option<std::path::PathBuf>,
-    },
+    FileSystem { message: String, path: Option<std::path::PathBuf> },
 
     #[error("Network operation failed: {message}")]
-    Network {
-        message: String,
-        url: Option<String>,
-    },
+    Network { message: String, url: Option<String> },
 
     #[error("Video processing failed: {message}")]
-    VideoProcessing {
-        message: String,
-        video_path: Option<String>,
-    },
+    VideoProcessing { message: String, video_path: Option<String> },
 
     #[error("API operation failed: {message}")]
     Api { message: String, api_name: String },
 
     #[error("Configuration error: {message}")]
-    Configuration {
-        message: String,
-        setting: Option<String>,
-    },
+    Configuration { message: String, setting: Option<String> },
 
     #[error("Validation error: {message}")]
-    Validation {
-        message: String,
-        field: Option<String>,
-    },
+    Validation { message: String, field: Option<String> },
 }
 
 /// User-friendly error message mapper
@@ -260,41 +233,38 @@ impl ErrorMessageMapper {
                 } else {
                     format!("File error: {message}")
                 }
-            }
+            },
             CoursePilotError::Network { message, url } => {
                 if let Some(url) = url {
                     format!("Network error: {message} (URL: {url})")
                 } else {
                     format!("Network error: {message}. Please check your internet connection.")
                 }
-            }
-            CoursePilotError::VideoProcessing {
-                message,
-                video_path,
-            } => {
+            },
+            CoursePilotError::VideoProcessing { message, video_path } => {
                 if let Some(path) = video_path {
                     format!("Video processing error: {message} (Video: {path})")
                 } else {
                     format!("Video processing error: {message}")
                 }
-            }
+            },
             CoursePilotError::Api { message, api_name } => {
                 format!("{api_name} API error: {message}. Please check your API key and try again.")
-            }
+            },
             CoursePilotError::Configuration { message, setting } => {
                 if let Some(setting) = setting {
                     format!("Configuration error: {message} (Setting: {setting})")
                 } else {
                     format!("Configuration error: {message}")
                 }
-            }
+            },
             CoursePilotError::Validation { message, field } => {
                 if let Some(field) = field {
                     format!("Validation error: {message} (Field: {field})")
                 } else {
                     format!("Validation error: {message}")
                 }
-            }
+            },
         }
     }
 
@@ -302,70 +272,64 @@ impl ErrorMessageMapper {
         match error {
             CourseError::NotFound { id } => {
                 format!("Course not found. The course '{id}' may have been deleted or moved.")
-            }
+            },
             CourseError::Validation { field, message } => {
                 format!("Course validation failed: {message} (Field: {field})")
-            }
+            },
             CourseError::CreationFailed { message } => {
                 format!("Failed to create course: {message}. Please try again.")
-            }
+            },
             CourseError::UpdateFailed { message } => {
                 format!("Failed to update course: {message}. Please try again.")
-            }
+            },
             CourseError::DeletionFailed { message } => {
                 format!("Failed to delete course: {message}. Please try again.")
-            }
+            },
             CourseError::StructureInvalid { message } => {
                 format!("Course structure is invalid: {message}. Please restructure the course.")
-            }
+            },
             CourseError::MetadataError { message } => {
                 format!("Course metadata error: {message}. Please check the course information.")
-            }
+            },
         }
     }
 
     fn map_import_error(error: &ImportError) -> String {
         match error {
-            ImportError::InvalidSource {
-                source_name,
-                message,
-            } => {
+            ImportError::InvalidSource { source_name, message } => {
                 format!(
                     "Invalid import source '{source_name}': {message}. Please check the URL or path."
                 )
-            }
+            },
             ImportError::AuthenticationFailed { service } => {
                 format!(
                     "Authentication failed for {service}. Please check your API key or login credentials."
                 )
-            }
-            ImportError::RateLimited {
-                service,
-                retry_after_seconds,
-            } => {
+            },
+            ImportError::RateLimited { service, retry_after_seconds } => {
                 format!(
                     "Rate limited by {service}. Please wait {retry_after_seconds} seconds before trying again."
                 )
-            }
+            },
             ImportError::ParsingFailed { message } => {
                 format!(
                     "Failed to parse import data: {message}. The source may be in an unsupported format."
                 )
-            }
+            },
             ImportError::NetworkError { message } => {
                 format!(
                     "Network error during import: {message}. Please check your internet connection."
                 )
-            }
+            },
             ImportError::FileSystemError { path, message } => {
                 format!("File system error: {message} (Path: {path})")
-            }
+            },
             ImportError::Cancelled => "Import was cancelled by user.".to_string(),
             ImportError::Timeout { timeout_seconds } => {
                 format!(
                     "Import timed out after {timeout_seconds} seconds. Please try again or check your connection."
                 )
-            }
+            },
         }
     }
 
@@ -373,30 +337,24 @@ impl ErrorMessageMapper {
         match error {
             NlpError::ProcessingFailed { message } => {
                 format!("Content analysis failed: {message}. Please try again.")
-            }
-            NlpError::ModelLoadFailed {
-                model_name,
-                message,
-            } => {
+            },
+            NlpError::ModelLoadFailed { model_name, message } => {
                 format!("Failed to load analysis model '{model_name}': {message}")
-            }
+            },
             NlpError::ClusteringFailed { algorithm, message } => {
                 format!("Content clustering failed using {algorithm}: {message}")
-            }
-            NlpError::ContentAnalysisFailed {
-                content_type,
-                message,
-            } => {
+            },
+            NlpError::ContentAnalysisFailed { content_type, message } => {
                 format!("Failed to analyze {content_type} content: {message}")
-            }
+            },
             NlpError::InsufficientData { required, actual } => {
                 format!(
                     "Not enough content to analyze. Need at least {required} items, but only {actual} available."
                 )
-            }
+            },
             NlpError::ConfigurationError { setting, message } => {
                 format!("Analysis configuration error: {message} (Setting: {setting})")
-            }
+            },
         }
     }
 
@@ -404,31 +362,25 @@ impl ErrorMessageMapper {
         match error {
             PlanError::GenerationFailed { message } => {
                 format!("Failed to generate study plan: {message}. Please try again.")
-            }
-            PlanError::ValidationFailed {
-                constraint,
-                message,
-            } => {
+            },
+            PlanError::ValidationFailed { constraint, message } => {
                 format!("Study plan validation failed: {message} (Constraint: {constraint})")
-            }
+            },
             PlanError::SchedulingConflict { message } => {
                 format!("Scheduling conflict: {message}. Please adjust your preferences.")
-            }
+            },
             PlanError::OptimizationFailed { optimizer, message } => {
                 format!("Plan optimization failed using {optimizer}: {message}")
-            }
+            },
             PlanError::NotFound { id } => {
                 format!("Study plan not found. The plan '{id}' may have been deleted.")
-            }
+            },
             PlanError::UpdateFailed { message } => {
                 format!("Failed to update study plan: {message}. Please try again.")
-            }
-            PlanError::ExecutionError {
-                session_id,
-                message,
-            } => {
+            },
+            PlanError::ExecutionError { session_id, message } => {
                 format!("Error executing study session '{session_id}': {message}")
-            }
+            },
         }
     }
 
@@ -436,65 +388,50 @@ impl ErrorMessageMapper {
         match error {
             DatabaseError::ConnectionFailed { message } => {
                 format!("Database connection failed: {message}. Please restart the application.")
-            }
+            },
             DatabaseError::QueryFailed { query: _, message } => {
                 format!("Database operation failed: {message}. Please try again.")
-            }
+            },
             DatabaseError::TransactionFailed { message } => {
                 format!("Database transaction failed: {message}. Changes may not have been saved.")
-            }
+            },
             DatabaseError::MigrationFailed { version, message } => {
                 format!("Database migration to version {version} failed: {message}")
-            }
-            DatabaseError::ConstraintViolation {
-                constraint: _,
-                message,
-            } => {
+            },
+            DatabaseError::ConstraintViolation { constraint: _, message } => {
                 format!("Data validation error: {message}")
-            }
+            },
             DatabaseError::CorruptionDetected { table, message } => {
                 format!(
                     "Database corruption detected in {table}: {message}. Please backup and restore your data."
                 )
-            }
+            },
             DatabaseError::LockTimeout { timeout_seconds } => {
                 format!(
                     "Database operation timed out after {timeout_seconds} seconds. Please try again."
                 )
-            }
-            DatabaseError::PoolExhausted {
-                active_connections,
-                max_connections,
-            } => {
+            },
+            DatabaseError::PoolExhausted { active_connections, max_connections } => {
                 format!(
                     "Too many database operations in progress ({active_connections}/{max_connections}). Please wait and try again."
                 )
-            }
+            },
             // Legacy compatibility variants
             DatabaseError::Sqlite(e) => {
                 format!("Database error: {}. Please try again.", e)
-            }
+            },
             DatabaseError::Serialization(e) => {
                 format!("Data format error: {}. The data may be corrupted.", e)
-            }
+            },
             DatabaseError::Io(e) => {
-                format!(
-                    "File system error: {}. Please check permissions and disk space.",
-                    e
-                )
-            }
+                format!("File system error: {}. Please check permissions and disk space.", e)
+            },
             DatabaseError::Pool(e) => {
-                format!(
-                    "Database connection pool error: {}. Please restart the application.",
-                    e
-                )
-            }
+                format!("Database connection pool error: {}. Please restart the application.", e)
+            },
             DatabaseError::NotFound(message) => {
-                format!(
-                    "Data not found: {}. The item may have been deleted.",
-                    message
-                )
-            }
+                format!("Data not found: {}. The item may have been deleted.", message)
+            },
         }
     }
 }
@@ -566,10 +503,7 @@ impl ErrorRecoveryManager {
                     "Verify your account permissions".to_string(),
                     "Try logging in again".to_string(),
                 ],
-                ImportError::RateLimited {
-                    retry_after_seconds,
-                    ..
-                } => vec![
+                ImportError::RateLimited { retry_after_seconds, .. } => vec![
                     format!("Wait {} seconds before retrying", retry_after_seconds),
                     "Try importing fewer items at once".to_string(),
                 ],
@@ -621,17 +555,11 @@ impl ErrorRecoveryManager {
             CoursePilotError::Database(DatabaseError::LockTimeout { .. }) => {
                 info!("Attempting database lock recovery...");
                 Some("Database lock cleared. Retrying operation...".to_string())
-            }
-            CoursePilotError::Import(ImportError::RateLimited {
-                retry_after_seconds,
-                ..
-            }) => {
+            },
+            CoursePilotError::Import(ImportError::RateLimited { retry_after_seconds, .. }) => {
                 info!("Scheduling automatic retry after rate limit...");
-                Some(format!(
-                    "Will retry automatically in {} seconds...",
-                    retry_after_seconds
-                ))
-            }
+                Some(format!("Will retry automatically in {} seconds...", retry_after_seconds))
+            },
             _ => None,
         }
     }
@@ -657,7 +585,7 @@ impl ErrorRecoveryManager {
                         info!("Operation succeeded after {} retries", attempt);
                     }
                     return Ok(result);
-                }
+                },
                 Err(error) => {
                     let error = error.into();
                     warn!("Operation failed on attempt {}: {}", attempt + 1, error);
@@ -668,7 +596,7 @@ impl ErrorRecoveryManager {
                         tokio::time::sleep(delay).await;
                         delay = std::cmp::min(delay * 2, max_delay);
                     }
-                }
+                },
             }
         }
 
@@ -698,14 +626,10 @@ impl ErrorRecoveryManager {
                         info!("Async operation succeeded after {} retries", attempt);
                     }
                     return Ok(result);
-                }
+                },
                 Err(error) => {
                     let error = error.into();
-                    warn!(
-                        "Async operation failed on attempt {}: {}",
-                        attempt + 1,
-                        error
-                    );
+                    warn!("Async operation failed on attempt {}: {}", attempt + 1, error);
                     last_error = Some(error);
 
                     if attempt < max_retries {
@@ -713,7 +637,7 @@ impl ErrorRecoveryManager {
                         tokio::time::sleep(delay).await;
                         delay = std::cmp::min(delay * 2, max_delay);
                     }
-                }
+                },
             }
         }
 
@@ -868,72 +792,62 @@ impl ErrorLogger {
         match error {
             CoursePilotError::Course(course_error) => {
                 error!("Course error details [ID: {error_id}]: {course_error:?}");
-            }
+            },
             CoursePilotError::Import(import_error) => {
                 error!("Import error details [ID: {error_id}]: {import_error:?}");
 
                 // Log additional context for import errors
                 match import_error {
-                    ImportError::RateLimited {
-                        service,
-                        retry_after_seconds,
-                    } => {
+                    ImportError::RateLimited { service, retry_after_seconds } => {
                         warn!(
                             "Rate limited by {service}, retry after {retry_after_seconds}s [ID: {error_id}]"
                         );
-                    }
+                    },
                     ImportError::AuthenticationFailed { service } => {
                         warn!("Authentication failed for {service} [ID: {error_id}]");
-                    }
-                    _ => {}
+                    },
+                    _ => {},
                 }
-            }
+            },
             CoursePilotError::Database(db_error) => {
                 error!("Database error details [ID: {error_id}]: {db_error:?}");
 
                 // Log additional context for database errors
                 match db_error {
-                    DatabaseError::PoolExhausted {
-                        active_connections,
-                        max_connections,
-                    } => {
+                    DatabaseError::PoolExhausted { active_connections, max_connections } => {
                         warn!(
                             "Database pool exhausted: {active_connections}/{max_connections} [ID: {error_id}]"
                         );
-                    }
+                    },
                     DatabaseError::LockTimeout { timeout_seconds } => {
                         warn!("Database lock timeout after {timeout_seconds}s [ID: {error_id}]");
-                    }
-                    _ => {}
+                    },
+                    _ => {},
                 }
-            }
+            },
             CoursePilotError::Nlp(nlp_error) => {
                 error!("NLP error details [ID: {error_id}]: {nlp_error:?}");
-            }
+            },
             CoursePilotError::Plan(plan_error) => {
                 error!("Plan error details [ID: {error_id}]: {plan_error:?}");
-            }
+            },
             _ => {
                 error!("General error details [ID: {error_id}]: {error:?}");
-            }
+            },
         }
     }
 
     fn generate_error_id() -> String {
         use std::time::{SystemTime, UNIX_EPOCH};
-        let timestamp = SystemTime::now()
-            .duration_since(UNIX_EPOCH)
-            .unwrap_or_default()
-            .as_millis();
+        let timestamp =
+            SystemTime::now().duration_since(UNIX_EPOCH).unwrap_or_default().as_millis();
         format!("ERR-{timestamp}")
     }
 
     fn generate_warning_id() -> String {
         use std::time::{SystemTime, UNIX_EPOCH};
-        let timestamp = SystemTime::now()
-            .duration_since(UNIX_EPOCH)
-            .unwrap_or_default()
-            .as_millis();
+        let timestamp =
+            SystemTime::now().duration_since(UNIX_EPOCH).unwrap_or_default().as_millis();
         format!("WARN-{timestamp}")
     }
 }
@@ -962,7 +876,7 @@ impl AsyncErrorHandler {
                     );
                     ErrorLogger::log_error(&timeout_error, &operation_name, Some("timeout"));
                     return Err(timeout_error);
-                }
+                },
             }
         } else {
             operation.await
@@ -973,7 +887,7 @@ impl AsyncErrorHandler {
             Err(error) => {
                 let handled_error = ErrorHandler::handle_error(error, &operation_name, None);
                 Err(handled_error)
-            }
+            },
         }
     }
 
@@ -1022,7 +936,7 @@ impl AsyncErrorHandler {
                             );
                             return Err(timeout_error);
                         }
-                    }
+                    },
                 }
             } else {
                 operation_future.await
@@ -1034,7 +948,7 @@ impl AsyncErrorHandler {
                         ErrorLogger::log_recovery_success(&operation_name, attempt + 1);
                     }
                     return Ok(value);
-                }
+                },
                 Err(error) => {
                     if attempt < max_retries
                         && ErrorHandler::should_retry(&error, attempt, max_retries)
@@ -1054,7 +968,7 @@ impl AsyncErrorHandler {
                             ErrorHandler::handle_error(error, &operation_name, None);
                         return Err(handled_error);
                     }
-                }
+                },
             }
         }
 
@@ -1082,11 +996,11 @@ impl AsyncErrorHandler {
                     info!("Completed async operation: {}", operation_name);
                 }
                 Ok(value)
-            }
+            },
             Err(error) => {
                 let handled_error = ErrorHandler::handle_ui_error(error, &operation_name);
                 Err(handled_error)
-            }
+            },
         }
     }
 
@@ -1100,12 +1014,9 @@ impl AsyncErrorHandler {
             Ok(value) => value,
             Err(error) => {
                 ErrorLogger::log_error(&error, operation_name, Some("error_boundary"));
-                warn!(
-                    "Error boundary caught error in '{}': {}",
-                    operation_name, error
-                );
+                warn!("Error boundary caught error in '{}': {}", operation_name, error);
                 fallback_value
-            }
+            },
         }
     }
 }
@@ -1152,11 +1063,7 @@ impl ErrorHandler {
 
         // Add recovery suggestions to the error
         let enhanced_message = if !recovery_actions.is_empty() {
-            format!(
-                "{}\n\nSuggested actions:\n• {}",
-                user_message,
-                recovery_actions.join("\n• ")
-            )
+            format!("{}\n\nSuggested actions:\n• {}", user_message, recovery_actions.join("\n• "))
         } else {
             user_message
         };
@@ -1174,8 +1081,7 @@ impl ErrorHandler {
         // Check for domain-specific retry delays
         if let Some(course_pilot_error) = error.downcast_ref::<CoursePilotError>() {
             if let CoursePilotError::Import(ImportError::RateLimited {
-                retry_after_seconds,
-                ..
+                retry_after_seconds, ..
             }) = course_pilot_error
             {
                 return Duration::from_secs(*retry_after_seconds);
@@ -1209,7 +1115,7 @@ impl TimeoutHandler {
                 );
                 ErrorLogger::log_error(&error, operation_name, Some("timeout"));
                 Err(error)
-            }
+            },
         }
     }
 
@@ -1231,7 +1137,7 @@ impl TimeoutHandler {
                         ErrorLogger::log_recovery_success(operation_name, attempt + 1);
                     }
                     return Ok(result);
-                }
+                },
                 Ok(Err(error)) => {
                     if attempt < max_retries && ErrorRecoveryManager::is_retryable(&error) {
                         ErrorLogger::log_retry_attempt(
@@ -1247,7 +1153,7 @@ impl TimeoutHandler {
                         ErrorLogger::log_recovery_failure(operation_name, attempt + 1, &error);
                         return Err(error);
                     }
-                }
+                },
                 Err(_) => {
                     let timeout_error = anyhow::anyhow!(
                         "Operation '{}' timed out after {:?} (attempt {})",
@@ -1274,7 +1180,7 @@ impl TimeoutHandler {
                         );
                         return Err(timeout_error);
                     }
-                }
+                },
             }
         }
 
@@ -1356,7 +1262,7 @@ impl FileSystemErrorHandler {
                         ErrorLogger::log_recovery_success(operation_name, attempt + 1);
                     }
                     return Ok(result);
-                }
+                },
                 Ok(Err(error)) => {
                     if attempt < max_retries && Self::is_file_error_retryable(&error) {
                         ErrorLogger::log_retry_attempt(
@@ -1372,7 +1278,7 @@ impl FileSystemErrorHandler {
                         ErrorLogger::log_recovery_failure(operation_name, attempt + 1, &error);
                         return Err(error);
                     }
-                }
+                },
                 Err(_) => {
                     let timeout_error = anyhow::anyhow!(
                         "File operation '{}' timed out after {:?} (attempt {})",
@@ -1398,7 +1304,7 @@ impl FileSystemErrorHandler {
                         );
                         return Err(timeout_error);
                     }
-                }
+                },
             }
         }
 
@@ -1427,7 +1333,7 @@ macro_rules! handle_error {
                 let handled_error =
                     $crate::error_handling::ErrorHandler::handle_error(error, $operation, None);
                 return Err(handled_error);
-            }
+            },
         }
     };
     ($result:expr, $operation:expr, $context:expr) => {
@@ -1440,7 +1346,7 @@ macro_rules! handle_error {
                     Some($context),
                 );
                 return Err(handled_error);
-            }
+            },
         }
     };
 }
@@ -1455,7 +1361,7 @@ macro_rules! handle_error_with_recovery {
                     error, $operation,
                 );
                 return Err(handled_error);
-            }
+            },
         }
     };
 }
@@ -1469,7 +1375,7 @@ macro_rules! handle_ui_error {
                 let handled_error =
                     $crate::error_handling::ErrorHandler::handle_ui_error(error, $operation);
                 return Err(handled_error);
-            }
+            },
         }
     };
 }
@@ -1624,8 +1530,7 @@ where
     E: Into<anyhow::Error>,
 {
     fn with_user_context(self, context: &str) -> Result<T> {
-        self.map_err(|e| e.into())
-            .with_context(|| context.to_string())
+        self.map_err(|e| e.into()).with_context(|| context.to_string())
     }
 
     fn to_user_error(self) -> Result<T> {
@@ -1667,9 +1572,7 @@ mod tests {
 
     #[test]
     fn test_domain_specific_error_mapping() {
-        let course_error = CourseError::NotFound {
-            id: "test-123".to_string(),
-        };
+        let course_error = CourseError::NotFound { id: "test-123".to_string() };
         let course_pilot_error = CoursePilotError::Course(course_error);
         let message = ErrorMessageMapper::map_course_pilot_error(&course_pilot_error);
         assert!(message.contains("Course not found"));
@@ -1678,10 +1581,8 @@ mod tests {
 
     #[test]
     fn test_import_error_mapping() {
-        let import_error = ImportError::RateLimited {
-            service: "YouTube".to_string(),
-            retry_after_seconds: 60,
-        };
+        let import_error =
+            ImportError::RateLimited { service: "YouTube".to_string(), retry_after_seconds: 60 };
         let course_pilot_error = CoursePilotError::Import(import_error);
         let message = ErrorMessageMapper::map_course_pilot_error(&course_pilot_error);
         assert!(message.contains("Rate limited"));
@@ -1691,10 +1592,7 @@ mod tests {
 
     #[test]
     fn test_database_error_mapping() {
-        let db_error = DatabaseError::PoolExhausted {
-            active_connections: 10,
-            max_connections: 10,
-        };
+        let db_error = DatabaseError::PoolExhausted { active_connections: 10, max_connections: 10 };
         let course_pilot_error = CoursePilotError::Database(db_error);
         let message = ErrorMessageMapper::map_course_pilot_error(&course_pilot_error);
         assert!(message.contains("Too many database operations"));
@@ -1703,10 +1601,7 @@ mod tests {
 
     #[test]
     fn test_nlp_error_mapping() {
-        let nlp_error = NlpError::InsufficientData {
-            required: 10,
-            actual: 3,
-        };
+        let nlp_error = NlpError::InsufficientData { required: 10, actual: 3 };
         let course_pilot_error = CoursePilotError::Nlp(nlp_error);
         let message = ErrorMessageMapper::map_course_pilot_error(&course_pilot_error);
         assert!(message.contains("Not enough content"));
@@ -1716,9 +1611,8 @@ mod tests {
 
     #[test]
     fn test_plan_error_mapping() {
-        let plan_error = PlanError::SchedulingConflict {
-            message: "Session overlap detected".to_string(),
-        };
+        let plan_error =
+            PlanError::SchedulingConflict { message: "Session overlap detected".to_string() };
         let course_pilot_error = CoursePilotError::Plan(plan_error);
         let message = ErrorMessageMapper::map_course_pilot_error(&course_pilot_error);
         assert!(message.contains("Scheduling conflict"));
@@ -1727,21 +1621,15 @@ mod tests {
 
     #[test]
     fn test_retryable_error_detection() {
-        let network_error = CoursePilotError::Network {
-            message: "Connection timeout".to_string(),
-            url: None,
-        };
-        assert!(ErrorRecoveryManager::is_retryable(&anyhow::anyhow!(
-            network_error
-        )));
+        let network_error =
+            CoursePilotError::Network { message: "Connection timeout".to_string(), url: None };
+        assert!(ErrorRecoveryManager::is_retryable(&anyhow::anyhow!(network_error)));
 
         let validation_error = CoursePilotError::Course(CourseError::Validation {
             field: "name".to_string(),
             message: "Name is required".to_string(),
         });
-        assert!(!ErrorRecoveryManager::is_retryable(&anyhow::anyhow!(
-            validation_error
-        )));
+        assert!(!ErrorRecoveryManager::is_retryable(&anyhow::anyhow!(validation_error)));
     }
 
     #[test]
@@ -1791,12 +1679,7 @@ mod tests {
         .await;
 
         assert!(result.is_err());
-        assert!(
-            result
-                .unwrap_err()
-                .to_string()
-                .contains("permanent failure")
-        );
+        assert!(result.unwrap_err().to_string().contains("permanent failure"));
     }
 
     #[tokio::test]
@@ -1853,14 +1736,10 @@ mod tests {
     #[test]
     fn test_network_error_retryable() {
         let timeout_error = anyhow::anyhow!("connection timeout");
-        assert!(NetworkErrorHandler::is_network_error_retryable(
-            &timeout_error
-        ));
+        assert!(NetworkErrorHandler::is_network_error_retryable(&timeout_error));
 
         let auth_error = anyhow::anyhow!("authentication failed");
-        assert!(!NetworkErrorHandler::is_network_error_retryable(
-            &auth_error
-        ));
+        assert!(!NetworkErrorHandler::is_network_error_retryable(&auth_error));
     }
 
     #[tokio::test]

@@ -10,11 +10,7 @@ pub fn LastAccessedCourse() -> Element {
 
     // For now, we'll use the most recently created course as "last accessed"
     // In a real implementation, you'd track actual access times
-    let last_course = course_manager
-        .courses
-        .iter()
-        .max_by_key(|course| course.created_at)
-        .cloned();
+    let last_course = course_manager.courses.iter().max_by_key(|course| course.created_at).cloned();
 
     match last_course {
         Some(course) => rsx! {
@@ -60,10 +56,8 @@ fn CourseQuickAccess(props: CourseQuickAccessProps) -> Element {
         .and_then(|plan| plan.as_ref())
         .cloned();
 
-    let progress_percentage = course_plan
-        .as_ref()
-        .map(|plan| plan.progress_percentage())
-        .unwrap_or(0.0);
+    let progress_percentage =
+        course_plan.as_ref().map(|plan| plan.progress_percentage()).unwrap_or(0.0);
 
     let status_info = if course.is_structured() {
         if course_plan.is_some() {

@@ -23,9 +23,7 @@ impl Default for NotesContext {
 
 impl NotesContext {
     pub fn new() -> Self {
-        Self {
-            notes: Signal::new(Vec::new()),
-        }
+        Self { notes: Signal::new(Vec::new()) }
     }
 }
 
@@ -44,14 +42,7 @@ pub fn use_notes_reactive() -> Signal<Vec<Note>> {
 /// Hook to get notes for a specific course
 pub fn use_course_notes_reactive(course_id: Uuid) -> Signal<Vec<Note>> {
     let notes = use_notes_reactive();
-    Signal::new(
-        notes
-            .read()
-            .iter()
-            .filter(|n| n.course_id == course_id)
-            .cloned()
-            .collect(),
-    )
+    Signal::new(notes.read().iter().filter(|n| n.course_id == course_id).cloned().collect())
 }
 
 /// Hook to get notes for a specific video
@@ -102,10 +93,7 @@ pub fn update_note_reactive(note_id: Uuid, updated_note: Note) -> StateResult<()
         notes.set(notes_vec);
         Ok(())
     } else {
-        Err(StateError::InvalidOperation(format!(
-            "Note not found: {}",
-            note_id
-        )))
+        Err(StateError::InvalidOperation(format!("Note not found: {}", note_id)))
     }
 }
 
@@ -119,10 +107,7 @@ pub fn delete_note_reactive(note_id: Uuid) -> StateResult<()> {
         notes.set(notes_vec);
         Ok(())
     } else {
-        Err(StateError::InvalidOperation(format!(
-            "Note not found: {}",
-            note_id
-        )))
+        Err(StateError::InvalidOperation(format!("Note not found: {}", note_id)))
     }
 }
 
@@ -174,10 +159,7 @@ pub fn search_notes_reactive(query: &str) -> Vec<Note> {
         .iter()
         .filter(|note| {
             note.content.to_lowercase().contains(&query_lower)
-                || note
-                    .tags
-                    .iter()
-                    .any(|tag| tag.to_lowercase().contains(&query_lower))
+                || note.tags.iter().any(|tag| tag.to_lowercase().contains(&query_lower))
         })
         .cloned()
         .collect()
@@ -188,11 +170,7 @@ pub fn get_notes_by_tag_reactive(tag: &str) -> Vec<Note> {
     let notes = use_notes_reactive();
     let notes_vec = notes.read();
 
-    notes_vec
-        .iter()
-        .filter(|note| note.tags.contains(&tag.to_string()))
-        .cloned()
-        .collect()
+    notes_vec.iter().filter(|note| note.tags.contains(&tag.to_string())).cloned().collect()
 }
 
 /// Get all unique tags from notes
@@ -200,10 +178,7 @@ pub fn get_all_tags_reactive() -> Vec<String> {
     let notes = use_notes_reactive();
     let notes_vec = notes.read();
 
-    let mut all_tags: Vec<String> = notes_vec
-        .iter()
-        .flat_map(|note| note.tags.clone())
-        .collect();
+    let mut all_tags: Vec<String> = notes_vec.iter().flat_map(|note| note.tags.clone()).collect();
 
     all_tags.sort();
     all_tags.dedup();

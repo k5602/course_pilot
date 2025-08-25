@@ -43,11 +43,8 @@ pub struct BasePageProps {
 /// Provides consistent page layout with header, breadcrumbs, and content
 #[component]
 pub fn BasePage(props: BasePageProps) -> Element {
-    let container_classes = format!(
-        "min-h-screen {} {}",
-        props.background,
-        if props.padded { "p-6" } else { "" }
-    );
+    let container_classes =
+        format!("min-h-screen {} {}", props.background, if props.padded { "p-6" } else { "" });
 
     let content_classes = format!("mx-auto {} {}", props.max_width, props.class);
 

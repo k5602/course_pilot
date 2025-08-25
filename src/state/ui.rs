@@ -23,9 +23,7 @@ impl Default for ContextualPanelContext {
 
 impl ContextualPanelContext {
     pub fn new() -> Self {
-        Self {
-            state: Signal::new(ContextualPanelState::default()),
-        }
+        Self { state: Signal::new(ContextualPanelState::default()) }
     }
 }
 
@@ -43,9 +41,7 @@ impl Default for MobileSidebarContext {
 
 impl MobileSidebarContext {
     pub fn new() -> Self {
-        Self {
-            is_open: Signal::new(false),
-        }
+        Self { is_open: Signal::new(false) }
     }
 }
 
@@ -64,10 +60,7 @@ impl Default for VideoContextState {
 
 impl VideoContextState {
     pub fn new() -> Self {
-        Self {
-            current_video: Signal::new(None),
-            is_notes_panel_open: Signal::new(false),
-        }
+        Self { current_video: Signal::new(None), is_notes_panel_open: Signal::new(false) }
     }
 }
 
@@ -175,12 +168,7 @@ pub fn set_video_context_and_open_notes_reactive_from_parts(
     video_title: String,
     module_title: String,
 ) {
-    let video_context = VideoContext {
-        course_id,
-        video_index,
-        video_title,
-        module_title,
-    };
+    let video_context = VideoContext { course_id, video_index, video_title, module_title };
     set_video_context_and_open_notes_reactive(video_context);
 }
 
@@ -266,9 +254,7 @@ pub fn navigate_back_reactive() -> StateResult<()> {
         // Note: breadcrumbs would need to be reconstructed based on the route
         Ok(())
     } else {
-        Err(StateError::NavigationError(
-            "No previous route in history".to_string(),
-        ))
+        Err(StateError::NavigationError("No previous route in history".to_string()))
     }
 }
 

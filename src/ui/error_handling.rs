@@ -25,11 +25,8 @@ pub fn handle_ui_error(error: Error, operation: &str) {
 
     // Show error with recovery suggestions if available
     if !recovery_actions.is_empty() {
-        let full_message = format!(
-            "{}\n\nSuggested actions:\n• {}",
-            user_message,
-            recovery_actions.join("\n• ")
-        );
+        let full_message =
+            format!("{}\n\nSuggested actions:\n• {}", user_message, recovery_actions.join("\n• "));
         toast_helpers::error(full_message);
     } else {
         toast_helpers::error(user_message);
@@ -41,26 +38,23 @@ pub fn handle_phase3_error(error: &Phase3Error, operation: &str) {
     error!("Phase3 operation '{operation}' failed: {error}");
 
     let user_message = match error {
-        Phase3Error::PlanItemNotFound {
-            plan_id,
-            item_index,
-        } => {
+        Phase3Error::PlanItemNotFound { plan_id, item_index } => {
             warn!("Plan item not found: plan_id={plan_id}, item_index={item_index}");
             "The item you're trying to update no longer exists. Please refresh the page."
                 .to_string()
-        }
+        },
         Phase3Error::Backend(e) => {
             error!("Backend error: {e}");
             "A server error occurred. Please try again in a moment.".to_string()
-        }
+        },
         Phase3Error::Ingest(msg) => {
             warn!("Import operation failed: {msg}");
             format!("Import failed: {msg}")
-        }
+        },
         Phase3Error::StateSyncError(msg) => {
             error!("UI state synchronization failed: {msg}");
             "UI state synchronization failed. Please refresh the page.".to_string()
-        }
+        },
     };
 
     toast_helpers::error(user_message);
@@ -89,11 +83,8 @@ pub fn handle_ui_error_with_recovery(error: Error, operation: &str, context: Opt
     let recovery_actions = ErrorRecoveryManager::get_recovery_actions(&error);
 
     if !recovery_actions.is_empty() {
-        let full_message = format!(
-            "{}\n\nSuggested actions:\n• {}",
-            user_message,
-            recovery_actions.join("\n• ")
-        );
+        let full_message =
+            format!("{}\n\nSuggested actions:\n• {}", user_message, recovery_actions.join("\n• "));
         toast_helpers::error(full_message);
     } else {
         toast_helpers::error(user_message);
@@ -126,10 +117,10 @@ pub fn handle_result_in_ui<T>(
                 toast_helpers::success(msg);
             }
             Some(value)
-        }
+        },
         Err(error) => {
             handle_ui_error(error, operation);
             None
-        }
+        },
     }
 }

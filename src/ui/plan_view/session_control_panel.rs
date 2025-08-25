@@ -28,14 +28,8 @@ pub fn SessionControlPanel(props: SessionControlPanelProps) -> Element {
     let mut include_weekends = use_signal(|| props.plan.settings.include_weekends);
 
     // Advanced scheduler settings
-    let mut advanced_settings = use_signal(|| {
-        props
-            .plan
-            .settings
-            .advanced_settings
-            .clone()
-            .unwrap_or_default()
-    });
+    let mut advanced_settings =
+        use_signal(|| props.plan.settings.advanced_settings.clone().unwrap_or_default());
     let mut selected_strategy = use_signal(|| advanced_settings().strategy);
     let mut user_experience_level = use_signal(|| advanced_settings().user_experience_level);
     let mut difficulty_adaptation = use_signal(|| advanced_settings().difficulty_adaptation);
@@ -65,19 +59,13 @@ pub fn SessionControlPanel(props: SessionControlPanelProps) -> Element {
                 if show_advanced() { 600.0 } else { 300.0 },
                 AnimationConfig::new(AnimationMode::Spring(Spring::default())),
             );
-            panel_opacity.animate_to(
-                1.0,
-                AnimationConfig::new(AnimationMode::Tween(Tween::default())),
-            );
+            panel_opacity
+                .animate_to(1.0, AnimationConfig::new(AnimationMode::Tween(Tween::default())));
         } else {
-            panel_height.animate_to(
-                0.0,
-                AnimationConfig::new(AnimationMode::Spring(Spring::default())),
-            );
-            panel_opacity.animate_to(
-                0.0,
-                AnimationConfig::new(AnimationMode::Tween(Tween::default())),
-            );
+            panel_height
+                .animate_to(0.0, AnimationConfig::new(AnimationMode::Spring(Spring::default())));
+            panel_opacity
+                .animate_to(0.0, AnimationConfig::new(AnimationMode::Tween(Tween::default())));
         }
     });
 
@@ -185,12 +173,11 @@ pub fn SessionControlPanel(props: SessionControlPanelProps) -> Element {
                             // briefly show completion state
                             tokio::time::sleep(tokio::time::Duration::from_millis(800)).await;
                             regeneration_status.set(RegenerationStatus::Idle);
-                        }
+                        },
                         Err(e) => {
-                            regeneration_status.set(RegenerationStatus::Failed {
-                                error: e.to_string(),
-                            });
-                        }
+                            regeneration_status
+                                .set(RegenerationStatus::Failed { error: e.to_string() });
+                        },
                     }
                 }
             });
@@ -309,13 +296,12 @@ pub fn SessionControlPanel(props: SessionControlPanelProps) -> Element {
                         // Reset status after a delay
                         tokio::time::sleep(tokio::time::Duration::from_secs(2)).await;
                         regeneration_status.set(RegenerationStatus::Idle);
-                    }
+                    },
                     Err(e) => {
-                        regeneration_status.set(RegenerationStatus::Failed {
-                            error: e.to_string(),
-                        });
+                        regeneration_status
+                            .set(RegenerationStatus::Failed { error: e.to_string() });
                         toast_helpers::error(format!("Failed to regenerate plan: {e}"));
-                    }
+                    },
                 }
             });
         }
@@ -346,10 +332,7 @@ pub fn SessionControlPanel(props: SessionControlPanelProps) -> Element {
             include_weekends.set(settings_snapshot.include_weekends);
 
             // Reset advanced settings
-            let current_advanced = settings_snapshot
-                .advanced_settings
-                .clone()
-                .unwrap_or_default();
+            let current_advanced = settings_snapshot.advanced_settings.clone().unwrap_or_default();
             advanced_settings.set(current_advanced.clone());
             selected_strategy.set(current_advanced.strategy);
             user_experience_level.set(current_advanced.user_experience_level);

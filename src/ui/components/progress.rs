@@ -73,11 +73,7 @@ pub fn ProgressRing(
     #[props(optional)] label: Option<Element>,
 ) -> Element {
     let max = max.unwrap_or(100);
-    let percent = if max == 0 {
-        0.0
-    } else {
-        (value as f32 / max as f32) * 100.0
-    };
+    let percent = if max == 0 { 0.0 } else { (value as f32 / max as f32) * 100.0 };
     let color_class = color.as_deref().unwrap_or("primary");
     let size_px = size.unwrap_or(48);
     let thickness_px = thickness.unwrap_or(4);

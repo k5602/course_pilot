@@ -11,7 +11,6 @@ use uuid::Uuid;
 /// ==============================
 /// SQLite helpers (local)
 /// ==============================
-
 fn parse_uuid_sqlite(s: &str, idx: usize) -> Result<Uuid, rusqlite::Error> {
     Uuid::parse_str(s).map_err(|_| {
         rusqlite::Error::InvalidColumnType(idx, "uuid".to_string(), rusqlite::types::Type::Text)
@@ -31,7 +30,6 @@ fn parse_json_sqlite<T: DeserializeOwned>(s: &str) -> Result<T, rusqlite::Error>
 /// ==============================
 /// YouTube/local video helpers
 /// ==============================
-
 fn is_youtube_video_title(title: &str) -> bool {
     if title.contains("youtube.com") || title.contains("youtu.be") || title.contains("watch?v=") {
         return true;
@@ -69,11 +67,7 @@ fn extract_youtube_video_id_from_title(title: &str) -> Option<String> {
             Some(title[id_start..id_start + end].to_string())
         } else {
             let remaining = &title[id_start..];
-            if remaining.len() == 11 {
-                Some(remaining.to_string())
-            } else {
-                None
-            }
+            if remaining.len() == 11 { Some(remaining.to_string()) } else { None }
         }
     } else if let Some(start) = title.find("youtu.be/") {
         let id_start = start + 9;
@@ -83,11 +77,7 @@ fn extract_youtube_video_id_from_title(title: &str) -> Option<String> {
             Some(title[id_start..id_start + end].to_string())
         } else {
             let remaining = &title[id_start..];
-            if remaining.len() == 11 {
-                Some(remaining.to_string())
-            } else {
-                None
-            }
+            if remaining.len() == 11 { Some(remaining.to_string()) } else { None }
         }
     } else {
         None
@@ -97,7 +87,6 @@ fn extract_youtube_video_id_from_title(title: &str) -> Option<String> {
 /// ==============================
 /// Metadata validation/repair
 /// ==============================
-
 fn validate_video_metadata(videos: &[VideoMetadata]) -> Result<Vec<VideoMetadata>> {
     let mut validated_videos = Vec::with_capacity(videos.len());
 
@@ -140,10 +129,7 @@ fn validate_video_metadata(videos: &[VideoMetadata]) -> Result<Vec<VideoMetadata
             } else if video.video_id.is_some() && video.source_url.is_none() {
                 if let Some(ref video_id) = video.video_id {
                     let url = if let Some(ref playlist_id) = video.playlist_id {
-                        format!(
-                            "https://www.youtube.com/watch?v={}&list={}",
-                            video_id, playlist_id
-                        )
+                        format!("https://www.youtube.com/watch?v={}&list={}", video_id, playlist_id)
                     } else {
                         format!("https://www.youtube.com/watch?v={}", video_id)
                     };
@@ -215,34 +201,23 @@ fn validate_and_repair_loaded_metadata(
                         index
                     );
                     repaired_video.video_id = Some(format!("PLACEHOLDER_{}", index));
-                    repaired_video.source_url = Some(format!(
-                        "https://www.youtube.com/watch?v=PLACEHOLDER_{}",
-                        index
-                    ));
+                    repaired_video.source_url =
+                        Some(format!("https://www.youtube.com/watch?v=PLACEHOLDER_{}", index));
                     repaired_video.playlist_id = None;
                     if repaired_video.original_index == 0 && index > 0 {
                         repaired_video.original_index = index;
                     }
                 }
             } else {
-                info!(
-                    "Converting assumed YouTube video to local video at index {}",
-                    index
-                );
+                info!("Converting assumed YouTube video to local video at index {}", index);
                 repaired_video.is_local = true;
                 repaired_video.source_url = Some(video.title.clone());
             }
         } else if !video.is_local && video.video_id.is_some() && video.source_url.is_none() {
             if let Some(ref video_id) = video.video_id {
-                info!(
-                    "Reconstructing source_url for video_id '{}' at index {}",
-                    video_id, index
-                );
+                info!("Reconstructing source_url for video_id '{}' at index {}", video_id, index);
                 let url = if let Some(ref playlist_id) = repaired_video.playlist_id {
-                    format!(
-                        "https://www.youtube.com/watch?v={}&list={}",
-                        video_id, playlist_id
-                    )
+                    format!("https://www.youtube.com/watch?v={}&list={}", video_id, playlist_id)
                 } else {
                     format!("https://www.youtube.com/watch?v={}", video_id)
                 };
@@ -326,10 +301,7 @@ fn create_fallback_video_metadata(raw_titles: &[String]) -> Vec<VideoMetadata> {
         .iter()
         .enumerate()
         .map(|(index, title)| {
-            info!(
-                "Creating fallback metadata for video {}: '{}'",
-                index, title
-            );
+            info!("Creating fallback metadata for video {}: '{}'", index, title);
 
             if is_youtube_video_title(title) {
                 info!("Detected as YouTube video: '{}'", title);
@@ -377,7 +349,6 @@ fn create_fallback_video_metadata(raw_titles: &[String]) -> Vec<VideoMetadata> {
 /// ==============================
 /// Public API: Courses CRUD
 /// ==============================
-
 pub fn save_course(db: &Database, course: &Course) -> Result<()> {
     info!("Saving course: {} (ID: {})", course.name, course.id);
 
@@ -388,11 +359,7 @@ pub fn save_course(db: &Database, course: &Course) -> Result<()> {
     let videos_json = serde_json::to_string(&validated_videos)
         .with_context(|| format!("Failed to serialize videos for '{}'", course.name))?;
 
-    info!(
-        "Saving course '{}' with {} videos",
-        course.name,
-        validated_videos.len()
-    );
+    info!("Saving course '{}' with {} videos", course.name, validated_videos.len());
     if !validated_videos.is_empty() {
         let first_video = &validated_videos[0];
         info!(
@@ -404,24 +371,14 @@ pub fn save_course(db: &Database, course: &Course) -> Result<()> {
         }
     }
 
-    let structure_json = course
-        .structure
-        .as_ref()
-        .map(serde_json::to_string)
-        .transpose()
-        .map_err(|e| {
-            error!(
-                "Failed to serialize structure for course {}: {}",
-                course.name, e
-            );
+    let structure_json =
+        course.structure.as_ref().map(serde_json::to_string).transpose().map_err(|e| {
+            error!("Failed to serialize structure for course {}: {}", course.name, e);
             e
         })?;
 
     let conn = db.get_conn().with_context(|| {
-        format!(
-            "Failed to get database connection for saving course {}",
-            course.name
-        )
+        format!("Failed to get database connection for saving course {}", course.name)
     })?;
 
     conn.execute(
@@ -447,9 +404,8 @@ pub fn save_course(db: &Database, course: &Course) -> Result<()> {
 pub fn load_courses(db: &Database) -> Result<Vec<Course>> {
     info!("Loading all courses from database");
 
-    let conn = db
-        .get_conn()
-        .with_context(|| "Failed to get database connection for loading courses")?;
+    let conn =
+        db.get_conn().with_context(|| "Failed to get database connection for loading courses")?;
 
     let mut stmt = conn
         .prepare(
@@ -477,10 +433,7 @@ pub fn load_courses(db: &Database) -> Result<Vec<Course>> {
             let videos: Vec<VideoMetadata> = if let Some(ref videos_json) = videos_json {
                 let parsed_videos: Vec<VideoMetadata> = serde_json::from_str(videos_json)
                     .unwrap_or_else(|e| {
-                        warn!(
-                            "Failed to deserialize video metadata, using fallback: {}",
-                            e
-                        );
+                        warn!("Failed to deserialize video metadata, using fallback: {}", e);
                         create_fallback_video_metadata(&raw_titles)
                     });
 
@@ -515,9 +468,7 @@ pub fn load_courses(db: &Database) -> Result<Vec<Course>> {
 }
 
 pub fn get_course_by_id(db: &Database, course_id: &Uuid) -> Result<Option<Course>> {
-    let conn = db
-        .get_conn()
-        .with_context(|| "Failed to get DB connection")?;
+    let conn = db.get_conn().with_context(|| "Failed to get DB connection")?;
     let mut stmt = conn.prepare(
         r#"
         SELECT id, name, created_at, raw_titles, videos, structure
@@ -590,19 +541,11 @@ pub fn get_course_by_id(db: &Database, course_id: &Uuid) -> Result<Option<Course
 }
 
 pub fn delete_course(db: &Database, course_id: &Uuid) -> Result<()> {
-    let mut conn = db
-        .get_conn()
-        .with_context(|| "Failed to get DB connection")?;
+    let mut conn = db.get_conn().with_context(|| "Failed to get DB connection")?;
 
     let tx = conn.transaction()?;
-    tx.execute(
-        "DELETE FROM plans WHERE course_id = ?1",
-        params![course_id.to_string()],
-    )?;
-    tx.execute(
-        "DELETE FROM courses WHERE id = ?1",
-        params![course_id.to_string()],
-    )?;
+    tx.execute("DELETE FROM plans WHERE course_id = ?1", params![course_id.to_string()])?;
+    tx.execute("DELETE FROM courses WHERE id = ?1", params![course_id.to_string()])?;
     tx.commit()?;
 
     Ok(())

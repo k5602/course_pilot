@@ -165,10 +165,7 @@ pub fn generate_basic_plan(course: &Course, settings: &PlanSettings) -> Result<P
     crate::planner::calendar::validate_settings(settings)?;
 
     // Check if course has structure
-    let _structure = course
-        .structure
-        .as_ref()
-        .ok_or(PlanError::CourseNotStructured)?;
+    let _structure = course.structure.as_ref().ok_or(PlanError::CourseNotStructured)?;
 
     // Create session distribution strategy
     let strategy = choose_distribution_strategy(course, settings)?;
@@ -180,11 +177,11 @@ pub fn generate_basic_plan(course: &Course, settings: &PlanSettings) -> Result<P
         DistributionStrategy::Hybrid => strat_generate_hybrid_plan(course, settings)?,
         DistributionStrategy::DifficultyBased => {
             strat_generate_difficulty_based_plan(course, settings)?
-        }
+        },
         DistributionStrategy::SpacedRepetition => {
             // Prefer the extracted strategy implementation
             self::strategies::generate_spaced_repetition_plan(course, settings)?
-        }
+        },
         DistributionStrategy::Adaptive => strat_generate_adaptive_plan(course, settings)?,
     };
 
@@ -242,11 +239,8 @@ pub fn generate_plan_from_groups(
     });
 
     // Recompute dates based on settings, preserving a consistent schedule.
-    let mut current_date = if let Some(first) = plan.items.first() {
-        first.date
-    } else {
-        chrono::Utc::now()
-    };
+    let mut current_date =
+        if let Some(first) = plan.items.first() { first.date } else { chrono::Utc::now() };
 
     for it in reordered_items.iter_mut() {
         it.date = current_date;

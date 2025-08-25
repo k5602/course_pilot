@@ -29,9 +29,8 @@ pub fn save_video_progress(
     db: &Database,
     progress: &crate::types::VideoProgressUpdate,
 ) -> Result<(), DatabaseError> {
-    let conn = db.get_conn().map_err(|e| DatabaseError::ConnectionFailed {
-        message: e.to_string(),
-    })?;
+    let conn =
+        db.get_conn().map_err(|e| DatabaseError::ConnectionFailed { message: e.to_string() })?;
 
     conn.execute(
         "INSERT OR REPLACE INTO video_progress (
@@ -64,9 +63,8 @@ pub fn get_video_completion_status(
     session_index: usize,
     video_index: usize,
 ) -> Result<bool, DatabaseError> {
-    let conn = db.get_conn().map_err(|e| DatabaseError::ConnectionFailed {
-        message: e.to_string(),
-    })?;
+    let conn =
+        db.get_conn().map_err(|e| DatabaseError::ConnectionFailed { message: e.to_string() })?;
 
     let mut stmt = conn
         .prepare(
@@ -79,14 +77,10 @@ pub fn get_video_completion_status(
             message: e.to_string(),
         })?;
 
-    let result = stmt.query_row(
-        params![
-            plan_id.to_string(),
-            session_index as i64,
-            video_index as i64
-        ],
-        |row| Ok(row.get::<_, bool>(0)?),
-    );
+    let result = stmt
+        .query_row(params![plan_id.to_string(), session_index as i64, video_index as i64], |row| {
+            Ok(row.get::<_, bool>(0)?)
+        });
 
     match result {
         Ok(completed) => Ok(completed),
@@ -109,9 +103,8 @@ pub fn get_session_progress(
     plan_id: &uuid::Uuid,
     session_index: usize,
 ) -> Result<f32, DatabaseError> {
-    let conn = db.get_conn().map_err(|e| DatabaseError::ConnectionFailed {
-        message: e.to_string(),
-    })?;
+    let conn =
+        db.get_conn().map_err(|e| DatabaseError::ConnectionFailed { message: e.to_string() })?;
 
     // Use COALESCE to avoid NULL for SUM on empty sets
     let mut stmt = conn
@@ -138,11 +131,7 @@ pub fn get_session_progress(
             message: e.to_string(),
         })?;
 
-    if total > 0 {
-        Ok(completed as f32 / total as f32)
-    } else {
-        Ok(0.0)
-    }
+    if total > 0 { Ok(completed as f32 / total as f32) } else { Ok(0.0) }
 }
 
 #[cfg(test)]
@@ -164,10 +153,7 @@ mod tests {
 
         // Initially no rows -> not completed, progress 0.0
         assert!(!get_video_completion_status(&db, &plan_id, session_index, video_index).unwrap());
-        assert_eq!(
-            get_session_progress(&db, &plan_id, session_index).unwrap(),
-            0.0
-        );
+        assert_eq!(get_session_progress(&db, &plan_id, session_index).unwrap(), 0.0);
 
         // Mark as not completed creates a row
         let upd =
@@ -175,19 +161,13 @@ mod tests {
         save_video_progress(&db, &upd).unwrap();
         assert!(!get_video_completion_status(&db, &plan_id, session_index, video_index).unwrap());
         // One row with completed=0 -> total=1, completed=0
-        assert_eq!(
-            get_session_progress(&db, &plan_id, session_index).unwrap(),
-            0.0
-        );
+        assert_eq!(get_session_progress(&db, &plan_id, session_index).unwrap(), 0.0);
 
         // Mark as completed
         let upd2 =
             crate::types::VideoProgressUpdate::new(plan_id, session_index, video_index, true);
         save_video_progress(&db, &upd2).unwrap();
         assert!(get_video_completion_status(&db, &plan_id, session_index, video_index).unwrap());
-        assert_eq!(
-            get_session_progress(&db, &plan_id, session_index).unwrap(),
-            1.0
-        );
+        assert_eq!(get_session_progress(&db, &plan_id, session_index).unwrap(), 1.0);
     }
 }

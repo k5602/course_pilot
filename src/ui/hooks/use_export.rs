@@ -11,11 +11,8 @@ use uuid::Uuid;
 pub struct ExportManager {
     db: Arc<crate::storage::database::Database>,
 
-    pub export_course_with_progress: Callback<(
-        Uuid,
-        crate::export::ExportFormat,
-        Box<dyn Fn(f32, String) + Send + Sync>,
-    )>,
+    pub export_course_with_progress:
+        Callback<(Uuid, crate::export::ExportFormat, Box<dyn Fn(f32, String) + Send + Sync>)>,
     pub export_course_with_ui_progress: Callback<(Uuid, crate::export::ExportFormat)>,
     pub save_export_data: Callback<crate::export::ExportResult>,
 }
@@ -197,13 +194,13 @@ pub fn use_export_manager() -> ExportManager {
                 match result {
                     Ok(Ok(_)) => {
                         toast_helpers::success("Course exported successfully");
-                    }
+                    },
                     Ok(Err(e)) => {
                         toast_helpers::error(format!("Failed to export course: {e}"));
-                    }
+                    },
                     Err(e) => {
                         toast_helpers::error(format!("Failed to export course: {e}"));
-                    }
+                    },
                 }
             });
             // Return () to match expected callback type
@@ -219,10 +216,10 @@ pub fn use_export_manager() -> ExportManager {
             match result {
                 Ok(saved_path) => {
                     toast_helpers::success(format!("Export saved to: {}", saved_path.display()));
-                }
+                },
                 Err(e) => {
                     toast_helpers::error(format!("Failed to save export: {e}"));
-                }
+                },
             }
         });
         // Return () to match expected callback type
@@ -280,27 +277,27 @@ pub fn use_export_manager() -> ExportManager {
                                         "Export saved to: {}",
                                         saved_path.display()
                                     ));
-                                }
+                                },
                                 Err(e) => {
                                     reporter.fail(format!("Failed to save export: {e}"));
                                     crate::ui::toast_helpers::error(format!(
                                         "Failed to save export: {e}"
                                     ));
-                                }
+                                },
                             }
-                        }
+                        },
                         Ok(Err(e)) => {
                             reporter.fail(format!("{e}"));
                             crate::ui::toast_helpers::error(format!(
                                 "Failed to export course: {e}"
                             ));
-                        }
+                        },
                         Err(e) => {
                             reporter.fail(format!("Join error: {e}"));
                             crate::ui::toast_helpers::error(format!(
                                 "Failed to export course: {e}"
                             ));
-                        }
+                        },
                     }
                 }
             });

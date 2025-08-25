@@ -23,9 +23,7 @@ impl Default for PlanContext {
 
 impl PlanContext {
     pub fn new() -> Self {
-        Self {
-            plans: Signal::new(Vec::new()),
-        }
+        Self { plans: Signal::new(Vec::new()) }
     }
 }
 
@@ -44,14 +42,7 @@ pub fn use_plans_reactive() -> Signal<Vec<Plan>> {
 /// Hook to get plans for a specific course
 pub fn use_course_plans_reactive(course_id: Uuid) -> Signal<Vec<Plan>> {
     let plans = use_plans_reactive();
-    Signal::new(
-        plans
-            .read()
-            .iter()
-            .filter(|p| p.course_id == course_id)
-            .cloned()
-            .collect(),
-    )
+    Signal::new(plans.read().iter().filter(|p| p.course_id == course_id).cloned().collect())
 }
 
 /// Hook to get the active plan for a course
@@ -59,11 +50,7 @@ pub fn use_active_plan_reactive(course_id: Uuid) -> Signal<Option<Plan>> {
     let plans = use_plans_reactive();
     Signal::new({
         let plans_vec = plans.read();
-        plans_vec
-            .iter()
-            .filter(|p| p.course_id == course_id)
-            .max_by_key(|p| p.created_at)
-            .cloned()
+        plans_vec.iter().filter(|p| p.course_id == course_id).max_by_key(|p| p.created_at).cloned()
     })
 }
 
@@ -90,11 +77,8 @@ pub fn use_plan_stats_reactive() -> Signal<(usize, usize, f32)> {
                 total_completion += completed as f32 / total_items as f32;
             }
         }
-        let average_progress = if total_plans > 0 {
-            total_completion / total_plans as f32
-        } else {
-            0.0
-        };
+        let average_progress =
+            if total_plans > 0 { total_completion / total_plans as f32 } else { 0.0 };
 
         (total_plans, active_plans, average_progress)
     })
@@ -122,10 +106,7 @@ pub fn update_plan_reactive(plan_id: Uuid, updated_plan: Plan) -> StateResult<()
         plans.set(plans_vec);
         Ok(())
     } else {
-        Err(StateError::InvalidOperation(format!(
-            "Plan not found: {}",
-            plan_id
-        )))
+        Err(StateError::InvalidOperation(format!("Plan not found: {}", plan_id)))
     }
 }
 
@@ -139,10 +120,7 @@ pub fn delete_plan_reactive(plan_id: Uuid) -> StateResult<()> {
         plans.set(plans_vec);
         Ok(())
     } else {
-        Err(StateError::InvalidOperation(format!(
-            "Plan not found: {}",
-            plan_id
-        )))
+        Err(StateError::InvalidOperation(format!("Plan not found: {}", plan_id)))
     }
 }
 
@@ -169,10 +147,7 @@ pub fn update_plan_progress_reactive(plan_id: Uuid, _progress: f32) -> StateResu
         plans.set(plans_vec);
         Ok(())
     } else {
-        Err(StateError::InvalidOperation(format!(
-            "Plan not found: {}",
-            plan_id
-        )))
+        Err(StateError::InvalidOperation(format!("Plan not found: {}", plan_id)))
     }
 }
 
@@ -194,10 +169,7 @@ pub fn complete_plan_item_reactive(plan_id: Uuid, item_index: usize) -> StateRes
             )))
         }
     } else {
-        Err(StateError::InvalidOperation(format!(
-            "Plan not found: {}",
-            plan_id
-        )))
+        Err(StateError::InvalidOperation(format!("Plan not found: {}", plan_id)))
     }
 }
 
@@ -219,10 +191,7 @@ pub fn uncomplete_plan_item_reactive(plan_id: Uuid, item_index: usize) -> StateR
             )))
         }
     } else {
-        Err(StateError::InvalidOperation(format!(
-            "Plan not found: {}",
-            plan_id
-        )))
+        Err(StateError::InvalidOperation(format!("Plan not found: {}", plan_id)))
     }
 }
 
@@ -236,10 +205,7 @@ pub fn activate_plan_reactive(plan_id: Uuid) -> StateResult<()> {
         plans.set(plans_vec);
         Ok(())
     } else {
-        Err(StateError::InvalidOperation(format!(
-            "Plan not found: {}",
-            plan_id
-        )))
+        Err(StateError::InvalidOperation(format!("Plan not found: {}", plan_id)))
     }
 }
 
@@ -251,11 +217,8 @@ pub fn get_plan_completion_stats_reactive(plan_id: Uuid) -> Option<(usize, usize
     if let Some(plan) = plans_vec.iter().find(|p| p.id == plan_id) {
         let total_items = plan.items.len();
         let completed_items = plan.items.iter().filter(|i| i.completed).count();
-        let completion_rate = if total_items > 0 {
-            completed_items as f32 / total_items as f32
-        } else {
-            0.0
-        };
+        let completion_rate =
+            if total_items > 0 { completed_items as f32 / total_items as f32 } else { 0.0 };
 
         Some((total_items, completed_items, completion_rate))
     } else {
@@ -366,21 +329,12 @@ mod tests {
                 items: vec![],
                 created_at: older,
             },
-            Plan {
-                id: Uuid::new_v4(),
-                course_id,
-                settings,
-                items: vec![],
-                created_at: newer,
-            },
+            Plan { id: Uuid::new_v4(), course_id, settings, items: vec![], created_at: newer },
         ];
 
         // The "active" one should be the most recent for that course
-        let active = plans
-            .iter()
-            .filter(|p| p.course_id == course_id)
-            .max_by_key(|p| p.created_at)
-            .unwrap();
+        let active =
+            plans.iter().filter(|p| p.course_id == course_id).max_by_key(|p| p.created_at).unwrap();
 
         assert_eq!(active.id, plans[1].id);
     }

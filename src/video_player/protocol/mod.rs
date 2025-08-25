@@ -25,7 +25,7 @@ pub fn handle_video_request(uri: &str, headers: &HeaderMap) -> Response<Cow<'sta
         Err(e) => {
             warn!("Invalid URI format: {} - Error: {}", uri, e);
             return error_response(StatusCode::BAD_REQUEST, "Invalid URI format");
-        }
+        },
     };
 
     // Verify file exists and is readable
@@ -38,27 +38,18 @@ pub fn handle_video_request(uri: &str, headers: &HeaderMap) -> Response<Cow<'sta
     let metadata = match file_path.metadata() {
         Ok(meta) => meta,
         Err(e) => {
-            error!(
-                "Failed to read file metadata for {}: {}",
-                file_path.display(),
-                e
-            );
+            error!("Failed to read file metadata for {}: {}", file_path.display(), e);
             return error_response(
                 StatusCode::INTERNAL_SERVER_ERROR,
                 "Failed to read file metadata",
             );
-        }
+        },
     };
 
     let file_size = metadata.len();
     let mime_type = get_video_mime_type(&file_path);
 
-    info!(
-        "Serving video: {} ({} bytes, type: {})",
-        file_path.display(),
-        file_size,
-        mime_type
-    );
+    info!("Serving video: {} ({} bytes, type: {})", file_path.display(), file_size, mime_type);
 
     // Check for Range header to support partial content requests
     let range_header = headers.get(header::RANGE).and_then(|h| h.to_str().ok());
@@ -68,11 +59,8 @@ pub fn handle_video_request(uri: &str, headers: &HeaderMap) -> Response<Cow<'sta
         Ok(response) => response,
         Err(e) => {
             error!("Failed to serve video file {}: {}", file_path.display(), e);
-            error_response(
-                StatusCode::INTERNAL_SERVER_ERROR,
-                "Failed to serve video file",
-            )
-        }
+            error_response(StatusCode::INTERNAL_SERVER_ERROR, "Failed to serve video file")
+        },
     }
 }
 
@@ -141,13 +129,7 @@ mod tests {
     #[test]
     fn test_get_video_mime_type() {
         assert_eq!(get_video_mime_type(&PathBuf::from("test.mp4")), "video/mp4");
-        assert_eq!(
-            get_video_mime_type(&PathBuf::from("test.webm")),
-            "video/webm"
-        );
-        assert_eq!(
-            get_video_mime_type(&PathBuf::from("test.unknown")),
-            "application/octet-stream"
-        );
+        assert_eq!(get_video_mime_type(&PathBuf::from("test.webm")), "video/webm");
+        assert_eq!(get_video_mime_type(&PathBuf::from("test.unknown")), "application/octet-stream");
     }
 }

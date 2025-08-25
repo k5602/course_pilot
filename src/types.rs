@@ -197,11 +197,7 @@ impl CourseStructure {
 
     /// Create a new CourseStructure without clustering metadata (for fallback)
     pub fn new_basic(modules: Vec<Module>, metadata: StructureMetadata) -> Self {
-        Self {
-            modules,
-            metadata,
-            clustering_metadata: None,
-        }
+        Self { modules, metadata, clustering_metadata: None }
     }
 
     /// Create a new CourseStructure with clustering metadata
@@ -210,11 +206,7 @@ impl CourseStructure {
         metadata: StructureMetadata,
         clustering_metadata: ClusteringMetadata,
     ) -> Self {
-        Self {
-            modules,
-            metadata,
-            clustering_metadata: Some(clustering_metadata),
-        }
+        Self { modules, metadata, clustering_metadata: Some(clustering_metadata) }
     }
 
     /// Check if this structure was created using clustering
@@ -432,13 +424,7 @@ pub struct VideoProgressUpdate {
 impl VideoProgressUpdate {
     /// Create a new video progress update
     pub fn new(plan_id: Uuid, session_index: usize, video_index: usize, completed: bool) -> Self {
-        Self {
-            plan_id,
-            session_index,
-            video_index,
-            completed,
-            timestamp: Utc::now(),
-        }
+        Self { plan_id, session_index, video_index, completed, timestamp: Utc::now() }
     }
 
     /// Create a completion update
@@ -625,8 +611,8 @@ impl ImportJob {
                 StageStatus::Completed => total_progress += stage_weight,
                 StageStatus::InProgress => {
                     total_progress += stage_weight * (stage_info.progress / 100.0)
-                }
-                _ => {}
+                },
+                _ => {},
             }
         }
 
@@ -688,8 +674,8 @@ impl ImportJob {
                 StageStatus::Completed => total_progress += stage_weight,
                 StageStatus::InProgress => {
                     total_progress += stage_weight * (stage_info.progress / 100.0)
-                }
-                _ => {}
+                },
+                _ => {},
             }
         }
 
@@ -996,20 +982,15 @@ impl VideoMetadata {
         if self.is_local {
             // Local videos need at least title and source_url (file path)
             !self.title.trim().is_empty()
-                && self
-                    .source_url
-                    .as_ref()
-                    .map_or(false, |url| !url.trim().is_empty())
+                && self.source_url.as_ref().map_or(false, |url| !url.trim().is_empty())
         } else {
             // YouTube videos need at least title, video_id, and source_url
             !self.title.trim().is_empty()
-                && self.video_id.as_ref().map_or(false, |id| {
-                    !id.trim().is_empty() && !id.starts_with("PLACEHOLDER_")
-                })
                 && self
-                    .source_url
+                    .video_id
                     .as_ref()
-                    .map_or(false, |url| !url.trim().is_empty())
+                    .map_or(false, |id| !id.trim().is_empty() && !id.starts_with("PLACEHOLDER_"))
+                && self.source_url.as_ref().map_or(false, |url| !url.trim().is_empty())
         }
     }
 
@@ -1024,27 +1005,27 @@ impl VideoMetadata {
                 None => return Err("Local video missing file path".to_string()),
                 Some(path) if path.trim().is_empty() => {
                     return Err("Local video has empty file path".to_string());
-                }
-                Some(_) => {} // Valid
+                },
+                Some(_) => {}, // Valid
             }
         } else {
             match &self.video_id {
                 None => return Err("YouTube video missing video_id".to_string()),
                 Some(id) if id.trim().is_empty() => {
                     return Err("YouTube video has empty video_id".to_string());
-                }
+                },
                 Some(id) if id.starts_with("PLACEHOLDER_") => {
                     return Err("YouTube video has placeholder video_id".to_string());
-                }
-                Some(_) => {} // Valid
+                },
+                Some(_) => {}, // Valid
             }
 
             match &self.source_url {
                 None => return Err("YouTube video missing source URL".to_string()),
                 Some(url) if url.trim().is_empty() => {
                     return Err("YouTube video has empty source URL".to_string());
-                }
-                Some(_) => {} // Valid
+                },
+                Some(_) => {}, // Valid
             }
         }
 
@@ -1054,13 +1035,7 @@ impl VideoMetadata {
 
 impl Plan {
     pub fn new(course_id: Uuid, settings: PlanSettings) -> Self {
-        Self {
-            id: Uuid::new_v4(),
-            course_id,
-            settings,
-            items: Vec::new(),
-            created_at: Utc::now(),
-        }
+        Self { id: Uuid::new_v4(), course_id, settings, items: Vec::new(), created_at: Utc::now() }
     }
 
     pub fn total_sessions(&self) -> usize {
@@ -1089,10 +1064,7 @@ pub struct PlanItemIdentifier {
 
 impl PlanItemIdentifier {
     pub fn new(plan_id: Uuid, item_index: usize) -> Self {
-        Self {
-            plan_id,
-            item_index,
-        }
+        Self { plan_id, item_index }
     }
 }
 
@@ -1150,10 +1122,7 @@ impl Default for AdvancedSchedulerSettings {
 impl AdvancedSchedulerSettings {
     /// Create new settings with a specific strategy
     pub fn with_strategy(strategy: DistributionStrategy) -> Self {
-        Self {
-            strategy,
-            ..Self::default()
-        }
+        Self { strategy, ..Self::default() }
     }
 
     /// Create settings optimized for beginners
@@ -1189,7 +1158,7 @@ impl AdvancedSchedulerSettings {
         if self.spaced_repetition_enabled && self.strategy != DistributionStrategy::SpacedRepetition
         {
             return Err(
-                "Spaced repetition enabled but strategy is not SpacedRepetition".to_string(),
+                "Spaced repetition enabled but strategy is not SpacedRepetition".to_string()
             );
         }
 
@@ -1232,15 +1201,13 @@ impl AdvancedSchedulerSettings {
             ) => DistributionStrategy::Adaptive,
             (DifficultyLevel::Advanced | DifficultyLevel::Expert, _) => {
                 DistributionStrategy::Hybrid
-            }
+            },
             _ => DistributionStrategy::Hybrid,
         };
 
         let spaced_repetition = matches!(user_level, DifficultyLevel::Beginner);
-        let prioritize_difficult = matches!(
-            user_level,
-            DifficultyLevel::Advanced | DifficultyLevel::Expert
-        );
+        let prioritize_difficult =
+            matches!(user_level, DifficultyLevel::Advanced | DifficultyLevel::Expert);
 
         // Adjust session duration based on course length
         let max_session_duration = if total_duration_hours > 20.0 {
@@ -1359,12 +1326,7 @@ impl DistributionStrategy {
 impl DifficultyLevel {
     /// Get all available difficulty levels
     pub fn all() -> Vec<Self> {
-        vec![
-            Self::Beginner,
-            Self::Intermediate,
-            Self::Advanced,
-            Self::Expert,
-        ]
+        vec![Self::Beginner, Self::Intermediate, Self::Advanced, Self::Expert]
     }
 
     /// Get human-readable name for the difficulty level
@@ -1461,11 +1423,7 @@ pub mod duration_utils {
         let seconds = total_seconds % 60;
 
         if hours > 0 {
-            if minutes > 0 {
-                format!("{hours}h {minutes}m")
-            } else {
-                format!("{hours}h")
-            }
+            if minutes > 0 { format!("{hours}h {minutes}m") } else { format!("{hours}h") }
         } else if minutes > 0 {
             format!("{minutes}m")
         } else {

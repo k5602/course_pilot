@@ -43,10 +43,10 @@ pub fn ImportSettings(props: ImportSettingsProps) -> Element {
                     Ok(_) => {
                         toast_helpers::success("Import preferences saved successfully!");
                         on_settings_updated.call(());
-                    }
+                    },
                     Err(e) => {
                         toast_helpers::error(format!("Failed to save import preferences: {e}"));
-                    }
+                    },
                 }
 
                 is_saving.set(false);

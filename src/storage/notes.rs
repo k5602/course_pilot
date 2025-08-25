@@ -96,9 +96,8 @@ pub fn init_notes_table(conn: &Connection) -> Result<()> {
 
     // Migration: add missing columns if needed
     let mut stmt = conn.prepare("PRAGMA table_info(notes);")?;
-    let columns: Vec<String> = stmt
-        .query_map([], |row| row.get(1))?
-        .collect::<std::result::Result<Vec<String>, _>>()?;
+    let columns: Vec<String> =
+        stmt.query_map([], |row| row.get(1))?.collect::<std::result::Result<Vec<String>, _>>()?;
 
     log::info!("Existing columns in notes table: {columns:?}");
 
@@ -125,27 +124,24 @@ pub fn init_notes_table(conn: &Connection) -> Result<()> {
                 if let Err(e) = conn.execute("CREATE INDEX IF NOT EXISTS idx_notes_course_video_index ON notes(course_id, video_index);", []) {
                     log::warn!("Failed to create index for video_index: {e}");
                 }
-            }
+            },
             Err(e) => {
                 log::error!("Failed to add video_index column: {e}");
                 return Err(anyhow::anyhow!("Failed to add video_index column: {}", e));
-            }
+            },
         }
     }
 
     // Verify the migration worked by checking columns again
     let mut stmt = conn.prepare("PRAGMA table_info(notes);")?;
-    let final_columns: Vec<String> = stmt
-        .query_map([], |row| row.get(1))?
-        .collect::<std::result::Result<Vec<String>, _>>()?;
+    let final_columns: Vec<String> =
+        stmt.query_map([], |row| row.get(1))?.collect::<std::result::Result<Vec<String>, _>>()?;
 
     log::info!("Final columns in notes table: {final_columns:?}");
 
     if !final_columns.iter().any(|c| c == "video_index") {
         log::error!("video_index column still missing after migration attempt");
-        return Err(anyhow::anyhow!(
-            "Failed to add video_index column to notes table"
-        ));
+        return Err(anyhow::anyhow!("Failed to add video_index column to notes table"));
     }
 
     Ok(())
@@ -273,11 +269,8 @@ pub async fn delete_note_pooled_async(db: Database, note_id: Uuid) -> Result<()>
 
 /// Delete a note by id.
 pub fn delete_note(conn: &Connection, note_id: Uuid) -> Result<()> {
-    conn.execute(
-        "DELETE FROM notes WHERE id = ?1",
-        params![note_id.to_string()],
-    )
-    .context("Failed to delete note")?;
+    conn.execute("DELETE FROM notes WHERE id = ?1", params![note_id.to_string()])
+        .context("Failed to delete note")?;
     Ok(())
 }
 
@@ -292,9 +285,7 @@ pub fn get_all_notes(conn: &Connection) -> Result<Vec<Note>> {
     let mut stmt = conn.prepare(
         "SELECT id, course_id, video_id, video_index, content, timestamp, created_at, updated_at, tags FROM notes ORDER BY updated_at DESC",
     )?;
-    let notes = stmt
-        .query_map([], note_from_row)?
-        .collect::<Result<Vec<_>, _>>()?;
+    let notes = stmt.query_map([], note_from_row)?.collect::<Result<Vec<_>, _>>()?;
     Ok(notes)
 }
 
@@ -369,10 +360,7 @@ pub fn get_notes_by_video_index(
         "SELECT id, course_id, video_id, video_index, content, timestamp, created_at, updated_at, tags FROM notes WHERE course_id = ?1 AND video_index = ?2 ORDER BY created_at ASC",
     )?;
     let notes = stmt
-        .query_map(
-            params![course_id.to_string(), video_index as i64],
-            note_from_row,
-        )?
+        .query_map(params![course_id.to_string(), video_index as i64], note_from_row)?
         .collect::<Result<Vec<_>, _>>()?;
     Ok(notes)
 }
@@ -403,18 +391,13 @@ pub fn search_notes_pooled(db: &Database, query: &str) -> Result<Vec<Note>> {
 /// Search notes by content (case-insensitive LIKE).
 pub fn search_notes(conn: &Connection, query: &str) -> Result<Vec<Note>> {
     // Escape %, _ and \ for LIKE pattern, then wrap with %...%
-    let escaped = query
-        .replace('\\', "\\\\")
-        .replace('%', "\\%")
-        .replace('_', "\\_");
+    let escaped = query.replace('\\', "\\\\").replace('%', "\\%").replace('_', "\\_");
     let pattern = format!("%{escaped}%");
     let mut stmt = conn.prepare(
         "SELECT id, course_id, video_id, video_index, content, timestamp, created_at, updated_at, tags \
          FROM notes WHERE content LIKE ?1 ESCAPE '\\' COLLATE NOCASE ORDER BY updated_at DESC",
     )?;
-    let notes = stmt
-        .query_map(params![pattern], note_from_row)?
-        .collect::<Result<Vec<_>, _>>()?;
+    let notes = stmt.query_map(params![pattern], note_from_row)?.collect::<Result<Vec<_>, _>>()?;
     Ok(notes)
 }
 
@@ -425,10 +408,7 @@ pub fn search_notes_paginated(
     limit: i64,
     offset: i64,
 ) -> Result<Vec<Note>> {
-    let escaped = query
-        .replace('\\', "\\\\")
-        .replace('%', "\\%")
-        .replace('_', "\\_");
+    let escaped = query.replace('\\', "\\\\").replace('%', "\\%").replace('_', "\\_");
     let pattern = format!("%{escaped}%");
     let mut stmt = conn.prepare(
         "SELECT id, course_id, video_id, video_index, content, timestamp, created_at, updated_at, tags \
@@ -489,7 +469,7 @@ pub fn search_notes_unified(
             } else {
                 search_notes_paginated(conn, query, limit, offset)
             }
-        }
+        },
     }
 }
 
@@ -501,10 +481,7 @@ pub fn search_notes_keyset(
     before_id: Option<Uuid>,
     limit: i64,
 ) -> Result<Vec<Note>> {
-    let escaped = query
-        .replace('\\', "\\\\")
-        .replace('%', "\\%")
-        .replace('_', "\\_");
+    let escaped = query.replace('\\', "\\\\").replace('%', "\\%").replace('_', "\\_");
     let pattern = format!("%{escaped}%");
 
     let (time_str, id_str) = if let (Some(ts), Some(id)) = (before_updated_at, before_id) {
@@ -550,17 +527,14 @@ pub fn search_notes_advanced_keyset(
             Some(video_id) => {
                 sql.push_str(" AND video_id = ? ");
                 params.push(Box::new(video_id.to_string()));
-            }
+            },
             None => {
                 sql.push_str(" AND video_id IS NULL ");
-            }
+            },
         }
     }
     if let Some(content) = filters.content.take() {
-        let escaped = content
-            .replace('\\', "\\\\")
-            .replace('%', "\\%")
-            .replace('_', "\\_");
+        let escaped = content.replace('\\', "\\\\").replace('%', "\\%").replace('_', "\\_");
         sql.push_str(" AND content LIKE ? ESCAPE '\\' COLLATE NOCASE ");
         params.push(Box::new(format!("%{escaped}%")));
     }
@@ -581,7 +555,7 @@ pub fn search_notes_advanced_keyset(
                     for tag in tags {
                         params.push(Box::new(tag.to_string()));
                     }
-                }
+                },
                 TagMatchMode::All => {
                     sql.push_str(
                         " AND (SELECT COUNT(DISTINCT t.tag) FROM notes_tags t WHERE t.note_id = notes.id AND t.tag IN (",
@@ -597,7 +571,7 @@ pub fn search_notes_advanced_keyset(
                         params.push(Box::new(tag.to_string()));
                     }
                     params.push(Box::new(tags.len() as i64));
-                }
+                },
             }
         }
     }
@@ -642,10 +616,7 @@ pub fn search_notes_advanced_keyset(
 
     let mut stmt = conn.prepare(&sql)?;
     let notes = stmt
-        .query_map(
-            rusqlite::params_from_iter(params.iter().map(|b| &**b)),
-            note_from_row,
-        )?
+        .query_map(rusqlite::params_from_iter(params.iter().map(|b| &**b)), note_from_row)?
         .collect::<Result<Vec<_>, _>>()?;
     Ok(notes)
 }
@@ -707,18 +678,15 @@ pub fn search_notes_advanced(conn: &Connection, filters: NoteSearchFilters) -> R
             Some(video_id) => {
                 sql.push_str(" AND video_id = ? ");
                 params.push(Box::new(video_id.to_string()));
-            }
+            },
             None => {
                 sql.push_str(" AND video_id IS NULL ");
-            }
+            },
         }
     }
     if let Some(content) = filters.content {
         // Escape %, _ and \ and search case-insensitively
-        let escaped = content
-            .replace('\\', "\\\\")
-            .replace('%', "\\%")
-            .replace('_', "\\_");
+        let escaped = content.replace('\\', "\\\\").replace('%', "\\%").replace('_', "\\_");
         sql.push_str(" AND content LIKE ? ESCAPE '\\' COLLATE NOCASE ");
         params.push(Box::new(format!("%{escaped}%")));
     }
@@ -740,7 +708,7 @@ pub fn search_notes_advanced(conn: &Connection, filters: NoteSearchFilters) -> R
                     for tag in tags {
                         params.push(Box::new(tag.to_string()));
                     }
-                }
+                },
                 TagMatchMode::All => {
                     // ALL: Ensure count of distinct matched tags equals provided tags length
                     sql.push_str(
@@ -757,7 +725,7 @@ pub fn search_notes_advanced(conn: &Connection, filters: NoteSearchFilters) -> R
                         params.push(Box::new(tag.to_string()));
                     }
                     params.push(Box::new(tags.len() as i64));
-                }
+                },
             }
         }
     }
@@ -789,10 +757,7 @@ pub fn search_notes_advanced(conn: &Connection, filters: NoteSearchFilters) -> R
 
     let mut stmt = conn.prepare(&sql)?;
     let notes = stmt
-        .query_map(
-            rusqlite::params_from_iter(params.iter().map(|b| &**b)),
-            note_from_row,
-        )?
+        .query_map(rusqlite::params_from_iter(params.iter().map(|b| &**b)), note_from_row)?
         .collect::<Result<Vec<_>, _>>()?;
     Ok(notes)
 }
@@ -818,17 +783,14 @@ pub fn search_notes_advanced_paginated(
             Some(video_id) => {
                 sql.push_str(" AND video_id = ? ");
                 params.push(Box::new(video_id.to_string()));
-            }
+            },
             None => {
                 sql.push_str(" AND video_id IS NULL ");
-            }
+            },
         }
     }
     if let Some(content) = filters.content.take() {
-        let escaped = content
-            .replace('\\', "\\\\")
-            .replace('%', "\\%")
-            .replace('_', "\\_");
+        let escaped = content.replace('\\', "\\\\").replace('%', "\\%").replace('_', "\\_");
         sql.push_str(" AND content LIKE ? ESCAPE '\\' COLLATE NOCASE ");
         params.push(Box::new(format!("%{escaped}%")));
     }
@@ -880,10 +842,7 @@ pub fn search_notes_advanced_paginated(
 
     let mut stmt = conn.prepare(&sql)?;
     let notes = stmt
-        .query_map(
-            rusqlite::params_from_iter(params.iter().map(|b| &**b)),
-            note_from_row,
-        )?
+        .query_map(rusqlite::params_from_iter(params.iter().map(|b| &**b)), note_from_row)?
         .collect::<Result<Vec<_>, _>>()?;
     Ok(notes)
 }
@@ -899,10 +858,7 @@ pub fn export_notes_markdown_by_course(conn: &Connection, course_id: Uuid) -> Re
     let notes = get_notes_by_course(conn, course_id)?;
     let mut md = String::new();
     for note in notes {
-        let ts = note
-            .timestamp
-            .map(|t| format!(" at {t}s"))
-            .unwrap_or_default();
+        let ts = note.timestamp.map(|t| format!(" at {t}s")).unwrap_or_default();
         let video_info = match note.video_id {
             Some(_) => format!("Video Note{ts}"),
             None => "Course Note".to_string(),
@@ -928,10 +884,7 @@ pub fn export_notes_markdown_by_video(conn: &Connection, video_id: Uuid) -> Resu
     let notes = get_notes_by_video(conn, video_id)?;
     let mut md = String::new();
     for note in notes {
-        let ts = note
-            .timestamp
-            .map(|t| format!(" at {t}s"))
-            .unwrap_or_default();
+        let ts = note.timestamp.map(|t| format!(" at {t}s")).unwrap_or_default();
         md.push_str(&format!(
             "### Video Note{} ({})\n{}\n\n---\n\n",
             ts,
@@ -958,7 +911,7 @@ fn note_from_row(row: &Row) -> std::result::Result<Note, rusqlite::Error> {
     let video_id = match row.get::<_, Option<String>>(2)? {
         Some(s) => {
             Some(Uuid::parse_str(&s).map_err(|e| SqlError::ToSqlConversionFailure(Box::new(e)))?)
-        }
+        },
         None => None,
     };
     let video_index = row.get::<_, Option<i64>>(3)?.map(|i| i as usize);
@@ -974,7 +927,7 @@ fn note_from_row(row: &Row) -> std::result::Result<Note, rusqlite::Error> {
         Some(json) => {
             let parsed: Vec<String> = serde_json::from_str(&json).unwrap_or_default();
             sanitize_tags(&parsed)
-        }
+        },
         None => Vec::new(),
     };
 

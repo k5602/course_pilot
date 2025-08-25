@@ -38,9 +38,7 @@ impl GeminiClient {
 
     pub async fn initialize(&mut self) -> Result<()> {
         if self.api_key.is_none() {
-            return Err(anyhow!(
-                "Gemini API key not configured. Please set it in Settings."
-            ));
+            return Err(anyhow!("Gemini API key not configured. Please set it in Settings."));
         }
         Ok(())
     }
@@ -54,10 +52,8 @@ impl GeminiClient {
         message: &str,
         conversation_history: &ConversationHistory,
     ) -> Result<ChatbotResponse> {
-        let api_key = self
-            .api_key
-            .as_ref()
-            .ok_or_else(|| anyhow!("Gemini API key not configured"))?;
+        let api_key =
+            self.api_key.as_ref().ok_or_else(|| anyhow!("Gemini API key not configured"))?;
 
         // Build the request with conversation history
         let mut contents = Vec::new();
@@ -67,9 +63,7 @@ impl GeminiClient {
             let system_prompt = self.generate_system_prompt(context)?;
             contents.push(GeminiContent {
                 role: "user".to_string(),
-                parts: vec![GeminiPart {
-                    text: system_prompt,
-                }],
+                parts: vec![GeminiPart { text: system_prompt }],
             });
             contents.push(GeminiContent {
                 role: "model".to_string(),
@@ -80,29 +74,20 @@ impl GeminiClient {
         }
 
         // Add conversation history (limit to last 10 messages to avoid token limits)
-        let recent_messages = conversation_history
-            .messages
-            .iter()
-            .rev()
-            .take(10)
-            .rev()
-            .collect::<Vec<_>>();
+        let recent_messages =
+            conversation_history.messages.iter().rev().take(10).rev().collect::<Vec<_>>();
 
         for msg in recent_messages {
             contents.push(GeminiContent {
                 role: if msg.role == "user" { "user" } else { "model" }.to_string(),
-                parts: vec![GeminiPart {
-                    text: msg.content.clone(),
-                }],
+                parts: vec![GeminiPart { text: msg.content.clone() }],
             });
         }
 
         // Add the current message
         contents.push(GeminiContent {
             role: "user".to_string(),
-            parts: vec![GeminiPart {
-                text: message.to_string(),
-            }],
+            parts: vec![GeminiPart { text: message.to_string() }],
         });
 
         let request = GeminiRequest {
@@ -147,10 +132,7 @@ impl GeminiClient {
             .map_err(|e| anyhow!("Failed to send request to Gemini API: {}", e))?;
 
         if !response.status().is_success() {
-            let error_text = response
-                .text()
-                .await
-                .unwrap_or_else(|_| "Unknown error".to_string());
+            let error_text = response.text().await.unwrap_or_else(|_| "Unknown error".to_string());
             return Err(anyhow!("Gemini API error: {}", error_text));
         }
 
@@ -195,10 +177,10 @@ impl GeminiClient {
         match &context.source_type {
             CourseSourceType::YouTube { playlist_url } => {
                 prompt.push_str(&format!("YouTube Playlist: {}\n", playlist_url));
-            }
+            },
             CourseSourceType::Local { folder_path } => {
                 prompt.push_str(&format!("Local Course Folder: {}\n", folder_path));
-            }
+            },
         }
 
         if let Some(video_context) = &context.current_video_context {
@@ -237,10 +219,8 @@ impl GeminiClient {
 
     pub async fn validate_api_key(api_key: &str) -> Result<bool> {
         let client = Client::new();
-        let url = format!(
-            "https://generativelanguage.googleapis.com/v1beta/models?key={}",
-            api_key
-        );
+        let url =
+            format!("https://generativelanguage.googleapis.com/v1beta/models?key={}", api_key);
 
         let response = client
             .get(&url)

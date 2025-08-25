@@ -38,19 +38,19 @@ fn verify_deep_link_support(
             } else {
                 log::error!("Deep link with invalid course ID format: {course_id}");
             }
-        }
+        },
         Route::Home {} => {
             // Home should always redirect to dashboard
             log::info!("Deep link to home, redirecting to dashboard");
-        }
+        },
         Route::Dashboard {} | Route::AllCourses {} | Route::Settings {} | Route::AddCourse {} => {
             // These routes should always work for deep linking
             log::debug!("Deep link to {route:?} - supported");
-        }
+        },
         #[cfg(debug_assertions)]
         Route::ToastTest {} => {
             log::debug!("Deep link to toast test - debug only");
-        }
+        },
     }
 }
 
@@ -77,9 +77,7 @@ pub fn DeepLinkingTester() -> Element {
             // Add course-specific routes if courses exist
             let mut all_test_routes = test_routes;
             if let Some(course) = courses.first() {
-                all_test_routes.push(Route::PlanView {
-                    course_id: course.id.to_string(),
-                });
+                all_test_routes.push(Route::PlanView { course_id: course.id.to_string() });
             }
 
             // Test navigation to each route
@@ -114,10 +112,7 @@ pub fn use_deep_linking() -> DeepLinkingManager {
     let navigator = use_navigator();
     let current_route = use_route::<Route>();
 
-    DeepLinkingManager {
-        current_route,
-        navigator,
-    }
+    DeepLinkingManager { current_route, navigator }
 }
 
 /// Manager for deep linking functionality
@@ -138,7 +133,7 @@ impl DeepLinkingManager {
             Route::PlanView { course_id } => {
                 // Only supports deep linking if course ID is valid format
                 uuid::Uuid::parse_str(course_id).is_ok()
-            }
+            },
             #[cfg(debug_assertions)]
             Route::ToastTest {} => true,
         }

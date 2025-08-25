@@ -104,39 +104,21 @@ mod tests {
     #[test]
     fn test_get_video_mime_type_common_formats() {
         assert_eq!(get_video_mime_type(&PathBuf::from("test.mp4")), "video/mp4");
-        assert_eq!(
-            get_video_mime_type(&PathBuf::from("test.webm")),
-            "video/webm"
-        );
-        assert_eq!(
-            get_video_mime_type(&PathBuf::from("test.avi")),
-            "video/x-msvideo"
-        );
-        assert_eq!(
-            get_video_mime_type(&PathBuf::from("test.mkv")),
-            "video/x-matroska"
-        );
+        assert_eq!(get_video_mime_type(&PathBuf::from("test.webm")), "video/webm");
+        assert_eq!(get_video_mime_type(&PathBuf::from("test.avi")), "video/x-msvideo");
+        assert_eq!(get_video_mime_type(&PathBuf::from("test.mkv")), "video/x-matroska");
     }
 
     #[test]
     fn test_get_video_mime_type_case_insensitive() {
         assert_eq!(get_video_mime_type(&PathBuf::from("test.MP4")), "video/mp4");
-        assert_eq!(
-            get_video_mime_type(&PathBuf::from("test.WEBM")),
-            "video/webm"
-        );
+        assert_eq!(get_video_mime_type(&PathBuf::from("test.WEBM")), "video/webm");
     }
 
     #[test]
     fn test_get_video_mime_type_unknown() {
-        assert_eq!(
-            get_video_mime_type(&PathBuf::from("test.unknown")),
-            "application/octet-stream"
-        );
-        assert_eq!(
-            get_video_mime_type(&PathBuf::from("test.txt")),
-            "application/octet-stream"
-        );
+        assert_eq!(get_video_mime_type(&PathBuf::from("test.unknown")), "application/octet-stream");
+        assert_eq!(get_video_mime_type(&PathBuf::from("test.txt")), "application/octet-stream");
     }
 
     #[test]

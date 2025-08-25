@@ -24,7 +24,7 @@ pub fn ContextualPanel() -> Element {
         Route::PlanView { course_id } => {
             // Parse course_id string to UUID
             uuid::Uuid::parse_str(&course_id).ok()
-        }
+        },
         _ => None,
     };
 
@@ -117,8 +117,8 @@ fn render_tab_content(
                     None => NotesPanelMode::AllNotes,
                 },
             };
-            rsx!(NotesPanel { mode: mode })
-        }
+            rsx!(NotesPanel { mode })
+        },
         ContextualPanelTab::Chatbot => rsx! {
             GeminiChatbot {}
         },

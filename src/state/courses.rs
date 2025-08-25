@@ -23,16 +23,14 @@ impl Default for CourseContext {
 
 impl CourseContext {
     pub fn new() -> Self {
-        Self {
-            courses: Signal::new(Vec::new()),
-        }
+        Self { courses: Signal::new(Vec::new()) }
     }
 }
 
 /// Course context provider component
 #[component]
 pub fn CourseContextProvider(children: Element) -> Element {
-    use_context_provider(|| CourseContext::new());
+    use_context_provider(CourseContext::new);
     rsx! { {children} }
 }
 

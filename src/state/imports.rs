@@ -23,16 +23,14 @@ impl Default for ImportContext {
 
 impl ImportContext {
     pub fn new() -> Self {
-        Self {
-            active_import: Signal::new(None),
-        }
+        Self { active_import: Signal::new(None) }
     }
 }
 
 /// Import context provider component
 #[component]
 pub fn ImportContextProvider(children: Element) -> Element {
-    use_context_provider(|| ImportContext::new());
+    use_context_provider(ImportContext::new);
     rsx! { {children} }
 }
 
@@ -50,11 +48,7 @@ pub fn is_import_active_reactive() -> bool {
 /// Get current import progress (0.0 to 1.0)
 pub fn get_import_progress_reactive() -> f32 {
     let active_import = use_active_import_reactive();
-    if let Some(ref job) = *active_import.read() {
-        job.progress_percentage / 100.0
-    } else {
-        0.0
-    }
+    if let Some(ref job) = *active_import.read() { job.progress_percentage / 100.0 } else { 0.0 }
 }
 
 /// Get current import status
@@ -99,9 +93,7 @@ pub fn update_import_reactive(job_id: Uuid, progress: f32, message: String) -> S
             )))
         }
     } else {
-        Err(StateError::InvalidOperation(
-            "No active import to update".to_string(),
-        ))
+        Err(StateError::InvalidOperation("No active import to update".to_string()))
     }
 }
 
@@ -122,9 +114,7 @@ pub fn complete_import_reactive(job_id: Uuid, final_message: String) -> StateRes
             )))
         }
     } else {
-        Err(StateError::InvalidOperation(
-            "No active import to complete".to_string(),
-        ))
+        Err(StateError::InvalidOperation("No active import to complete".to_string()))
     }
 }
 
@@ -142,9 +132,7 @@ pub fn fail_import_reactive(job_id: Uuid, error_message: String) -> StateResult<
             )))
         }
     } else {
-        Err(StateError::InvalidOperation(
-            "No active import to fail".to_string(),
-        ))
+        Err(StateError::InvalidOperation("No active import to fail".to_string()))
     }
 }
 
@@ -161,9 +149,7 @@ pub fn cancel_import_reactive() -> StateResult<()> {
         active_import.set(None);
         Ok(())
     } else {
-        Err(StateError::InvalidOperation(
-            "No active import to cancel".to_string(),
-        ))
+        Err(StateError::InvalidOperation("No active import to cancel".to_string()))
     }
 }
 

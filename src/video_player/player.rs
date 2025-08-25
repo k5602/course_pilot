@@ -85,10 +85,10 @@ pub fn VideoPlayer(props: VideoPlayerProps) -> Element {
             let ap_script = match &*state.current_video.read() {
                 Some(VideoSource::Local { .. }) => {
                     crate::video_player::ipc::global::set_active_player("local", &local_id)
-                }
+                },
                 Some(VideoSource::YouTube { .. }) => {
                     crate::video_player::ipc::global::set_active_player("youtube", &yt_id)
-                }
+                },
                 None => "window.cpActivePlayer=null;".to_string(),
             };
             let _ = window.webview.evaluate_script(&ap_script);

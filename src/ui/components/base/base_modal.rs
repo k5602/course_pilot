@@ -59,10 +59,7 @@ pub fn BaseModal(props: BaseModalProps) -> Element {
                 velocity: 0.0,
             })),
         );
-        opacity.animate_to(
-            1.0,
-            AnimationConfig::new(AnimationMode::Spring(Spring::default())),
-        );
+        opacity.animate_to(1.0, AnimationConfig::new(AnimationMode::Spring(Spring::default())));
     });
 
     let animation_style = format!(
@@ -71,10 +68,7 @@ pub fn BaseModal(props: BaseModalProps) -> Element {
         opacity.get_value()
     );
 
-    let modal_box_class = format!(
-        "{} bg-base-100 shadow-xl relative {}",
-        props.size, props.class
-    );
+    let modal_box_class = format!("{} bg-base-100 shadow-xl relative {}", props.size, props.class);
 
     rsx! {
         // Modal overlay using DaisyUI classes

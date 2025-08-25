@@ -56,17 +56,13 @@ impl Exportable for Vec<Note> {
         );
 
         for note in self {
-            let video_id_str = note
-                .video_id
-                .map(|id| id.to_string())
-                .unwrap_or_else(|| "".to_string());
+            let video_id_str =
+                note.video_id.map(|id| id.to_string()).unwrap_or_else(|| "".to_string());
 
             let tags_str = note.tags.join(";");
 
-            let timestamp_str = note
-                .timestamp
-                .map(|ts| ts.to_string())
-                .unwrap_or_else(|| "".to_string());
+            let timestamp_str =
+                note.timestamp.map(|ts| ts.to_string()).unwrap_or_else(|| "".to_string());
 
             csv_data.push_str(&format!(
                 "{},{},{},{},{},{},{},{}\n",
@@ -110,8 +106,7 @@ impl Exportable for Vec<Note> {
 
         // Render to bytes
         let mut bytes = Vec::new();
-        doc.render(&mut bytes)
-            .map_err(|e| anyhow::anyhow!("Failed to render PDF: {}", e))?;
+        doc.render(&mut bytes).map_err(|e| anyhow::anyhow!("Failed to render PDF: {}", e))?;
         Ok(bytes)
     }
 
@@ -126,19 +121,19 @@ impl Exportable for Vec<Note> {
                     callback(25.0, "Generating JSON data...".to_string());
                 }
                 self.export_json()?.into_bytes()
-            }
+            },
             ExportFormat::Csv => {
                 if let Some(ref callback) = options.progress_callback {
                     callback(25.0, "Generating CSV data...".to_string());
                 }
                 self.export_csv()?.into_bytes()
-            }
+            },
             ExportFormat::Pdf => {
                 if let Some(ref callback) = options.progress_callback {
                     callback(25.0, "Generating PDF document...".to_string());
                 }
                 self.export_pdf()?
-            }
+            },
         };
 
         if let Some(ref callback) = options.progress_callback {
@@ -211,11 +206,8 @@ impl NotesExportExtensions for &[Note] {
 
         // Calculate average note length
         let total_length: usize = self.iter().map(|note| note.content.len()).sum();
-        let average_note_length = if total_notes > 0 {
-            total_length as f32 / total_notes as f32
-        } else {
-            0.0
-        };
+        let average_note_length =
+            if total_notes > 0 { total_length as f32 / total_notes as f32 } else { 0.0 };
 
         NotesStatistics {
             total_notes,
@@ -240,18 +232,9 @@ impl NotesExportExtensions for &[Note] {
         content.push_str("NOTES STATISTICS\n");
         content.push_str("----------------\n");
         content.push_str(&format!("Total Notes: {}\n", statistics.total_notes));
-        content.push_str(&format!(
-            "Course-level Notes: {}\n",
-            statistics.course_level_notes
-        ));
-        content.push_str(&format!(
-            "Video-level Notes: {}\n",
-            statistics.video_level_notes
-        ));
-        content.push_str(&format!(
-            "Notes with Timestamps: {}\n",
-            statistics.notes_with_timestamps
-        ));
+        content.push_str(&format!("Course-level Notes: {}\n", statistics.course_level_notes));
+        content.push_str(&format!("Video-level Notes: {}\n", statistics.video_level_notes));
+        content.push_str(&format!("Notes with Timestamps: {}\n", statistics.notes_with_timestamps));
         content.push_str(&format!(
             "Average Note Length: {:.1} characters\n",
             statistics.average_note_length
@@ -266,10 +249,7 @@ impl NotesExportExtensions for &[Note] {
         // Group notes by course
         let mut notes_by_course: HashMap<uuid::Uuid, Vec<&Note>> = HashMap::new();
         for note in *self {
-            notes_by_course
-                .entry(note.course_id)
-                .or_default()
-                .push(note);
+            notes_by_course.entry(note.course_id).or_default().push(note);
         }
 
         // Export notes grouped by course
@@ -283,14 +263,10 @@ impl NotesExportExtensions for &[Note] {
 
             for note in sorted_notes {
                 content.push_str(&format!("Note ID: {}\n", note.id));
-                content.push_str(&format!(
-                    "Created: {}\n",
-                    utils::format_timestamp(note.created_at)
-                ));
-                content.push_str(&format!(
-                    "Updated: {}\n",
-                    utils::format_timestamp(note.updated_at)
-                ));
+                content
+                    .push_str(&format!("Created: {}\n", utils::format_timestamp(note.created_at)));
+                content
+                    .push_str(&format!("Updated: {}\n", utils::format_timestamp(note.updated_at)));
 
                 if let Some(video_id) = note.video_id {
                     content.push_str(&format!("Video ID: {video_id}\n"));
@@ -330,14 +306,9 @@ impl NotesExportExtensions for &[Note] {
         // Statistics
         markdown.push_str("## Statistics\n\n");
         markdown.push_str(&format!("- **Total Notes:** {}\n", statistics.total_notes));
-        markdown.push_str(&format!(
-            "- **Course-level Notes:** {}\n",
-            statistics.course_level_notes
-        ));
-        markdown.push_str(&format!(
-            "- **Video-level Notes:** {}\n",
-            statistics.video_level_notes
-        ));
+        markdown
+            .push_str(&format!("- **Course-level Notes:** {}\n", statistics.course_level_notes));
+        markdown.push_str(&format!("- **Video-level Notes:** {}\n", statistics.video_level_notes));
         markdown.push_str(&format!(
             "- **Notes with Timestamps:** {}\n",
             statistics.notes_with_timestamps
@@ -348,20 +319,14 @@ impl NotesExportExtensions for &[Note] {
         ));
 
         if !statistics.unique_tags.is_empty() {
-            markdown.push_str(&format!(
-                "- **Tags:** {}\n",
-                statistics.unique_tags.join(", ")
-            ));
+            markdown.push_str(&format!("- **Tags:** {}\n", statistics.unique_tags.join(", ")));
         }
         markdown.push('\n');
 
         // Group notes by course
         let mut notes_by_course: HashMap<uuid::Uuid, Vec<&Note>> = HashMap::new();
         for note in *self {
-            notes_by_course
-                .entry(note.course_id)
-                .or_default()
-                .push(note);
+            notes_by_course.entry(note.course_id).or_default().push(note);
         }
 
         // Export notes grouped by course
@@ -458,9 +423,7 @@ pub mod notes_utils {
             .collect();
 
         if filtered_notes.is_empty() {
-            return Err(anyhow::anyhow!(
-                "No notes found in the specified date range"
-            ));
+            return Err(anyhow::anyhow!("No notes found in the specified date range"));
         }
 
         filtered_notes.export_with_options(options)
@@ -471,11 +434,8 @@ pub mod notes_utils {
         notes: &[Note],
         options: ExportOptions,
     ) -> Result<ExportResult> {
-        let timestamped_notes: Vec<Note> = notes
-            .iter()
-            .filter(|note| note.timestamp.is_some())
-            .cloned()
-            .collect();
+        let timestamped_notes: Vec<Note> =
+            notes.iter().filter(|note| note.timestamp.is_some()).cloned().collect();
 
         if timestamped_notes.is_empty() {
             return Err(anyhow::anyhow!("No timestamped notes found"));
@@ -492,27 +452,16 @@ pub mod notes_utils {
         summary.push_str("NOTES SUMMARY REPORT\n");
         summary.push_str("====================\n\n");
 
-        summary.push_str(&format!(
-            "Generated: {}\n\n",
-            utils::format_timestamp(chrono::Utc::now())
-        ));
+        summary
+            .push_str(&format!("Generated: {}\n\n", utils::format_timestamp(chrono::Utc::now())));
 
         // Overview
         summary.push_str("OVERVIEW\n");
         summary.push_str("--------\n");
         summary.push_str(&format!("Total Notes: {}\n", statistics.total_notes));
-        summary.push_str(&format!(
-            "Course-level Notes: {}\n",
-            statistics.course_level_notes
-        ));
-        summary.push_str(&format!(
-            "Video-level Notes: {}\n",
-            statistics.video_level_notes
-        ));
-        summary.push_str(&format!(
-            "Notes with Timestamps: {}\n",
-            statistics.notes_with_timestamps
-        ));
+        summary.push_str(&format!("Course-level Notes: {}\n", statistics.course_level_notes));
+        summary.push_str(&format!("Video-level Notes: {}\n", statistics.video_level_notes));
+        summary.push_str(&format!("Notes with Timestamps: {}\n", statistics.notes_with_timestamps));
         summary.push_str(&format!(
             "Average Note Length: {:.1} characters\n\n",
             statistics.average_note_length
@@ -522,10 +471,7 @@ pub mod notes_utils {
         if !statistics.unique_tags.is_empty() {
             summary.push_str("TAGS ANALYSIS\n");
             summary.push_str("-------------\n");
-            summary.push_str(&format!(
-                "Total Unique Tags: {}\n",
-                statistics.unique_tags.len()
-            ));
+            summary.push_str(&format!("Total Unique Tags: {}\n", statistics.unique_tags.len()));
             summary.push_str("Tags: ");
             summary.push_str(&statistics.unique_tags.join(", "));
             summary.push_str("\n\n");

@@ -44,19 +44,19 @@ pub fn GeminiChatbot() -> Element {
                                             conversation_history
                                                 .write()
                                                 .set_course_context(context);
-                                        }
+                                        },
                                         Err(e) => {
                                             log::error!("Failed to setup course context: {}", e);
-                                        }
+                                        },
                                     }
                                 });
                             }
                         }
-                    }
+                    },
                     Err(e) => {
                         error_message
                             .set(Some(format!("Failed to initialize Gemini client: {}", e)));
-                    }
+                    },
                 }
             });
         }
@@ -86,9 +86,7 @@ pub fn GeminiChatbot() -> Element {
                 timestamp: chrono::Utc::now(),
             });
 
-            conversation_history
-                .write()
-                .add_message("user".to_string(), message.clone());
+            conversation_history.write().add_message("user".to_string(), message.clone());
 
             let history = conversation_history.read().clone();
             let gem_clone = gem.clone();
@@ -104,10 +102,10 @@ pub fn GeminiChatbot() -> Element {
                         conversation_history
                             .write()
                             .add_message("assistant".to_string(), response.message);
-                    }
+                    },
                     Err(e) => {
                         error_message.set(Some(format!("Failed to get response: {}", e)));
-                    }
+                    },
                 }
                 is_loading.set(false);
             });
@@ -143,9 +141,7 @@ pub fn GeminiChatbot() -> Element {
                     timestamp: chrono::Utc::now(),
                 });
 
-                conversation_history
-                    .write()
-                    .add_message("user".to_string(), message.clone());
+                conversation_history.write().add_message("user".to_string(), message.clone());
 
                 let history = conversation_history.read().clone();
                 let gem_clone = gem.clone();
@@ -161,10 +157,10 @@ pub fn GeminiChatbot() -> Element {
                             conversation_history
                                 .write()
                                 .add_message("assistant".to_string(), response.message);
-                        }
+                        },
                         Err(e) => {
                             error_message.set(Some(format!("Failed to get response: {}", e)));
-                        }
+                        },
                     }
                     is_loading.set(false);
                 });
@@ -447,11 +443,7 @@ pub fn GeminiChatbot() -> Element {
 #[component]
 fn ChatMessageBubble(message: ChatMessage) -> Element {
     let is_user = message.role == "user";
-    let chat_class = if is_user {
-        "chat chat-end"
-    } else {
-        "chat chat-start"
-    };
+    let chat_class = if is_user { "chat chat-end" } else { "chat chat-start" };
     let bubble_class = if is_user {
         "chat-bubble chat-bubble-primary"
     } else {
@@ -493,16 +485,12 @@ async fn setup_course_context(
     video_context: Option<VideoContext>,
 ) -> anyhow::Result<CourseContext> {
     // Get course information
-    let course = backend
-        .get_course(course_id)
-        .await?
-        .ok_or_else(|| anyhow::anyhow!("Course not found"))?;
+    let course =
+        backend.get_course(course_id).await?.ok_or_else(|| anyhow::anyhow!("Course not found"))?;
 
     // For now, we'll create a generic source type since we don't store source URLs
     // In a future enhancement, we could add source tracking to the database
-    let source_type = CourseSourceType::Local {
-        folder_path: format!("Course: {}", course.name),
-    };
+    let source_type = CourseSourceType::Local { folder_path: format!("Course: {}", course.name) };
 
     Ok(CourseContext {
         course_id,

@@ -89,13 +89,8 @@ pub fn available_weekdays(include_weekends: bool) -> &'static [Weekday] {
         ];
         &ALL
     } else {
-        const WEEKDAYS: [Weekday; 5] = [
-            Weekday::Mon,
-            Weekday::Tue,
-            Weekday::Wed,
-            Weekday::Thu,
-            Weekday::Fri,
-        ];
+        const WEEKDAYS: [Weekday; 5] =
+            [Weekday::Mon, Weekday::Tue, Weekday::Wed, Weekday::Thu, Weekday::Fri];
         &WEEKDAYS
     }
 }
@@ -119,8 +114,8 @@ pub fn validate_weekend_policy(
                     i,
                     d.weekday()
                 ));
-            }
-            _ => {}
+            },
+            _ => {},
         }
     }
 

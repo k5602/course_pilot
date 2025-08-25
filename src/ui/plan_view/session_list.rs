@@ -31,10 +31,7 @@ pub fn group_items_by_session(items: &[PlanItem]) -> Vec<SessionGroup> {
         HashMap::new();
 
     for (index, item) in items.iter().enumerate() {
-        sessions
-            .entry(item.date)
-            .or_default()
-            .push((index, item.clone()));
+        sessions.entry(item.date).or_default().push((index, item.clone()));
     }
 
     let mut session_groups: Vec<SessionGroup> = sessions
@@ -101,14 +98,9 @@ pub fn SessionList(props: SessionListProps) -> Element {
     let mut container_y = use_motion(20.0f32);
 
     use_effect(move || {
-        container_opacity.animate_to(
-            1.0,
-            AnimationConfig::new(AnimationMode::Tween(Tween::default())),
-        );
-        container_y.animate_to(
-            0.0,
-            AnimationConfig::new(AnimationMode::Spring(Spring::default())),
-        );
+        container_opacity
+            .animate_to(1.0, AnimationConfig::new(AnimationMode::Tween(Tween::default())));
+        container_y.animate_to(0.0, AnimationConfig::new(AnimationMode::Spring(Spring::default())));
     });
 
     let container_style = use_memo(move || {
@@ -212,10 +204,8 @@ fn SessionAccordion(props: SessionAccordionProps) -> Element {
                 tokio::time::sleep(tokio::time::Duration::from_millis((delay * 1000.0) as u64))
                     .await;
 
-                session_opacity.animate_to(
-                    1.0,
-                    AnimationConfig::new(AnimationMode::Tween(Tween::default())),
-                );
+                session_opacity
+                    .animate_to(1.0, AnimationConfig::new(AnimationMode::Tween(Tween::default())));
                 session_x.animate_to(
                     0.0,
                     AnimationConfig::new(AnimationMode::Spring(Spring::default())),
@@ -483,12 +473,12 @@ fn VideoContentItem(props: VideoContentItemProps) -> Element {
                         } else {
                             toast_helpers::info("Video marked as incomplete");
                         }
-                    }
+                    },
                     Err(e) => {
                         is_updating.set(false);
                         video_completed.set(!new_state); // Revert on error
                         toast_helpers::error(format!("Failed to update video progress: {}", e));
-                    }
+                    },
                 }
             });
         }
@@ -584,19 +574,19 @@ fn VideoContentItem(props: VideoContentItemProps) -> Element {
                         );
                         open_video.call((video_source, Some(video_title.clone())));
                         toast_helpers::success(format!("Opening video player: {}", video_title));
-                    }
+                    },
                     Ok(Ok(None)) => {
                         log::error!("Course not found in database: {}", course_id);
                         toast_helpers::error("Course not found");
-                    }
+                    },
                     Ok(Err(e)) => {
                         log::error!("Database error loading course {}: {}", course_id, e);
                         toast_helpers::error("Failed to load course data");
-                    }
+                    },
                     Err(e) => {
                         log::error!("Task error loading course {}: {}", course_id, e);
                         toast_helpers::error("Failed to load course data");
-                    }
+                    },
                 }
             });
         }
@@ -650,10 +640,8 @@ fn VideoContentItem(props: VideoContentItemProps) -> Element {
                 });
             } else {
                 // Reset animation when session collapses
-                item_opacity.animate_to(
-                    0.0,
-                    AnimationConfig::new(AnimationMode::Tween(Tween::default())),
-                );
+                item_opacity
+                    .animate_to(0.0, AnimationConfig::new(AnimationMode::Tween(Tween::default())));
                 item_x.animate_to(
                     -12.0,
                     AnimationConfig::new(AnimationMode::Tween(Tween::default())),
@@ -665,16 +653,8 @@ fn VideoContentItem(props: VideoContentItemProps) -> Element {
     let item_style = use_memo(move || {
         format!(
             "opacity: {}; transform: translateX({}px); transition: all 0.2s ease-out;",
-            if props.is_session_expanded {
-                item_opacity.get_value()
-            } else {
-                1.0
-            },
-            if props.is_session_expanded {
-                item_x.get_value()
-            } else {
-                0.0
-            }
+            if props.is_session_expanded { item_opacity.get_value() } else { 1.0 },
+            if props.is_session_expanded { item_x.get_value() } else { 0.0 }
         )
     });
 

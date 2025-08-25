@@ -75,11 +75,7 @@ impl Default for PacingRecommendation {
 
 impl Default for DurationThresholds {
     fn default() -> Self {
-        Self {
-            short_video_minutes: 10,
-            medium_video_minutes: 20,
-            long_video_minutes: 40,
-        }
+        Self { short_video_minutes: 10, medium_video_minutes: 20, long_video_minutes: 40 }
     }
 }
 
@@ -216,16 +212,16 @@ impl DifficultyAnalyzer {
             DifficultyLevel::Beginner => {
                 // Beginners perceive everything as more difficult
                 base_score + 0.1
-            }
+            },
             DifficultyLevel::Intermediate => base_score, // No adjustment
             DifficultyLevel::Advanced => {
                 // Advanced users find things easier
                 base_score - 0.1
-            }
+            },
             DifficultyLevel::Expert => {
                 // Experts find most things easy
                 base_score - 0.2
-            }
+            },
         }
     }
 
@@ -267,10 +263,8 @@ impl DifficultyAnalyzer {
             });
         }
 
-        let scores: Vec<f32> = sections
-            .iter()
-            .map(|section| self.calculate_difficulty_score(section))
-            .collect();
+        let scores: Vec<f32> =
+            sections.iter().map(|section| self.calculate_difficulty_score(section)).collect();
 
         let progression_quality = self.calculate_progression_quality(&scores);
         let steep_jumps = self.detect_steep_jumps(&scores);
@@ -308,11 +302,7 @@ impl DifficultyAnalyzer {
             }
         }
 
-        if total_transitions > 0 {
-            quality_score / total_transitions as f32
-        } else {
-            1.0
-        }
+        if total_transitions > 0 { quality_score / total_transitions as f32 } else { 1.0 }
     }
 
     /// Detect steep difficulty jumps in the sequence
@@ -341,11 +331,8 @@ impl DifficultyAnalyzer {
         }
 
         // Create pairs of (index, score) and sort by score
-        let mut indexed_scores: Vec<(usize, f32)> = scores
-            .iter()
-            .enumerate()
-            .map(|(i, &score)| (i, score))
-            .collect();
+        let mut indexed_scores: Vec<(usize, f32)> =
+            scores.iter().enumerate().map(|(i, &score)| (i, score)).collect();
 
         // Sort by difficulty score (ascending)
         indexed_scores.sort_by(|a, b| a.1.partial_cmp(&b.1).unwrap_or(std::cmp::Ordering::Equal));
@@ -440,10 +427,8 @@ impl DifficultyAnalyzer {
             });
         }
 
-        let scores: Vec<f32> = sections
-            .iter()
-            .map(|section| self.calculate_difficulty_score(section))
-            .collect();
+        let scores: Vec<f32> =
+            sections.iter().map(|section| self.calculate_difficulty_score(section)).collect();
 
         let average_difficulty = scores.iter().sum::<f32>() / scores.len() as f32;
         let difficulty_variance = self.calculate_variance(&scores, average_difficulty);
@@ -562,11 +547,7 @@ impl DifficultyAnalyzer {
         let issues = self.identify_progression_issues(&progression);
         let suggestions = self.generate_improvement_suggestions(&progression, sections);
 
-        Ok(ProgressionValidation {
-            progression,
-            issues,
-            suggestions,
-        })
+        Ok(ProgressionValidation { progression, issues, suggestions })
     }
 
     /// Identify issues in difficulty progression
@@ -578,29 +559,20 @@ impl DifficultyAnalyzer {
 
         // Check for steep jumps
         if !progression.steep_jumps.is_empty() {
-            issues.push(ProgressionIssue::SteepDifficultyJumps(
-                progression.steep_jumps.clone(),
-            ));
+            issues.push(ProgressionIssue::SteepDifficultyJumps(progression.steep_jumps.clone()));
         }
 
         // Check for poor progression quality
         if progression.progression_quality < 0.5 {
-            issues.push(ProgressionIssue::PoorProgression(
-                progression.progression_quality,
-            ));
+            issues.push(ProgressionIssue::PoorProgression(progression.progression_quality));
         }
 
         // Check for high cognitive load concentration
-        let high_load_count = progression
-            .cognitive_load_distribution
-            .iter()
-            .filter(|&&load| load > 0.8)
-            .count();
+        let high_load_count =
+            progression.cognitive_load_distribution.iter().filter(|&&load| load > 0.8).count();
 
         if high_load_count > progression.scores.len() / 3 {
-            issues.push(ProgressionIssue::HighCognitiveLoadConcentration(
-                high_load_count,
-            ));
+            issues.push(ProgressionIssue::HighCognitiveLoadConcentration(high_load_count));
         }
 
         issues
@@ -736,10 +708,7 @@ mod tests {
         let analysis = analyzer.analyze_session_difficulty(&sections).unwrap();
 
         assert!(analysis.average_difficulty > 0.5);
-        assert_eq!(
-            analysis.recommended_pacing,
-            PacingRecommendation::Decelerated
-        );
+        assert_eq!(analysis.recommended_pacing, PacingRecommendation::Decelerated);
     }
 
     #[test]

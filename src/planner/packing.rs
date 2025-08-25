@@ -136,11 +136,7 @@ fn try_fill_remaining_time(
         }
 
         // Early exit if essentially full
-        if effective_limit
-            .as_secs()
-            .saturating_sub(current_duration.as_secs())
-            < 30
-        {
+        if effective_limit.as_secs().saturating_sub(current_duration.as_secs()) < 30 {
             break;
         }
     }
@@ -257,10 +253,7 @@ mod tests {
         // Actually run pack to exercise both passes.
         let packed = pack_videos_into_session(&mut q, &s).expect("pack");
         // 30 from front, then try fill: 10 fits (40), 9 would exceed (49), then 8 fits (48)
-        assert_eq!(
-            packed.iter().map(|v| v.duration.as_secs()).sum::<u64>() / 60,
-            48
-        );
+        assert_eq!(packed.iter().map(|v| v.duration.as_secs()).sum::<u64>() / 60, 48);
         assert_eq!(packed.len(), 3);
         // Remaining queue should keep relative order for unpicked items, which is just the 9-min one.
         assert_eq!(q.len(), 1);

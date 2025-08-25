@@ -16,12 +16,7 @@ pub fn use_modal_manager(initial_state: bool) -> ModalManager {
     let close = use_callback(move |_| is_open.set(false));
     let toggle = use_callback(move |_| is_open.set(!is_open()));
 
-    ModalManager {
-        is_open: is_open(),
-        open,
-        close,
-        toggle,
-    }
+    ModalManager { is_open: is_open(), open, close, toggle }
 }
 
 /// Form state manager for input handling
@@ -42,10 +37,5 @@ pub fn use_form_manager<T: Clone + PartialEq + 'static>(initial_value: T) -> For
 
     let is_dirty = value() != initial_ref();
 
-    FormManager {
-        value: value(),
-        set_value,
-        reset,
-        is_dirty,
-    }
+    FormManager { value: value(), set_value, reset, is_dirty }
 }

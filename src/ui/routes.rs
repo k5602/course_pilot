@@ -43,7 +43,7 @@ pub fn PlanView(course_id: String) -> Element {
         Ok(uuid) => uuid,
         Err(_) => {
             return render_invalid_course_id(&course_id, navigator);
-        }
+        },
     };
 
     // Validate that the course exists

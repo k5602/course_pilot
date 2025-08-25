@@ -169,11 +169,8 @@ fn AlgorithmPerformanceComparison(props: AlgorithmPerformanceComparisonProps) ->
     let analytics = &props.analytics;
 
     // Convert algorithm distribution to sorted vector for display
-    let mut algorithm_stats: Vec<(ClusteringAlgorithm, usize)> = analytics
-        .algorithm_distribution
-        .iter()
-        .map(|(alg, count)| (alg.clone(), *count))
-        .collect();
+    let mut algorithm_stats: Vec<(ClusteringAlgorithm, usize)> =
+        analytics.algorithm_distribution.iter().map(|(alg, count)| (alg.clone(), *count)).collect();
     algorithm_stats.sort_by(|a, b| b.1.cmp(&a.1)); // Sort by usage count descending
 
     // Convert strategy distribution to sorted vector
@@ -362,9 +359,7 @@ fn TopicAnalysisVisualization(props: TopicAnalysisVisualizationProps) -> Element
     // Aggregate topics by keyword
     let mut topic_aggregation: HashMap<String, (f32, usize)> = HashMap::new();
     for topic in &all_topics {
-        let entry = topic_aggregation
-            .entry(topic.keyword.clone())
-            .or_insert((0.0, 0));
+        let entry = topic_aggregation.entry(topic.keyword.clone()).or_insert((0.0, 0));
         entry.0 += topic.relevance_score;
         entry.1 += topic.video_count;
     }
@@ -688,7 +683,5 @@ fn calculate_course_similarity(course1: &Course, course2: &Course) -> f32 {
     };
 
     // Weighted average
-    (name_similarity * 0.7 + video_count_similarity * 0.3)
-        .max(0.0)
-        .min(1.0)
+    (name_similarity * 0.7 + video_count_similarity * 0.3).max(0.0).min(1.0)
 }

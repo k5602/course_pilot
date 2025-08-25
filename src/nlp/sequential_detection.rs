@@ -235,14 +235,8 @@ fn detect_alphabetic_sequence_pattern(titles: &[String]) -> Option<SequentialPat
             if let Some(captures) = regex.captures(title) {
                 if let Some(letter_match) = captures.get(2) {
                     matched_indices.push(i);
-                    letters.push(
-                        letter_match
-                            .as_str()
-                            .chars()
-                            .next()
-                            .unwrap()
-                            .to_ascii_lowercase(),
-                    );
+                    letters
+                        .push(letter_match.as_str().chars().next().unwrap().to_ascii_lowercase());
                 }
             }
         }
@@ -273,10 +267,8 @@ fn detect_alphabetic_sequence_pattern(titles: &[String]) -> Option<SequentialPat
 
 /// Detect module progression patterns
 fn detect_module_progression_pattern(titles: &[String]) -> Option<SequentialPattern> {
-    let module_patterns = [
-        r"(?i)\b(module|unit|course)\s*(\d+)",
-        r"(?i)^(module|unit|course)\s*(\d+)",
-    ];
+    let module_patterns =
+        [r"(?i)\b(module|unit|course)\s*(\d+)", r"(?i)^(module|unit|course)\s*(\d+)"];
 
     for pattern_str in &module_patterns {
         if let Ok(regex) = Regex::new(pattern_str) {
@@ -417,11 +409,8 @@ fn calculate_sequence_confidence(numbers: &[i32], matches: usize, total: usize) 
         }
     }
 
-    let sequence_ratio = if numbers.len() > 1 {
-        sequential_count as f32 / (numbers.len() - 1) as f32
-    } else {
-        0.0
-    };
+    let sequence_ratio =
+        if numbers.len() > 1 { sequential_count as f32 / (numbers.len() - 1) as f32 } else { 0.0 };
 
     // Combine match ratio and sequence quality
     (match_ratio * 0.6 + sequence_ratio * 0.4).min(1.0)
@@ -446,11 +435,8 @@ fn calculate_alphabetic_sequence_confidence(letters: &[char], matches: usize, to
         }
     }
 
-    let sequence_ratio = if letters.len() > 1 {
-        sequential_count as f32 / (letters.len() - 1) as f32
-    } else {
-        0.0
-    };
+    let sequence_ratio =
+        if letters.len() > 1 { sequential_count as f32 / (letters.len() - 1) as f32 } else { 0.0 };
 
     (match_ratio * 0.6 + sequence_ratio * 0.4).min(1.0)
 }
@@ -521,11 +507,8 @@ fn analyze_naming_consistency(titles: &[String]) -> NamingConsistency {
         }
     }
 
-    let consistency_score = if titles.is_empty() {
-        0.0
-    } else {
-        total_patterns as f32 / titles.len() as f32
-    };
+    let consistency_score =
+        if titles.is_empty() { 0.0 } else { total_patterns as f32 / titles.len() as f32 };
 
     let common_patterns: Vec<String> = pattern_counts
         .iter()
@@ -589,15 +572,9 @@ fn determine_content_type(
     } else if thematic_score > confidence_threshold && thematic_score > sequential_score {
         (ContentType::Thematic, thematic_score)
     } else if (sequential_score - thematic_score).abs() < 0.2 && sequential_score > 0.3 {
-        (
-            ContentType::Mixed,
-            (sequential_score + thematic_score) / 2.0,
-        )
+        (ContentType::Mixed, (sequential_score + thematic_score) / 2.0)
     } else {
-        (
-            ContentType::Ambiguous,
-            (sequential_score + thematic_score) / 2.0,
-        )
+        (ContentType::Ambiguous, (sequential_score + thematic_score) / 2.0)
     }
 }
 
@@ -610,7 +587,7 @@ fn generate_processing_recommendation(
     match content_type {
         ContentType::Sequential if confidence_score > 0.7 => {
             ProcessingRecommendation::PreserveOrder
-        }
+        },
         ContentType::Sequential if confidence_score > 0.5 => {
             // Check if we have strong sequential patterns
             if sequential_patterns.iter().any(|p| p.confidence > 0.8) {
@@ -618,14 +595,14 @@ fn generate_processing_recommendation(
             } else {
                 ProcessingRecommendation::UserChoice
             }
-        }
+        },
         ContentType::Thematic if confidence_score > 0.6 => {
             ProcessingRecommendation::ApplyClustering
-        }
+        },
         ContentType::Mixed => ProcessingRecommendation::UserChoice,
         ContentType::Ambiguous if confidence_score < 0.3 => {
             ProcessingRecommendation::FallbackProcessing
-        }
+        },
         _ => ProcessingRecommendation::UserChoice,
     }
 }

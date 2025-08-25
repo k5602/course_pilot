@@ -337,11 +337,7 @@ pub fn FeedbackModal(
             clustering_parameters: preferences.clone(),
             feedback_type: feedback_type(),
             rating: rating() / 5.0, // Convert 1-5 scale to 0-1
-            comments: if comments().trim().is_empty() {
-                None
-            } else {
-                Some(comments())
-            },
+            comments: if comments().trim().is_empty() { None } else { Some(comments()) },
             manual_adjustments: Vec::new(), // This would be populated from actual adjustments
             created_at: chrono::Utc::now(),
         };
@@ -443,31 +439,21 @@ pub fn FeedbackModal(
 /// A/B Test results display component
 #[component]
 pub fn ABTestResults(test_config: ABTestConfig, results: Vec<ABTestResult>) -> Element {
-    let variant_a_results: Vec<&ABTestResult> = results
-        .iter()
-        .filter(|r| matches!(r.variant, ABTestVariant::VariantA))
-        .collect();
+    let variant_a_results: Vec<&ABTestResult> =
+        results.iter().filter(|r| matches!(r.variant, ABTestVariant::VariantA)).collect();
 
-    let variant_b_results: Vec<&ABTestResult> = results
-        .iter()
-        .filter(|r| matches!(r.variant, ABTestVariant::VariantB))
-        .collect();
+    let variant_b_results: Vec<&ABTestResult> =
+        results.iter().filter(|r| matches!(r.variant, ABTestVariant::VariantB)).collect();
 
     let avg_satisfaction_a = if !variant_a_results.is_empty() {
-        variant_a_results
-            .iter()
-            .map(|r| r.user_satisfaction)
-            .sum::<f32>()
+        variant_a_results.iter().map(|r| r.user_satisfaction).sum::<f32>()
             / variant_a_results.len() as f32
     } else {
         0.0
     };
 
     let avg_satisfaction_b = if !variant_b_results.is_empty() {
-        variant_b_results
-            .iter()
-            .map(|r| r.user_satisfaction)
-            .sum::<f32>()
+        variant_b_results.iter().map(|r| r.user_satisfaction).sum::<f32>()
             / variant_b_results.len() as f32
     } else {
         0.0

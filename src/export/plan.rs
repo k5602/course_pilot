@@ -64,12 +64,8 @@ impl Exportable for Plan {
             let week_number = (days_from_start / 7) + 1;
             let session_number = index + 1;
 
-            let video_indices_str = item
-                .video_indices
-                .iter()
-                .map(|i| i.to_string())
-                .collect::<Vec<_>>()
-                .join(";");
+            let video_indices_str =
+                item.video_indices.iter().map(|i| i.to_string()).collect::<Vec<_>>().join(";");
 
             csv_data.push_str(&format!(
                 "{},{},{},{},{},{},{}\n",
@@ -100,10 +96,7 @@ impl Exportable for Plan {
 
         // Header
         doc.push(genpdf::elements::Paragraph::new("Study Plan"));
-        doc.push(genpdf::elements::Paragraph::new(format!(
-            "Plan ID: {}",
-            self.id
-        )));
+        doc.push(genpdf::elements::Paragraph::new(format!("Plan ID: {}", self.id)));
         doc.push(genpdf::elements::Paragraph::new(format!(
             "Created At: {}",
             crate::export::utils::format_timestamp(self.created_at)
@@ -144,12 +137,8 @@ impl Exportable for Plan {
         // Sessions detail
         doc.push(genpdf::elements::Paragraph::new("Sessions:"));
         for (index, item) in self.items.iter().enumerate() {
-            let indices_str = item
-                .video_indices
-                .iter()
-                .map(|i| i.to_string())
-                .collect::<Vec<_>>()
-                .join(",");
+            let indices_str =
+                item.video_indices.iter().map(|i| i.to_string()).collect::<Vec<_>>().join(",");
             doc.push(genpdf::elements::Paragraph::new(format!(
                 "• {:>3}. {} | {} | Videos [{}] | Date: {} | {}",
                 index + 1,
@@ -157,18 +146,13 @@ impl Exportable for Plan {
                 item.section_title,
                 indices_str,
                 item.date.format("%Y-%m-%d"),
-                if item.completed {
-                    "Completed"
-                } else {
-                    "Pending"
-                }
+                if item.completed { "Completed" } else { "Pending" }
             )));
         }
 
         // Render to bytes
         let mut bytes = Vec::new();
-        doc.render(&mut bytes)
-            .map_err(|e| anyhow::anyhow!("Failed to render PDF: {}", e))?;
+        doc.render(&mut bytes).map_err(|e| anyhow::anyhow!("Failed to render PDF: {}", e))?;
         Ok(bytes)
     }
 
@@ -183,19 +167,19 @@ impl Exportable for Plan {
                     callback(25.0, "Generating JSON data...".to_string());
                 }
                 self.export_json()?.into_bytes()
-            }
+            },
             ExportFormat::Csv => {
                 if let Some(ref callback) = options.progress_callback {
                     callback(25.0, "Generating CSV schedule...".to_string());
                 }
                 self.export_csv()?.into_bytes()
-            }
+            },
             ExportFormat::Pdf => {
                 if let Some(ref callback) = options.progress_callback {
                     callback(25.0, "Generating PDF document...".to_string());
                 }
                 self.export_pdf()?
-            }
+            },
         };
 
         if let Some(ref callback) = options.progress_callback {

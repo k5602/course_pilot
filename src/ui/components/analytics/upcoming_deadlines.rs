@@ -93,7 +93,7 @@ pub fn UpcomingDeadlines() -> Element {
                     }
                 }
             }
-        }
+        },
         Some(Err(e)) => rsx! {
             div { class: "alert alert-error",
                 "Failed to load upcoming deadlines: {e}"

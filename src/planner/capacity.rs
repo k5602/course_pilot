@@ -96,11 +96,7 @@ pub fn average_video_duration_from_course(course: &Course) -> Option<Duration> {
         }
     }
 
-    if count == 0 {
-        None
-    } else {
-        Some(Duration::from_secs((total_secs / count as u64).max(60)))
-    }
+    if count == 0 { None } else { Some(Duration::from_secs((total_secs / count as u64).max(60))) }
 }
 
 /// Estimate videos per session for a course, using actual durations when available,
@@ -134,10 +130,7 @@ mod tests {
         let eff = effective_session_limit(&s);
 
         assert_eq!(strict.as_secs(), 60 * 60);
-        assert_eq!(
-            eff.as_secs(),
-            (60.0 * 60.0 * EFFECTIVE_BUFFER_FRACTION) as u64
-        );
+        assert_eq!(eff.as_secs(), (60.0 * 60.0 * EFFECTIVE_BUFFER_FRACTION) as u64);
         assert!(eff < strict);
     }
 
@@ -155,35 +148,20 @@ mod tests {
     #[test]
     fn test_video_exceeds_checks() {
         let s = settings(60, 3, false);
-        assert!(!video_exceeds_strict_limit(
-            Duration::from_secs(50 * 60),
-            &s
-        ));
+        assert!(!video_exceeds_strict_limit(Duration::from_secs(50 * 60), &s));
         assert!(video_exceeds_strict_limit(Duration::from_secs(61 * 60), &s));
 
         // Effective is 48 minutes for 60-minute session
-        assert!(!video_exceeds_effective_limit(
-            Duration::from_secs(45 * 60),
-            &s
-        ));
-        assert!(video_exceeds_effective_limit(
-            Duration::from_secs(49 * 60),
-            &s
-        ));
+        assert!(!video_exceeds_effective_limit(Duration::from_secs(45 * 60), &s));
+        assert!(video_exceeds_effective_limit(Duration::from_secs(49 * 60), &s));
     }
 
     #[test]
     fn test_session_capacity_for_average() {
         let s = settings(60, 3, false);
         // Effective = 48 min
-        assert_eq!(
-            session_capacity_for_average(Duration::from_secs(5 * 60), &s),
-            9
-        );
-        assert_eq!(
-            session_capacity_for_average(Duration::from_secs(50 * 60), &s),
-            1
-        );
+        assert_eq!(session_capacity_for_average(Duration::from_secs(5 * 60), &s), 9);
+        assert_eq!(session_capacity_for_average(Duration::from_secs(50 * 60), &s), 1);
     }
 
     #[test]

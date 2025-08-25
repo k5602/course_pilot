@@ -34,9 +34,7 @@ pub fn group_sessions(titles: &[String]) -> Result<Vec<Vec<usize>>, NlpError> {
 
     // Preserve order, simple chunking by count (default settings)
     let grouper = crate::nlp::SequentialGrouper::new();
-    grouper
-        .group(titles)
-        .map_err(|e| NlpError::Processing(format!("Grouping failed: {e}")))
+    grouper.group(titles).map_err(|e| NlpError::Processing(format!("Grouping failed: {e}")))
 }
 
 /// Build a minimal CourseStructure from session groups while preserving order.
@@ -53,15 +51,8 @@ pub fn structure_course(titles: Vec<String>) -> Result<CourseStructure, NlpError
     for (i, group) in groups.iter().enumerate() {
         let mut sections = Vec::with_capacity(group.len());
         for &idx in group {
-            let title = titles
-                .get(idx)
-                .cloned()
-                .unwrap_or_else(|| format!("Video {}", idx + 1));
-            sections.push(Section {
-                title,
-                video_index: idx,
-                duration: Duration::from_secs(0),
-            });
+            let title = titles.get(idx).cloned().unwrap_or_else(|| format!("Video {}", idx + 1));
+            sections.push(Section { title, video_index: idx, duration: Duration::from_secs(0) });
         }
 
         let module_title = format!("Session {}", i + 1);
@@ -180,7 +171,7 @@ impl StructurePatterns {
                 Err(e) => {
                     error!("Failed to compile regex pattern '{pattern_str}': {e}");
                     // Continue with other patterns instead of panicking
-                }
+                },
             }
         }
 
@@ -221,10 +212,7 @@ pub fn is_module_indicator(text: &str) -> bool {
     let text_lower = text.to_lowercase();
     let patterns = StructurePatterns::default();
 
-    patterns
-        .module_keywords
-        .iter()
-        .any(|keyword| text_lower.contains(keyword))
+    patterns.module_keywords.iter().any(|keyword| text_lower.contains(keyword))
 }
 
 /// Check if text contains section-level keywords
@@ -232,10 +220,7 @@ pub fn is_section_indicator(text: &str) -> bool {
     let text_lower = text.to_lowercase();
     let patterns = StructurePatterns::default();
 
-    patterns
-        .section_keywords
-        .iter()
-        .any(|keyword| text_lower.contains(keyword))
+    patterns.section_keywords.iter().any(|keyword| text_lower.contains(keyword))
 }
 
 /// Clean and normalize text for analysis
@@ -243,13 +228,7 @@ pub fn normalize_text(text: &str) -> String {
     text.trim()
         .to_lowercase()
         .chars()
-        .map(|c| {
-            if c.is_alphanumeric() || c.is_whitespace() {
-                c
-            } else {
-                ' '
-            }
-        })
+        .map(|c| if c.is_alphanumeric() || c.is_whitespace() { c } else { ' ' })
         .collect::<String>()
         .split_whitespace()
         .collect::<Vec<_>>()
@@ -264,11 +243,7 @@ pub fn text_similarity(text1: &str, text2: &str) -> f32 {
     let intersection = words1.intersection(&words2).count();
     let union = words1.union(&words2).count();
 
-    if union == 0 {
-        0.0
-    } else {
-        intersection as f32 / union as f32
-    }
+    if union == 0 { 0.0 } else { intersection as f32 / union as f32 }
 }
 
 #[cfg(test)]

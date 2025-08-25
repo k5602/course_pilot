@@ -80,9 +80,7 @@ impl Backend {
         item_index: usize,
         completed: bool,
     ) -> Result<()> {
-        self.plans
-            .update_plan_item_completion(plan_id, item_index, completed)
-            .await
+        self.plans.update_plan_item_completion(plan_id, item_index, completed).await
     }
 
     pub async fn get_plan_progress(&self, plan_id: Uuid) -> Result<ProgressInfo> {
@@ -115,9 +113,7 @@ impl Backend {
         course_id: Uuid,
         video_index: Option<usize>,
     ) -> Result<Vec<Note>> {
-        self.notes
-            .list_notes_by_course_and_video_index(course_id, video_index)
-            .await
+        self.notes.list_notes_by_course_and_video_index(course_id, video_index).await
     }
 
     pub async fn list_notes_by_video(&self, video_id: Uuid) -> Result<Vec<Note>> {
@@ -129,9 +125,7 @@ impl Backend {
         course_id: Uuid,
         video_index: usize,
     ) -> Result<Vec<Note>> {
-        self.notes
-            .list_notes_by_video_index(course_id, video_index)
-            .await
+        self.notes.list_notes_by_video_index(course_id, video_index).await
     }
 
     pub async fn search_notes(&self, query: &str) -> Result<Vec<Note>> {
@@ -216,15 +210,11 @@ impl Backend {
         session_index: usize,
         video_index: usize,
     ) -> Result<bool> {
-        self.analytics
-            .get_video_completion_status(plan_id, session_index, video_index)
-            .await
+        self.analytics.get_video_completion_status(plan_id, session_index, video_index).await
     }
 
     pub async fn get_session_progress(&self, plan_id: Uuid, session_index: usize) -> Result<f32> {
-        self.analytics
-            .get_session_progress(plan_id, session_index)
-            .await
+        self.analytics.get_session_progress(plan_id, session_index).await
     }
 
     // --- Analytics ---
@@ -236,9 +226,7 @@ impl Backend {
         &self,
         settings: &AdvancedSchedulerSettings,
     ) -> Result<Vec<String>> {
-        self.analytics
-            .validate_advanced_scheduler_settings(settings)
-            .await
+        self.analytics.validate_advanced_scheduler_settings(settings).await
     }
 
     pub async fn get_recommended_advanced_settings(
@@ -246,9 +234,7 @@ impl Backend {
         course_id: Uuid,
         user_experience: DifficultyLevel,
     ) -> Result<AdvancedSchedulerSettings> {
-        self.analytics
-            .get_recommended_advanced_settings(course_id, user_experience)
-            .await
+        self.analytics.get_recommended_advanced_settings(course_id, user_experience).await
     }
 
     pub async fn structure_course(&self, course_id: Uuid) -> Result<Course> {
@@ -263,9 +249,7 @@ impl Backend {
     where
         F: Fn(f32, String) + Send + Sync + 'static,
     {
-        self.analytics
-            .structure_course_with_progress(course_id, progress_callback)
-            .await
+        self.analytics.structure_course_with_progress(course_id, progress_callback).await
     }
 
     // --- Import ---
@@ -282,9 +266,7 @@ impl Backend {
         folder_path: PathBuf,
         course_title: Option<String>,
     ) -> Result<Course> {
-        self.import
-            .import_from_local_folder(folder_path, course_title)
-            .await
+        self.import.import_from_local_folder(folder_path, course_title).await
     }
 
     // --- Settings ---

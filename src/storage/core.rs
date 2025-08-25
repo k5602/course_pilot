@@ -79,22 +79,16 @@ impl Database {
             .with_context(|| "Failed to create database connection pool")?;
 
         // Initialize database schema
-        let mut conn = pool
-            .get()
-            .with_context(|| "Failed to get initial database connection")?;
+        let mut conn = pool.get().with_context(|| "Failed to get initial database connection")?;
 
         init_tables(&mut conn).with_context(|| "Failed to initialize database tables")?;
 
-        Ok(Database {
-            pool: Arc::new(pool),
-        })
+        Ok(Database { pool: Arc::new(pool) })
     }
 
     /// Get a connection from the pool with error handling
     pub fn get_conn(&self) -> Result<PooledConnection> {
-        self.pool
-            .get()
-            .with_context(|| "Failed to get database connection from pool")
+        self.pool.get().with_context(|| "Failed to get database connection from pool")
     }
 
     /// Get a reference to the underlying pool
@@ -112,7 +106,7 @@ impl Database {
             Err(e) => {
                 log::warn!("Connection pool health check failed: {}", e);
                 false
-            }
+            },
         };
 
         Ok(ConnectionPoolHealth {
@@ -151,7 +145,7 @@ impl Database {
                             );
                             std::thread::sleep(std::time::Duration::from_millis(delay));
                         }
-                    }
+                    },
                 },
                 Err(e) => {
                     last_error = Some(e);
@@ -165,7 +159,7 @@ impl Database {
                         );
                         std::thread::sleep(std::time::Duration::from_millis(delay));
                     }
-                }
+                },
             }
         }
 
@@ -302,22 +296,10 @@ pub fn init_tables(conn: &mut Connection) -> Result<()> {
 
     // Secondary indexes (idempotent)
     let tx = conn.transaction()?;
-    tx.execute(
-        "CREATE INDEX IF NOT EXISTS idx_plans_course_id ON plans(course_id);",
-        [],
-    )?;
-    tx.execute(
-        "CREATE INDEX IF NOT EXISTS idx_courses_created_at ON courses(created_at);",
-        [],
-    )?;
-    tx.execute(
-        "CREATE INDEX IF NOT EXISTS idx_courses_name ON courses(name);",
-        [],
-    )?;
-    tx.execute(
-        "CREATE INDEX IF NOT EXISTS idx_plans_created_at ON plans(created_at);",
-        [],
-    )?;
+    tx.execute("CREATE INDEX IF NOT EXISTS idx_plans_course_id ON plans(course_id);", [])?;
+    tx.execute("CREATE INDEX IF NOT EXISTS idx_courses_created_at ON courses(created_at);", [])?;
+    tx.execute("CREATE INDEX IF NOT EXISTS idx_courses_name ON courses(name);", [])?;
+    tx.execute("CREATE INDEX IF NOT EXISTS idx_plans_created_at ON plans(created_at);", [])?;
     tx.execute(
         "CREATE INDEX IF NOT EXISTS idx_plans_course_created ON plans(course_id, created_at);",
         [],
@@ -377,11 +359,8 @@ pub fn get_database_performance_metrics(db: &Database) -> Result<DatabasePerform
     let notes_count: i64 = conn.query_row("SELECT COUNT(*) FROM notes", [], |row| row.get(0))?;
 
     // Calculate fragmentation
-    let fragmentation_ratio = if page_count > 0 {
-        freelist_count as f64 / page_count as f64
-    } else {
-        0.0
-    };
+    let fragmentation_ratio =
+        if page_count > 0 { freelist_count as f64 / page_count as f64 } else { 0.0 };
 
     Ok(DatabasePerformanceMetrics {
         total_size_bytes: (page_count * page_size) as usize,

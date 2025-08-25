@@ -20,10 +20,8 @@ pub fn generate_spaced_repetition_plan(
     course: &Course,
     settings: &PlanSettings,
 ) -> Result<Vec<PlanItem>, PlanError> {
-    let structure = course
-        .structure
-        .as_ref()
-        .expect("Course must be structured for spaced repetition plan");
+    let structure =
+        course.structure.as_ref().expect("Course must be structured for spaced repetition plan");
     let mut plan_items = Vec::new();
     let mut current_date = settings.start_date;
     let mut review_schedule: HashMap<usize, Vec<DateTime<Utc>>> = HashMap::new();

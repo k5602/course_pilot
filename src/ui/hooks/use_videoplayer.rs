@@ -49,41 +49,41 @@ impl KeyboardShortcuts {
             " " | "space" | "k" => {
                 state.toggle_play_pause();
                 true
-            }
+            },
             "j" => {
                 state.seek_relative(-10.0);
                 true
-            }
+            },
             "l" => {
                 state.seek_relative(10.0);
                 true
-            }
+            },
             "arrowleft" => {
                 state.seek_relative(-5.0);
                 true
-            }
+            },
             "arrowright" => {
                 state.seek_relative(5.0);
                 true
-            }
+            },
             "arrowup" => {
                 let new_volume = (*state.volume.read() + 0.1).clamp(0.0, 1.0);
                 state.set_volume(new_volume);
                 true
-            }
+            },
             "arrowdown" => {
                 let new_volume = (*state.volume.read() - 0.1).clamp(0.0, 1.0);
                 state.set_volume(new_volume);
                 true
-            }
+            },
             "m" => {
                 state.toggle_mute();
                 true
-            }
+            },
             "f" => {
                 state.toggle_fullscreen();
                 true
-            }
+            },
             "escape" => {
                 if *state.is_fullscreen.read() {
                     state.set_fullscreen(false);
@@ -91,11 +91,11 @@ impl KeyboardShortcuts {
                 } else {
                     false
                 }
-            }
+            },
             "0" => {
                 state.seek_to(0.0);
                 true
-            }
+            },
             "1" | "2" | "3" | "4" | "5" | "6" | "7" | "8" | "9" => {
                 if let Ok(digit) = key.parse::<f64>() {
                     let percentage = digit / 10.0;
@@ -104,7 +104,7 @@ impl KeyboardShortcuts {
                 } else {
                     false
                 }
-            }
+            },
             _ => false,
         };
 
@@ -288,7 +288,7 @@ pub fn use_video_analytics() -> VideoAnalytics {
                 if watch_start_time.read().is_none() {
                     watch_start_time.set(Some(std::time::Instant::now()));
                 }
-            }
+            },
             crate::video_player::PlaybackState::Paused => {
                 let start_time_opt = *watch_start_time.read();
                 if let Some(start_time) = start_time_opt {
@@ -300,7 +300,7 @@ pub fn use_video_analytics() -> VideoAnalytics {
                     watch_start_time.set(None);
                     pause_count.set(current_pause_count + 1);
                 }
-            }
+            },
             crate::video_player::PlaybackState::Stopped => {
                 let start_time_opt = *watch_start_time.read();
                 if let Some(start_time) = start_time_opt {
@@ -310,8 +310,8 @@ pub fn use_video_analytics() -> VideoAnalytics {
                     total_watch_time.set(current_watch_time + elapsed);
                     watch_start_time.set(None);
                 }
-            }
-            _ => {}
+            },
+            _ => {},
         }
     });
 
