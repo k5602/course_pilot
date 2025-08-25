@@ -5,7 +5,9 @@
 //! Enhanced with recursive directory scanning, nested folder support, and sequential pattern detection.
 
 use crate::ImportError;
-use crate::nlp::sequential_detection::{detect_sequential_patterns, ContentTypeAnalysis, ContentType, ProcessingRecommendation};
+use crate::nlp::sequential_detection::{
+    ContentType, ContentTypeAnalysis, ProcessingRecommendation, detect_sequential_patterns,
+};
 use crate::storage::{self, database::Database};
 use crate::types::Course;
 use chrono::Utc;
@@ -16,6 +18,9 @@ use std::time::SystemTime;
 use uuid::Uuid;
 use walkdir::WalkDir;
 
+// ===== Constants & helpers =====
+const DEFAULT_MAX_DEPTH: usize = 25;
+
 /// Struct representing a local video section with title and duration
 #[derive(PartialEq, Debug, Clone)]
 pub struct LocalVideoSection {
@@ -25,7 +30,7 @@ pub struct LocalVideoSection {
     pub original_index: usize, // Preserve import order for sequential detection
 }
 
-/// Enhanced import result with content type analysis
+/// import result with content type analysis
 #[derive(Debug, Clone)]
 pub struct LocalImportResult {
     pub sections: Vec<LocalVideoSection>,
@@ -42,28 +47,21 @@ pub enum SortingMethod {
     PreservedOrder, // Original order preserved due to sequential detection
 }
 
-/// Enhanced local ingest with nested folder support
-pub struct EnhancedLocalIngest {
+/// local ingest with nested folder support
+pub struct LocalIngest {
     video_extensions: HashSet<String>,
 }
 
-impl Default for EnhancedLocalIngest {
+impl Default for LocalIngest {
     fn default() -> Self {
         Self::new()
     }
 }
 
-impl EnhancedLocalIngest {
+impl LocalIngest {
     pub fn new() -> Self {
         let mut video_extensions = HashSet::new();
-        video_extensions.extend(
-            [
-                "mp4", "avi", "mkv", "mov", "wmv", "flv", "webm", "m4v", "3gp", "ogv", "ts", "mts",
-                "m2ts", "mpg", "mpeg", "f4v", "asf", "rm", "rmvb", "vob", "drc",
-            ]
-            .iter()
-            .map(|s| s.to_string()),
-        );
+        video_extensions.extend(crate::ingest::VIDEO_EXTENSIONS.iter().map(|s| s.to_string()));
 
         Self { video_extensions }
     }
@@ -72,7 +70,7 @@ impl EnhancedLocalIngest {
     pub fn scan_directory_recursive(
         &self,
         root_path: &Path,
-        progress_callback: Option<&dyn Fn(f32, String)>,
+        mut progress_callback: Option<&mut dyn FnMut(crate::ingest::ImportProgress)>,
     ) -> Result<Vec<VideoFile>, ImportError> {
         log::info!("Recursively scanning directory: {}", root_path.display());
 
@@ -93,20 +91,39 @@ impl EnhancedLocalIngest {
         // First pass: count total files for progress reporting
         let mut total_files = 0;
         if progress_callback.is_some() {
-            progress_callback.unwrap()(0.0, "Counting video files...".to_string());
+            if let Some(cb) = progress_callback.as_mut() {
+                cb(crate::ingest::ImportProgress {
+                    stage: crate::types::ImportStage::Fetching,
+                    progress: 0.0,
+                    message: "Counting video files...".to_string(),
+                    clustering_stage: None,
+                });
+            }
 
             for entry in WalkDir::new(root_path)
                 .follow_links(false)
+                .max_depth(DEFAULT_MAX_DEPTH)
                 .into_iter()
+                .filter_entry(|e| {
+                    if e.file_type().is_dir() { !is_ignored_directory(e.path()) } else { true }
+                })
                 .filter_map(|e| e.ok())
                 .filter(|e| e.file_type().is_file())
+                .filter(|e| !is_hidden_or_system_file(e.path()))
             {
                 if self.is_video_file(entry.path()) {
                     total_files += 1;
                 }
             }
 
-            progress_callback.unwrap()(0.0, format!("Found {total_files} video files"));
+            if let Some(cb) = progress_callback.as_mut() {
+                cb(crate::ingest::ImportProgress {
+                    stage: crate::types::ImportStage::Fetching,
+                    progress: 0.0,
+                    message: format!("Found {total_files} video files"),
+                    clustering_stage: None,
+                });
+            }
         }
 
         // Second pass: process files
@@ -115,27 +132,37 @@ impl EnhancedLocalIngest {
 
         for entry in WalkDir::new(root_path)
             .follow_links(false)
+            .max_depth(DEFAULT_MAX_DEPTH)
             .into_iter()
+            .filter_entry(|e| {
+                if e.file_type().is_dir() { !is_ignored_directory(e.path()) } else { true }
+            })
             .filter_map(|e| match e {
                 Ok(entry) => Some(entry),
                 Err(err) => {
                     log::warn!("Error accessing path: {err}");
                     None
-                }
+                },
             })
             .filter(|e| e.file_type().is_file())
+            .filter(|e| !is_hidden_or_system_file(e.path()))
         {
             if self.is_video_file(entry.path()) {
                 processed_files += 1;
 
-                if let Some(cb) = progress_callback {
+                if let Some(cb) = progress_callback.as_mut() {
                     let progress = if total_files > 0 {
-                        (processed_files as f32 / total_files as f32) * 100.0
+                        processed_files as f32 / total_files as f32
                     } else {
                         0.0
                     };
 
-                    cb(progress, format!("Processing: {}", entry.path().display()));
+                    cb(crate::ingest::ImportProgress {
+                        stage: crate::types::ImportStage::Processing,
+                        progress,
+                        message: format!("Processing: {}", entry.path().display()),
+                        clustering_stage: None,
+                    });
                 }
 
                 let video_file = VideoFile {
@@ -166,10 +193,16 @@ impl EnhancedLocalIngest {
     }
 
     /// Asynchronously scans a directory recursively for video files with cancellation support
+    /// - Normalizes progress [0.0, 1.0]
+    /// - Skips hidden/system files
+    /// - Skips common ignored directories (e.g., .git, node_modules, System Volume Information)
+    /// - Applies a default max depth to prevent deep traversal stalls
     pub async fn scan_directory_recursive_async(
         &self,
         root_path: PathBuf,
-        progress_callback: impl Fn(f32, String) + Send + 'static,
+        mut progress_callback: Option<
+            Box<dyn FnMut(crate::ingest::ImportProgress) + Send + 'static>,
+        >,
         batch_size: Option<usize>,
         cancel_token: Option<tokio_util::sync::CancellationToken>,
     ) -> Result<Vec<VideoFile>, ImportError> {
@@ -181,15 +214,32 @@ impl EnhancedLocalIngest {
             let mut processed_files = 0;
             let mut video_files = Vec::new();
 
-            // First pass: count total files
-            progress_callback(0.0, "Counting video files...".to_string());
+            // Default max depth to guard against pathological directory trees
+            let default_max_depth: usize = 25;
 
-            for entry in WalkDir::new(&root_path)
+            // First pass: count total files
+            if let Some(cb) = progress_callback.as_mut() {
+                cb(crate::ingest::ImportProgress {
+                    stage: crate::types::ImportStage::Fetching,
+                    progress: 0.0,
+                    message: "Counting video files...".to_string(),
+                    clustering_stage: None,
+                });
+            }
+
+            let iter = WalkDir::new(&root_path)
                 .follow_links(false)
+                .max_depth(default_max_depth)
                 .into_iter()
-                .filter_map(|e| e.ok())
-                .filter(|e| e.file_type().is_file())
-            {
+                .filter_entry(|e| {
+                    if e.file_type().is_dir() { !is_ignored_directory(e.path()) } else { true }
+                });
+
+            for entry in iter.filter_map(|e| e.ok()).filter(|e| e.file_type().is_file()) {
+                if is_hidden_or_system_file(entry.path()) {
+                    continue;
+                }
+
                 if let Some(ext) = entry.path().extension() {
                     let ext_lower = ext.to_string_lossy().to_lowercase();
                     if video_extensions.contains(&ext_lower) {
@@ -198,21 +248,34 @@ impl EnhancedLocalIngest {
                 }
             }
 
-            progress_callback(0.0, format!("Found {total_files} video files"));
+            if let Some(cb) = progress_callback.as_mut() {
+                cb(crate::ingest::ImportProgress {
+                    stage: crate::types::ImportStage::Fetching,
+                    progress: 0.0,
+                    message: format!("Found {total_files} video files"),
+                    clustering_stage: None,
+                });
+            }
 
             // Second pass: process files in batches if requested
             let batch_size = batch_size.unwrap_or(usize::MAX); // Default to processing all at once
+
             let entries: Vec<_> = WalkDir::new(&root_path)
                 .follow_links(false)
+                .max_depth(default_max_depth)
                 .into_iter()
+                .filter_entry(|e| {
+                    if e.file_type().is_dir() { !is_ignored_directory(e.path()) } else { true }
+                })
                 .filter_map(|e| match e {
                     Ok(entry) => Some(entry),
                     Err(err) => {
                         log::warn!("Error accessing path: {err}");
                         None
-                    }
+                    },
                 })
                 .filter(|e| e.file_type().is_file())
+                .filter(|e| !is_hidden_or_system_file(e.path()))
                 .collect();
 
             // Process in batches
@@ -226,21 +289,33 @@ impl EnhancedLocalIngest {
                 }
 
                 for entry in chunk {
+                    // Additional per-item cancellation check to stop early within batches
+                    if let Some(token) = &cancel_token {
+                        if token.is_cancelled() {
+                            log::info!("Directory scan cancelled by user");
+                            return Ok(video_files);
+                        }
+                    }
+
                     if let Some(ext) = entry.path().extension() {
                         let ext_lower = ext.to_string_lossy().to_lowercase();
                         if video_extensions.contains(&ext_lower) {
                             processed_files += 1;
 
                             let progress = if total_files > 0 {
-                                (processed_files as f32 / total_files as f32) * 100.0
+                                processed_files as f32 / total_files as f32
                             } else {
                                 0.0
                             };
 
-                            progress_callback(
-                                progress,
-                                format!("Processing: {}", entry.path().display()),
-                            );
+                            if let Some(cb) = progress_callback.as_mut() {
+                                cb(crate::ingest::ImportProgress {
+                                    stage: crate::types::ImportStage::Processing,
+                                    progress,
+                                    message: format!("Processing: {}", entry.path().display()),
+                                    clustering_stage: None,
+                                });
+                            }
 
                             let video_file = VideoFile {
                                 path: entry.path().to_path_buf(),
@@ -264,11 +339,7 @@ impl EnhancedLocalIngest {
                 }
             }
 
-            if video_files.is_empty() {
-                Err(ImportError::NoContent)
-            } else {
-                Ok(video_files)
-            }
+            if video_files.is_empty() { Err(ImportError::NoContent) } else { Ok(video_files) }
         })
         .await
         .unwrap_or_else(|e| Err(ImportError::FileSystem(format!("Join error: {e}"))))
@@ -276,30 +347,16 @@ impl EnhancedLocalIngest {
 
     /// Checks if a file is a video based on its extension
     fn is_video_file(&self, path: &Path) -> bool {
-        if let Some(ext) = path.extension() {
-            let ext = ext.to_string_lossy().to_lowercase();
-            self.video_extensions.contains(&ext)
-        } else {
-            false
-        }
+        crate::ingest::is_video_file(path)
     }
 }
 
-/// Represents a video file discovered during scanning
 #[derive(Debug, Clone)]
 pub struct VideoFile {
     pub path: PathBuf,
     pub name: String,
     pub size: u64,
     pub relative_path: PathBuf,
-}
-
-/// Legacy function for backward compatibility
-pub fn scan_directory(path: &Path) -> Result<Vec<PathBuf>, ImportError> {
-    log::info!("Using legacy scan_directory (non-recursive)");
-    let ingest = EnhancedLocalIngest::new();
-    let video_files = ingest.scan_directory_recursive(path, None)?;
-    Ok(video_files.into_iter().map(|vf| vf.path).collect())
 }
 
 /// Import video titles and durations from a local folder containing video files with sequential detection
@@ -310,15 +367,14 @@ pub fn scan_directory(path: &Path) -> Result<Vec<PathBuf>, ImportError> {
 /// # Returns
 /// * `Ok(LocalImportResult)` - Import result with sections and content analysis
 /// * `Err(ImportError)` - Error if import fails
-pub fn import_from_local_folder_with_analysis(path: &Path) -> Result<LocalImportResult, ImportError> {
+pub fn import_from_local_folder_with_analysis(
+    path: &Path,
+) -> Result<LocalImportResult, ImportError> {
     log::info!("Starting local folder analysis for: {}", path.display());
-    
+
     // Validate that the path exists and is a directory
     if !path.exists() {
-        return Err(ImportError::FileSystem(format!(
-            "Path does not exist: {}",
-            path.display()
-        )));
+        return Err(ImportError::FileSystem(format!("Path does not exist: {}", path.display())));
     }
 
     if !path.is_dir() {
@@ -331,27 +387,33 @@ pub fn import_from_local_folder_with_analysis(path: &Path) -> Result<LocalImport
     // Use recursive scanning like the validation does
     let mut video_files = Vec::new();
 
-    for entry in WalkDir::new(path)
-        .follow_links(false)
-        .into_iter()
-        .filter_map(|e| match e {
-            Ok(entry) => Some(entry),
-            Err(err) => {
-                log::warn!("Error accessing path during analysis: {err}");
-                None
-            }
-        })
-        .filter(|e| e.file_type().is_file())
+    for entry in
+        WalkDir::new(path)
+            .follow_links(false)
+            .max_depth(DEFAULT_MAX_DEPTH)
+            .into_iter()
+            .filter_entry(|e| {
+                if e.file_type().is_dir() { !is_ignored_directory(e.path()) } else { true }
+            })
+            .filter_map(|e| match e {
+                Ok(entry) => Some(entry),
+                Err(err) => {
+                    log::warn!("Error accessing path during analysis: {err}");
+                    None
+                },
+            })
+            .filter(|e| e.file_type().is_file())
+            .filter(|e| !is_hidden_or_system_file(e.path()))
     {
         let file_path = entry.path();
 
         // Skip hidden files and system files
-        if is_hidden_or_system_file(&file_path) {
+        if is_hidden_or_system_file(file_path) {
             continue;
         }
 
         // Check if it's a video file
-        if is_video_file(&file_path) {
+        if crate::ingest::is_video_file(file_path) {
             let metadata = match entry.metadata() {
                 Ok(metadata) => metadata,
                 Err(_) => {
@@ -361,17 +423,14 @@ pub fn import_from_local_folder_with_analysis(path: &Path) -> Result<LocalImport
                         created: SystemTime::now(),
                     });
                     continue;
-                }
+                },
             };
 
             let created = metadata
                 .created()
                 .unwrap_or_else(|_| metadata.modified().unwrap_or_else(|_| SystemTime::now()));
 
-            video_files.push(VideoFileInfo {
-                path: file_path.to_path_buf(),
-                created,
-            });
+            video_files.push(VideoFileInfo { path: file_path.to_path_buf(), created });
         }
     }
 
@@ -381,20 +440,18 @@ pub fn import_from_local_folder_with_analysis(path: &Path) -> Result<LocalImport
     }
 
     // Extract titles first for sequential pattern detection
-    let raw_titles: Vec<String> = video_files.iter().map(|file_info| {
-        extract_title_from_path(&file_info.path).unwrap_or_else(|| {
-            file_info
-                .path
-                .file_stem()
-                .unwrap_or_default()
-                .to_string_lossy()
-                .to_string()
+    let raw_titles: Vec<String> = video_files
+        .iter()
+        .map(|file_info| {
+            extract_title_from_path(&file_info.path).unwrap_or_else(|| {
+                file_info.path.file_stem().unwrap_or_default().to_string_lossy().to_string()
+            })
         })
-    }).collect();
+        .collect();
 
     // Perform content type analysis on raw titles
     let content_analysis = detect_sequential_patterns(&raw_titles);
-    
+
     log::info!(
         "Local folder content analysis: type={:?}, confidence={:.2}, recommendation={:?}",
         content_analysis.content_type,
@@ -404,43 +461,38 @@ pub fn import_from_local_folder_with_analysis(path: &Path) -> Result<LocalImport
 
     // Determine sorting method based on content analysis
     let sorting_method = determine_sorting_method(&content_analysis);
-    
+
     // Apply appropriate sorting based on content analysis
     match sorting_method {
         SortingMethod::PreservedOrder => {
             // Keep original order when sequential patterns detected
             log::info!("Preserving original file order due to sequential pattern detection");
             // video_files already in directory order, no sorting needed
-        }
+        },
         SortingMethod::Natural => {
             // Apply natural sorting (default behavior)
             video_files.sort_by(|a, b| natural_sort_compare(&a.path, &b.path));
-        }
+        },
         SortingMethod::Alphabetical => {
             // Apply alphabetical sorting
             video_files.sort_by(|a, b| a.path.file_name().cmp(&b.path.file_name()));
-        }
+        },
         SortingMethod::CreationTime => {
             // Sort by creation time
             video_files.sort_by(|a, b| a.created.cmp(&b.created));
-        }
+        },
     }
 
     // Extract titles and durations from video files with preserved indices
     let mut sections = Vec::new();
     for (index, file_info) in video_files.iter().enumerate() {
         let title = extract_title_from_path(&file_info.path).unwrap_or_else(|| {
-            file_info
-                .path
-                .file_stem()
-                .unwrap_or_default()
-                .to_string_lossy()
-                .to_string()
+            file_info.path.file_stem().unwrap_or_default().to_string_lossy().to_string()
         });
-        let duration = probe_video_duration(&file_info.path)
+        let duration = crate::ingest::probe_video_duration(&file_info.path)
             .unwrap_or_else(|| std::time::Duration::from_secs(0));
-        sections.push(LocalVideoSection { 
-            title, 
+        sections.push(LocalVideoSection {
+            title,
             duration,
             file_path: Some(file_info.path.to_string_lossy().to_string()),
             original_index: index, // Preserve order for sequential content
@@ -451,11 +503,7 @@ pub fn import_from_local_folder_with_analysis(path: &Path) -> Result<LocalImport
         return Err(ImportError::NoContent);
     }
 
-    Ok(LocalImportResult {
-        sections,
-        content_analysis,
-        sorting_applied: sorting_method,
-    })
+    Ok(LocalImportResult { sections, content_analysis, sorting_applied: sorting_method })
 }
 
 /// Information about a video file for sorting purposes
@@ -463,62 +511,6 @@ pub fn import_from_local_folder_with_analysis(path: &Path) -> Result<LocalImport
 struct VideoFileInfo {
     path: std::path::PathBuf,
     created: SystemTime,
-}
-
-/// Probe video duration using rust-ffmpeg, fallback to ffprobe CLI if needed
-fn probe_video_duration(path: &std::path::Path) -> Option<std::time::Duration> {
-    // Try rust-ffmpeg first
-    #[cfg(feature = "ffmpeg")]
-    {
-        if let Ok(_) = ffmpeg_next::init() {
-            if let Ok(ictx) = ffmpeg_next::format::input(&path) {
-                if let Some(stream) = ictx.streams().best(ffmpeg_next::media::Type::Video) {
-                    let duration = stream.duration();
-                    let time_base = stream.time_base();
-                    if duration >= 0 {
-                        let secs = duration as f64 * f64::from(time_base);
-                        return Some(std::time::Duration::from_secs_f64(secs));
-                    }
-                }
-            }
-        }
-    }
-    // Fallback to ffprobe CLI
-    use std::process::Command;
-    let output = Command::new("ffprobe")
-        .args([
-            "-v",
-            "error",
-            "-show_entries",
-            "format=duration",
-            "-of",
-            "default=noprint_wrappers=1:nokey=1",
-            path.to_string_lossy().as_ref(),
-        ])
-        .output()
-        .ok()?;
-    if !output.status.success() {
-        return None;
-    }
-    let stdout = String::from_utf8_lossy(&output.stdout);
-    let secs = stdout.trim().parse::<f64>().ok()?;
-    Some(std::time::Duration::from_secs_f64(secs))
-}
-
-/// Check if a file has a video extension
-fn is_video_file(path: &Path) -> bool {
-    const VIDEO_EXTENSIONS: &[&str] = &[
-        "mp4", "avi", "mkv", "mov", "wmv", "flv", "webm", "m4v", "mpg", "mpeg", "3gp", "f4v",
-        "asf", "rm", "rmvb", "vob", "ogv", "drc", "gif", "gifv", "mng", "qt", "yuv", "mp2", "mpe",
-        "mpv", "m2v", "svi", "3g2", "mxf", "roq", "nsv",
-    ];
-
-    if let Some(extension) = path.extension() {
-        if let Some(ext_str) = extension.to_str() {
-            return VIDEO_EXTENSIONS.contains(&ext_str.to_lowercase().as_str());
-        }
-    }
-    false
 }
 
 /// Check if a file is hidden or a system file
@@ -540,39 +532,36 @@ fn is_hidden_or_system_file(path: &Path) -> bool {
     false
 }
 
+/// Check if a directory should be ignored during scanning
+fn is_ignored_directory(path: &Path) -> bool {
+    if let Some(name) = path.file_name().and_then(|s| s.to_str()) {
+        let name_lower = name.to_lowercase();
+        // Common VCS, system, and build directories
+        let ignored = [
+            ".git",
+            ".svn",
+            ".hg",
+            ".idea",
+            "node_modules",
+            "__macosx",
+            "system volume information",
+            "$recycle.bin",
+            ".trash",
+            ".trashes",
+        ];
+        if ignored.contains(&name_lower.as_str()) {
+            return true;
+        }
+    }
+    false
+}
+
 /// Extract a meaningful title from a file path
 fn extract_title_from_path(path: &Path) -> Option<String> {
     path.file_stem()
         .and_then(|stem| stem.to_str())
-        .map(clean_filename_title)
+        .map(crate::ingest::clean_title)
         .filter(|title| !title.is_empty())
-}
-
-/// Clean and normalize titles extracted from filenames
-fn clean_filename_title(title: &str) -> String {
-    title
-        .trim()
-        // Replace common separators with spaces
-        .replace(['_', '-', '.'], " ")
-        // Remove common video quality indicators
-        .replace("1080p", "")
-        .replace("720p", "")
-        .replace("480p", "")
-        .replace("4K", "")
-        .replace("HD", "")
-        // Remove common brackets and their contents if they contain metadata
-        .split('[')
-        .next()
-        .unwrap_or(title)
-        .split('(')
-        .next()
-        .unwrap_or(title)
-        // Normalize whitespace
-        .split_whitespace()
-        .collect::<Vec<_>>()
-        .join(" ")
-        .trim()
-        .to_string()
 }
 
 /// Natural sorting comparison that handles numbers correctly
@@ -614,7 +603,7 @@ fn natural_sort_string_compare(a: &str, b: &str) -> std::cmp::Ordering {
                         other => return other,
                     }
                 }
-            }
+            },
         }
     }
 }
@@ -645,24 +634,24 @@ fn determine_sorting_method(analysis: &ContentTypeAnalysis) -> SortingMethod {
                 // Medium confidence, use natural sorting as compromise
                 SortingMethod::Natural
             }
-        }
+        },
         ProcessingRecommendation::ApplyClustering => {
             // Thematic content can use natural sorting
             SortingMethod::Natural
-        }
+        },
         ProcessingRecommendation::UserChoice => {
             // When ambiguous, default to natural sorting
             SortingMethod::Natural
-        }
+        },
         ProcessingRecommendation::FallbackProcessing => {
             // Fallback to natural sorting
             SortingMethod::Natural
-        }
+        },
     }
 }
 
 /// Import video titles and durations from a local folder containing video files
-/// 
+///
 /// Legacy function for backward compatibility - returns only sections
 ///
 /// # Arguments
@@ -684,16 +673,13 @@ pub fn get_sorting_options(path: &Path) -> Result<Vec<SortingOption>, ImportErro
     let mut video_files = Vec::new();
     for entry in entries.flatten() {
         let file_path = entry.path();
-        if is_video_file(&file_path) && !is_hidden_or_system_file(&file_path) {
+        if crate::ingest::is_video_file(&file_path) && !is_hidden_or_system_file(&file_path) {
             if let Ok(metadata) = entry.metadata() {
                 let created = metadata
                     .created()
                     .unwrap_or_else(|_| metadata.modified().unwrap_or_else(|_| SystemTime::now()));
 
-                video_files.push(VideoFileInfo {
-                    path: file_path,
-                    created,
-                });
+                video_files.push(VideoFileInfo { path: file_path, created });
             }
         }
     }
@@ -705,10 +691,7 @@ pub fn get_sorting_options(path: &Path) -> Result<Vec<SortingOption>, ImportErro
     alphabetical.sort_by(|a, b| a.path.file_name().cmp(&b.path.file_name()));
     options.push(SortingOption {
         name: "Alphabetical".to_string(),
-        titles: alphabetical
-            .into_iter()
-            .filter_map(|f| extract_title_from_path(&f.path))
-            .collect(),
+        titles: alphabetical.into_iter().filter_map(|f| extract_title_from_path(&f.path)).collect(),
     });
 
     // Natural sorting (default)
@@ -716,10 +699,7 @@ pub fn get_sorting_options(path: &Path) -> Result<Vec<SortingOption>, ImportErro
     natural.sort_by(|a, b| natural_sort_compare(&a.path, &b.path));
     options.push(SortingOption {
         name: "Natural (Default)".to_string(),
-        titles: natural
-            .into_iter()
-            .filter_map(|f| extract_title_from_path(&f.path))
-            .collect(),
+        titles: natural.into_iter().filter_map(|f| extract_title_from_path(&f.path)).collect(),
     });
 
     // Creation time sorting
@@ -727,10 +707,7 @@ pub fn get_sorting_options(path: &Path) -> Result<Vec<SortingOption>, ImportErro
     by_creation.sort_by(|a, b| a.created.cmp(&b.created));
     options.push(SortingOption {
         name: "Creation Time".to_string(),
-        titles: by_creation
-            .into_iter()
-            .filter_map(|f| extract_title_from_path(&f.path))
-            .collect(),
+        titles: by_creation.into_iter().filter_map(|f| extract_title_from_path(&f.path)).collect(),
     });
 
     Ok(options)
@@ -743,13 +720,17 @@ pub fn import_from_folder(
     folder_path: &Path,
     course_title: &str,
 ) -> Result<Course, ImportError> {
-    log::info!("Starting import from folder: {} with title: {}", folder_path.display(), course_title);
-    
+    log::info!(
+        "Starting import from folder: {} with title: {}",
+        folder_path.display(),
+        course_title
+    );
+
     // Use the enhanced import with content analysis
     let import_result = import_from_local_folder_with_analysis(folder_path)?;
-    
+
     log::info!("Import analysis completed with {} sections", import_result.sections.len());
-    
+
     if import_result.sections.is_empty() {
         return Err(ImportError::NoContent);
     }
@@ -757,7 +738,7 @@ pub fn import_from_folder(
     // Extract raw titles and create sections
     let raw_titles: Vec<String> = import_result.sections.iter().map(|s| s.title.clone()).collect();
     let mut sections = Vec::new();
-    
+
     for (index, local_section) in import_result.sections.iter().enumerate() {
         let section = crate::types::Section {
             title: local_section.title.clone(),
@@ -771,24 +752,45 @@ pub fn import_from_folder(
     let total_duration: std::time::Duration = sections.iter().map(|section| section.duration).sum();
 
     // Determine content type and processing strategy from analysis
-    let (content_type_detected, processing_strategy, original_order_preserved) = match import_result.content_analysis.content_type {
-        ContentType::Sequential => {
-            log::info!("Local content detected as Sequential with confidence {:.2}", import_result.content_analysis.confidence_score);
-            ("Sequential".to_string(), "PreserveOrder".to_string(), true)
-        }
-        ContentType::Thematic => {
-            log::info!("Local content detected as Thematic with confidence {:.2}", import_result.content_analysis.confidence_score);
-            ("Thematic".to_string(), "ApplyClustering".to_string(), false)
-        }
-        ContentType::Mixed => {
-            log::info!("Local content detected as Mixed with confidence {:.2}", import_result.content_analysis.confidence_score);
-            ("Mixed".to_string(), "UserChoice".to_string(), import_result.sorting_applied == SortingMethod::PreservedOrder)
-        }
-        ContentType::Ambiguous => {
-            log::info!("Local content type ambiguous with confidence {:.2}", import_result.content_analysis.confidence_score);
-            ("Ambiguous".to_string(), "FallbackProcessing".to_string(), import_result.sorting_applied == SortingMethod::PreservedOrder)
-        }
-    };
+    let (content_type_detected, processing_strategy, original_order_preserved) =
+        match import_result.content_analysis.content_type {
+            ContentType::Sequential => {
+                log::info!(
+                    "Local content detected as Sequential with confidence {:.2}",
+                    import_result.content_analysis.confidence_score
+                );
+                ("Sequential".to_string(), "PreserveOrder".to_string(), true)
+            },
+            ContentType::Thematic => {
+                log::info!(
+                    "Local content detected as Thematic with confidence {:.2}",
+                    import_result.content_analysis.confidence_score
+                );
+                ("Thematic".to_string(), "ApplyClustering".to_string(), false)
+            },
+            ContentType::Mixed => {
+                log::info!(
+                    "Local content detected as Mixed with confidence {:.2}",
+                    import_result.content_analysis.confidence_score
+                );
+                (
+                    "Mixed".to_string(),
+                    "UserChoice".to_string(),
+                    import_result.sorting_applied == SortingMethod::PreservedOrder,
+                )
+            },
+            ContentType::Ambiguous => {
+                log::info!(
+                    "Local content type ambiguous with confidence {:.2}",
+                    import_result.content_analysis.confidence_score
+                );
+                (
+                    "Ambiguous".to_string(),
+                    "FallbackProcessing".to_string(),
+                    import_result.sorting_applied == SortingMethod::PreservedOrder,
+                )
+            },
+        };
 
     // Create a single module containing all videos
     let module = crate::types::Module {
@@ -818,7 +820,8 @@ pub fn import_from_folder(
     };
 
     // Create video metadata from local sections with preserved indices
-    let videos: Vec<crate::types::VideoMetadata> = import_result.sections
+    let videos: Vec<crate::types::VideoMetadata> = import_result
+        .sections
         .iter()
         .map(|local_section| {
             let mut video_metadata = crate::types::VideoMetadata::new_local_with_index(
@@ -872,11 +875,11 @@ mod tests {
 
     #[test]
     fn test_video_file_detection() {
-        assert!(is_video_file(Path::new("test.mp4")));
-        assert!(is_video_file(Path::new("movie.avi")));
-        assert!(is_video_file(Path::new("VIDEO.MP4"))); // case insensitive
-        assert!(!is_video_file(Path::new("document.pdf")));
-        assert!(!is_video_file(Path::new("image.jpg")));
+        assert!(crate::ingest::is_video_file(Path::new("test.mp4")));
+        assert!(crate::ingest::is_video_file(Path::new("movie.avi")));
+        assert!(crate::ingest::is_video_file(Path::new("VIDEO.MP4"))); // case insensitive
+        assert!(!crate::ingest::is_video_file(Path::new("document.pdf")));
+        assert!(!crate::ingest::is_video_file(Path::new("image.jpg")));
     }
 
     #[test]
@@ -889,15 +892,12 @@ mod tests {
 
     #[test]
     fn test_title_cleaning() {
+        assert_eq!(crate::ingest::clean_title("My_Video-Title.1080p"), "My Video Title");
         assert_eq!(
-            clean_filename_title("My_Video-Title.1080p"),
-            "My Video Title"
-        );
-        assert_eq!(
-            clean_filename_title("Lecture 01 - Introduction.mp4"),
+            crate::ingest::clean_title("Lecture 01 - Introduction"),
             "Lecture 01 Introduction"
         );
-        assert_eq!(clean_filename_title("Chapter_2_Part_1"), "Chapter 2 Part 1");
+        assert_eq!(crate::ingest::clean_title("Chapter_2_Part_1"), "Chapter 2 Part 1");
     }
 
     #[test]
@@ -906,10 +906,7 @@ mod tests {
         let mut sorted_files = files.clone();
         sorted_files.sort_by(|a, b| natural_sort_string_compare(a, b));
 
-        assert_eq!(
-            sorted_files,
-            vec!["video1.mp4", "video2.mp4", "video10.mp4", "video20.mp4"]
-        );
+        assert_eq!(sorted_files, vec!["video1.mp4", "video2.mp4", "video10.mp4", "video20.mp4"]);
     }
 
     #[test]
@@ -956,12 +953,12 @@ mod tests {
         File::create(temp_dir.path().join("Lesson 3 - Advanced.mp4"))?;
 
         let result = import_from_local_folder_with_analysis(temp_dir.path())?;
-        
+
         // Should detect sequential pattern
         assert_eq!(result.content_analysis.content_type, ContentType::Sequential);
         assert!(result.content_analysis.confidence_score > 0.5);
         assert_eq!(result.sorting_applied, SortingMethod::PreservedOrder);
-        
+
         // Should have 3 videos with preserved indices
         assert_eq!(result.sections.len(), 3);
         assert!(result.sections.iter().any(|s| s.title.contains("Introduction")));
@@ -981,7 +978,7 @@ mod tests {
         File::create(temp_dir.path().join("React Components.mp4"))?;
 
         let result = import_from_local_folder_with_analysis(temp_dir.path())?;
-        
+
         // Should not detect strong sequential pattern
         assert_ne!(result.content_analysis.content_type, ContentType::Sequential);
         assert_eq!(result.sorting_applied, SortingMethod::Natural);
@@ -993,5 +990,259 @@ mod tests {
     fn test_nonexistent_directory() {
         let result = import_from_local_folder(Path::new("/nonexistent/path"));
         assert!(matches!(result, Err(ImportError::FileSystem(_))));
+    }
+
+    #[tokio::test]
+    async fn test_scan_directory_recursive_async_cancellation()
+    -> Result<(), Box<dyn std::error::Error>> {
+        use std::fs::File;
+        use tokio_util::sync::CancellationToken;
+
+        let temp_dir = tempfile::tempdir()?;
+        let base = temp_dir.path();
+
+        // Create a large number of dummy video files to ensure the scan takes time
+        let total_files = 200usize;
+        for i in 0..total_files {
+            File::create(base.join(format!("video_{i}.mp4")))?;
+        }
+
+        let ingest = super::LocalIngest::new();
+        let token = CancellationToken::new();
+        let path = base.to_path_buf();
+
+        // Start the async recursive scan with small batch_size for frequent cancellation checks
+        let scan_fut = ingest.scan_directory_recursive_async(
+            path,
+            None,
+            Some(1), // process one file per batch to maximize cancellation windows
+            Some(token.clone()),
+        );
+
+        // Cancel shortly after to simulate user cancellation
+        tokio::spawn({
+            let token = token.clone();
+            async move {
+                tokio::time::sleep(std::time::Duration::from_millis(5)).await;
+                token.cancel();
+            }
+        });
+
+        let result = scan_fut.await?;
+        // Expect that we cancelled before collecting all files, but collected at least some
+        assert!(result.len() < total_files, "Expected partial results due to cancellation");
+        assert!(!result.is_empty(), "Expected at least some files collected before cancellation");
+
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn test_scan_directory_recursive_async_batching() -> Result<(), Box<dyn std::error::Error>>
+    {
+        use std::fs::File;
+
+        let temp_dir = tempfile::tempdir()?;
+        let base = temp_dir.path();
+
+        // Create a moderate number of dummy video files
+        let total_files = 25usize;
+        for i in 0..total_files {
+            File::create(base.join(format!("clip_{i}.mp4")))?;
+        }
+
+        let ingest = super::LocalIngest::new();
+        let result = ingest
+            .scan_directory_recursive_async(
+                base.to_path_buf(),
+                None,
+                Some(3), // small batch size to exercise batch loop
+                None,    // no cancellation
+            )
+            .await?;
+
+        assert_eq!(
+            result.len(),
+            total_files,
+            "All files should be discovered with batching enabled"
+        );
+        Ok(())
+    }
+
+    #[test]
+    fn test_nested_folder_discovery() -> Result<(), Box<dyn std::error::Error>> {
+        use std::fs::{self, File};
+        use tempfile::tempdir;
+
+        let dir = tempdir()?;
+        let root = dir.path();
+        // Create nested directory structure
+        fs::create_dir_all(root.join("sub1"))?;
+        fs::create_dir_all(root.join("sub2/deeper"))?;
+
+        // Create video files in root and nested directories
+        File::create(root.join("video_root.mp4"))?;
+        File::create(root.join("sub1/video_a.mp4"))?;
+        File::create(root.join("sub2/deeper/video_b.mp4"))?;
+
+        // Use the recursive import which should discover nested files
+        let result = super::import_from_local_folder_with_analysis(root)?;
+        assert_eq!(result.sections.len(), 3, "Should discover videos in nested folders too");
+
+        Ok(())
+    }
+
+    #[test]
+    fn test_hidden_and_system_file_skipping() -> Result<(), Box<dyn std::error::Error>> {
+        use std::fs::File;
+        use tempfile::tempdir;
+
+        let dir = tempdir()?;
+        let root = dir.path();
+
+        // Hidden/system files should be skipped
+        File::create(root.join(".hidden.mp4"))?;
+        File::create(root.join("Thumbs.db"))?;
+        File::create(root.join(".DS_Store"))?;
+
+        // Visible file should be included
+        File::create(root.join("visible.mp4"))?;
+
+        let result = super::import_from_local_folder_with_analysis(root)?;
+        assert_eq!(
+            result.sections.len(),
+            1,
+            "Only visible.mp4 should be included, hidden/system files must be skipped"
+        );
+        assert!(
+            result.sections.iter().any(|s| s.title.to_lowercase().contains("visible")),
+            "Result should contain the visible video"
+        );
+
+        Ok(())
+    }
+
+    #[test]
+    fn test_stable_sorting_modes_natural_alphabetical_ctime()
+    -> Result<(), Box<dyn std::error::Error>> {
+        use std::fs::File;
+        use tempfile::tempdir;
+
+        let dir = tempdir()?;
+        let root = dir.path();
+
+        // Create files in a specific creation order to test ctime sorting
+        // Creation order: file2 -> file10 -> file1
+        File::create(root.join("file2.mp4"))?;
+        std::thread::sleep(std::time::Duration::from_millis(2));
+        File::create(root.join("file10.mp4"))?;
+        std::thread::sleep(std::time::Duration::from_millis(2));
+        File::create(root.join("file1.mp4"))?;
+
+        let options = super::get_sorting_options(root)?;
+
+        // Find each sorting option by name
+        let alphabetical = options
+            .iter()
+            .find(|o| o.name == "Alphabetical")
+            .expect("Alphabetical option should exist");
+        let natural = options
+            .iter()
+            .find(|o| o.name == "Natural (Default)")
+            .expect("Natural option should exist");
+        let creation = options
+            .iter()
+            .find(|o| o.name == "Creation Time")
+            .expect("Creation Time option should exist");
+
+        // Alphabetical: "file1", "file10", "file2"
+        assert_eq!(
+            alphabetical.titles,
+            vec!["file1".to_string(), "file10".to_string(), "file2".to_string()],
+            "Alphabetical sorting should be lexicographic"
+        );
+
+        // Natural: "file1", "file2", "file10"
+        assert_eq!(
+            natural.titles,
+            vec!["file1".to_string(), "file2".to_string(), "file10".to_string()],
+            "Natural sorting should handle numeric segments"
+        );
+
+        // Creation Time: creation order file2 -> file10 -> file1
+        assert_eq!(
+            creation.titles,
+            vec!["file2".to_string(), "file10".to_string(), "file1".to_string()],
+            "Creation time sorting should follow file creation order"
+        );
+
+        Ok(())
+    }
+
+    #[test]
+    fn test_ignored_directories_are_skipped() -> Result<(), Box<dyn std::error::Error>> {
+        use std::fs::{self, File};
+        use tempfile::tempdir;
+
+        let dir = tempdir()?;
+        let root = dir.path();
+
+        // Create ignored directories and place video files inside them
+        fs::create_dir_all(root.join("node_modules/sub"))?;
+        fs::create_dir_all(root.join(".git/objects"))?;
+        fs::create_dir_all(root.join("System Volume Information"))?;
+
+        // Files inside ignored directories should not be picked up
+        File::create(root.join("node_modules/sub/hidden_video.mp4"))?;
+        File::create(root.join(".git/objects/ignored.mp4"))?;
+        File::create(root.join("System Volume Information/ignored2.mp4"))?;
+
+        // Visible file should be included
+        File::create(root.join("visible.mp4"))?;
+
+        let result = super::import_from_local_folder_with_analysis(root)?;
+        let titles: Vec<_> = result.sections.iter().map(|s| s.title.to_lowercase()).collect();
+
+        assert_eq!(
+            result.sections.len(),
+            1,
+            "Only visible.mp4 should be included; files in ignored directories must be skipped"
+        );
+        assert!(
+            titles.iter().any(|t| t.contains("visible")),
+            "Result should contain the visible video"
+        );
+
+        Ok(())
+    }
+
+    #[test]
+    #[ignore = "slow - deep recursive scan over many nested folders"]
+    fn slow_recursive_scan_with_deep_tree() -> Result<(), Box<dyn std::error::Error>> {
+        use std::fs::{self, File};
+
+        let dir = tempfile::tempdir()?;
+        let root = dir.path();
+
+        // Create a deeper tree with many files to simulate a slow scan
+        for i in 0..30usize {
+            let sub = root.join(format!("level_{i}/sub_{i}/subsub_{i}"));
+            fs::create_dir_all(&sub)?;
+            // Add multiple files at each level
+            File::create(sub.join(format!("video_{i}_a.mp4")))?;
+            File::create(sub.join(format!("video_{i}_b.mkv")))?;
+            // Add some non-video files which should be ignored
+            File::create(sub.join(format!("note_{i}.txt")))?;
+            File::create(sub.join(format!(".hidden_{i}.mp4")))?; // hidden -> ignored
+        }
+
+        let ingest = super::LocalIngest::new();
+        // Run the synchronous recursive scan without progress callback
+        let files = ingest.scan_directory_recursive(root, None)?;
+        assert!(
+            files.len() >= 60,
+            "Expected at least 60 discovered video files across nested levels"
+        );
+
+        Ok(())
     }
 }

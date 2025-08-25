@@ -1,0 +1,37 @@
+# Clippy configuration for Course Pilot
+# Reference: https://rust-lang.github.io/rust-clippy/master/index.html#configuration
+# Place this file at the crate root to configure clippy lints project-wide.
+# The project uses edition 2024; align MSRV accordingly.
+msrv = "1.85.0"
+
+# Complexity thresholds (tune to reduce false positives while keeping signal high)
+cognitive-complexity-threshold = 40         # default 25
+type-complexity-threshold = 300             # default 250
+too-many-arguments-threshold = 10           # default 7
+too-many-lines-threshold = 400              # default 100
+single-char-binding-names-threshold = 2     # default 1
+
+# Testing ergonomics: allow these in tests/benches/examples only
+allow-unwrap-in-tests = true
+allow-expect-in-tests = true
+allow-dbg-in-tests = true
+
+# Whitelist identifiers for the `clippy::doc_markdown` lint
+doc-valid-idents = [
+  "HTML",
+  "HTTP",
+  "URL",
+  "UUID",
+  "JSON",
+  "CSV",
+  "PDF",
+  "SQL",
+  "SQLite",
+  "Tokio",
+  "Dioxus",
+  "YouTube",
+  "R2D2",
+  "IPC",
+  "GUI",
+  "CLI",
+]

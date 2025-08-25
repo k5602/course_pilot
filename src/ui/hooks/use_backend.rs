@@ -5,17 +5,21 @@ use crate::types::{
     PlanSettings,
 };
 use anyhow::Result;
+use dioxus::prelude::*;
 use std::path::PathBuf;
+use std::sync::Arc;
 use uuid::Uuid;
 
 use super::{
     FolderValidation, ProgressInfo, use_analytics_manager, use_course_manager, use_export_manager,
-    use_import_manager, use_notes_manager, use_plan_manager, use_settings_manager,
+    use_gemini_manager, use_import_manager, use_notes_manager, use_plan_manager,
+    use_settings_manager,
 };
 
 use super::use_analytics::AnalyticsManager;
 use super::use_courses::CourseManager;
 use super::use_export::ExportManager;
+use super::use_gemini::GeminiManager;
 use super::use_import::ImportManager;
 use super::use_notes::NotesManager;
 use super::use_plans::PlanManager;
@@ -24,6 +28,7 @@ use super::use_settings::SettingsManager;
 /// Unified backend interface that combines all the specialized hooks
 #[derive(Clone)]
 pub struct Backend {
+    db: Arc<crate::storage::database::Database>,
     pub courses: CourseManager,
     pub plans: PlanManager,
     pub notes: NotesManager,
@@ -31,6 +36,7 @@ pub struct Backend {
     pub import: ImportManager,
     pub export: ExportManager,
     pub settings: SettingsManager,
+    pub gemini: GeminiManager,
 }
 
 impl Backend {
@@ -74,9 +80,7 @@ impl Backend {
         item_index: usize,
         completed: bool,
     ) -> Result<()> {
-        self.plans
-            .update_plan_item_completion(plan_id, item_index, completed)
-            .await
+        self.plans.update_plan_item_completion(plan_id, item_index, completed).await
     }
 
     pub async fn get_plan_progress(&self, plan_id: Uuid) -> Result<ProgressInfo> {
@@ -109,9 +113,7 @@ impl Backend {
         course_id: Uuid,
         video_index: Option<usize>,
     ) -> Result<Vec<Note>> {
-        self.notes
-            .list_notes_by_course_and_video_index(course_id, video_index)
-            .await
+        self.notes.list_notes_by_course_and_video_index(course_id, video_index).await
     }
 
     pub async fn list_notes_by_video(&self, video_id: Uuid) -> Result<Vec<Note>> {
@@ -123,9 +125,7 @@ impl Backend {
         course_id: Uuid,
         video_index: usize,
     ) -> Result<Vec<Note>> {
-        self.notes
-            .list_notes_by_video_index(course_id, video_index)
-            .await
+        self.notes.list_notes_by_video_index(course_id, video_index).await
     }
 
     pub async fn search_notes(&self, query: &str) -> Result<Vec<Note>> {
@@ -189,15 +189,27 @@ impl Backend {
     }
 
     // --- Video Progress Tracking ---
-    pub async fn mark_video_completed(&self, plan_id: Uuid, session_index: usize, video_index: usize, completed: bool) -> Result<()> {
+    pub async fn mark_video_completed(
+        &self,
+        plan_id: Uuid,
+        session_index: usize,
+        video_index: usize,
+        completed: bool,
+    ) -> Result<()> {
         // Create video progress update
-        let progress_update = crate::types::VideoProgressUpdate::new(plan_id, session_index, video_index, completed);
-        
+        let progress_update =
+            crate::types::VideoProgressUpdate::new(plan_id, session_index, video_index, completed);
+
         // Store in database via analytics manager (which handles progress tracking)
         self.analytics.update_video_progress(progress_update).await
     }
 
-    pub async fn get_video_completion_status(&self, plan_id: Uuid, session_index: usize, video_index: usize) -> Result<bool> {
+    pub async fn get_video_completion_status(
+        &self,
+        plan_id: Uuid,
+        session_index: usize,
+        video_index: usize,
+    ) -> Result<bool> {
         self.analytics.get_video_completion_status(plan_id, session_index, video_index).await
     }
 
@@ -214,9 +226,7 @@ impl Backend {
         &self,
         settings: &AdvancedSchedulerSettings,
     ) -> Result<Vec<String>> {
-        self.analytics
-            .validate_advanced_scheduler_settings(settings)
-            .await
+        self.analytics.validate_advanced_scheduler_settings(settings).await
     }
 
     pub async fn get_recommended_advanced_settings(
@@ -224,9 +234,7 @@ impl Backend {
         course_id: Uuid,
         user_experience: DifficultyLevel,
     ) -> Result<AdvancedSchedulerSettings> {
-        self.analytics
-            .get_recommended_advanced_settings(course_id, user_experience)
-            .await
+        self.analytics.get_recommended_advanced_settings(course_id, user_experience).await
     }
 
     pub async fn structure_course(&self, course_id: Uuid) -> Result<Course> {
@@ -241,9 +249,7 @@ impl Backend {
     where
         F: Fn(f32, String) + Send + Sync + 'static,
     {
-        self.analytics
-            .structure_course_with_progress(course_id, progress_callback)
-            .await
+        self.analytics.structure_course_with_progress(course_id, progress_callback).await
     }
 
     // --- Import ---
@@ -260,9 +266,7 @@ impl Backend {
         folder_path: PathBuf,
         course_title: Option<String>,
     ) -> Result<Course> {
-        self.import
-            .import_from_local_folder(folder_path, course_title)
-            .await
+        self.import.import_from_local_folder(folder_path, course_title).await
     }
 
     // --- Settings ---
@@ -293,11 +297,33 @@ impl Backend {
     pub async fn reset_settings(&self) -> Result<()> {
         self.settings.reset_settings().await
     }
+
+    // --- Clustering analytics & quality ---
+    pub async fn get_clustering_analytics(&self) -> Result<crate::storage::ClusteringAnalytics> {
+        let db = self.db.clone();
+        tokio::task::spawn_blocking(move || crate::storage::get_clustering_analytics(&db))
+            .await
+            .unwrap_or_else(|e| Err(anyhow::anyhow!("Join error: {}", e)))
+    }
+
+    pub async fn get_courses_by_clustering_quality(
+        &self,
+        min_quality: f32,
+    ) -> Result<Vec<crate::types::Course>> {
+        let db = self.db.clone();
+        tokio::task::spawn_blocking(move || {
+            crate::storage::get_courses_by_clustering_quality(&db, min_quality)
+        })
+        .await
+        .unwrap_or_else(|e| Err(anyhow::anyhow!("Join error: {}", e)))
+    }
 }
 
 /// Hook for accessing the unified backend interface
 pub fn use_backend() -> Backend {
+    let db = use_context::<Arc<crate::storage::database::Database>>();
     Backend {
+        db,
         courses: use_course_manager(),
         plans: use_plan_manager(),
         notes: use_notes_manager(),
@@ -305,5 +331,6 @@ pub fn use_backend() -> Backend {
         import: use_import_manager(),
         export: use_export_manager(),
         settings: use_settings_manager(),
+        gemini: use_gemini_manager(),
     }
 }

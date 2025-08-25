@@ -12,7 +12,7 @@ pub use crate::state::{
     NotesContext, NotesContextProvider, PlanContext, PlanContextProvider, initialize_global_state,
     use_active_import_reactive, use_contextual_panel_reactive, use_course_reactive,
     use_course_stats_reactive, use_courses_reactive, use_mobile_sidebar_reactive,
-    use_notes_reactive, use_plans_reactive, use_tag_statistics_reactive,
+    use_notes_reactive, use_plans_reactive,
 };
 
 /// Utility hook for managing loading states across contexts
@@ -65,11 +65,7 @@ impl PaginationState {
     pub fn total_pages(&self) -> usize {
         let total = (self.total_items)();
         let per_page = (self.items_per_page)();
-        if per_page == 0 {
-            1
-        } else {
-            total.div_ceil(per_page)
-        }
+        if per_page == 0 { 1 } else { total.div_ceil(per_page) }
     }
 
     pub fn has_next_page(&self) -> bool {
@@ -86,13 +82,8 @@ pub fn use_pagination_state(items_per_page: usize) -> PaginationState {
 }
 
 /// Hook for managing selection state (for bulk operations)
-pub fn use_selection_state<T: Clone + PartialEq + 'static>() -> (
-    Signal<Vec<T>>,
-    Callback<T>,
-    Callback<T>,
-    Callback<()>,
-    Callback<Vec<T>>,
-) {
+pub fn use_selection_state<T: Clone + PartialEq + 'static>()
+-> (Signal<Vec<T>>, Callback<T>, Callback<T>, Callback<()>, Callback<Vec<T>>) {
     let selected_items = use_signal(|| Vec::new());
 
     let add_selection = use_callback({
@@ -125,13 +116,7 @@ pub fn use_selection_state<T: Clone + PartialEq + 'static>() -> (
         move |items: Vec<T>| selected_items.set(items)
     });
 
-    (
-        selected_items,
-        add_selection,
-        remove_selection,
-        clear_selection,
-        set_selection,
-    )
+    (selected_items, add_selection, remove_selection, clear_selection, set_selection)
 }
 
 /// Hook for managing form validation state
@@ -210,11 +195,7 @@ impl<T: Clone + 'static> Default for AsyncOperationState<T> {
 
 impl<T: Clone + 'static> AsyncOperationState<T> {
     pub fn new() -> Self {
-        Self {
-            data: Signal::new(None),
-            loading: Signal::new(false),
-            error: Signal::new(None),
-        }
+        Self { data: Signal::new(None), loading: Signal::new(false), error: Signal::new(None) }
     }
 
     pub fn set_loading(&mut self, is_loading: bool) {

@@ -7,7 +7,7 @@ pub struct ChatMessage {
     pub timestamp: chrono::DateTime<chrono::Utc>,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
 pub struct ConversationHistory {
     pub messages: Vec<ChatMessage>,
     pub course_context: Option<CourseContext>,
@@ -107,26 +107,13 @@ pub struct UsageMetadata {
     pub total_token_count: Option<i32>,
 }
 
-impl Default for ConversationHistory {
-    fn default() -> Self {
-        Self {
-            messages: Vec::new(),
-            course_context: None,
-        }
-    }
-}
-
 impl ConversationHistory {
     pub fn new() -> Self {
         Self::default()
     }
 
     pub fn add_message(&mut self, role: String, content: String) {
-        self.messages.push(ChatMessage {
-            role,
-            content,
-            timestamp: chrono::Utc::now(),
-        });
+        self.messages.push(ChatMessage { role, content, timestamp: chrono::Utc::now() });
     }
 
     pub fn set_course_context(&mut self, context: CourseContext) {

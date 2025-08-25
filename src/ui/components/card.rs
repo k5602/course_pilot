@@ -85,10 +85,7 @@ pub fn Card(props: CardProps) -> Element {
 
     // Mount animation
     use_effect(move || {
-        opacity.animate_to(
-            1.0,
-            AnimationConfig::new(AnimationMode::Spring(Spring::default())),
-        );
+        opacity.animate_to(1.0, AnimationConfig::new(AnimationMode::Spring(Spring::default())));
     });
 
     let card_style = use_memo(move || {
@@ -151,7 +148,7 @@ pub fn Card(props: CardProps) -> Element {
                             // Render badges
                             if let Some(badges) = &props.badges {
                                 for (index, badge) in badges.iter().enumerate() {
-                                    // Add tooltip for content type badges 
+                                    // Add tooltip for content type badges
                                     if index == 1 && (badge.label == "Sequential" || badge.label == "Clustered" || badge.label == "Mixed") {
                                         div {
                                             class: "tooltip tooltip-bottom ml-2",
@@ -218,11 +215,7 @@ pub fn Card(props: CardProps) -> Element {
 /// Render variant-specific content
 fn render_variant_content(variant: &CardVariant) -> Element {
     match variant {
-        CardVariant::Course {
-            video_count,
-            duration,
-            progress,
-        } => {
+        CardVariant::Course { video_count, duration, progress } => {
             let progress_percent = (*progress * 100.0).round() as u32;
             let status = if progress_percent >= 100 {
                 "Completed"
@@ -261,11 +254,8 @@ fn render_variant_content(variant: &CardVariant) -> Element {
                     }
                 }
             }
-        }
-        CardVariant::Plan {
-            completion,
-            total_items,
-        } => {
+        },
+        CardVariant::Plan { completion, total_items } => {
             let completion_percent = (*completion * 100.0).round() as u32;
             let completed_items = (*completion * *total_items as f32).round() as usize;
 
@@ -295,7 +285,7 @@ fn render_variant_content(variant: &CardVariant) -> Element {
                     }
                 }
             }
-        }
+        },
         CardVariant::Note { timestamp, tags } => {
             rsx! {
                 div {
@@ -324,11 +314,11 @@ fn render_variant_content(variant: &CardVariant) -> Element {
                     }
                 }
             }
-        }
+        },
         CardVariant::Generic => {
             rsx! {
                 div { class: "space-y-2" }
             }
-        }
+        },
     }
 }

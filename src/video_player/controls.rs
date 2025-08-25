@@ -1,11 +1,12 @@
 use dioxus::prelude::*;
+use dioxus_desktop::use_window;
 use dioxus_free_icons::Icon;
 use dioxus_free_icons::icons::fa_solid_icons::{
     FaBackward, FaCompress, FaExpand, FaForward, FaPause, FaPlay, FaStop, FaVolumeHigh,
     FaVolumeXmark,
 };
 
-use crate::video_player::{PlaybackState, use_video_player, VideoSource};
+use crate::video_player::{PlaybackState, VideoSource, use_video_player};
 
 #[derive(Props, PartialEq, Clone)]
 pub struct VideoControlsProps {
@@ -22,24 +23,64 @@ pub struct VideoControlsProps {
 #[component]
 pub fn VideoControls(props: VideoControlsProps) -> Element {
     let state = use_video_player();
+    let window = use_window();
     let show_playlist_controls = props.show_playlist_controls.unwrap_or(false);
     let controls_visible = use_signal(|| true);
+    let last_mouse_move = use_signal(|| None::<std::time::Instant>);
+
+    let playback_rate = use_signal(|| 1.0f64);
 
     // Auto-hide controls in fullscreen mode
     let handle_mouse_move = use_callback({
         let mut controls_visible = controls_visible.clone();
-        let state = state.clone();
+        let mut last_mouse_move = last_mouse_move.clone();
         move |_| {
             controls_visible.set(true);
-            
-            // Set timer to hide controls after 3 seconds in fullscreen
-            if *state.is_fullscreen.read() {
-                let mut controls_visible = controls_visible.clone();
-                spawn(async move {
-                    tokio::time::sleep(tokio::time::Duration::from_secs(3)).await;
-                    controls_visible.set(false);
-                });
-            }
+
+            // record last mouse move time; auto-hide loop will handle hiding
+            last_mouse_move.set(Some(std::time::Instant::now()));
+        }
+    });
+
+    // Install global pointer tracker to compute click position via JS
+    use_effect({
+        let window = window.clone();
+        move || {
+            let script = r#"
+                    (function() {
+                        if (!window._cpPointerTrackerInstalled) {
+                            window._cpPointerTrackerInstalled = true;
+                            document.addEventListener('pointermove', function(e) {
+                                window._cp_last_pointer = { x: e.clientX, y: e.clientY };
+                            }, { capture: true, passive: true });
+                        }
+                    })();
+                "#
+            .to_string();
+            let _ = window.webview.evaluate_script(&script);
+        }
+    });
+
+    // Auto-hide controls in fullscreen after 3s of inactivity
+    use_effect({
+        let mut controls_visible = controls_visible.clone();
+        let last_mouse_move = last_mouse_move.clone();
+        let is_fullscreen = state.is_fullscreen.clone();
+        move || {
+            let is_fullscreen_clone = is_fullscreen.clone();
+            spawn(async move {
+                let mut interval = tokio::time::interval(tokio::time::Duration::from_millis(250));
+                loop {
+                    interval.tick().await;
+                    if *is_fullscreen_clone.read() && *controls_visible.read() {
+                        if let Some(t) = *last_mouse_move.read() {
+                            if t.elapsed() >= std::time::Duration::from_secs(3) {
+                                controls_visible.set(false);
+                            }
+                        }
+                    }
+                }
+            });
         }
     });
 
@@ -146,10 +187,7 @@ pub fn VideoControls(props: VideoControlsProps) -> Element {
         move |_evt: MouseEvent| {
             let duration = *state.duration.read();
             if duration > 0.0 {
-                // Calculate click position as percentage
-                // Note: This is a simplified calculation - in a real implementation,
-                // you'd need to get the actual element bounds
-                let percentage = 0.5; // Placeholder - would calculate from click position
+                let percentage = 0.5;
                 let new_position = duration * percentage;
                 state.seek_to(new_position);
                 if let Some(on_seek) = &on_seek {
@@ -179,9 +217,9 @@ pub fn VideoControls(props: VideoControlsProps) -> Element {
             div {
                 class: "flex items-center gap-3 text-white text-sm mb-3",
 
-                span { 
-                    class: "text-xs font-mono min-w-[3rem]", 
-                    "{format_time(*state.position.read())}" 
+                span {
+                    class: "text-xs font-mono min-w-[3rem]",
+                    "{format_time(*state.position.read())}"
                 }
 
                 div {
@@ -189,6 +227,7 @@ pub fn VideoControls(props: VideoControlsProps) -> Element {
 
                     // Progress track
                     div {
+
                         class: "h-2 bg-white/20 rounded-full cursor-pointer hover:bg-white/30 transition-colors",
                         onclick: handle_progress_click,
 
@@ -206,9 +245,9 @@ pub fn VideoControls(props: VideoControlsProps) -> Element {
                     }
                 }
 
-                span { 
-                    class: "text-xs font-mono min-w-[3rem]", 
-                    "{format_time(*state.duration.read())}" 
+                span {
+                    class: "text-xs font-mono min-w-[3rem]",
+                    "{format_time(*state.duration.read())}"
                 }
             }
 
@@ -369,21 +408,31 @@ pub fn VideoControls(props: VideoControlsProps) -> Element {
                         }
                     }
 
-                    // Playback speed (for future implementation)
+                    // Playback speed
                     div {
                         class: "dropdown dropdown-top dropdown-end",
-                        
+
                         button {
                             class: "btn btn-ghost btn-sm text-white hover:text-primary",
                             title: "Playback speed",
-                            "1x"
+                            "{*playback_rate.read()}x"
                         }
-                        
+
                         div {
                             class: "dropdown-content menu p-2 shadow bg-base-100 rounded-box w-32",
                             for speed in [0.25, 0.5, 0.75, 1.0, 1.25, 1.5, 1.75, 2.0] {
                                 button {
                                     class: "btn btn-ghost btn-sm justify-start",
+                                    onclick: {
+                                        let window = window.clone();
+                                        let mut playback_rate = playback_rate.clone();
+                                        let player_id = props.player_id.clone();
+                                        move |_| {
+                                            playback_rate.set(speed);
+                                            let script = format!("(function() {{ var el = document.getElementById('{}'); if (el) el.playbackRate = {}; }})()", player_id, speed);
+                                            let _ = window.webview.evaluate_script(&script);
+                                        }
+                                    },
                                     "{speed}x"
                                 }
                             }
@@ -417,15 +466,13 @@ pub fn VideoControls(props: VideoControlsProps) -> Element {
 
 /// Simplified controls for minimal UI
 #[component]
-pub fn MinimalVideoControls(
-    on_play_pause: EventHandler<()>,
-) -> Element {
+pub fn MinimalVideoControls(on_play_pause: EventHandler<()>) -> Element {
     let state = use_video_player();
 
     rsx! {
         div {
             class: "absolute inset-0 flex items-center justify-center",
-            
+
             button {
                 class: "btn btn-circle btn-lg bg-black/50 border-white/20 text-white hover:bg-black/70",
                 onclick: {
@@ -456,9 +503,7 @@ pub fn MinimalVideoControls(
 
 /// Progress bar only (for compact layouts)
 #[component]
-pub fn VideoProgressBar(
-    on_seek: EventHandler<f64>,
-) -> Element {
+pub fn VideoProgressBar(on_seek: EventHandler<f64>) -> Element {
     let state = use_video_player();
 
     let handle_progress_click = use_callback({

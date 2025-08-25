@@ -193,19 +193,19 @@ impl PreferenceLearningEngine {
                     feedback.rating,
                     &feedback.clustering_parameters,
                 )?;
-            }
+            },
             FeedbackType::ManualAdjustment => {
                 self.adjust_preferences_from_adjustments(&feedback.manual_adjustments)?;
-            }
+            },
             FeedbackType::ParameterChange => {
                 self.learn_from_parameter_change(&feedback.clustering_parameters)?;
-            }
+            },
             FeedbackType::ImplicitAcceptance => {
                 self.reinforce_current_preferences()?;
-            }
+            },
             FeedbackType::Rejection => {
                 self.adjust_preferences_from_rejection(&feedback.clustering_parameters)?;
-            }
+            },
         }
 
         // Update satisfaction score and usage count
@@ -386,12 +386,12 @@ impl PreferenceLearningEngine {
             DifficultyLevel::Beginner => {
                 params.preferred_strategy = ClusteringStrategy::ContentBased;
                 params.content_vs_duration_weight = 0.8; // Prioritize content grouping
-            }
+            },
             DifficultyLevel::Expert => {
                 params.preferred_strategy = ClusteringStrategy::Hybrid;
                 params.content_vs_duration_weight = 0.6; // Balance content and duration
-            }
-            _ => {} // Keep current preferences
+            },
+            _ => {}, // Keep current preferences
         }
 
         params
@@ -439,10 +439,7 @@ impl PreferenceLearningEngine {
         test_id: Uuid,
         course_id: Uuid,
     ) -> Option<(ABTestVariant, ClusteringPreferences)> {
-        let test = self
-            .ab_tests
-            .iter()
-            .find(|t| t.id == test_id && t.is_active)?;
+        let test = self.ab_tests.iter().find(|t| t.id == test_id && t.is_active)?;
 
         if test.current_sample_size >= test.target_sample_size {
             return None; // Test completed
@@ -476,11 +473,8 @@ impl PreferenceLearningEngine {
 
     /// Analyze A/B test results and update preferences
     pub fn analyze_ab_test_results(&mut self, test_id: Uuid) -> Result<ABTestAnalysis> {
-        let results: Vec<&ABTestResult> = self
-            .ab_results
-            .iter()
-            .filter(|r| r.test_id == test_id)
-            .collect();
+        let results: Vec<&ABTestResult> =
+            self.ab_results.iter().filter(|r| r.test_id == test_id).collect();
 
         if results.is_empty() {
             return Err(anyhow::anyhow!("No results found for test {}", test_id));
@@ -510,15 +504,9 @@ impl PreferenceLearningEngine {
                 .map(|r| r.user_satisfaction)
                 .sum::<f32>()
                 / variant_b_results.len() as f32,
-            variant_a_quality: variant_a_results
-                .iter()
-                .map(|r| r.quality_score)
-                .sum::<f32>()
+            variant_a_quality: variant_a_results.iter().map(|r| r.quality_score).sum::<f32>()
                 / variant_a_results.len() as f32,
-            variant_b_quality: variant_b_results
-                .iter()
-                .map(|r| r.quality_score)
-                .sum::<f32>()
+            variant_b_quality: variant_b_results.iter().map(|r| r.quality_score).sum::<f32>()
                 / variant_b_results.len() as f32,
             variant_a_adjustments: variant_a_results
                 .iter()
@@ -542,11 +530,11 @@ impl PreferenceLearningEngine {
             match analysis.winner {
                 Some(ABTestVariant::VariantA) => {
                     self.preferences = test.parameters_a.clone();
-                }
+                },
                 Some(ABTestVariant::VariantB) => {
                     self.preferences = test.parameters_b.clone();
-                }
-                None => {} // No clear winner, keep current preferences
+                },
+                None => {}, // No clear winner, keep current preferences
             }
         }
 
@@ -653,10 +641,7 @@ mod tests {
     fn test_preference_learning_creation() {
         let engine = PreferenceLearningEngine::new();
         assert_eq!(engine.get_preferences().similarity_threshold, 0.6);
-        assert_eq!(
-            engine.get_preferences().preferred_algorithm,
-            ClusteringAlgorithm::Hybrid
-        );
+        assert_eq!(engine.get_preferences().preferred_algorithm, ClusteringAlgorithm::Hybrid);
     }
 
     #[test]

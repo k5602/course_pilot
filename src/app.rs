@@ -9,15 +9,17 @@ pub fn initialize_app() -> Result<(), Box<dyn std::error::Error>> {
     {
         env_logger::Builder::from_default_env()
             .filter_level(log::LevelFilter::Debug)
+            .filter_module("symphonia_core::probe", log::LevelFilter::Off)
             .format_timestamp_secs()
             .init();
-        log::info!("Course Pilot application starting in debug mode with enhanced logging");
+        log::info!("Course Pilot application starting in debug mode with  logging");
     }
 
     #[cfg(not(debug_assertions))]
     {
         env_logger::Builder::from_default_env()
             .filter_level(log::LevelFilter::Info)
+            .filter_module("symphonia_core::probe", log::LevelFilter::Off)
             .format_timestamp_secs()
             .init();
         log::info!("Course Pilot application starting in release mode");
@@ -56,16 +58,46 @@ pub fn load_demo_data() -> Vec<crate::types::Course> {
                 "Testing and Documentation".to_string(),
             ],
             videos: vec![
-                crate::types::VideoMetadata::new_local("Introduction to Rust".to_string(), "".to_string()),
-                crate::types::VideoMetadata::new_local("Setting up the Development Environment".to_string(), "".to_string()),
-                crate::types::VideoMetadata::new_local("Variables and Data Types".to_string(), "".to_string()),
-                crate::types::VideoMetadata::new_local("Control Flow and Functions".to_string(), "".to_string()),
-                crate::types::VideoMetadata::new_local("Ownership and Borrowing".to_string(), "".to_string()),
-                crate::types::VideoMetadata::new_local("Structs and Enums".to_string(), "".to_string()),
-                crate::types::VideoMetadata::new_local("Error Handling".to_string(), "".to_string()),
-                crate::types::VideoMetadata::new_local("Collections and Iterators".to_string(), "".to_string()),
-                crate::types::VideoMetadata::new_local("Building a CLI Application".to_string(), "".to_string()),
-                crate::types::VideoMetadata::new_local("Testing and Documentation".to_string(), "".to_string()),
+                crate::types::VideoMetadata::new_local(
+                    "Introduction to Rust".to_string(),
+                    "".to_string(),
+                ),
+                crate::types::VideoMetadata::new_local(
+                    "Setting up the Development Environment".to_string(),
+                    "".to_string(),
+                ),
+                crate::types::VideoMetadata::new_local(
+                    "Variables and Data Types".to_string(),
+                    "".to_string(),
+                ),
+                crate::types::VideoMetadata::new_local(
+                    "Control Flow and Functions".to_string(),
+                    "".to_string(),
+                ),
+                crate::types::VideoMetadata::new_local(
+                    "Ownership and Borrowing".to_string(),
+                    "".to_string(),
+                ),
+                crate::types::VideoMetadata::new_local(
+                    "Structs and Enums".to_string(),
+                    "".to_string(),
+                ),
+                crate::types::VideoMetadata::new_local(
+                    "Error Handling".to_string(),
+                    "".to_string(),
+                ),
+                crate::types::VideoMetadata::new_local(
+                    "Collections and Iterators".to_string(),
+                    "".to_string(),
+                ),
+                crate::types::VideoMetadata::new_local(
+                    "Building a CLI Application".to_string(),
+                    "".to_string(),
+                ),
+                crate::types::VideoMetadata::new_local(
+                    "Testing and Documentation".to_string(),
+                    "".to_string(),
+                ),
             ],
             structure: Some(CourseStructure {
                 modules: vec![
@@ -146,16 +178,46 @@ pub fn load_demo_data() -> Vec<crate::types::Course> {
                 "Deployment Strategies".to_string(),
             ],
             videos: vec![
-                crate::types::VideoMetadata::new_local("Introduction to Dioxus".to_string(), "".to_string()),
-                crate::types::VideoMetadata::new_local("Setting up a Dioxus Project".to_string(), "".to_string()),
-                crate::types::VideoMetadata::new_local("Components and Props".to_string(), "".to_string()),
-                crate::types::VideoMetadata::new_local("State Management".to_string(), "".to_string()),
-                crate::types::VideoMetadata::new_local("Event Handling".to_string(), "".to_string()),
-                crate::types::VideoMetadata::new_local("Routing and Navigation".to_string(), "".to_string()),
-                crate::types::VideoMetadata::new_local("Styling with CSS".to_string(), "".to_string()),
-                crate::types::VideoMetadata::new_local("Building for Desktop".to_string(), "".to_string()),
-                crate::types::VideoMetadata::new_local("Building for Web".to_string(), "".to_string()),
-                crate::types::VideoMetadata::new_local("Deployment Strategies".to_string(), "".to_string()),
+                crate::types::VideoMetadata::new_local(
+                    "Introduction to Dioxus".to_string(),
+                    "".to_string(),
+                ),
+                crate::types::VideoMetadata::new_local(
+                    "Setting up a Dioxus Project".to_string(),
+                    "".to_string(),
+                ),
+                crate::types::VideoMetadata::new_local(
+                    "Components and Props".to_string(),
+                    "".to_string(),
+                ),
+                crate::types::VideoMetadata::new_local(
+                    "State Management".to_string(),
+                    "".to_string(),
+                ),
+                crate::types::VideoMetadata::new_local(
+                    "Event Handling".to_string(),
+                    "".to_string(),
+                ),
+                crate::types::VideoMetadata::new_local(
+                    "Routing and Navigation".to_string(),
+                    "".to_string(),
+                ),
+                crate::types::VideoMetadata::new_local(
+                    "Styling with CSS".to_string(),
+                    "".to_string(),
+                ),
+                crate::types::VideoMetadata::new_local(
+                    "Building for Desktop".to_string(),
+                    "".to_string(),
+                ),
+                crate::types::VideoMetadata::new_local(
+                    "Building for Web".to_string(),
+                    "".to_string(),
+                ),
+                crate::types::VideoMetadata::new_local(
+                    "Deployment Strategies".to_string(),
+                    "".to_string(),
+                ),
             ],
             structure: None,
         },

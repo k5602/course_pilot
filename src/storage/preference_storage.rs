@@ -3,11 +3,85 @@
 //! This module handles persistence of user preferences, feedback history,
 //! and A/B testing data for the clustering preference learning system.
 
+#[cfg(feature = "advanced_nlp")]
 use crate::nlp::clustering::{
     ABTestConfig, ABTestResult, ClusteringFeedback, ClusteringPreferences, PreferenceLearningEngine,
 };
+
+#[cfg(not(feature = "advanced_nlp"))]
+mod nlp_store_fallback {
+    use super::*;
+    use chrono::{DateTime, Utc};
+    use serde::{Deserialize, Serialize};
+    use uuid::Uuid;
+
+    #[derive(Clone, Debug, Default, Serialize, Deserialize, PartialEq)]
+    pub struct ClusteringPreferences {}
+
+    #[derive(Clone, Debug, Serialize, Deserialize)]
+    pub enum ABTestVariant {
+        A,
+        B,
+    }
+
+    #[derive(Clone, Debug, Serialize, Deserialize)]
+    pub struct ABTestConfig {
+        pub id: Uuid,
+        pub name: String,
+        pub description: Option<String>,
+        pub created_at: Option<DateTime<Utc>>,
+        pub sample_size: Option<i64>,
+        pub is_active: Option<bool>,
+    }
+
+    #[derive(Clone, Debug, Serialize, Deserialize)]
+    pub struct ClusteringFeedback {
+        pub id: Uuid,
+        pub course_id: Uuid,
+        pub clustering_parameters: ClusteringPreferences,
+        pub feedback_type: String,
+        pub rating: f32,
+        pub comments: Option<String>,
+        pub manual_adjustments: Vec<String>,
+        pub created_at: DateTime<Utc>,
+    }
+
+    #[derive(Clone, Debug, Serialize, Deserialize)]
+    pub struct ABTestResult {
+        pub test_id: Uuid,
+        pub course_id: Uuid,
+        pub variant: ABTestVariant,
+        pub parameters_used: ClusteringPreferences,
+        pub user_satisfaction: f32,
+        pub processing_time_ms: u64,
+        pub quality_score: f32,
+        pub user_made_adjustments: bool,
+        pub adjustment_count: usize,
+        pub created_at: DateTime<Utc>,
+    }
+
+    pub struct PreferenceLearningEngine;
+
+    impl PreferenceLearningEngine {
+        pub fn with_preferences(_p: ClusteringPreferences) -> Self {
+            Self
+        }
+        pub fn update_preferences_from_feedback(
+            &mut self,
+            _feedback: ClusteringFeedback,
+        ) -> anyhow::Result<()> {
+            Ok(())
+        }
+    }
+}
+
 use crate::storage::Database;
 use anyhow::Result;
+#[cfg(not(feature = "advanced_nlp"))]
+use nlp_store_fallback::{
+    ABTestConfig, ABTestResult, ABTestVariant, ClusteringFeedback, ClusteringPreferences,
+    PreferenceLearningEngine,
+};
 use rusqlite::params;
 use uuid::Uuid;
 

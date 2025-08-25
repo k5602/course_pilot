@@ -30,24 +30,16 @@ pub fn NotesPanel(mode: NotesPanelMode) -> Element {
     match mode {
         NotesPanelMode::AllNotes => {
             rsx!(AllNotesTab {})
-        }
+        },
         NotesPanelMode::CourseNotes(course_id) => {
             let video_id = None;
-            rsx!(NotesTab {
-                course_id: course_id,
-                video_id: video_id,
-                video_context: None
-            })
-        }
+            rsx!(NotesTab { course_id, video_id, video_context: None })
+        },
         NotesPanelMode::VideoNotes(course_id, video_index, video_title, module_title) => {
             let video_id = None; // We'll use video_index for now since we don't have video UUIDs
             let video_context = Some((video_index, video_title, module_title));
-            rsx!(NotesTab {
-                course_id: course_id,
-                video_id: video_id,
-                video_context: video_context
-            })
-        }
+            rsx!(NotesTab { course_id, video_id, video_context })
+        },
     }
 }
 
@@ -104,10 +96,7 @@ fn NotesTab(
                 .filter(|note| {
                     // Filter by search query
                     let matches_query = search_query().is_empty()
-                        || note
-                            .content
-                            .to_lowercase()
-                            .contains(&search_query().to_lowercase());
+                        || note.content.to_lowercase().contains(&search_query().to_lowercase());
 
                     // Filter by selected tags
                     let matches_tags = selected_tags().is_empty()
@@ -167,7 +156,7 @@ fn NotesTab(
                         toast_helpers::error("Failed to load notes");
                         return;
                     }
-                }
+                },
                 None => {
                     // Create new note
                     crate::types::Note {
@@ -181,7 +170,7 @@ fn NotesTab(
                         created_at: chrono::Utc::now(),
                         updated_at: chrono::Utc::now(),
                     }
-                }
+                },
             };
 
             save_note_action(note);
@@ -292,7 +281,7 @@ fn NotesTab(
                     })}
                 }
             };
-        }
+        },
         Some(Err(_err)) => {
             return rsx! {
                 div {
@@ -300,7 +289,7 @@ fn NotesTab(
                     "Failed to load notes."
                 }
             };
-        }
+        },
         Some(Ok(_)) => {
             // Extract temporary values to avoid borrowing issues
             let tag_stats_data = tag_stats.read_unchecked();
@@ -520,7 +509,7 @@ fn NotesTab(
                     }
                 }
             }
-        }
+        },
     }
 }
 
@@ -540,10 +529,7 @@ struct NoteCardProps {
 
 #[component]
 fn NoteCard(props: NoteCardProps) -> Element {
-    let ts = props
-        .timestamp
-        .map(|t| format!(" at {t}s"))
-        .unwrap_or_default();
+    let ts = props.timestamp.map(|t| format!(" at {t}s")).unwrap_or_default();
 
     let note_for_render = crate::types::Note {
         content: props.content.to_string(),
@@ -570,14 +556,8 @@ fn NoteCard(props: NoteCardProps) -> Element {
     let mut card_y = use_motion(12.0f32);
 
     use_effect(move || {
-        card_opacity.animate_to(
-            1.0,
-            AnimationConfig::new(AnimationMode::Tween(Tween::default())),
-        );
-        card_y.animate_to(
-            0.0,
-            AnimationConfig::new(AnimationMode::Spring(Spring::default())),
-        );
+        card_opacity.animate_to(1.0, AnimationConfig::new(AnimationMode::Tween(Tween::default())));
+        card_y.animate_to(0.0, AnimationConfig::new(AnimationMode::Spring(Spring::default())));
     });
 
     let card_style = use_memo(move || {
@@ -599,9 +579,7 @@ fn NoteCard(props: NoteCardProps) -> Element {
         DropdownItem {
             label: "Export".to_string(),
             icon: Some("📤".to_string()),
-            on_select: Some(EventHandler::new(|_| {
-                toast_helpers::info("Exported note (stub)")
-            })),
+            on_select: Some(EventHandler::new(|_| toast_helpers::info("Exported note (stub)"))),
             disabled: false,
             divider: false,
         },
@@ -734,7 +712,7 @@ fn AllNotesTab() -> Element {
                     div { class: "text-xs text-base-content/60 mt-2", "Debug: Resource is None (still loading)" }
                 }
             };
-        }
+        },
         Some(Err(err)) => {
             return rsx! {
                 div {
@@ -743,11 +721,11 @@ fn AllNotesTab() -> Element {
                     div { class: "text-xs text-base-content/60 mt-2", "Debug: Resource returned error" }
                 }
             };
-        }
+        },
         Some(Ok(notes)) => {
             log::info!("Debug: Loaded {} notes from database", notes.len());
             notes.clone()
-        }
+        },
     };
 
     // Filter notes based on search query
@@ -760,10 +738,7 @@ fn AllNotesTab() -> Element {
                 .iter()
                 .filter(|note| {
                     note.content.to_lowercase().contains(&query)
-                        || note
-                            .tags
-                            .iter()
-                            .any(|tag| tag.to_lowercase().contains(&query))
+                        || note.tags.iter().any(|tag| tag.to_lowercase().contains(&query))
                 })
                 .cloned()
                 .collect()

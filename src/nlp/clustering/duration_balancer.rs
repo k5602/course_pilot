@@ -227,9 +227,7 @@ impl DurationBalancer {
 
         if cluster.total_duration <= effective_target {
             // Cluster fits within target, no splitting needed
-            Ok(vec![
-                self.create_balanced_cluster(cluster.videos, effective_target),
-            ])
+            Ok(vec![self.create_balanced_cluster(cluster.videos, effective_target)])
         } else {
             // Cluster is too large, needs splitting
             self.split_cluster_by_duration(cluster.videos, effective_target)
@@ -358,9 +356,7 @@ impl DurationBalancer {
     ) -> Result<Vec<BalancedCluster>> {
         // Sort by balance score to identify problematic clusters
         clusters.sort_by(|a, b| {
-            a.balance_score
-                .partial_cmp(&b.balance_score)
-                .unwrap_or(std::cmp::Ordering::Equal)
+            a.balance_score.partial_cmp(&b.balance_score).unwrap_or(std::cmp::Ordering::Equal)
         });
 
         let mut optimized = Vec::new();
@@ -606,9 +602,7 @@ impl DurationBalancer {
         videos.sort_by(|a, b| {
             let sim_a = self.calculate_average_similarity_to_group(a, &videos_for_similarity);
             let sim_b = self.calculate_average_similarity_to_group(b, &videos_for_similarity);
-            sim_b
-                .partial_cmp(&sim_a)
-                .unwrap_or(std::cmp::Ordering::Equal)
+            sim_b.partial_cmp(&sim_a).unwrap_or(std::cmp::Ordering::Equal)
         });
 
         // Calculate optimal split points using dynamic programming approach
@@ -713,9 +707,7 @@ impl DurationBalancer {
 
         // Sort by balance score to prioritize problematic clusters
         optimized.sort_by(|a, b| {
-            a.balance_score
-                .partial_cmp(&b.balance_score)
-                .unwrap_or(std::cmp::Ordering::Equal)
+            a.balance_score.partial_cmp(&b.balance_score).unwrap_or(std::cmp::Ordering::Equal)
         });
 
         // Apply final optimizations
@@ -750,9 +742,7 @@ impl DurationBalancer {
 
         // Sort by difficulty progression (easier to harder)
         cluster.videos.sort_by(|a, b| {
-            a.difficulty_score
-                .partial_cmp(&b.difficulty_score)
-                .unwrap_or(std::cmp::Ordering::Equal)
+            a.difficulty_score.partial_cmp(&b.difficulty_score).unwrap_or(std::cmp::Ordering::Equal)
         });
 
         // Then by duration (shorter to longer within same difficulty)
@@ -779,9 +769,7 @@ impl DurationBalancer {
         videos.sort_by(|a, b| {
             let sim_a = self.calculate_average_similarity_to_group(a, &videos_for_similarity);
             let sim_b = self.calculate_average_similarity_to_group(b, &videos_for_similarity);
-            sim_b
-                .partial_cmp(&sim_a)
-                .unwrap_or(std::cmp::Ordering::Equal)
+            sim_b.partial_cmp(&sim_a).unwrap_or(std::cmp::Ordering::Equal)
         });
 
         let effective_target = Duration::from_secs(
@@ -868,18 +856,12 @@ impl DurationBalancer {
 
         for video1 in group1 {
             for video2 in group2 {
-                total_similarity += video1
-                    .feature_vector
-                    .cosine_similarity(&video2.feature_vector);
+                total_similarity += video1.feature_vector.cosine_similarity(&video2.feature_vector);
                 count += 1;
             }
         }
 
-        if count > 0 {
-            total_similarity / count as f32
-        } else {
-            0.0
-        }
+        if count > 0 { total_similarity / count as f32 } else { 0.0 }
     }
 
     /// Calculate average similarity of a video to a group
@@ -897,18 +879,12 @@ impl DurationBalancer {
 
         for other in group {
             if other.index != video.index {
-                total_similarity += video
-                    .feature_vector
-                    .cosine_similarity(&other.feature_vector);
+                total_similarity += video.feature_vector.cosine_similarity(&other.feature_vector);
                 count += 1;
             }
         }
 
-        if count > 0 {
-            total_similarity / count as f32
-        } else {
-            1.0
-        }
+        if count > 0 { total_similarity / count as f32 } else { 1.0 }
     }
 
     /// Check if adding a video maintains content coherence in a bin
@@ -929,11 +905,8 @@ impl DurationBalancer {
 
         let total_videos: usize = clusters.iter().map(|c| c.videos.len()).sum();
         let total_duration: Duration = clusters.iter().map(|c| c.total_duration).sum();
-        let average_utilization = clusters
-            .iter()
-            .map(|c| c.utilization_percentage)
-            .sum::<f32>()
-            / clusters.len() as f32;
+        let average_utilization =
+            clusters.iter().map(|c| c.utilization_percentage).sum::<f32>() / clusters.len() as f32;
         let average_balance_score =
             clusters.iter().map(|c| c.balance_score).sum::<f32>() / clusters.len() as f32;
 
@@ -946,14 +919,10 @@ impl DurationBalancer {
             .sum::<f32>()
             / clusters.len() as f32;
 
-        let underutilized_clusters = clusters
-            .iter()
-            .filter(|c| c.utilization_percentage < 70.0)
-            .count();
-        let overutilized_clusters = clusters
-            .iter()
-            .filter(|c| c.utilization_percentage > 120.0)
-            .count();
+        let underutilized_clusters =
+            clusters.iter().filter(|c| c.utilization_percentage < 70.0).count();
+        let overutilized_clusters =
+            clusters.iter().filter(|c| c.utilization_percentage > 120.0).count();
 
         // Calculate content coherence score
         let content_coherence_score = self.calculate_overall_content_coherence(clusters);
@@ -1014,18 +983,13 @@ impl DurationBalancer {
 
         for i in 0..videos.len() {
             for j in (i + 1)..videos.len() {
-                total_similarity += videos[i]
-                    .feature_vector
-                    .cosine_similarity(&videos[j].feature_vector);
+                total_similarity +=
+                    videos[i].feature_vector.cosine_similarity(&videos[j].feature_vector);
                 count += 1;
             }
         }
 
-        if count > 0 {
-            total_similarity / count as f32
-        } else {
-            1.0
-        }
+        if count > 0 { total_similarity / count as f32 } else { 1.0 }
     }
 
     /// Calculate duration variance score (lower variance is better)
@@ -1034,10 +998,8 @@ impl DurationBalancer {
             return 1.0;
         }
 
-        let durations: Vec<f32> = clusters
-            .iter()
-            .map(|c| c.total_duration.as_secs() as f32)
-            .collect();
+        let durations: Vec<f32> =
+            clusters.iter().map(|c| c.total_duration.as_secs() as f32).collect();
 
         let mean = durations.iter().sum::<f32>() / durations.len() as f32;
         let variance = durations
@@ -1049,11 +1011,8 @@ impl DurationBalancer {
             .sum::<f32>()
             / durations.len() as f32;
 
-        let coefficient_of_variation = if mean > 0.0 {
-            (variance.sqrt() / mean).min(1.0)
-        } else {
-            0.0
-        };
+        let coefficient_of_variation =
+            if mean > 0.0 { (variance.sqrt() / mean).min(1.0) } else { 0.0 };
 
         1.0 - coefficient_of_variation // Higher score for lower variance
     }
@@ -1178,27 +1137,15 @@ impl BalanceMetrics {
     pub fn detailed_report(&self) -> HashMap<String, f32> {
         let mut report = HashMap::new();
         report.insert("average_utilization".to_string(), self.average_utilization);
-        report.insert(
-            "content_coherence".to_string(),
-            self.content_coherence_score,
-        );
-        report.insert(
-            "duration_variance".to_string(),
-            self.duration_variance_score,
-        );
-        report.insert(
-            "bin_packing_efficiency".to_string(),
-            self.bin_packing_efficiency,
-        );
+        report.insert("content_coherence".to_string(), self.content_coherence_score);
+        report.insert("duration_variance".to_string(), self.duration_variance_score);
+        report.insert("bin_packing_efficiency".to_string(), self.bin_packing_efficiency);
         report.insert("balance_score".to_string(), self.average_balance_score);
         report.insert(
             "underutilized_ratio".to_string(),
             self.underutilized_clusters as f32 / self.total_clusters as f32,
         );
-        report.insert(
-            "overutilized_count".to_string(),
-            self.overutilized_clusters as f32,
-        );
+        report.insert("overutilized_count".to_string(), self.overutilized_clusters as f32);
         report
     }
 }
@@ -1262,11 +1209,8 @@ mod tests {
             0.2,
         );
 
-        let videos = vec![
-            create_test_video(0, 15),
-            create_test_video(1, 15),
-            create_test_video(2, 15),
-        ];
+        let videos =
+            vec![create_test_video(0, 15), create_test_video(1, 15), create_test_video(2, 15)];
         let cluster = create_test_cluster(videos);
 
         let result = balancer.balance_single_cluster(cluster).unwrap();
@@ -1299,11 +1243,8 @@ mod tests {
         let balancer =
             DurationBalancer::new(Duration::from_secs(3600), Duration::from_secs(4320), 0.2);
 
-        let videos = vec![
-            create_test_video(0, 20),
-            create_test_video(1, 20),
-            create_test_video(2, 20),
-        ];
+        let videos =
+            vec![create_test_video(0, 20), create_test_video(1, 20), create_test_video(2, 20)];
 
         let total_duration = Duration::from_secs(3600); // 60 minutes
         let target_duration = Duration::from_secs(3600);

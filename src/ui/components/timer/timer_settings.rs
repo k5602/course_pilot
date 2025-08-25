@@ -78,10 +78,10 @@ pub fn TimerSettings(
                 "Timer settings saved successfully!".to_string(),
                 crate::ui::components::toast::ToastVariant::Success,
             );
-        }
+        },
         Err(error) => {
             validation_error.set(Some(error));
-        }
+        },
     };
 
     let handle_reset = move |_| {

@@ -6,7 +6,7 @@ use crate::ui::{
 };
 use dioxus::prelude::*;
 
-use super::{CourseActions, ContentReorganizationModals};
+use super::{ContentReorganizationModals, CourseActions};
 
 #[derive(Props, PartialEq, Clone)]
 pub struct CourseCardProps {
@@ -132,10 +132,7 @@ pub fn CourseCard(props: CourseCardProps) -> Element {
     );
 
     // Create badges for the card
-    let mut badges = vec![BadgeData {
-        label: status.clone(),
-        color: badge_color.clone(),
-    }];
+    let mut badges = vec![BadgeData { label: status.clone(), color: badge_color.clone() }];
 
     // Add content type badge if course is structured
     if let Some(structure) = &props.course.structure {
@@ -146,11 +143,8 @@ pub fn CourseCard(props: CourseCardProps) -> Element {
             "Mixed" => Some("warning".to_string()),
             _ => Some("ghost".to_string()),
         };
-        
-        badges.push(BadgeData {
-            label: content_type,
-            color: content_badge_color,
-        });
+
+        badges.push(BadgeData { label: content_type, color: content_badge_color });
     }
 
     // Handle export with format selection

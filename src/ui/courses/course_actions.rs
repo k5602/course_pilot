@@ -148,17 +148,17 @@ pub fn ContentReorganizationModals(props: ContentReorganizationModalsProps) -> E
         Callback::new(move |_| {
             let analytics_manager = analytics_manager.clone();
             let course_manager = course_manager.clone();
-            
+
             spawn(async move {
                 toast_helpers::info("Re-clustering course content...");
-                
+
                 // Call the analytics manager to re-cluster the course
                 analytics_manager.structure_course.call(course_id);
                 course_manager.refresh.call(());
-                
+
                 toast_helpers::success("Course content has been re-clustered successfully!");
             });
-            
+
             on_close.call(());
         })
     };
@@ -171,15 +171,17 @@ pub fn ContentReorganizationModals(props: ContentReorganizationModalsProps) -> E
 
         Callback::new(move |_| {
             let _course_manager = course_manager.clone();
-            
+
             spawn(async move {
                 toast_helpers::info("Restoring original video order...");
-                
+
                 // This would need to be implemented in the backend
                 // For now, we'll show a placeholder message
-                toast_helpers::info("Restore original order functionality will be implemented in a future update");
+                toast_helpers::info(
+                    "Restore original order functionality will be implemented in a future update",
+                );
             });
-            
+
             on_close.call(());
         })
     };
@@ -189,7 +191,9 @@ pub fn ContentReorganizationModals(props: ContentReorganizationModalsProps) -> E
         let on_close = props.on_manual_reorder_close;
 
         Callback::new(move |_| {
-            toast_helpers::info("Manual reorder functionality will be implemented in a future update");
+            toast_helpers::info(
+                "Manual reorder functionality will be implemented in a future update",
+            );
             on_close.call(());
         })
     };

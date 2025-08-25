@@ -2,7 +2,9 @@ use dioxus::prelude::*;
 use dioxus_desktop::use_window;
 use uuid::Uuid;
 
-use crate::video_player::{VideoSource, PlaybackState, use_video_player, VideoPlayerError, VideoControls};
+use crate::video_player::{
+    PlaybackState, VideoControls, VideoPlayerError, VideoSource, use_video_player,
+};
 
 #[derive(Props, PartialEq, Clone)]
 pub struct VideoPlayerProps {
@@ -21,7 +23,6 @@ pub struct VideoPlayerProps {
 pub fn VideoPlayer(props: VideoPlayerProps) -> Element {
     let state = use_video_player();
     let window = use_window();
-    
     // Clone the current video for use in closures
     let current_video = state.current_video.clone();
     let player_id = use_signal(|| format!("cp-video-{}", Uuid::new_v4().simple()));
@@ -60,54 +61,60 @@ pub fn VideoPlayer(props: VideoPlayerProps) -> Element {
     use_effect({
         let execute_script = execute_script.clone();
         let id = player_id();
+        let window = window.clone();
         move || {
-            let init_script = format!(r#"
-                if (!window.cpVideoState) {{
-                    window.cpVideoState = {{}};
-                }}
-                window.cpVideoState['{}'] = {{
-                    currentTime: 0,
-                    duration: 0,
-                    volume: 1.0,
-                    muted: false,
-                    paused: true
-                }};
-            "#, id);
+            // Ensure per-player state
+            let init_script = crate::video_player::ipc::global::init_cp_state(&id);
             execute_script(init_script);
+
+            // Ensure global keyboard action dispatcher is available
+            let _ = window
+                .webview
+                .evaluate_script(&crate::video_player::ipc::global::keyboard_action_handler());
         }
     });
 
-    // Sync state from JavaScript to Rust periodically
-    use_effect(move || {
-        let execute_script = execute_script.clone();
-        let id = player_id();
-        let _on_progress = props.on_progress.clone();
-        // Set up periodic sync using tokio interval
-        spawn(async move {
-            let mut interval = tokio::time::interval(tokio::time::Duration::from_millis(500));
-            loop {
-                interval.tick().await;
-                let sync_script = format!(r#"
-                        (function() {{
-                            const videoState = window.cpVideoState['{}'];
-                            if (!videoState) return null;
-                            
-                            const el = document.getElementById('cp-video-{}');
-                            if (el) {{
-                                videoState.currentTime = el.currentTime || 0;
-                                videoState.duration = isFinite(el.duration) ? (el.duration || 0) : 0;
-                                videoState.volume = (typeof el.volume === 'number') ? el.volume : 1.0;
-                                videoState.muted = !!el.muted;
-                                videoState.paused = !!el.paused;
-                            }}
-                            
-                            return JSON.stringify(videoState);
-                        }})()
-                    "#, id, id);
+    // set active player and dispatch global keyboard keys to the active player
+    use_effect({
+        let window = window.clone();
+        let local_id = player_id();
+        let yt_id = youtube_player_id();
+        let state = state.clone();
+        move || {
+            // Set the active player context based on current source
+            let ap_script = match &*state.current_video.read() {
+                Some(VideoSource::Local { .. }) => {
+                    crate::video_player::ipc::global::set_active_player("local", &local_id)
+                },
+                Some(VideoSource::YouTube { .. }) => {
+                    crate::video_player::ipc::global::set_active_player("youtube", &yt_id)
+                },
+                None => "window.cpActivePlayer=null;".to_string(),
+            };
+            let _ = window.webview.evaluate_script(&ap_script);
 
-                execute_script(sync_script);
-            }
-        });
+            // Poll keystrokes from global buffer and dispatch via cpHandleVideoKey
+            spawn({
+                let window = window.clone();
+                async move {
+                    let mut interval =
+                        tokio::time::interval(tokio::time::Duration::from_millis(100));
+                    loop {
+                        interval.tick().await;
+                        let script = r#"
+                                (function() {
+                                    if (window.lastVideoPlayerKey && window.cpHandleVideoKey) {
+                                        const k = window.lastVideoPlayerKey;
+                                        window.lastVideoPlayerKey = null;
+                                        try { window.cpHandleVideoKey(k); } catch(e) {}
+                                    }
+                                })();
+                            "#;
+                        let _ = window.webview.evaluate_script(script);
+                    }
+                }
+            });
+        }
     });
 
     // Control handlers (currently unused but ready for future implementation)
@@ -115,17 +122,7 @@ pub fn VideoPlayer(props: VideoPlayerProps) -> Element {
         let execute_script = execute_script.clone();
         let id = player_id();
         move |_: ()| {
-            let script = format!(r#"
-                (function() {{
-                    const el = document.getElementById('cp-video-{}');
-                    if (!el) return;
-                    if (el.paused) {{
-                        el.play().catch(e => console.error('Play failed:', e));
-                    }} else {{
-                        el.pause();
-                    }}
-                }})()
-            "#, id);
+            let script = crate::video_player::ipc::local::play_pause(&id);
             execute_script(script);
         }
     });
@@ -133,17 +130,12 @@ pub fn VideoPlayer(props: VideoPlayerProps) -> Element {
     let _handle_seek = use_callback({
         let execute_script = execute_script.clone();
         let id = player_id();
-        let mut state = state.clone();
+        let state = state.clone();
         move |position: f64| {
             let pos = position.max(0.0);
-            let script = format!(r#"
-                (function() {{
-                    const el = document.getElementById('cp-video-{}');
-                    if (!el) return;
-                    el.currentTime = {};
-                }})()
-            "#, id, pos);
+            let script = crate::video_player::ipc::local::seek_to(&id, pos);
             execute_script(script);
+            let mut state = state.clone();
             state.position.set(pos);
         }
     });
@@ -151,18 +143,12 @@ pub fn VideoPlayer(props: VideoPlayerProps) -> Element {
     let _handle_volume_change = use_callback({
         let execute_script = execute_script.clone();
         let id = player_id();
-        let mut state = state.clone();
+        let state = state.clone();
         move |new_volume: f64| {
             let vol = new_volume.clamp(0.0, 1.0);
-            let script = format!(r#"
-                (function() {{
-                    const el = document.getElementById('cp-video-{}');
-                    if (!el) return;
-                    el.volume = {};
-                    el.muted = ({} <= 0);
-                }})()
-            "#, id, vol, vol);
+            let script = crate::video_player::ipc::local::set_volume(&id, vol);
             execute_script(script);
+            let mut state = state.clone();
             state.set_volume(vol);
         }
     });
@@ -199,12 +185,16 @@ pub fn VideoPlayer(props: VideoPlayerProps) -> Element {
                         path: path.clone(),
                         autoplay: props.autoplay.unwrap_or(false),
                         on_play: {
-                            let mut playback_state = state.playback_state;
-                            move |_| playback_state.set(PlaybackState::Playing)
+                            let mut playback_state = state.playback_state.clone();
+                            move |_| {
+                                playback_state.set(PlaybackState::Playing)
+                            }
                         },
                         on_pause: {
-                            let mut playback_state = state.playback_state;
-                            move |_| playback_state.set(PlaybackState::Paused)
+                            let mut playback_state = state.playback_state.clone();
+                            move |_| {
+                                playback_state.set(PlaybackState::Paused)
+                            }
                         },
                         on_ended: {
                             let state = state.clone();
@@ -228,7 +218,7 @@ pub fn VideoPlayer(props: VideoPlayerProps) -> Element {
                             }
                         },
                         on_loadedmetadata: {
-                            let mut loading = state.loading;
+                            let mut loading = state.loading.clone();
                             move |_| {
                                 loading.set(false);
                             }
@@ -248,25 +238,24 @@ pub fn VideoPlayer(props: VideoPlayerProps) -> Element {
                         video_id: video_id.clone(),
                         playlist_id: playlist_id.clone(),
                         on_state_change: {
-                            let mut playback_state = state.playback_state;
+                            let mut playback_state = state.playback_state.clone();
                             move |new_playback_state| {
                                 // Update the state with the new playback state
                                 playback_state.set(new_playback_state);
                             }
                         },
                         on_progress: {
-                            let state = state.clone();
+                            let mut state_position = state.position.clone();
                             let on_progress = props.on_progress.clone();
                             move |position| {
-                                let mut state = state.clone();
-                                state.position.set(position);
+                                state_position.set(position);
                                 if let Some(on_progress) = &on_progress {
                                     on_progress.call(position);
                                 }
                             }
                         },
                         on_duration: {
-                            let mut duration = state.duration;
+                            let mut duration = state.duration.clone();
                             move |duration_value| {
                                 duration.set(duration_value);
                             }
@@ -303,32 +292,49 @@ pub fn VideoPlayer(props: VideoPlayerProps) -> Element {
                     on_play_pause: {
                         let state = state.clone();
                         let current_video = current_video.clone();
-                            move |_| {
-                                // Handle play/pause for the appropriate player type
-                                match &*current_video.read() {
-                                    Some(VideoSource::Local { .. }) => {
-                                        // Local player toggle
-                                        let mut state = state.clone();
-                                        state.toggle_play_pause();
-                                    }
-                                    Some(VideoSource::YouTube { .. }) => {
-                                        // YouTube controls will be handled by the YouTube component
-                                    }
-                                    None => {}
+                        let execute_script = execute_script.clone();
+                        move |_| {
+                            // Handle play/pause for the appropriate player type
+                            match &*current_video.read() {
+                                Some(VideoSource::Local { .. }) => {
+                                    // Mark active and toggle HTML5 <video>
+                                    let set_active = crate::video_player::ipc::global::set_active_player("local", &player_id());
+                                    execute_script(set_active);
+                                    let toggle = crate::video_player::ipc::local::play_pause(&player_id());
+                                    execute_script(toggle);
+
+                                    // Update state
+                                    let mut state = state.clone();
+                                    state.toggle_play_pause();
                                 }
+                                Some(VideoSource::YouTube { .. }) => {
+                                    // Mark active and toggle via keyboard action handler (k)
+                                    let set_active = crate::video_player::ipc::global::set_active_player("youtube", &youtube_player_id());
+                                    execute_script(set_active);
+                                    execute_script("window.cpHandleVideoKey && window.cpHandleVideoKey('k');".to_string());
+                                }
+                                None => {}
                             }
-                        },
+                        }
+                    },
                         on_seek: {
                             let state = state.clone();
                             let current_video = current_video.clone();
+                            let execute_script = execute_script.clone();
                             move |position| {
                                 match &*current_video.read() {
                                     Some(VideoSource::Local { .. }) => {
                                         let mut state = state.clone();
                                         state.seek_to(position);
+
+                                        // Reflect in DOM
+                                        let script = crate::video_player::ipc::local::seek_to(&player_id(), position);
+                                        execute_script(script);
                                     }
                                     Some(VideoSource::YouTube { .. }) => {
-                                        // YouTube seek will be handled by the YouTube component
+                                        // Seek YouTube embedded player
+                                        let script = crate::video_player::ipc::youtube::seek_to(&youtube_player_id(), position);
+                                        execute_script(script);
                                     }
                                     None => {}
                                 }
@@ -337,14 +343,21 @@ pub fn VideoPlayer(props: VideoPlayerProps) -> Element {
                         on_volume_change: {
                             let state = state.clone();
                             let current_video = current_video.clone();
+                            let execute_script = execute_script.clone();
                             move |volume| {
                                 match &*current_video.read() {
                                     Some(VideoSource::Local { .. }) => {
                                         let mut state = state.clone();
                                         state.set_volume(volume);
+
+                                        // Reflect in DOM
+                                        let script = crate::video_player::ipc::local::set_volume(&player_id(), volume);
+                                        execute_script(script);
                                     }
                                     Some(VideoSource::YouTube { .. }) => {
-                                        // YouTube volume will be handled by the YouTube component
+                                        // Set volume on YouTube embedded player (0..1 mapped in helper)
+                                        let script = crate::video_player::ipc::youtube::set_volume(&youtube_player_id(), volume);
+                                        execute_script(script);
                                     }
                                     None => {}
                                 }
@@ -416,17 +429,17 @@ fn LocalVideoPlayer(
 ) -> Element {
     // Convert file path to custom protocol URL
     let video_url = format!("local-video://file/{}", path.display());
-    
+
     rsx! {
         div { class: "flex-1 bg-black relative",
             video {
                 id: "{player_id}",
                 class: "w-full h-full object-contain",
                 autoplay: autoplay,
-                controls: false,
+                controls: true,
                 preload: "metadata",
                 src: "{video_url}",
-                
+
                 // Event handlers
                 onplay: move |_| on_play.call(()),
                 onpause: move |_| on_pause.call(()),
@@ -442,19 +455,12 @@ fn LocalVideoPlayer(
                 },
             }
 
-            // Click overlay for play/pause
-            button {
-                class: "absolute inset-0 bg-transparent hover:bg-black/10 transition-colors duration-200",
-                onclick: move |_| {
-                    // This will be handled by the parent component
-                },
-                "aria-label": "Toggle play/pause"
-            }
+            // Native controls are now enabled, no overlay needed
         }
     }
 }
 
-/// YouTube video player using iframe
+/// YouTube embedded player (YouTube IFrame API)
 #[component]
 fn YouTubeVideoPlayer(
     player_id: String,
@@ -466,6 +472,7 @@ fn YouTubeVideoPlayer(
     on_error: EventHandler<String>,
 ) -> Element {
     let window = use_window();
+    // use_eval removed (no JSON polling)
     let _api_ready = use_signal(|| false);
 
     // Execute JavaScript in webview
@@ -485,26 +492,7 @@ fn YouTubeVideoPlayer(
     use_effect({
         let execute_script = execute_script.clone();
         move || {
-            let init_script = r#"
-                // Load YouTube IFrame Player API if not already loaded
-                if (!window.YT) {
-                    console.log('Loading YouTube IFrame Player API...');
-                    const tag = document.createElement('script');
-                    tag.src = 'https://www.youtube.com/iframe_api';
-                    const firstScriptTag = document.getElementsByTagName('script')[0];
-                    firstScriptTag.parentNode.insertBefore(tag, firstScriptTag);
-                    
-                    // Set up global callback
-                    window.onYouTubeIframeAPIReady = function() {
-                        console.log('YouTube IFrame Player API ready');
-                        window.ytAPIReady = true;
-                    };
-                } else {
-                    console.log('YouTube IFrame Player API already loaded');
-                    window.ytAPIReady = true;
-                }
-            "#.to_string();
-            
+            let init_script = crate::video_player::ipc::youtube::load_api();
             execute_script(init_script);
         }
     });
@@ -514,100 +502,22 @@ fn YouTubeVideoPlayer(
         let execute_script = execute_script.clone();
         let player_id_val = player_id.clone();
         let video_id_val = video_id.clone();
-        let playlist_param = playlist_id.as_ref().map(|p| format!(", list: '{}'", p)).unwrap_or_default();
-        
+        let playlist_opt = playlist_id.clone();
         move || {
-            let create_script = format!(r#"
-                function createYouTubePlayer() {{
-                    if (window.YT && window.YT.Player) {{
-                        console.log('Creating YouTube player for video: {}');
-                        
-                        try {{
-                            window.ytPlayer_{} = new YT.Player('{}', {{
-                                height: '100%',
-                                width: '100%',
-                                videoId: '{}'{},
-                                playerVars: {{
-                                    'enablejsapi': 1,
-                                    'origin': window.location.origin,
-                                    'playsinline': 1,
-                                    'rel': 0,
-                                    'modestbranding': 1,
-                                    'controls': 0,
-                                    'disablekb': 1,
-                                    'fs': 0,
-                                    'iv_load_policy': 3
-                                }},
-                                events: {{
-                                    'onReady': function(event) {{
-                                        console.log('YouTube player ready: {}');
-                                        window.ytPlayerReady_{} = true;
-                                        window.ytPlayerInstance_{} = event.target;
-                                    }},
-                                    'onStateChange': function(event) {{
-                                        console.log('YouTube player state changed: {}', event.data);
-                                        window.ytPlayerState_{} = event.data;
-                                        
-                                        // Update position and duration
-                                        if (event.target) {{
-                                            try {{
-                                                window.ytPlayerPosition_{} = event.target.getCurrentTime() || 0;
-                                                window.ytPlayerDuration_{} = event.target.getDuration() || 0;
-                                            }} catch (e) {{
-                                                console.warn('Error getting player time info:', e);
-                                            }}
-                                        }}
-                                    }},
-                                    'onError': function(event) {{
-                                        console.error('YouTube player error: {}', event.data);
-                                        window.ytPlayerError_{} = event.data;
-                                    }}
-                                }}
-                            }});
-                        }} catch (e) {{
-                            console.error('Error creating YouTube player:', e);
-                            window.ytPlayerError_{} = 'Player creation failed';
-                        }}
-                    }} else {{
-                        console.log('YouTube API not ready yet, retrying...');
-                        setTimeout(createYouTubePlayer, 100);
-                    }}
-                }}
-
-                // Wait for API to be ready, then create the player
-                if (window.ytAPIReady) {{
-                    createYouTubePlayer();
-                }} else {{
-                    const checkAPI = setInterval(function() {{
-                        if (window.ytAPIReady) {{
-                            clearInterval(checkAPI);
-                            createYouTubePlayer();
-                        }}
-                    }}, 100);
-                    
-                    // Timeout after 10 seconds
-                    setTimeout(function() {{
-                        if (!window.ytAPIReady) {{
-                            clearInterval(checkAPI);
-                            console.error('YouTube API failed to load within timeout');
-                            window.ytPlayerError_{} = 'YouTube API load timeout';
-                        }}
-                    }}, 10000);
-                }}
-            "#, 
-            video_id_val, player_id_val, player_id_val, video_id_val, playlist_param,
-            player_id_val, player_id_val, player_id_val, player_id_val, player_id_val,
-            player_id_val, player_id_val, player_id_val, player_id_val, player_id_val,
-            player_id_val
+            let create_script = crate::video_player::ipc::youtube::create_player(
+                &player_id_val,
+                &video_id_val,
+                playlist_opt.as_deref(),
             );
-            
             execute_script(create_script);
         }
     });
 
+    // YouTube polling removed (handled via future IPC bridge)
+
     rsx! {
         div { class: "flex-1 bg-gray-900 relative",
-            // YouTube iframe will be inserted here by JavaScript
+            // Embedded iframe will be inserted here via the YouTube IFrame API (no HTML5 <video>)
             div {
                 id: "{player_id}",
                 class: "w-full h-full",
@@ -619,32 +529,29 @@ fn YouTubeVideoPlayer(
 
 /// Error display component
 #[component]
-fn VideoErrorDisplay(
-    error: VideoPlayerError,
-    on_retry: EventHandler<()>,
-) -> Element {
+fn VideoErrorDisplay(error: VideoPlayerError, on_retry: EventHandler<()>) -> Element {
     rsx! {
         div {
             class: "absolute inset-0 bg-red-900/50 flex items-center justify-center",
             div {
                 class: "text-white text-center p-6 max-w-md",
                 div { class: "text-4xl mb-4", "❌" }
-                div { 
+                div {
                     class: "text-lg font-semibold mb-2",
-                    "Video Error" 
+                    "Video Error"
                 }
-                div { 
+                div {
                     class: "text-sm text-gray-300 mb-4",
-                    "{error.user_message()}" 
+                    "{error.user_message()}"
                 }
-                
+
                 // Recovery suggestions
                 div { class: "text-xs text-gray-400 mb-4",
                     for suggestion in error.recovery_suggestions() {
                         div { "• {suggestion}" }
                     }
                 }
-                
+
                 // Retry button
                 button {
                     class: "btn btn-primary btn-sm",
@@ -673,7 +580,7 @@ mod tests {
             on_complete: None,
             on_error: None,
         };
-        
+
         let cloned_props = props.clone();
         assert_eq!(props.width, cloned_props.width);
         assert_eq!(props.height, cloned_props.height);

@@ -1,6 +1,7 @@
 use dioxus::prelude::*;
 
-use crate::video_player::{VideoPlayer, VideoPlayerProvider, PlaybackState, VideoSource, use_video_keyboard_shortcuts};
+use crate::ui::hooks::use_video_keyboard_shortcuts;
+use crate::video_player::{PlaybackState, VideoPlayer, VideoPlayerProvider, VideoSource};
 
 #[derive(Props, PartialEq, Clone)]
 pub struct VideoPlayerProps {
@@ -14,27 +15,35 @@ pub struct VideoPlayerProps {
     pub on_error: Option<EventHandler<String>>,
 }
 
+#[component]
+fn VideoPlayerShortcutsInit() -> Element {
+    let _shortcuts = use_video_keyboard_shortcuts();
+    rsx! { div {} }
+}
+
 /// Cross-platform video player component wrapper
 #[component]
 pub fn VideoPlayerComponent(props: VideoPlayerProps) -> Element {
-    // Set up keyboard shortcuts
-    use_video_keyboard_shortcuts();
+    // Keyboard shortcuts are initialized under VideoPlayerProvider via VideoPlayerShortcutsInit
 
     rsx! {
         VideoPlayerProvider {
-            VideoPlayer {
-                source: props.video_source,
-                width: props.width,
-                height: props.height,
-                show_controls: props.show_controls,
-                autoplay: props.autoplay,
-                on_progress: props.on_position_change,
-                on_complete: move |_| {
-                    if let Some(on_state_change) = &props.on_state_change {
-                        on_state_change.call(PlaybackState::Stopped);
-                    }
-                },
-                on_error: props.on_error,
+            children: rsx! {
+                VideoPlayerShortcutsInit {}
+                VideoPlayer {
+                    source: props.video_source,
+                    width: props.width,
+                    height: props.height,
+                    show_controls: props.show_controls,
+                    autoplay: props.autoplay,
+                    on_progress: props.on_position_change,
+                    on_complete: move |_| {
+                        if let Some(on_state_change) = &props.on_state_change {
+                            on_state_change.call(PlaybackState::Stopped);
+                        }
+                    },
+                    on_error: props.on_error,
+                }
             }
         }
     }

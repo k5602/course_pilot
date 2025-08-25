@@ -1,10 +1,12 @@
 use crate::storage::database::Database;
+use crate::storage::settings::AppSettings;
 use crate::types::Course;
 use crate::ui::toast_helpers;
 use anyhow::Result;
 use dioxus::prelude::*;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
+use tokio_util::sync::CancellationToken;
 
 /// Folder validation result
 #[derive(Debug, Clone, PartialEq)]
@@ -75,9 +77,133 @@ impl ImportManager {
     }
 
     pub async fn generate_folder_preview(&self, path: PathBuf) -> Result<LocalFolderPreview> {
-        tokio::task::spawn_blocking(move || generate_folder_preview_sync(&path))
+        self.generate_folder_preview_with_cancel(path, CancellationToken::new()).await
+    }
+
+    pub async fn generate_folder_preview_with_cancel(
+        &self,
+        path: PathBuf,
+        cancel_token: CancellationToken,
+    ) -> Result<LocalFolderPreview> {
+        // Validate first in a blocking task
+        let validation = tokio::task::spawn_blocking({
+            let path = path.clone();
+            move || validate_folder_sync(&path)
+        })
+        .await
+        .unwrap_or_else(|e| Err(anyhow::anyhow!("Join error: {}", e)))?;
+
+        if !validation.is_valid {
+            return Err(anyhow::anyhow!(
+                "Cannot generate preview for invalid folder: {}",
+                validation.error_message.unwrap_or_else(|| "Unknown error".to_string())
+            ));
+        }
+
+        // Load ingest-related preferences
+        let settings = AppSettings::load().unwrap_or_default();
+        let import_prefs = settings.get_import_preferences().clone();
+
+        // Respect cancellation toggle from settings
+        let effective_token = if import_prefs.preview_cancellation_enabled {
+            cancel_token.clone()
+        } else {
+            CancellationToken::new()
+        };
+
+        let ingest = crate::ingest::local_folder::LocalIngest::new();
+        let video_files = ingest
+            .scan_directory_recursive_async(
+                path.clone(),
+                None,
+                Some(128), // batch size for scanning
+                Some(effective_token.clone()),
+            )
             .await
-            .unwrap_or_else(|e| Err(anyhow::anyhow!("Join error: {}", e)))
+            .map_err(|e| anyhow::anyhow!("Failed to scan folder for preview: {}", e))?;
+
+        // Prepare preview items and parallelize duration probing with bounded concurrency
+        let mut videos = Vec::with_capacity(video_files.len());
+        let mut total_duration = std::time::Duration::new(0, 0);
+
+        // Precompute work items
+        let work: Vec<_> = video_files
+            .iter()
+            .enumerate()
+            .map(|(index, vf)| {
+                let title = vf
+                    .path
+                    .file_stem()
+                    .and_then(|s| s.to_str())
+                    .map(crate::ingest::clean_title)
+                    .unwrap_or_else(|| vf.name.clone());
+
+                let format = vf
+                    .path
+                    .extension()
+                    .and_then(|ext| ext.to_str())
+                    .unwrap_or("unknown")
+                    .to_uppercase();
+
+                (index, vf.path.clone(), title, vf.size, format)
+            })
+            .collect();
+
+        // Bounded parallelism (configurable via settings)
+        let max_concurrency = import_prefs.preview_probe_max_concurrency.max(1);
+        for chunk in work.chunks(max_concurrency) {
+            if effective_token.is_cancelled() {
+                return Err(anyhow::anyhow!("Preview generation cancelled"));
+            }
+
+            // Spawn blocking duration probes
+            let mut handles = Vec::with_capacity(chunk.len());
+            for (_, path, _, _, _) in chunk.iter() {
+                let path = path.clone();
+                let cancel = effective_token.clone();
+                handles.push(tokio::task::spawn_blocking(move || {
+                    if cancel.is_cancelled() {
+                        return None;
+                    }
+                    crate::ingest::probe_video_duration(&path)
+                }));
+            }
+
+            // Collect results preserving chunk order
+            for (i, handle) in handles.into_iter().enumerate() {
+                if effective_token.is_cancelled() {
+                    return Err(anyhow::anyhow!("Preview generation cancelled"));
+                }
+                let duration =
+                    handle.await.map_err(|e| anyhow::anyhow!(format!("Join error: {}", e)))?;
+
+                let (index, _path, title, size, format) = &chunk[i];
+
+                if let Some(d) = duration {
+                    total_duration += d;
+                }
+
+                videos.push(LocalVideoPreview {
+                    title: title.clone(),
+                    duration,
+                    index: *index,
+                    file_size: *size,
+                    format: format.clone(),
+                });
+            }
+        }
+
+        Ok(LocalFolderPreview {
+            title: path
+                .file_name()
+                .and_then(|name| name.to_str())
+                .unwrap_or("Imported Course")
+                .to_string(),
+            video_count: videos.len(),
+            total_duration: Some(total_duration),
+            videos,
+            total_size: validation.total_size,
+        })
     }
 
     pub async fn import_from_local_folder(
@@ -143,9 +269,7 @@ pub fn use_import_manager() -> ImportManager {
                     if !validation.is_valid {
                         return Err(anyhow::anyhow!(
                             "Invalid folder: {}",
-                            validation
-                                .error_message
-                                .unwrap_or_else(|| "Unknown error".to_string())
+                            validation.error_message.unwrap_or_else(|| "Unknown error".to_string())
                         ));
                     }
 
@@ -171,13 +295,13 @@ pub fn use_import_manager() -> ImportManager {
                 match result {
                     Ok(Ok(_)) => {
                         toast_helpers::success("Course imported successfully");
-                    }
+                    },
                     Ok(Err(e)) => {
                         toast_helpers::error(format!("Failed to import course: {e}"));
-                    }
+                    },
                     Err(e) => {
                         toast_helpers::error(format!("Failed to import course: {e}"));
-                    }
+                    },
                 }
             });
             // Return () to match expected callback type
@@ -191,13 +315,13 @@ pub fn use_import_manager() -> ImportManager {
             match result {
                 Ok(Ok(_)) => {
                     // Validation successful - the UI will handle the result
-                }
+                },
                 Ok(Err(e)) => {
                     toast_helpers::error(format!("Folder validation failed: {e}"));
-                }
+                },
                 Err(e) => {
                     toast_helpers::error(format!("Folder validation failed: {e}"));
-                }
+                },
             }
         });
         // Return () to match expected callback type
@@ -205,29 +329,21 @@ pub fn use_import_manager() -> ImportManager {
 
     let generate_folder_preview = use_callback(move |path: PathBuf| {
         spawn(async move {
-            let result = tokio::task::spawn_blocking(move || generate_folder_preview_sync(&path)).await;
+            let result = generate_folder_preview_async(path).await;
 
             match result {
-                Ok(Ok(_)) => {
+                Ok(_) => {
                     // Preview generation successful - the UI will handle the result
-                }
-                Ok(Err(e)) => {
-                    toast_helpers::error(format!("Preview generation failed: {e}"));
-                }
+                },
                 Err(e) => {
                     toast_helpers::error(format!("Preview generation failed: {e}"));
-                }
+                },
             }
         });
         // Return () to match expected callback type
     });
 
-    ImportManager {
-        db,
-        import_from_local_folder,
-        validate_folder,
-        generate_folder_preview,
-    }
+    ImportManager { db, import_from_local_folder, validate_folder, generate_folder_preview }
 }
 
 /// Hook for reactive folder validation
@@ -342,10 +458,15 @@ fn validate_folder_sync(path: &Path) -> Result<FolderValidation> {
 }
 
 /// Generate preview data for a local folder
-fn generate_folder_preview_sync(path: &Path) -> Result<LocalFolderPreview> {
-    // First validate the folder
-    let validation = validate_folder_sync(path)?;
-    
+async fn generate_folder_preview_async(path: PathBuf) -> Result<LocalFolderPreview> {
+    // First validate the folder in a blocking task
+    let validation = tokio::task::spawn_blocking({
+        let path = path.clone();
+        move || validate_folder_sync(&path)
+    })
+    .await
+    .map_err(|e| anyhow::anyhow!(format!("Join error: {}", e)))??;
+
     if !validation.is_valid {
         return Err(anyhow::anyhow!(
             "Cannot generate preview for invalid folder: {}",
@@ -354,48 +475,84 @@ fn generate_folder_preview_sync(path: &Path) -> Result<LocalFolderPreview> {
     }
 
     // Generate course title from folder name
-    let title = path
-        .file_name()
-        .and_then(|name| name.to_str())
-        .unwrap_or("Imported Course")
-        .to_string();
+    let title =
+        path.file_name().and_then(|name| name.to_str()).unwrap_or("Imported Course").to_string();
 
-    // Use the enhanced local ingest to scan recursively (matching validation behavior)
-    let ingest = crate::ingest::local_folder::EnhancedLocalIngest::new();
-    let video_files = ingest.scan_directory_recursive(path, None)
-        .map_err(|e| anyhow::anyhow!("Failed to scan folder for preview: {}", e))?;
+    // Async, cancellable recursive scan with batching
+    let cancel_token = tokio_util::sync::CancellationToken::new();
+    let ingest = crate::ingest::local_folder::LocalIngest::new();
+    let video_files = ingest
+        .scan_directory_recursive_async(path.clone(), None, Some(128), Some(cancel_token.clone()))
+        .await
+        .map_err(|e| anyhow::anyhow!(format!("Failed to scan folder for preview: {}", e)))?;
 
-    // Convert video files to preview videos
-    let mut videos = Vec::new();
+    // Prepare preview items and parallelize duration probing with bounded concurrency
+    let mut videos = Vec::with_capacity(video_files.len());
     let mut total_duration = std::time::Duration::new(0, 0);
 
-    for (index, video_file) in video_files.iter().enumerate() {
-        // Extract title from file path
-        let title = video_file.path
-            .file_stem()
-            .and_then(|stem| stem.to_str())
-            .map(|s| clean_filename_title(s))
-            .unwrap_or_else(|| video_file.name.clone());
+    // Build work items
+    let work: Vec<_> = video_files
+        .iter()
+        .enumerate()
+        .map(|(index, vf)| {
+            let title = vf
+                .path
+                .file_stem()
+                .and_then(|s| s.to_str())
+                .map(crate::ingest::clean_title)
+                .unwrap_or_else(|| vf.name.clone());
 
-        // Try to get video duration (this might be slow for many files, but needed for preview)
-        let duration = probe_video_duration(&video_file.path);
+            let format = vf
+                .path
+                .extension()
+                .and_then(|ext| ext.to_str())
+                .unwrap_or("unknown")
+                .to_uppercase();
 
-        let format = video_file.path
-            .extension()
-            .and_then(|ext| ext.to_str())
-            .unwrap_or("unknown")
-            .to_uppercase();
+            (index, vf.path.clone(), title, vf.size, format)
+        })
+        .collect();
 
-        videos.push(LocalVideoPreview {
-            title,
-            duration,
-            index,
-            file_size: video_file.size,
-            format,
-        });
+    let max_concurrency = 8usize;
+    for chunk in work.chunks(max_concurrency) {
+        if cancel_token.is_cancelled() {
+            return Err(anyhow::anyhow!("Preview generation cancelled"));
+        }
 
-        if let Some(dur) = duration {
-            total_duration += dur;
+        // Spawn blocking duration probes
+        let mut handles = Vec::with_capacity(chunk.len());
+        for (_, p, _, _, _) in chunk.iter() {
+            let path = p.clone();
+            let cancel = cancel_token.clone();
+            handles.push(tokio::task::spawn_blocking(move || {
+                if cancel.is_cancelled() {
+                    return None;
+                }
+                crate::ingest::probe_video_duration(&path)
+            }));
+        }
+
+        // Collect results preserving order within chunk
+        for (i, handle) in handles.into_iter().enumerate() {
+            if cancel_token.is_cancelled() {
+                return Err(anyhow::anyhow!("Preview generation cancelled"));
+            }
+            let duration =
+                handle.await.map_err(|e| anyhow::anyhow!(format!("Join error: {}", e)))?;
+
+            let (index, _path, title, size, format) = &chunk[i];
+
+            if let Some(d) = duration {
+                total_duration += d;
+            }
+
+            videos.push(LocalVideoPreview {
+                title: title.clone(),
+                duration,
+                index: *index,
+                file_size: *size,
+                format: format.clone(),
+            });
         }
     }
 
@@ -408,55 +565,9 @@ fn generate_folder_preview_sync(path: &Path) -> Result<LocalFolderPreview> {
     })
 }
 
-/// Clean and normalize titles extracted from filenames
-fn clean_filename_title(title: &str) -> String {
-    title
-        .trim()
-        // Replace common separators with spaces
-        .replace(['_', '-', '.'], " ")
-        // Remove common video quality indicators
-        .replace("1080p", "")
-        .replace("720p", "")
-        .replace("480p", "")
-        .replace("4K", "")
-        .replace("HD", "")
-        // Remove common brackets and their contents if they contain metadata
-        .split('[')
-        .next()
-        .unwrap_or(title)
-        .split('(')
-        .next()
-        .unwrap_or(title)
-        // Normalize whitespace
-        .split_whitespace()
-        .collect::<Vec<_>>()
-        .join(" ")
-        .trim()
-        .to_string()
-}
+// Removed: use crate::ingest::clean_title instead
 
-/// Probe video duration using ffprobe CLI
-fn probe_video_duration(path: &std::path::Path) -> Option<std::time::Duration> {
-    use std::process::Command;
-    let output = Command::new("ffprobe")
-        .args([
-            "-v",
-            "error",
-            "-show_entries",
-            "format=duration",
-            "-of",
-            "default=noprint_wrappers=1:nokey=1",
-            path.to_string_lossy().as_ref(),
-        ])
-        .output()
-        .ok()?;
-    if !output.status.success() {
-        return None;
-    }
-    let stdout = String::from_utf8_lossy(&output.stdout);
-    let secs = stdout.trim().parse::<f64>().ok()?;
-    Some(std::time::Duration::from_secs_f64(secs))
-}
+// Removed: use crate::ingest::probe_video_duration instead
 
 /// Helper function to check if an extension might be video-related
 fn is_video_like_extension(ext: &str) -> bool {

@@ -1,45 +1,44 @@
-use crate::storage::Database;
 use crate::types::{Plan, PlanItem};
+use crate::ui::hooks::use_backend;
 use chrono::{DateTime, Duration as ChronoDuration, Local, Utc};
 use dioxus::prelude::*;
-use std::sync::Arc;
 
 #[component]
 pub fn UpcomingDeadlines() -> Element {
-    let db = use_context::<Arc<Database>>();
+    let backend = use_backend();
 
     let upcoming_deadlines_resource = use_resource(move || {
-        let db = db.clone();
+        let backend = backend.clone();
         async move {
-            tokio::task::spawn_blocking(move || {
-                // Load all courses to get their plans
-                let courses = crate::storage::load_courses(&db)?;
-                let mut upcoming_sessions = Vec::new();
-                let now = Utc::now();
-                let next_week = now + ChronoDuration::days(7);
+            // Load all courses to get their plans via backend
+            let courses = backend
+                .list_courses()
+                .await
+                .map_err(|e| anyhow::anyhow!("Failed to load courses: {}", e))?;
 
-                for course in courses {
-                    if let Ok(Some(plan)) = crate::storage::get_plan_by_course_id(&db, &course.id) {
-                        for (index, item) in plan.items.iter().enumerate() {
-                            // Only include future sessions within the next week
-                            if item.date > now && item.date <= next_week && !item.completed {
-                                upcoming_sessions.push((
-                                    plan.clone(),
-                                    index,
-                                    item.clone(),
-                                    course.name.clone(),
-                                ));
-                            }
+            let mut upcoming_sessions: Vec<(Plan, usize, PlanItem, String)> = Vec::new();
+            let now = Utc::now();
+            let next_week = now + ChronoDuration::days(7);
+
+            for course in courses {
+                if let Ok(Some(plan)) = backend.get_plan_by_course(course.id).await {
+                    for (index, item) in plan.items.iter().enumerate() {
+                        // Only include future sessions within the next week
+                        if item.date > now && item.date <= next_week && !item.completed {
+                            upcoming_sessions.push((
+                                plan.clone(),
+                                index,
+                                item.clone(),
+                                course.name.clone(),
+                            ));
                         }
                     }
                 }
+            }
 
-                // Sort by date
-                upcoming_sessions.sort_by_key(|(_, _, item, _)| item.date);
-                Ok::<Vec<(Plan, usize, PlanItem, String)>, anyhow::Error>(upcoming_sessions)
-            })
-            .await
-            .unwrap_or_else(|_| Err(anyhow::anyhow!("Failed to load upcoming sessions")))
+            // Sort by date
+            upcoming_sessions.sort_by_key(|(_, _, item, _)| item.date);
+            Ok::<Vec<(Plan, usize, PlanItem, String)>, anyhow::Error>(upcoming_sessions)
         }
     });
 
@@ -94,7 +93,7 @@ pub fn UpcomingDeadlines() -> Element {
                     }
                 }
             }
-        }
+        },
         Some(Err(e)) => rsx! {
             div { class: "alert alert-error",
                 "Failed to load upcoming deadlines: {e}"

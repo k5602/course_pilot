@@ -34,14 +34,14 @@ pub fn PlanHeader(props: PlanHeaderProps) -> Element {
                             "Plan exported successfully to {}",
                             file_path.display()
                         ));
-                    }
+                    },
                     Err(e) => {
                         toast_helpers::error(format!("Failed to save export: {e}"));
-                    }
+                    },
                 },
                 Err(e) => {
                     toast_helpers::error(format!("Export failed: {e}"));
-                }
+                },
             }
         });
     };

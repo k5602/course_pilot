@@ -6,7 +6,7 @@ use uuid::Uuid;
 use super::{PlanHeader, SessionControlPanel, SessionList, group_items_by_session};
 use crate::types::{PlanExt, PlanSettings};
 use crate::ui::toast_helpers;
-use crate::ui::{use_plan_resource, hooks::use_course_resource};
+use crate::ui::{hooks::use_course_resource, use_plan_resource};
 
 #[derive(Props, PartialEq, Clone)]
 pub struct PlanViewProps {
@@ -48,7 +48,7 @@ pub fn PlanView(props: PlanViewProps) -> Element {
                     course_resource: course_resource,
                 }
             }
-        }
+        },
         Some(Ok(None)) => render_no_plan_state(props.course_id),
     }
 }
@@ -103,14 +103,8 @@ fn render_enhanced_plan_content(
     let mut list_y = use_motion(-16.0f32);
 
     use_effect(move || {
-        list_opacity.animate_to(
-            1.0,
-            AnimationConfig::new(AnimationMode::Tween(Tween::default())),
-        );
-        list_y.animate_to(
-            0.0,
-            AnimationConfig::new(AnimationMode::Spring(Spring::default())),
-        );
+        list_opacity.animate_to(1.0, AnimationConfig::new(AnimationMode::Tween(Tween::default())));
+        list_y.animate_to(0.0, AnimationConfig::new(AnimationMode::Spring(Spring::default())));
     });
 
     let list_style = use_memo(move || {
@@ -122,7 +116,7 @@ fn render_enhanced_plan_content(
     });
 
     let handle_settings_change = {
-        let backend = crate::ui::hooks::use_backend_adapter();
+        let backend = crate::ui::hooks::use_backend();
         let plan_id = plan.id;
 
         move |new_settings: PlanSettings| {
@@ -135,10 +129,10 @@ fn render_enhanced_plan_content(
                     Ok(_updated_plan) => {
                         toast_helpers::success("Study plan updated successfully!");
                         // The plan resource will automatically refresh and show the updated plan
-                    }
+                    },
                     Err(e) => {
                         toast_helpers::error(format!("Failed to update study plan: {e}"));
-                    }
+                    },
                 }
             });
         }
@@ -193,7 +187,7 @@ fn render_enhanced_plan_content(
 
 /// Render no plan state
 fn render_no_plan_state(course_id: Uuid) -> Element {
-    let backend = crate::ui::hooks::use_backend_adapter();
+    let backend = crate::ui::hooks::use_backend();
     let is_creating = use_signal(|| false);
 
     let handle_create_plan = {
@@ -221,10 +215,10 @@ fn render_no_plan_state(course_id: Uuid) -> Element {
                     Ok(_plan) => {
                         toast_helpers::success("Study plan created successfully!");
                         // The plan resource will automatically refresh and show the new plan
-                    }
+                    },
                     Err(e) => {
                         toast_helpers::error(format!("Failed to create study plan: {e}"));
-                    }
+                    },
                 }
 
                 is_creating.set(false);
@@ -262,23 +256,14 @@ fn render_duration_summary(plan: &crate::types::Plan) -> Element {
     let total_video_duration: std::time::Duration =
         plan.items.iter().map(|item| item.total_duration).sum();
 
-    let total_estimated_time: std::time::Duration = plan
-        .items
-        .iter()
-        .map(|item| item.estimated_completion_time)
-        .sum();
+    let total_estimated_time: std::time::Duration =
+        plan.items.iter().map(|item| item.estimated_completion_time).sum();
 
-    let total_warnings: Vec<&String> = plan
-        .items
-        .iter()
-        .flat_map(|item| &item.overflow_warnings)
-        .collect();
+    let total_warnings: Vec<&String> =
+        plan.items.iter().flat_map(|item| &item.overflow_warnings).collect();
 
-    let sessions_with_warnings = plan
-        .items
-        .iter()
-        .filter(|item| !item.overflow_warnings.is_empty())
-        .count();
+    let sessions_with_warnings =
+        plan.items.iter().filter(|item| !item.overflow_warnings.is_empty()).count();
 
     rsx! {
         div {
@@ -379,17 +364,23 @@ fn render_duration_summary(plan: &crate::types::Plan) -> Element {
     }
 }
 /// Render content organization indicator showing whether content follows original or clustered order
-fn render_content_organization_indicator(course_resource: &Resource<Result<Option<crate::types::Course>, anyhow::Error>>) -> Element {
+fn render_content_organization_indicator(
+    course_resource: &Resource<Result<Option<crate::types::Course>, anyhow::Error>>,
+) -> Element {
     match &*course_resource.read_unchecked() {
         Some(Ok(Some(course))) => {
             if let Some(structure) = &course.structure {
                 let content_type = structure.get_content_organization_type();
                 let description = structure.get_content_organization_description();
-                
+
                 let (badge_color, icon, indicator_text) = match content_type.as_str() {
                     "Sequential" => ("info", "📚", "Sessions follow original video order"),
-                    "Clustered" => ("secondary", "🎯", "Sessions organized by intelligent topic clustering"),
-                    "Mixed" => ("warning", "🔀", "Sessions contain both sequential and thematic elements"),
+                    "Clustered" => {
+                        ("secondary", "🎯", "Sessions organized by intelligent topic clustering")
+                    },
+                    "Mixed" => {
+                        ("warning", "🔀", "Sessions contain both sequential and thematic elements")
+                    },
                     _ => ("ghost", "❓", "Content organization type unknown"),
                 };
 
@@ -443,7 +434,7 @@ fn render_content_organization_indicator(course_resource: &Resource<Result<Optio
                     }
                 }
             }
-        }
-        _ => rsx! { div {} } // Don't show anything if course is loading or failed
+        },
+        _ => rsx! { div {} }, // Don't show anything if course is loading or failed
     }
 }

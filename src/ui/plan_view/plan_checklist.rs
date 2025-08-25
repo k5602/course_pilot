@@ -26,10 +26,7 @@ fn group_items_by_module(items: &[PlanItem]) -> Vec<ModuleGroup> {
     let mut modules: HashMap<String, Vec<(usize, PlanItem)>> = HashMap::new();
 
     for (index, item) in items.iter().enumerate() {
-        modules
-            .entry(item.module_title.clone())
-            .or_default()
-            .push((index, item.clone()));
+        modules.entry(item.module_title.clone()).or_default().push((index, item.clone()));
     }
 
     let mut module_groups: Vec<ModuleGroup> = modules
@@ -37,19 +34,9 @@ fn group_items_by_module(items: &[PlanItem]) -> Vec<ModuleGroup> {
         .map(|(title, items)| {
             let total = items.len();
             let completed = items.iter().filter(|(_, item)| item.completed).count();
-            let progress = if total > 0 {
-                (completed as f32 / total as f32) * 100.0
-            } else {
-                0.0
-            };
+            let progress = if total > 0 { (completed as f32 / total as f32) * 100.0 } else { 0.0 };
 
-            ModuleGroup {
-                title,
-                items,
-                total,
-                completed,
-                progress,
-            }
+            ModuleGroup { title, items, total, completed, progress }
         })
         .collect();
 
@@ -68,14 +55,9 @@ pub fn PlanChecklist(props: PlanChecklistProps) -> Element {
     let mut container_y = use_motion(20.0f32);
 
     use_effect(move || {
-        container_opacity.animate_to(
-            1.0,
-            AnimationConfig::new(AnimationMode::Tween(Tween::default())),
-        );
-        container_y.animate_to(
-            0.0,
-            AnimationConfig::new(AnimationMode::Spring(Spring::default())),
-        );
+        container_opacity
+            .animate_to(1.0, AnimationConfig::new(AnimationMode::Tween(Tween::default())));
+        container_y.animate_to(0.0, AnimationConfig::new(AnimationMode::Spring(Spring::default())));
     });
 
     let container_style = use_memo(move || {
@@ -140,10 +122,8 @@ pub fn ModuleAccordion(props: ModuleAccordionProps) -> Element {
                 tokio::time::sleep(tokio::time::Duration::from_millis((delay * 1000.0) as u64))
                     .await;
 
-                module_opacity.animate_to(
-                    1.0,
-                    AnimationConfig::new(AnimationMode::Tween(Tween::default())),
-                );
+                module_opacity
+                    .animate_to(1.0, AnimationConfig::new(AnimationMode::Tween(Tween::default())));
                 module_x.animate_to(
                     0.0,
                     AnimationConfig::new(AnimationMode::Spring(Spring::default())),
@@ -257,14 +237,8 @@ pub fn PlanChecklistItem(props: PlanChecklistItemProps) -> Element {
     let mut item_x = use_motion(-12.0f32);
 
     use_effect(move || {
-        item_opacity.animate_to(
-            1.0,
-            AnimationConfig::new(AnimationMode::Tween(Tween::default())),
-        );
-        item_x.animate_to(
-            0.0,
-            AnimationConfig::new(AnimationMode::Spring(Spring::default())),
-        );
+        item_opacity.animate_to(1.0, AnimationConfig::new(AnimationMode::Tween(Tween::default())));
+        item_x.animate_to(0.0, AnimationConfig::new(AnimationMode::Spring(Spring::default())));
     });
 
     let item_style = use_memo(move || {
@@ -285,11 +259,8 @@ pub fn PlanChecklistItem(props: PlanChecklistItemProps) -> Element {
         }
     };
 
-    let text_classes = if local_completed() {
-        "line-through text-base-content/40"
-    } else {
-        "text-base-content"
-    };
+    let text_classes =
+        if local_completed() { "line-through text-base-content/40" } else { "text-base-content" };
 
     rsx! {
         li {

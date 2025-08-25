@@ -70,16 +70,12 @@ pub fn generate_breadcrumbs(
     courses: &[crate::types::Course],
 ) -> Vec<BreadcrumbItem> {
     match current_route {
-        Route::Home {} => vec![BreadcrumbItem {
-            label: "Home".to_string(),
-            route: None,
-            active: true,
-        }],
-        Route::Dashboard {} => vec![BreadcrumbItem {
-            label: "Dashboard".to_string(),
-            route: None,
-            active: true,
-        }],
+        Route::Home {} => {
+            vec![BreadcrumbItem { label: "Home".to_string(), route: None, active: true }]
+        },
+        Route::Dashboard {} => {
+            vec![BreadcrumbItem { label: "Dashboard".to_string(), route: None, active: true }]
+        },
         Route::PlanView { course_id } => {
             // Parse course_id string to UUID
             let course_uuid = match uuid::Uuid::parse_str(&course_id) {
@@ -90,7 +86,7 @@ pub fn generate_breadcrumbs(
                         route: None,
                         active: true,
                     }];
-                }
+                },
             };
 
             let course_name = courses
@@ -105,24 +101,16 @@ pub fn generate_breadcrumbs(
                     route: Some(Route::Dashboard {}),
                     active: false,
                 },
-                BreadcrumbItem {
-                    label: course_name,
-                    route: None,
-                    active: true,
-                },
+                BreadcrumbItem { label: course_name, route: None, active: true },
             ]
-        }
+        },
         Route::Settings {} => vec![
             BreadcrumbItem {
                 label: "Dashboard".to_string(),
                 route: Some(Route::Dashboard {}),
                 active: false,
             },
-            BreadcrumbItem {
-                label: "Settings".to_string(),
-                route: None,
-                active: true,
-            },
+            BreadcrumbItem { label: "Settings".to_string(), route: None, active: true },
         ],
         Route::AddCourse {} => vec![
             BreadcrumbItem {
@@ -130,11 +118,7 @@ pub fn generate_breadcrumbs(
                 route: Some(Route::Dashboard {}),
                 active: false,
             },
-            BreadcrumbItem {
-                label: "Add Course".to_string(),
-                route: None,
-                active: true,
-            },
+            BreadcrumbItem { label: "Add Course".to_string(), route: None, active: true },
         ],
         Route::AllCourses {} => vec![
             BreadcrumbItem {
@@ -142,11 +126,7 @@ pub fn generate_breadcrumbs(
                 route: Some(Route::Dashboard {}),
                 active: false,
             },
-            BreadcrumbItem {
-                label: "All Courses".to_string(),
-                route: None,
-                active: true,
-            },
+            BreadcrumbItem { label: "All Courses".to_string(), route: None, active: true },
         ],
         #[cfg(debug_assertions)]
         Route::ToastTest {} => vec![
@@ -155,11 +135,7 @@ pub fn generate_breadcrumbs(
                 route: Some(Route::Dashboard {}),
                 active: false,
             },
-            BreadcrumbItem {
-                label: "Toast Test".to_string(),
-                route: None,
-                active: true,
-            },
+            BreadcrumbItem { label: "Toast Test".to_string(), route: None, active: true },
         ],
     }
 }

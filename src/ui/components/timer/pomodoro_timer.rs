@@ -28,10 +28,10 @@ impl TimerMode {
             TimerMode::Work => Duration::from_secs(settings.work_duration_minutes as u64 * 60),
             TimerMode::ShortBreak => {
                 Duration::from_secs(settings.short_break_duration_minutes as u64 * 60)
-            }
+            },
             TimerMode::LongBreak => {
                 Duration::from_secs(settings.long_break_duration_minutes as u64 * 60)
-            }
+            },
         }
     }
 
@@ -68,7 +68,7 @@ impl TimerMode {
                 } else {
                     TimerMode::ShortBreak
                 }
-            }
+            },
             TimerMode::ShortBreak | TimerMode::LongBreak => TimerMode::Work,
         }
     }
@@ -170,7 +170,7 @@ pub fn PomodoroTimer(props: PomodoroTimerProps) -> Element {
                             TimerMode::Work => settings().auto_start_work,
                             TimerMode::ShortBreak | TimerMode::LongBreak => {
                                 settings().auto_start_breaks
-                            }
+                            },
                         };
 
                         timer_mode.set(next_mode);
@@ -222,13 +222,13 @@ pub fn PomodoroTimer(props: PomodoroTimerProps) -> Element {
                     remaining_time(),
                 );
                 timer_state.set(TimerState::Running);
-            }
+            },
             TimerState::Paused => {
                 timer_state.set(TimerState::Running);
-            }
+            },
             TimerState::Running => {
                 timer_state.set(TimerState::Paused);
-            }
+            },
         }
     };
 
@@ -460,15 +460,8 @@ fn show_desktop_notification(mode: &TimerMode, settings: &PomodoroSettings) {
     };
 
     // Log notification for now (desktop notifications can be added later)
-    log::info!(
-        "Timer notification: {} Complete! - {}",
-        mode.label(),
-        message
-    );
+    log::info!("Timer notification: {} Complete! - {}", mode.label(), message);
 
     // Always show toast notification for immediate feedback
-    show_toast(
-        format!("{} complete! {}", mode.label(), message),
-        ToastVariant::Info,
-    );
+    show_toast(format!("{} complete! {}", mode.label(), message), ToastVariant::Info);
 }

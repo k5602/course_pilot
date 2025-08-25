@@ -28,20 +28,18 @@ pub fn SessionControlPanel(props: SessionControlPanelProps) -> Element {
     let mut include_weekends = use_signal(|| props.plan.settings.include_weekends);
 
     // Advanced scheduler settings
-    let mut advanced_settings = use_signal(|| {
-        props
-            .plan
-            .settings
-            .advanced_settings
-            .clone()
-            .unwrap_or_default()
-    });
+    let mut advanced_settings =
+        use_signal(|| props.plan.settings.advanced_settings.clone().unwrap_or_default());
     let mut selected_strategy = use_signal(|| advanced_settings().strategy);
     let mut user_experience_level = use_signal(|| advanced_settings().user_experience_level);
     let mut difficulty_adaptation = use_signal(|| advanced_settings().difficulty_adaptation);
     let mut spaced_repetition_enabled =
         use_signal(|| advanced_settings().spaced_repetition_enabled);
     let mut cognitive_load_balancing = use_signal(|| advanced_settings().cognitive_load_balancing);
+    // Auto-apply debounce version counter (increments on any control change)
+    let mut change_version = use_signal(|| 0usize);
+    // Track the last applied version to detect pending changes
+    let mut last_applied_version = use_signal(|| 0usize);
 
     // Form validation and regeneration state
     let mut form_errors = use_signal(Vec::<String>::new);
@@ -61,19 +59,13 @@ pub fn SessionControlPanel(props: SessionControlPanelProps) -> Element {
                 if show_advanced() { 600.0 } else { 300.0 },
                 AnimationConfig::new(AnimationMode::Spring(Spring::default())),
             );
-            panel_opacity.animate_to(
-                1.0,
-                AnimationConfig::new(AnimationMode::Tween(Tween::default())),
-            );
+            panel_opacity
+                .animate_to(1.0, AnimationConfig::new(AnimationMode::Tween(Tween::default())));
         } else {
-            panel_height.animate_to(
-                0.0,
-                AnimationConfig::new(AnimationMode::Spring(Spring::default())),
-            );
-            panel_opacity.animate_to(
-                0.0,
-                AnimationConfig::new(AnimationMode::Tween(Tween::default())),
-            );
+            panel_height
+                .animate_to(0.0, AnimationConfig::new(AnimationMode::Spring(Spring::default())));
+            panel_opacity
+                .animate_to(0.0, AnimationConfig::new(AnimationMode::Tween(Tween::default())));
         }
     });
 
@@ -83,6 +75,113 @@ pub fn SessionControlPanel(props: SessionControlPanelProps) -> Element {
             panel_height.get_value(),
             panel_opacity.get_value()
         )
+    });
+
+    // Auto-apply Session Controls with debounce when any control changes
+    use_effect({
+        // Capture dependencies/signals
+        let backend = backend.clone();
+        let plan_id = props.plan.id;
+
+        let selected_strategy = selected_strategy;
+        let user_experience_level = user_experience_level;
+        let difficulty_adaptation = difficulty_adaptation;
+        let spaced_repetition_enabled = spaced_repetition_enabled;
+        let cognitive_load_balancing = cognitive_load_balancing;
+
+        let sessions_per_week = sessions_per_week;
+        let session_length = session_length;
+        let include_weekends = include_weekends;
+
+        let mut regeneration_status = regeneration_status;
+        let on_plan_regenerated = props.on_plan_regenerated;
+
+        let change_version = change_version;
+
+        move || {
+            // Read signals for dependency tracking
+            let ver = change_version();
+            if ver == 0 {
+                // No changes yet; skip
+                return;
+            }
+
+            // Don't start a new regeneration while one is already in progress
+            if matches!(regeneration_status(), RegenerationStatus::InProgress { .. }) {
+                return;
+            }
+
+            spawn({
+                let backend = backend.clone();
+                let change_version = change_version;
+
+                let selected_strategy = selected_strategy;
+                let user_experience_level = user_experience_level;
+                let difficulty_adaptation = difficulty_adaptation;
+                let spaced_repetition_enabled = spaced_repetition_enabled;
+                let cognitive_load_balancing = cognitive_load_balancing;
+
+                let sessions_per_week = sessions_per_week;
+                let session_length = session_length;
+                let include_weekends = include_weekends;
+
+                let mut regeneration_status = regeneration_status;
+                let on_plan_regenerated = on_plan_regenerated;
+
+                async move {
+                    // Debounce window
+                    tokio::time::sleep(tokio::time::Duration::from_millis(600)).await;
+
+                    // If another change happened during debounce, skip this run
+                    if change_version() != ver {
+                        return;
+                    }
+
+                    // Build new settings from current controls
+                    let new_advanced_settings = AdvancedSchedulerSettings {
+                        strategy: selected_strategy(),
+                        difficulty_adaptation: difficulty_adaptation(),
+                        spaced_repetition_enabled: spaced_repetition_enabled(),
+                        cognitive_load_balancing: cognitive_load_balancing(),
+                        user_experience_level: user_experience_level(),
+                        custom_intervals: None,
+                        max_session_duration_minutes: None,
+                        min_break_between_sessions_hours: None,
+                        prioritize_difficult_content: false,
+                        adaptive_pacing: true,
+                    };
+
+                    let new_settings = PlanSettings {
+                        start_date: props.plan.settings.start_date,
+                        sessions_per_week: sessions_per_week(),
+                        session_length_minutes: session_length(),
+                        include_weekends: include_weekends(),
+                        advanced_settings: Some(new_advanced_settings),
+                    };
+
+                    regeneration_status.set(RegenerationStatus::InProgress {
+                        progress: 0.0,
+                        message: "Applying session controls...".to_string(),
+                    });
+
+                    match backend.regenerate_plan(plan_id, new_settings).await {
+                        Ok(new_plan) => {
+                            regeneration_status.set(RegenerationStatus::Completed);
+                            // Mark current controls as applied
+                            last_applied_version.set(change_version());
+                            on_plan_regenerated.call(new_plan);
+                            // briefly show completion state
+                            tokio::time::sleep(tokio::time::Duration::from_millis(800)).await;
+                            regeneration_status.set(RegenerationStatus::Idle);
+                        },
+                        Err(e) => {
+                            regeneration_status
+                                .set(RegenerationStatus::Failed { error: e.to_string() });
+                        },
+                    }
+                }
+            });
+        }
     });
 
     let toggle_panel = move |_| {
@@ -122,98 +221,135 @@ pub fn SessionControlPanel(props: SessionControlPanelProps) -> Element {
         errors
     };
 
-    let apply_settings = move |_| {
-        // Validate form
-        let errors = validate_form();
-        form_errors.set(errors.clone());
+    let apply_settings = use_callback({
+        let validate_form = validate_form;
+        let mut form_errors = form_errors;
+        let mut regeneration_status = regeneration_status;
 
-        if !errors.is_empty() {
-            spawn(async move {
-                toast_helpers::error("Please fix validation errors before applying settings");
-            });
-            return;
-        }
+        let selected_strategy = selected_strategy;
+        let difficulty_adaptation = difficulty_adaptation;
+        let spaced_repetition_enabled = spaced_repetition_enabled;
+        let cognitive_load_balancing = cognitive_load_balancing;
+        let user_experience_level = user_experience_level;
 
-        // Create new advanced settings
-        let new_advanced_settings = AdvancedSchedulerSettings {
-            strategy: selected_strategy(),
-            difficulty_adaptation: difficulty_adaptation(),
-            spaced_repetition_enabled: spaced_repetition_enabled(),
-            cognitive_load_balancing: cognitive_load_balancing(),
-            user_experience_level: user_experience_level(),
-            custom_intervals: None, // Could be enhanced later
-            max_session_duration_minutes: None,
-            min_break_between_sessions_hours: None,
-            prioritize_difficult_content: false,
-            adaptive_pacing: true,
-        };
-
-        let new_settings = PlanSettings {
-            start_date: props.plan.settings.start_date,
-            sessions_per_week: sessions_per_week(),
-            session_length_minutes: session_length(),
-            include_weekends: include_weekends(),
-            advanced_settings: Some(new_advanced_settings),
-        };
-
-        // Start regeneration process
-        regeneration_status.set(RegenerationStatus::InProgress {
-            progress: 0.0,
-            message: "Starting plan regeneration...".to_string(),
-        });
+        let sessions_per_week = sessions_per_week;
+        let session_length = session_length;
+        let include_weekends = include_weekends;
 
         let plan_id = props.plan.id;
-        let backend_clone = backend.clone();
+        let backend = backend.clone();
         let on_plan_regenerated = props.on_plan_regenerated;
 
-        spawn(async move {
-            // Use the simpler regenerate_plan method without progress callback
-            // since Dioxus signals can't be moved into Send + Sync closures
-            match backend_clone.regenerate_plan(plan_id, new_settings).await {
-                Ok(new_plan) => {
-                    regeneration_status.set(RegenerationStatus::Completed);
-                    on_plan_regenerated.call(new_plan);
-                    toast_helpers::success("Plan regenerated successfully!");
+        let mut last_applied_version = last_applied_version;
+        let change_version = change_version;
 
-                    // Reset status after a delay
-                    tokio::time::sleep(tokio::time::Duration::from_secs(2)).await;
-                    regeneration_status.set(RegenerationStatus::Idle);
-                }
-                Err(e) => {
-                    regeneration_status.set(RegenerationStatus::Failed {
-                        error: e.to_string(),
-                    });
-                    toast_helpers::error(format!("Failed to regenerate plan: {e}"));
-                }
+        move |_| {
+            // Validate form
+            let errors = validate_form();
+            form_errors.set(errors.clone());
+
+            if !errors.is_empty() {
+                spawn(async move {
+                    toast_helpers::error("Please fix validation errors before applying settings");
+                });
+                return;
             }
-        });
-    };
 
-    let reset_settings = move |_| {
-        sessions_per_week.set(props.plan.settings.sessions_per_week);
-        session_length.set(props.plan.settings.session_length_minutes);
-        include_weekends.set(props.plan.settings.include_weekends);
+            // Create new advanced settings
+            let new_advanced_settings = AdvancedSchedulerSettings {
+                strategy: selected_strategy(),
+                difficulty_adaptation: difficulty_adaptation(),
+                spaced_repetition_enabled: spaced_repetition_enabled(),
+                cognitive_load_balancing: cognitive_load_balancing(),
+                user_experience_level: user_experience_level(),
+                custom_intervals: None, // Could be enhanced later
+                max_session_duration_minutes: None,
+                min_break_between_sessions_hours: None,
+                prioritize_difficult_content: false,
+                adaptive_pacing: true,
+            };
 
-        // Reset advanced settings
-        let current_advanced = props
-            .plan
-            .settings
-            .advanced_settings
-            .clone()
-            .unwrap_or_default();
-        advanced_settings.set(current_advanced.clone());
-        selected_strategy.set(current_advanced.strategy);
-        user_experience_level.set(current_advanced.user_experience_level);
-        difficulty_adaptation.set(current_advanced.difficulty_adaptation);
-        spaced_repetition_enabled.set(current_advanced.spaced_repetition_enabled);
-        cognitive_load_balancing.set(current_advanced.cognitive_load_balancing);
+            let new_settings = PlanSettings {
+                start_date: props.plan.settings.start_date,
+                sessions_per_week: sessions_per_week(),
+                session_length_minutes: session_length(),
+                include_weekends: include_weekends(),
+                advanced_settings: Some(new_advanced_settings),
+            };
 
-        form_errors.set(Vec::new());
+            // Start regeneration process
+            regeneration_status.set(RegenerationStatus::InProgress {
+                progress: 0.0,
+                message: "Starting plan regeneration...".to_string(),
+            });
 
-        spawn(async move {
-            toast_helpers::info("Settings reset to current plan values");
-        });
-    };
+            let backend_clone = backend.clone();
+            spawn(async move {
+                match backend_clone.regenerate_plan(plan_id, new_settings).await {
+                    Ok(new_plan) => {
+                        regeneration_status.set(RegenerationStatus::Completed);
+                        // Mark current controls as applied
+                        last_applied_version.set(change_version());
+                        on_plan_regenerated.call(new_plan);
+                        toast_helpers::success("Plan regenerated successfully!");
+
+                        // Reset status after a delay
+                        tokio::time::sleep(tokio::time::Duration::from_secs(2)).await;
+                        regeneration_status.set(RegenerationStatus::Idle);
+                    },
+                    Err(e) => {
+                        regeneration_status
+                            .set(RegenerationStatus::Failed { error: e.to_string() });
+                        toast_helpers::error(format!("Failed to regenerate plan: {e}"));
+                    },
+                }
+            });
+        }
+    });
+
+    let reset_settings = use_callback({
+        let mut sessions_per_week = sessions_per_week;
+        let mut session_length = session_length;
+        let mut include_weekends = include_weekends;
+
+        let mut advanced_settings = advanced_settings;
+        let mut selected_strategy = selected_strategy;
+        let mut user_experience_level = user_experience_level;
+        let mut difficulty_adaptation = difficulty_adaptation;
+        let mut spaced_repetition_enabled = spaced_repetition_enabled;
+        let mut cognitive_load_balancing = cognitive_load_balancing;
+
+        let mut form_errors = form_errors;
+        let mut last_applied_version = last_applied_version;
+        let change_version = change_version;
+
+        // Snapshot current plan settings to reset to
+        let settings_snapshot = props.plan.settings.clone();
+
+        move |_| {
+            sessions_per_week.set(settings_snapshot.sessions_per_week);
+            session_length.set(settings_snapshot.session_length_minutes);
+            include_weekends.set(settings_snapshot.include_weekends);
+
+            // Reset advanced settings
+            let current_advanced = settings_snapshot.advanced_settings.clone().unwrap_or_default();
+            advanced_settings.set(current_advanced.clone());
+            selected_strategy.set(current_advanced.strategy);
+            user_experience_level.set(current_advanced.user_experience_level);
+            difficulty_adaptation.set(current_advanced.difficulty_adaptation);
+            spaced_repetition_enabled.set(current_advanced.spaced_repetition_enabled);
+            cognitive_load_balancing.set(current_advanced.cognitive_load_balancing);
+
+            form_errors.set(Vec::new());
+
+            // Reset pending changes marker since controls now match the plan
+            last_applied_version.set(change_version());
+
+            spawn(async move {
+                toast_helpers::info("Settings reset to current plan values");
+            });
+        }
+    });
 
     rsx! {
         div { class: "card bg-base-100 border border-base-300 mb-6 shadow-sm",
@@ -235,6 +371,16 @@ pub fn SessionControlPanel(props: SessionControlPanelProps) -> Element {
                         span { "{sessions_per_week()} sessions/week" }
                         span { "•" }
                         span { "{session_length()} min each" }
+
+                        // Show 'Restructure Now' when there are unapplied edits and not currently regenerating
+                        if change_version() != last_applied_version()
+                            && !matches!(regeneration_status(), RegenerationStatus::InProgress { .. }) {
+                            button {
+                                class: "btn btn-primary btn-xs mr-2",
+                                onclick: move |evt| apply_settings.call(evt),
+                                "Restructure Now"
+                            }
+                        }
 
                         button {
                             class: "btn btn-ghost btn-sm btn-circle ml-2",
@@ -322,6 +468,8 @@ pub fn SessionControlPanel(props: SessionControlPanelProps) -> Element {
                                         oninput: move |evt| {
                                             if let Ok(value) = evt.value().parse::<u8>() {
                                                 sessions_per_week.set(value);
+                                                // mark change for debounce
+                                                change_version.set(change_version() + 1);
                                             }
                                         }
                                     }
@@ -358,6 +506,8 @@ pub fn SessionControlPanel(props: SessionControlPanelProps) -> Element {
                                         oninput: move |evt| {
                                             if let Ok(value) = evt.value().parse::<u32>() {
                                                 session_length.set(value);
+                                                // mark change for debounce
+                                                change_version.set(change_version() + 1);
                                             }
                                         }
                                     }
@@ -383,6 +533,8 @@ pub fn SessionControlPanel(props: SessionControlPanelProps) -> Element {
                                         checked: include_weekends(),
                                         onchange: move |evt| {
                                             include_weekends.set(evt.checked());
+                                            // mark change for debounce
+                                            change_version.set(change_version() + 1);
                                         }
                                     }
                                     span { class: "label-text", "Include weekends in schedule" }
@@ -424,6 +576,8 @@ pub fn SessionControlPanel(props: SessionControlPanelProps) -> Element {
                                                 let strategies = DistributionStrategy::all();
                                                 if let Some(strategy) = strategies.get(value as usize) {
                                                     selected_strategy.set(strategy.clone());
+                                                    // mark change for debounce
+                                                    change_version.set(change_version() + 1);
                                                 }
                                             }
                                         },
@@ -450,7 +604,11 @@ pub fn SessionControlPanel(props: SessionControlPanelProps) -> Element {
                                                 ),
                                                 onclick: {
                                                     let level = *level;
-                                                    move |_| user_experience_level.set(level)
+                                                    move |_| {
+                                                        user_experience_level.set(level);
+                                                        // mark change for debounce
+                                                        change_version.set(change_version() + 1);
+                                                    }
                                                 },
                                                 "{level.display_name()}"
                                             }
@@ -468,6 +626,8 @@ pub fn SessionControlPanel(props: SessionControlPanelProps) -> Element {
                                                 checked: difficulty_adaptation(),
                                                 onchange: move |evt| {
                                                     difficulty_adaptation.set(evt.checked());
+                                                    // mark change for debounce
+                                                    change_version.set(change_version() + 1);
                                                 }
                                             }
                                             div {
@@ -485,6 +645,8 @@ pub fn SessionControlPanel(props: SessionControlPanelProps) -> Element {
                                                 checked: spaced_repetition_enabled(),
                                                 onchange: move |evt| {
                                                     spaced_repetition_enabled.set(evt.checked());
+                                                    // mark change for debounce
+                                                    change_version.set(change_version() + 1);
                                                 }
                                             }
                                             div {
@@ -502,6 +664,8 @@ pub fn SessionControlPanel(props: SessionControlPanelProps) -> Element {
                                                 checked: cognitive_load_balancing(),
                                                 onchange: move |evt| {
                                                     cognitive_load_balancing.set(evt.checked());
+                                                    // mark change for debounce
+                                                    change_version.set(change_version() + 1);
                                                 }
                                             }
                                             div {
@@ -519,7 +683,7 @@ pub fn SessionControlPanel(props: SessionControlPanelProps) -> Element {
                             button {
                                 class: "btn btn-primary flex-1",
                                 disabled: matches!(regeneration_status(), RegenerationStatus::InProgress { .. }),
-                                onclick: apply_settings,
+                                onclick: move |evt| apply_settings.call(evt),
                                 if matches!(regeneration_status(), RegenerationStatus::InProgress { .. }) {
                                     Icon { icon: FaSpinner, class: "w-4 h-4 animate-spin" }
                                 } else {
@@ -531,7 +695,7 @@ pub fn SessionControlPanel(props: SessionControlPanelProps) -> Element {
                             button {
                                 class: "btn btn-ghost",
                                 disabled: matches!(regeneration_status(), RegenerationStatus::InProgress { .. }),
-                                onclick: reset_settings,
+                                onclick: move |evt| reset_settings.call(evt),
                                 "Reset to Current"
                             }
                         }

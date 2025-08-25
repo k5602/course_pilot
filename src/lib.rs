@@ -7,6 +7,10 @@
 //! - SQLite-based persistence
 //!
 
+// Suppress warnings that are expected during development
+#![allow(unused_mut)]
+#![allow(unused_comparisons)]
+
 // Main modules
 pub mod app;
 pub mod error_handling;
@@ -36,7 +40,7 @@ pub use planner::generate_plan;
 pub use storage::{init_db, load_courses, load_plan, save_course, save_plan};
 
 // Re-export enhanced integrated functions
-pub use ingest::{ImportProgress, import_and_structure_local_folder, import_and_structure_youtube};
+pub use ingest::ImportProgress;
 pub use storage::{
     ClusteringAnalytics, ClusteringPerformancePoint, ProcessingTimeStats, QualityDistribution,
     get_clustering_analytics, get_clustering_performance_history,
@@ -54,9 +58,9 @@ pub use ui::{
 
 // Re-export commonly used hooks
 pub use ui::{
-    use_app_state, use_backend, use_course_manager, use_courses_resource, use_export_manager,
-    use_import_manager, use_modal_manager, use_navigation_manager, use_notes_manager,
-    use_plan_manager, use_settings_manager,
+    use_backend, use_course_manager, use_courses_resource, use_export_manager, use_import_manager,
+    use_modal_manager, use_navigation_manager, use_notes_manager, use_plan_manager,
+    use_settings_manager,
 };
 
 // Custom error types
@@ -128,10 +132,7 @@ pub enum Phase3Error {
     Backend(#[from] anyhow::Error),
 
     #[error("Plan item not found: plan_id={plan_id}, item_index={item_index}")]
-    PlanItemNotFound {
-        plan_id: uuid::Uuid,
-        item_index: usize,
-    },
+    PlanItemNotFound { plan_id: uuid::Uuid, item_index: usize },
 
     #[error("Ingest operation failed: {0}")]
     Ingest(String),
@@ -147,12 +148,12 @@ pub fn handle_async_error(error: anyhow::Error, operation: &str) {
     let user_message = match error.downcast_ref::<Phase3Error>() {
         Some(Phase3Error::PlanItemNotFound { .. }) => {
             "The item you're trying to update no longer exists. Please refresh the page."
-        }
+        },
         Some(Phase3Error::Backend(_)) => "A server error occurred. Please try again in a moment.",
         Some(Phase3Error::Ingest(msg)) => &format!("Import failed: {msg}"),
         Some(Phase3Error::StateSyncError(_)) => {
             "UI state synchronization failed. Please refresh the page."
-        }
+        },
         _ => "An unexpected error occurred. Please try again.",
     };
 

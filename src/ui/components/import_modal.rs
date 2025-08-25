@@ -1,5 +1,5 @@
-use crate::ui::{Badge, BaseModal, toast_helpers};
 use crate::ui::hooks::LocalFolderPreview;
+use crate::ui::{Badge, BaseModal, toast_helpers};
 use dioxus::prelude::*;
 use dioxus_free_icons::Icon;
 use dioxus_free_icons::icons::fa_brands_icons::FaYoutube;
@@ -93,21 +93,15 @@ pub fn ImportModal(props: ImportModalProps) -> Element {
     let mut folder_validation = use_signal(|| None::<crate::ui::hooks::FolderValidation>);
     let mut is_generating_preview = use_signal(|| false);
     let mut local_folder_preview = use_signal(|| None::<LocalFolderPreview>);
+    let mut preview_cancel_token = use_signal(|| None::<tokio_util::sync::CancellationToken>);
 
     let import_manager = crate::ui::hooks::use_import_manager();
     let _course_manager = crate::ui::hooks::use_course_manager();
 
     // Tab labels and sources
-    let tab_labels = [
-        "Local Course".to_string(),
-        "YouTube".to_string(),
-        "Other Resources".to_string(),
-    ];
-    let sources = [
-        ImportSource::LocalFolder,
-        ImportSource::YouTube,
-        ImportSource::OtherResources,
-    ];
+    let tab_labels =
+        ["Local Course".to_string(), "YouTube".to_string(), "Other Resources".to_string()];
+    let sources = [ImportSource::LocalFolder, ImportSource::YouTube, ImportSource::OtherResources];
 
     // Get current source
     let current_source = sources[selected_tab()];
@@ -120,10 +114,10 @@ pub fn ImportModal(props: ImportModalProps) -> Element {
             } else {
                 false
             }
-        }
+        },
         ImportSource::YouTube => {
             !youtube_url().trim().is_empty() && youtube_url().contains("youtube.com")
-        }
+        },
         ImportSource::OtherResources => false, // Always disabled for now
     };
 
@@ -153,10 +147,12 @@ pub fn ImportModal(props: ImportModalProps) -> Element {
                                     toast_helpers::info("Starting local folder import...");
 
                                     // Use the async method directly instead of the callback
-                                    let result = import_manager.import_from_local_folder(
-                                        std::path::PathBuf::from(&path),
-                                        None, // Let it auto-generate title from folder name
-                                    ).await;
+                                    let result = import_manager
+                                        .import_from_local_folder(
+                                            std::path::PathBuf::from(&path),
+                                            None, // Let it auto-generate title from folder name
+                                        )
+                                        .await;
 
                                     match result {
                                         Ok(course) => {
@@ -173,12 +169,12 @@ pub fn ImportModal(props: ImportModalProps) -> Element {
                                             {
                                                 refresh_callback.call(());
                                             }
-                                        }
+                                        },
                                         Err(e) => {
                                             toast_helpers::error(format!(
                                                 "Failed to import course: {e}"
                                             ));
-                                        }
+                                        },
                                     }
                                 });
                             } else {
@@ -192,7 +188,7 @@ pub fn ImportModal(props: ImportModalProps) -> Element {
                     } else {
                         toast_helpers::error("Please select a folder");
                     }
-                }
+                },
                 ImportSource::YouTube => {
                     let input = youtube_url().trim().to_string();
                     if !input.is_empty() {
@@ -200,12 +196,12 @@ pub fn ImportModal(props: ImportModalProps) -> Element {
                     } else {
                         toast_helpers::error("Please provide a valid YouTube URL");
                     }
-                }
+                },
                 ImportSource::OtherResources => {
                     toast_helpers::info(
                         "Additional import sources are not yet available. Please use Local Course or YouTube import options.",
                     );
-                }
+                },
             }
         }
     };
@@ -238,6 +234,7 @@ pub fn ImportModal(props: ImportModalProps) -> Element {
         let mut is_validating = is_validating;
         let mut is_generating_preview = is_generating_preview;
         let mut local_folder_preview = local_folder_preview;
+        let mut preview_cancel_token = preview_cancel_token;
 
         move || {
             let path = local_path();
@@ -246,31 +243,41 @@ pub fn ImportModal(props: ImportModalProps) -> Element {
                 is_generating_preview.set(true);
                 folder_validation.set(None);
                 local_folder_preview.set(None);
-                
+
                 let import_manager = import_manager.clone();
                 let path = path.clone();
                 spawn(async move {
                     let path_buf = std::path::PathBuf::from(&path);
-                    
+
                     // First validate the folder
                     match import_manager.validate_folder(path_buf.clone()).await {
                         Ok(validation) => {
                             folder_validation.set(Some(validation.clone()));
                             is_validating.set(false);
-                            
+
                             // If validation is successful, generate preview
                             if validation.is_valid {
-                                match import_manager.generate_folder_preview(path_buf).await {
+                                let token = tokio_util::sync::CancellationToken::new();
+                                preview_cancel_token.set(Some(token.clone()));
+                                match import_manager
+                                    .generate_folder_preview_with_cancel(path_buf, token)
+                                    .await
+                                {
                                     Ok(preview) => {
                                         local_folder_preview.set(Some(preview));
-                                    }
+                                        preview_cancel_token.set(None);
+                                    },
                                     Err(e) => {
                                         log::error!("Failed to generate preview: {}", e);
-                                        crate::ui::toast_helpers::error(format!("Failed to generate preview: {}", e));
-                                    }
+                                        crate::ui::toast_helpers::error(format!(
+                                            "Failed to generate preview: {}",
+                                            e
+                                        ));
+                                        preview_cancel_token.set(None);
+                                    },
                                 }
                             }
-                        }
+                        },
                         Err(e) => {
                             folder_validation.set(Some(crate::ui::hooks::FolderValidation {
                                 is_valid: false,
@@ -281,9 +288,9 @@ pub fn ImportModal(props: ImportModalProps) -> Element {
                                 error_message: Some(format!("Validation error: {e}")),
                             }));
                             is_validating.set(false);
-                        }
+                        },
                     }
-                    
+
                     is_generating_preview.set(false);
                 });
             } else {
@@ -303,6 +310,7 @@ pub fn ImportModal(props: ImportModalProps) -> Element {
             folder_validation.set(None);
             is_generating_preview.set(false);
             local_folder_preview.set(None);
+            preview_cancel_token.set(None);
         }
     });
 
@@ -318,8 +326,22 @@ pub fn ImportModal(props: ImportModalProps) -> Element {
                     onclick: move |_| props.on_close.call(()),
                     "Cancel"
                 }
-                // Only show import button for non-YouTube tabs (YouTube has its own button)
-                if current_source != ImportSource::YouTube {
+                // Cancel preview if a long-running preview is in progress (Local Folder only)
+                                if current_source == ImportSource::LocalFolder && is_generating_preview() {
+                                    button {
+                                        class: "btn btn-warning btn-sm",
+                                        disabled: preview_cancel_token().is_none(),
+                                        onclick: move |_| {
+                                            if let Some(token) = preview_cancel_token() {
+                                                token.cancel();
+                                                crate::ui::toast_helpers::info("Cancelling preview...");
+                                            }
+                                        },
+                                        "Cancel Preview"
+                                    }
+                                }
+                                // Only show import button for non-YouTube tabs (YouTube has its own button)
+                                if current_source != ImportSource::YouTube {
                     button {
                         class: "btn btn-primary btn-sm",
                         disabled: !is_valid || is_validating() || props.preview_loading,
@@ -440,14 +462,25 @@ fn YouTubeImportForm(
     let backend = crate::ui::hooks::use_backend();
     let navigator = use_navigator();
 
-    // Load settings and initialize API key from storage
-    let settings = use_resource(|| async { crate::storage::AppSettings::load() });
+    // Load settings and initialize API key from storage (via backend)
+    let settings = use_resource({
+        let backend = backend.clone();
+        move || {
+            let value = backend.clone();
+            async move { value.load_settings().await }
+        }
+    });
 
     // Form state
     let url = use_signal(String::new);
     let mut api_key = use_signal(String::new);
     let mut api_key_from_settings = use_signal(|| false);
     let api_key_validation_status = use_signal(|| None::<bool>);
+    let mut youtube_preview_cancel_token =
+        use_signal(|| None::<tokio_util::sync::CancellationToken>);
+    let mut _youtube_import_cancelled = use_signal(|| false);
+    let mut youtube_import_cancel_token =
+        use_signal(|| None::<tokio_util::sync::CancellationToken>);
 
     // Initialize API key from settings when settings load
     use_effect({
@@ -497,14 +530,14 @@ fn YouTubeImportForm(
             if !new_url.contains("youtube.com")
                 || (!new_url.contains("playlist") && !new_url.contains("list="))
             {
-                validation_error.set(Some(
-                    "Please enter a valid YouTube playlist URL".to_string(),
-                ));
+                validation_error.set(Some("Please enter a valid YouTube playlist URL".to_string()));
                 return;
             }
 
             // If we have an API key, validate the playlist and load preview
             if !api_key().trim().is_empty() {
+                let token = tokio_util::sync::CancellationToken::new();
+                youtube_preview_cancel_token.set(Some(token.clone()));
                 is_validating.set(true);
                 is_loading_preview.set(true);
 
@@ -515,15 +548,32 @@ fn YouTubeImportForm(
                 let mut is_loading_preview = is_loading_preview;
 
                 spawn(async move {
-                    // First validate the playlist exists
-                    match crate::ingest::youtube::validate_playlist_url(&new_url, &api_key_val)
-                        .await
+                    // First validate the playlist exists (honor cancellation)
+                    if token.is_cancelled() {
+                        is_validating.set(false);
+                        is_loading_preview.set(false);
+                        youtube_preview_cancel_token.set(None);
+                        return;
+                    }
+                    match crate::ingest::youtube::validate_playlist_url_with_cancel(
+                        &new_url,
+                        &api_key_val,
+                        &token,
+                    )
+                    .await
                     {
                         Ok(true) => {
-                            // Load preview data
-                            match crate::ingest::youtube::import_from_youtube(
+                            // Load preview data (honor cancellation)
+                            if token.is_cancelled() {
+                                is_validating.set(false);
+                                is_loading_preview.set(false);
+                                youtube_preview_cancel_token.set(None);
+                                return;
+                            }
+                            match crate::ingest::youtube::import_from_youtube_with_cancel(
                                 &new_url,
                                 &api_key_val,
+                                &token,
                             )
                             .await
                             {
@@ -551,41 +601,43 @@ fn YouTubeImportForm(
                                     };
 
                                     preview.set(Some(preview_data));
-                                }
+                                    youtube_preview_cancel_token.set(None);
+                                },
                                 Err(crate::ImportError::Network(msg)) => {
                                     validation_error.set(Some(format!("Network error: {msg}")));
-                                }
+                                },
                                 Err(crate::ImportError::InvalidUrl(msg)) => {
                                     validation_error.set(Some(msg));
-                                }
+                                },
                                 Err(crate::ImportError::NoContent) => {
                                     validation_error.set(Some(
                                         "Playlist is empty or contains no accessible videos"
                                             .to_string(),
                                     ));
-                                }
+                                },
                                 Err(e) => {
                                     validation_error
                                         .set(Some(format!("Failed to load playlist: {e}")));
-                                }
+                                },
                             }
-                        }
+                        },
                         Ok(false) => {
                             validation_error.set(Some("Playlist not found or not accessible. Please check the URL and ensure the playlist is public or unlisted.".to_string()));
-                        }
+                        },
                         Err(crate::ImportError::Network(msg)) => {
                             validation_error.set(Some(format!("Network error: {msg}")));
-                        }
+                        },
                         Err(crate::ImportError::InvalidUrl(msg)) => {
                             validation_error.set(Some(msg));
-                        }
+                        },
                         Err(e) => {
                             validation_error.set(Some(format!("Validation error: {e}")));
-                        }
+                        },
                     }
 
                     is_validating.set(false);
                     is_loading_preview.set(false);
+                    youtube_preview_cancel_token.set(None);
                 });
             }
         }
@@ -610,17 +662,17 @@ fn YouTubeImportForm(
                     Ok(true) => {
                         api_key_validation_status.set(Some(true));
                         toast_helpers::success("YouTube API key is valid!");
-                    }
+                    },
                     Ok(false) => {
                         api_key_validation_status.set(Some(false));
                         toast_helpers::error(
                             "YouTube API key is invalid or has insufficient permissions",
                         );
-                    }
+                    },
                     Err(e) => {
                         api_key_validation_status.set(Some(false));
                         toast_helpers::error(format!("Failed to validate API key: {e}"));
-                    }
+                    },
                 }
             });
         }
@@ -633,6 +685,7 @@ fn YouTubeImportForm(
         let mut api_key_validation_status = api_key_validation_status;
         let url = url;
         let mut handle_url_change = handle_url_change;
+        let backend = backend.clone();
 
         move |new_api_key: String| {
             api_key.set(new_api_key.clone());
@@ -646,15 +699,17 @@ fn YouTubeImportForm(
             // Auto-save API key to settings when user enters it manually
             if !api_key_from_settings() && !new_api_key.trim().is_empty() {
                 let key_to_save = new_api_key.trim().to_string();
+                let backend = backend.clone();
                 spawn(async move {
-                    if let Ok(mut settings) = crate::storage::AppSettings::load() {
-                        if let Err(e) = settings.set_youtube_api_key(Some(key_to_save)) {
-                            log::error!("Failed to save API key: {e}");
-                            toast_helpers::error("Failed to save API key to settings");
-                        } else {
+                    match backend.set_youtube_api_key(Some(key_to_save)).await {
+                        Ok(()) => {
                             log::info!("YouTube API key saved to settings");
                             toast_helpers::success("API key saved to settings");
-                        }
+                        },
+                        Err(e) => {
+                            log::error!("Failed to save API key: {e}");
+                            toast_helpers::error("Failed to save API key to settings");
+                        },
                     }
                 });
             }
@@ -675,6 +730,7 @@ fn YouTubeImportForm(
         let url = url;
         let api_key = api_key;
         let preview = preview;
+        let mut youtube_import_cancel_token = youtube_import_cancel_token;
 
         move |_| {
             let url_val = url().trim().to_string();
@@ -732,7 +788,15 @@ fn YouTubeImportForm(
                     "Fetching playlist data...".to_string(),
                 );
 
-                match crate::ingest::youtube::import_from_youtube(&url_val, &api_key_val).await {
+                let token = tokio_util::sync::CancellationToken::new();
+                youtube_import_cancel_token.set(Some(token.clone()));
+                match crate::ingest::youtube::import_from_youtube_with_cancel(
+                    &url_val,
+                    &api_key_val,
+                    &token,
+                )
+                .await
+                {
                     Ok((sections, metadata)) => {
                         complete_stage(
                             crate::types::ImportStage::Fetching,
@@ -749,19 +813,20 @@ fn YouTubeImportForm(
 
                         // Convert to course with proper structure
                         let course_name = metadata.title;
-                        
+
                         // Convert YoutubeSection objects to VideoMetadata with proper video_id and URLs
                         let videos: Vec<crate::types::VideoMetadata> = sections
                             .iter()
                             .enumerate()
                             .map(|(_index, section)| {
-                                let mut video = crate::types::VideoMetadata::new_youtube_with_playlist(
-                                    section.title.clone(),
-                                    section.video_id.clone(),
-                                    section.url.clone(),
-                                    section.playlist_id.clone(),
-                                    section.original_index,
-                                );
+                                let mut video =
+                                    crate::types::VideoMetadata::new_youtube_with_playlist(
+                                        section.title.clone(),
+                                        section.video_id.clone(),
+                                        section.url.clone(),
+                                        section.playlist_id.clone(),
+                                        section.original_index,
+                                    );
                                 video.duration_seconds = Some(section.duration.as_secs_f64());
                                 video.thumbnail_url = section.thumbnail_url.clone();
                                 video.description = section.description.clone();
@@ -770,12 +835,19 @@ fn YouTubeImportForm(
                             })
                             .collect();
 
-                        log::info!("Created {} VideoMetadata objects from YoutubeSection data", videos.len());
+                        log::info!(
+                            "Created {} VideoMetadata objects from YoutubeSection data",
+                            videos.len()
+                        );
                         if !videos.is_empty() {
-                            log::info!("First video: title='{}', video_id={:?}, source_url={:?}", 
-                                       videos[0].title, videos[0].video_id, videos[0].source_url);
+                            log::info!(
+                                "First video: title='{}', video_id={:?}, source_url={:?}",
+                                videos[0].title,
+                                videos[0].video_id,
+                                videos[0].source_url
+                            );
                         }
-                        
+
                         let mut course = crate::types::Course::new_with_videos(course_name, videos);
 
                         // Create course structure with durations
@@ -790,7 +862,8 @@ fn YouTubeImportForm(
                             .collect();
 
                         // Create a single module containing all videos (basic structure)
-                        let total_duration: std::time::Duration = sections.iter().map(|s| s.duration).sum();
+                        let total_duration: std::time::Duration =
+                            sections.iter().map(|s| s.duration).sum();
                         let module = crate::types::Module::new_basic(
                             "All Videos".to_string(),
                             course_sections,
@@ -825,12 +898,12 @@ fn YouTubeImportForm(
                             process_start.elapsed().as_millis() as u64,
                         );
 
-                        // TF-IDF Analysis stage
+                        // Title analysis stage
                         let tfidf_start = std::time::Instant::now();
                         update_job_progress(
                             crate::types::ImportStage::TfIdfAnalysis,
                             0.0,
-                            "Computing term frequency and semantic similarity...".to_string(),
+                            "Analyzing titles and preparing session grouping...".to_string(),
                         );
 
                         // Simulate TF-IDF progress
@@ -839,7 +912,7 @@ fn YouTubeImportForm(
                             update_job_progress(
                                 crate::types::ImportStage::TfIdfAnalysis,
                                 i as f32 * 20.0,
-                                format!("Analyzing semantic relationships... ({i}/5)"),
+                                format!("Reviewing title patterns... ({i}/5)"),
                             );
                         }
                         complete_stage(
@@ -847,12 +920,12 @@ fn YouTubeImportForm(
                             tfidf_start.elapsed().as_millis() as u64,
                         );
 
-                        // K-Means Clustering stage
+                        // Session grouping stage
                         let kmeans_start = std::time::Instant::now();
                         update_job_progress(
                             crate::types::ImportStage::KMeansClustering,
                             0.0,
-                            "Grouping videos into learning modules...".to_string(),
+                            "Grouping videos into study sessions...".to_string(),
                         );
 
                         // Structure the course using NLP
@@ -863,16 +936,28 @@ fn YouTubeImportForm(
                                     quality_score: 8.5,
                                     confidence_level: 87.0,
                                     cluster_count: course_structure.modules.len(),
-                                    rationale: "Videos grouped by topic similarity and learning progression".to_string(),
-                                    key_topics: vec!["Introduction".to_string(), "Core Concepts".to_string(), "Advanced Topics".to_string()],
-                                    estimated_modules: course_structure.modules.iter().enumerate().map(|(i, module)| {
-                                        crate::types::EstimatedModule {
+                                    rationale:
+                                        "Preliminary session grouping based on title analysis"
+                                            .to_string(),
+                                    key_topics: vec![
+                                        "Introduction".to_string(),
+                                        "Core Concepts".to_string(),
+                                        "Advanced Topics".to_string(),
+                                    ],
+                                    estimated_modules: course_structure
+                                        .modules
+                                        .iter()
+                                        .enumerate()
+                                        .map(|(i, module)| crate::types::EstimatedModule {
                                             title: module.title.clone(),
                                             video_count: module.sections.len(),
                                             confidence: 0.85 + (i as f32 * 0.05),
-                                            key_topics: vec!["Topic A".to_string(), "Topic B".to_string()],
-                                        }
-                                    }).collect(),
+                                            key_topics: vec![
+                                                "Topic A".to_string(),
+                                                "Topic B".to_string(),
+                                            ],
+                                        })
+                                        .collect(),
                                 };
 
                                 // Update job with clustering preview
@@ -884,19 +969,19 @@ fn YouTubeImportForm(
                                 update_job_progress(
                                     crate::types::ImportStage::KMeansClustering,
                                     80.0,
-                                    "Finalizing module structure...".to_string(),
+                                    "Finalizing session grouping...".to_string(),
                                 );
                                 complete_stage(
                                     crate::types::ImportStage::KMeansClustering,
                                     kmeans_start.elapsed().as_millis() as u64,
                                 );
 
-                                // Optimization stage
+                                // Finalization stage
                                 let opt_start = std::time::Instant::now();
                                 update_job_progress(
                                     crate::types::ImportStage::Optimization,
                                     0.0,
-                                    "Optimizing learning flow and module boundaries...".to_string(),
+                                    "Finalizing session grouping...".to_string(),
                                 );
 
                                 course.structure = Some(course_structure);
@@ -945,11 +1030,11 @@ fn YouTubeImportForm(
                                             "Course imported and structured successfully!",
                                         );
                                         on_import_complete.call(course_for_callback);
-                                    }
+                                    },
                                     Err(e) => {
                                         let error_msg = format!("Failed to save course: {e}");
                                         log::error!("{}", error_msg);
-                                        
+
                                         if let Some(mut job) = import_job() {
                                             job.fail_stage(
                                                 crate::types::ImportStage::Saving,
@@ -959,9 +1044,9 @@ fn YouTubeImportForm(
                                         }
 
                                         toast_helpers::error(&error_msg);
-                                    }
+                                    },
                                 }
-                            }
+                            },
                             Err(e) => {
                                 let error_msg = format!("Failed to structure course: {e}");
                                 if let Some(mut job) = import_job() {
@@ -975,9 +1060,9 @@ fn YouTubeImportForm(
                                 if let Some(on_error) = on_import_error {
                                     on_error.call(error_msg);
                                 }
-                            }
+                            },
                         }
-                    }
+                    },
                     Err(crate::ImportError::Network(msg)) => {
                         let error_msg = format!("Network error: {msg}");
                         if let Some(mut job) = import_job() {
@@ -990,7 +1075,7 @@ fn YouTubeImportForm(
                         if let Some(on_error) = on_import_error {
                             on_error.call(error_msg);
                         }
-                    }
+                    },
                     Err(crate::ImportError::InvalidUrl(msg)) => {
                         let error_msg = format!("Invalid URL: {msg}");
                         if let Some(mut job) = import_job() {
@@ -1003,7 +1088,7 @@ fn YouTubeImportForm(
                         if let Some(on_error) = on_import_error {
                             on_error.call(error_msg);
                         }
-                    }
+                    },
                     Err(crate::ImportError::NoContent) => {
                         let error_msg = "No accessible content found in playlist".to_string();
                         if let Some(mut job) = import_job() {
@@ -1014,7 +1099,7 @@ fn YouTubeImportForm(
                         if let Some(on_error) = on_import_error {
                             on_error.call(error_msg);
                         }
-                    }
+                    },
                     Err(e) => {
                         let error_msg = format!("Import failed: {e}");
                         if let Some(mut job) = import_job() {
@@ -1025,7 +1110,7 @@ fn YouTubeImportForm(
                         if let Some(on_error) = on_import_error {
                             on_error.call(error_msg);
                         }
-                    }
+                    },
                 }
             });
         }
@@ -1250,6 +1335,18 @@ fn YouTubeImportForm(
                         div { class: "mt-2",
                             progress { class: "progress progress-primary w-full" }
                         }
+                        div { class: "mt-3 flex justify-end",
+                            button {
+                                class: "btn btn-warning btn-sm",
+                                onclick: move |_| {
+                                    if let Some(token) = youtube_preview_cancel_token() {
+                                        token.cancel();
+                                        crate::ui::toast_helpers::info("Cancelling YouTube preview...");
+                                    }
+                                },
+                                "Cancel Preview"
+                            }
+                        }
                     }
                 }
             }
@@ -1257,6 +1354,18 @@ fn YouTubeImportForm(
             // Enhanced import progress
             if let Some(job) = import_job() {
                 YouTubeImportProgressPanel { job }
+                div { class: "mt-2 flex justify-end",
+                    button {
+                        class: "btn btn-warning btn-sm",
+                        onclick: move |_| {
+                            if let Some(token) = youtube_import_cancel_token() {
+                                token.cancel();
+                                crate::ui::toast_helpers::info("Cancelling YouTube import...");
+                            }
+                        },
+                        "Cancel Import"
+                    }
+                }
             }
 
             // Enhanced import button
@@ -1286,11 +1395,7 @@ fn YouTubePlaylistPreviewPanel(preview: YouTubePlaylistPreview) -> Element {
     let duration_text = {
         let hours = preview.total_duration.as_secs() / 3600;
         let minutes = (preview.total_duration.as_secs() % 3600) / 60;
-        if hours > 0 {
-            format!("{hours}h {minutes}m")
-        } else {
-            format!("{minutes}m")
-        }
+        if hours > 0 { format!("{hours}h {minutes}m") } else { format!("{minutes}m") }
     };
 
     rsx! {
@@ -1699,10 +1804,7 @@ fn ClusteringPreviewPanel(preview: crate::types::ClusteringPreview) -> Element {
 /// Extract a course name from a YouTube playlist URL
 fn extract_course_name_from_url(url: &str) -> String {
     if let Some(playlist_id) = crate::ingest::youtube::extract_playlist_id(url) {
-        format!(
-            "YouTube Playlist {}",
-            &playlist_id[..8.min(playlist_id.len())]
-        )
+        format!("YouTube Playlist {}", &playlist_id[..8.min(playlist_id.len())])
     } else {
         "YouTube Course".to_string()
     }
@@ -2062,11 +2164,7 @@ fn LocalFolderPreviewPanel(preview: LocalFolderPreview) -> Element {
     let duration_text = if let Some(duration) = preview.total_duration {
         let hours = duration.as_secs() / 3600;
         let minutes = (duration.as_secs() % 3600) / 60;
-        if hours > 0 {
-            format!("{hours}h {minutes}m")
-        } else {
-            format!("{minutes}m")
-        }
+        if hours > 0 { format!("{hours}h {minutes}m") } else { format!("{minutes}m") }
     } else {
         "Unknown".to_string()
     };
@@ -2216,11 +2314,7 @@ fn ImportPreviewPanel(preview: ImportPreview) -> Element {
     let duration_text = if let Some(duration) = preview.total_duration {
         let hours = duration.as_secs() / 3600;
         let minutes = (duration.as_secs() % 3600) / 60;
-        if hours > 0 {
-            format!("{hours}h {minutes}m")
-        } else {
-            format!("{minutes}m")
-        }
+        if hours > 0 { format!("{hours}h {minutes}m") } else { format!("{minutes}m") }
     } else {
         "Unknown".to_string()
     };

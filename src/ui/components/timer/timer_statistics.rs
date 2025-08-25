@@ -49,11 +49,11 @@ impl TimerStats {
                 TimerType::Work => {
                     self.completed_work_sessions += 1;
                     self.total_focus_time_minutes += session.duration_minutes;
-                }
+                },
                 TimerType::Break => {
                     self.completed_break_sessions += 1;
                     self.total_break_time_minutes += session.duration_minutes;
-                }
+                },
             }
 
             // Update daily stats
@@ -77,9 +77,7 @@ impl TimerStats {
     fn update_streak(&mut self) {
         // Simple streak calculation - consecutive days with sessions
         let today = Local::now().format("%Y-%m-%d").to_string();
-        let yesterday = (Local::now() - chrono::Duration::days(1))
-            .format("%Y-%m-%d")
-            .to_string();
+        let yesterday = (Local::now() - chrono::Duration::days(1)).format("%Y-%m-%d").to_string();
 
         if self.sessions_by_date.get(&today).unwrap_or(&0) > &0 {
             if self.sessions_by_date.get(&yesterday).unwrap_or(&0) > &0 {

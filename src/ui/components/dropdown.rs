@@ -181,7 +181,7 @@ pub fn create_course_actions(
                 divider: false,
             });
         }
-        
+
         if let Some(on_restore_order) = on_restore_order {
             actions.push(DropdownItem {
                 label: "Restore Original Order".to_string(),
@@ -191,7 +191,7 @@ pub fn create_course_actions(
                 divider: false,
             });
         }
-        
+
         if let Some(on_manual_reorder) = on_manual_reorder {
             actions.push(DropdownItem {
                 label: "Manual Reorder".to_string(),

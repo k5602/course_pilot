@@ -7,10 +7,10 @@ use crate::nlp::clustering::{
     ABTestConfig, ABTestResult, ABTestVariant, ClusteringFeedback, ClusteringPreferences,
     FeedbackType, ManualAdjustment, PreferenceLearningEngine,
 };
+
 use crate::storage::{AppSettings, PreferenceStorage};
 use crate::types::{Course, DifficultyLevel};
 use anyhow::Result;
-
 use std::sync::{Arc, Mutex};
 use uuid::Uuid;
 
@@ -29,28 +29,18 @@ impl PreferenceService {
 
         let engine = Arc::new(Mutex::new(storage.create_preference_engine()?));
 
-        Ok(Self {
-            engine,
-            storage,
-            settings,
-        })
+        Ok(Self { engine, storage, settings })
     }
 
     /// Get current clustering preferences
     pub fn get_preferences(&self) -> Result<ClusteringPreferences> {
-        let engine = self
-            .engine
-            .lock()
-            .map_err(|e| anyhow::anyhow!("Lock error: {}", e))?;
+        let engine = self.engine.lock().map_err(|e| anyhow::anyhow!("Lock error: {}", e))?;
         Ok(engine.get_preferences().clone())
     }
 
     /// Get recommended parameters for a specific course
     pub fn get_recommended_parameters(&self, course: &Course) -> Result<ClusteringPreferences> {
-        let engine = self
-            .engine
-            .lock()
-            .map_err(|e| anyhow::anyhow!("Lock error: {}", e))?;
+        let engine = self.engine.lock().map_err(|e| anyhow::anyhow!("Lock error: {}", e))?;
 
         // Estimate course complexity based on video count and titles
         let complexity = self.estimate_course_complexity(course);
@@ -65,10 +55,7 @@ impl PreferenceService {
         self.storage.save_feedback(&feedback)?;
 
         // Update engine with feedback
-        let mut engine = self
-            .engine
-            .lock()
-            .map_err(|e| anyhow::anyhow!("Lock error: {}", e))?;
+        let mut engine = self.engine.lock().map_err(|e| anyhow::anyhow!("Lock error: {}", e))?;
         engine.update_preferences_from_feedback(feedback)?;
 
         // Save updated preferences
@@ -112,24 +99,12 @@ impl PreferenceService {
             return Err(anyhow::anyhow!("A/B testing is disabled in settings"));
         }
 
-        let mut engine = self
-            .engine
-            .lock()
-            .map_err(|e| anyhow::anyhow!("Lock error: {}", e))?;
-        let test_id = engine.create_ab_test(
-            name,
-            description,
-            algorithm_a,
-            algorithm_b,
-            target_sample_size,
-        );
+        let mut engine = self.engine.lock().map_err(|e| anyhow::anyhow!("Lock error: {}", e))?;
+        let test_id =
+            engine.create_ab_test(name, description, algorithm_a, algorithm_b, target_sample_size);
 
         // Save test configuration to storage
-        if let Some(test_config) = engine
-            .get_active_ab_tests()
-            .iter()
-            .find(|t| t.id == test_id)
-        {
+        if let Some(test_config) = engine.get_active_ab_tests().iter().find(|t| t.id == test_id) {
             self.storage.save_ab_test_config(test_config)?;
         }
 
@@ -145,10 +120,7 @@ impl PreferenceService {
             return Ok(None);
         }
 
-        let engine = self
-            .engine
-            .lock()
-            .map_err(|e| anyhow::anyhow!("Lock error: {}", e))?;
+        let engine = self.engine.lock().map_err(|e| anyhow::anyhow!("Lock error: {}", e))?;
         let active_tests = engine.get_active_ab_tests();
 
         // For simplicity, use the first active test
@@ -165,11 +137,8 @@ impl PreferenceService {
         self.storage.save_ab_test_result(&result)?;
 
         // Update engine
-        let mut engine = self
-            .engine
-            .lock()
-            .map_err(|e| anyhow::anyhow!("Lock error: {}", e))?;
-        engine.record_ab_test_result(result.clone())?;
+        let mut engine = self.engine.lock().map_err(|e| anyhow::anyhow!("Lock error: {}", e))?;
+        let _ = engine.record_ab_test_result(result.clone());
 
         // Update test sample size in storage
         self.storage.update_ab_test_sample_size(
@@ -187,10 +156,7 @@ impl PreferenceService {
 
     /// Analyze A/B test results
     pub fn analyze_ab_test(&self, test_id: Uuid) -> Result<crate::nlp::clustering::ABTestAnalysis> {
-        let mut engine = self
-            .engine
-            .lock()
-            .map_err(|e| anyhow::anyhow!("Lock error: {}", e))?;
+        let mut engine = self.engine.lock().map_err(|e| anyhow::anyhow!("Lock error: {}", e))?;
         let analysis = engine.analyze_ab_test_results(test_id)?;
 
         // Mark test as completed if it has enough data
@@ -199,7 +165,7 @@ impl PreferenceService {
         }
 
         // Save updated preferences
-        self.storage.save_preferences(engine.get_preferences())?;
+        self.storage.save_preferences(&engine.get_preferences())?;
 
         Ok(analysis)
     }
@@ -208,11 +174,7 @@ impl PreferenceService {
     pub fn get_optimized_parameters(&self, course: &Course) -> Result<ClusteringPreferences> {
         // Check if user is part of an A/B test
         if let Some((variant, test_params)) = self.get_ab_test_parameters(course.id)? {
-            log::info!(
-                "Using A/B test parameters for course {}: {:?}",
-                course.id,
-                variant
-            );
+            log::info!("Using A/B test parameters for course {}: {:?}", course.id, variant);
             return Ok(test_params);
         }
 
@@ -262,10 +224,7 @@ impl PreferenceService {
 
         // If this was part of an A/B test, record the result
         if let Some((variant, _)) = self.get_ab_test_parameters(course_id)? {
-            let engine = self
-                .engine
-                .lock()
-                .map_err(|e| anyhow::anyhow!("Lock error: {}", e))?;
+            let engine = self.engine.lock().map_err(|e| anyhow::anyhow!("Lock error: {}", e))?;
             if let Some(test) = engine.get_active_ab_tests().first() {
                 let ab_result = ABTestResult {
                     test_id: test.id,
@@ -295,11 +254,8 @@ impl PreferenceService {
 
     /// Get active A/B tests
     pub fn get_active_ab_tests(&self) -> Result<Vec<ABTestConfig>> {
-        let engine = self
-            .engine
-            .lock()
-            .map_err(|e| anyhow::anyhow!("Lock error: {}", e))?;
-        Ok(engine.get_active_ab_tests().into_iter().cloned().collect())
+        let engine = self.engine.lock().map_err(|e| anyhow::anyhow!("Lock error: {}", e))?;
+        Ok(engine.get_active_ab_tests().into_iter().map(|c| (*c).clone()).collect())
     }
 
     /// Update settings and refresh engine
@@ -307,10 +263,7 @@ impl PreferenceService {
         self.settings = settings;
 
         // Update clustering preferences in engine if they changed
-        let mut engine = self
-            .engine
-            .lock()
-            .map_err(|e| anyhow::anyhow!("Lock error: {}", e))?;
+        let mut engine = self.engine.lock().map_err(|e| anyhow::anyhow!("Lock error: {}", e))?;
         let current_prefs = engine.get_preferences().clone();
 
         // If settings have different clustering preferences, update them
@@ -327,7 +280,7 @@ impl PreferenceService {
             };
 
             engine.update_preferences_from_feedback(feedback)?;
-            self.storage.save_preferences(engine.get_preferences())?;
+            self.storage.save_preferences(&engine.get_preferences())?;
         }
 
         Ok(())
@@ -525,10 +478,7 @@ mod tests {
                 "Beginner Tutorial".to_string(),
             ],
         );
-        assert_eq!(
-            service.estimate_course_complexity(&beginner_course),
-            DifficultyLevel::Beginner
-        );
+        assert_eq!(service.estimate_course_complexity(&beginner_course), DifficultyLevel::Beginner);
 
         // Advanced course
         let advanced_course = Course::new(
@@ -539,9 +489,6 @@ mod tests {
                 "Advanced Implementation Techniques".to_string(),
             ],
         );
-        assert_eq!(
-            service.estimate_course_complexity(&advanced_course),
-            DifficultyLevel::Expert
-        );
+        assert_eq!(service.estimate_course_complexity(&advanced_course), DifficultyLevel::Expert);
     }
 }

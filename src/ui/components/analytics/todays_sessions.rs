@@ -1,43 +1,47 @@
-use crate::storage::Database;
 use crate::types::{Plan, PlanItem};
 use crate::ui::components::ProgressRing;
+use crate::ui::hooks::use_backend;
 use crate::ui::hooks::use_toggle_plan_item_action;
 use chrono::Local;
 use dioxus::prelude::*;
-use std::sync::Arc;
+
 use uuid::Uuid;
 
 #[component]
 pub fn TodaysSessions() -> Element {
-    let db = use_context::<Arc<Database>>();
+    let backend = use_backend();
     let today = Local::now().date_naive();
 
     // Load all plans and filter today's sessions
     let todays_sessions_resource = use_resource(move || {
-        let db = db.clone();
+        let backend = backend.clone();
         async move {
-            tokio::task::spawn_blocking(move || {
-                // Load all courses to get their plans
-                let courses = crate::storage::load_courses(&db)?;
-                let mut sessions = Vec::new();
+            // Load all courses via backend without blocking thread
+            let courses = backend
+                .list_courses()
+                .await
+                .map_err(|e| anyhow::anyhow!("Failed to load courses: {}", e))?;
 
-                for course in courses {
-                    if let Ok(Some(plan)) = crate::storage::get_plan_by_course_id(&db, &course.id) {
-                        for (index, item) in plan.items.iter().enumerate() {
-                            let item_date = item.date.with_timezone(&Local).date_naive();
-                            if item_date == today {
-                                sessions.push((plan.clone(), index, item.clone()));
-                            }
+            let mut sessions = Vec::new();
+
+            for course in courses {
+                if let Some(plan) = backend
+                    .get_plan_by_course(course.id)
+                    .await
+                    .map_err(|e| anyhow::anyhow!("Failed to load plan: {}", e))?
+                {
+                    for (index, item) in plan.items.iter().enumerate() {
+                        let item_date = item.date.with_timezone(&Local).date_naive();
+                        if item_date == today {
+                            sessions.push((plan.clone(), index, item.clone()));
                         }
                     }
                 }
+            }
 
-                // Sort by time
-                sessions.sort_by_key(|(_, _, item)| item.date);
-                Ok::<Vec<(Plan, usize, PlanItem)>, anyhow::Error>(sessions)
-            })
-            .await
-            .unwrap_or_else(|_| Err(anyhow::anyhow!("Failed to load sessions")))
+            // Sort by time
+            sessions.sort_by_key(|(_, _, item)| item.date);
+            Ok::<Vec<(Plan, usize, PlanItem)>, anyhow::Error>(sessions)
         }
     });
 
@@ -72,7 +76,7 @@ pub fn TodaysSessions() -> Element {
                     })}
                 }
             }
-        }
+        },
         Some(Err(e)) => rsx! {
             div { class: "alert alert-error",
                 "Failed to load today's sessions: {e}"
@@ -99,12 +103,7 @@ struct SessionCardProps {
 #[component]
 fn SessionCard(props: SessionCardProps) -> Element {
     let toggle_completion = use_toggle_plan_item_action();
-    let time_str = props
-        .item
-        .date
-        .with_timezone(&Local)
-        .format("%H:%M")
-        .to_string();
+    let time_str = props.item.date.with_timezone(&Local).format("%H:%M").to_string();
     let duration_str = crate::types::duration_utils::format_duration(props.item.total_duration);
 
     let handle_toggle_completion = {

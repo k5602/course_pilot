@@ -1,28 +1,24 @@
-
-use crate::planner::scheduler::{PlanAnalysis, VelocityCategory};
-use crate::storage::{ClusteringAnalytics, Database, get_clustering_analytics};
+use crate::planner::{PlanAnalysis, VelocityCategory};
+use crate::storage::ClusteringAnalytics;
 use crate::ui::hooks::use_analytics_manager;
+use crate::ui::hooks::use_backend;
 use dioxus::prelude::*;
-use std::sync::Arc;
 
 #[component]
 pub fn LearningAnalytics() -> Element {
+    let backend = use_backend();
     let analytics_manager = use_analytics_manager();
-    let db = use_context::<Arc<Database>>();
 
     let learning_analytics_resource = use_resource(move || {
         let analytics_manager = analytics_manager.clone();
         async move { analytics_manager.get_learning_analytics().await }
     });
 
-    let clustering_analytics_resource = use_resource(move || {
-        let db_clone = db.clone();
-        async move {
-            tokio::task::spawn_blocking(move || get_clustering_analytics(&db_clone))
-                .await
-                .unwrap_or_else(|_| {
-                    Err(anyhow::anyhow!("Failed to load analytics"))
-                })
+    let clustering_analytics_resource = use_resource({
+        let backend = backend.clone();
+        move || {
+            let value = backend.clone();
+            async move { value.get_clustering_analytics().await }
         }
     });
 
@@ -96,16 +92,12 @@ fn LearningVelocityChart(props: LearningVelocityChartProps) -> Element {
         })
         .sum();
 
-    let avg_videos_per_day: f32 = plan_analyses
-        .iter()
-        .map(|analysis| analysis.velocity_analysis.videos_per_day)
-        .sum::<f32>()
-        / plan_analyses.len() as f32;
+    let avg_videos_per_day: f32 =
+        plan_analyses.iter().map(|analysis| analysis.velocity_analysis.videos_per_day).sum::<f32>()
+            / plan_analyses.len() as f32;
 
-    let total_study_days: i64 = plan_analyses
-        .iter()
-        .map(|analysis| analysis.velocity_analysis.total_duration_days)
-        .sum();
+    let total_study_days: i64 =
+        plan_analyses.iter().map(|analysis| analysis.velocity_analysis.total_duration_days).sum();
 
     // Categorize velocity distribution
     let velocity_counts = plan_analyses.iter().fold([0; 4], |mut acc, analysis| {
@@ -221,21 +213,15 @@ fn CognitiveLoadDistribution(props: CognitiveLoadDistributionProps) -> Element {
     }
 
     // Calculate aggregate cognitive load metrics
-    let avg_load: f32 = plan_analyses
-        .iter()
-        .map(|analysis| analysis.load_distribution.average_load)
-        .sum::<f32>()
-        / plan_analyses.len() as f32;
+    let avg_load: f32 =
+        plan_analyses.iter().map(|analysis| analysis.load_distribution.average_load).sum::<f32>()
+            / plan_analyses.len() as f32;
 
-    let total_overloaded: usize = plan_analyses
-        .iter()
-        .map(|analysis| analysis.load_distribution.overloaded_sessions)
-        .sum();
+    let total_overloaded: usize =
+        plan_analyses.iter().map(|analysis| analysis.load_distribution.overloaded_sessions).sum();
 
-    let total_underloaded: usize = plan_analyses
-        .iter()
-        .map(|analysis| analysis.load_distribution.underloaded_sessions)
-        .sum();
+    let total_underloaded: usize =
+        plan_analyses.iter().map(|analysis| analysis.load_distribution.underloaded_sessions).sum();
 
     let total_sessions: usize = plan_analyses
         .iter()
@@ -245,11 +231,9 @@ fn CognitiveLoadDistribution(props: CognitiveLoadDistributionProps) -> Element {
         })
         .sum();
 
-    let avg_variance: f32 = plan_analyses
-        .iter()
-        .map(|analysis| analysis.load_distribution.load_variance)
-        .sum::<f32>()
-        / plan_analyses.len() as f32;
+    let avg_variance: f32 =
+        plan_analyses.iter().map(|analysis| analysis.load_distribution.load_variance).sum::<f32>()
+            / plan_analyses.len() as f32;
 
     // Categorize load balance quality
     let balance_quality = match avg_variance {

@@ -73,10 +73,10 @@ pub fn GeneralSettings(props: GeneralSettingsProps) -> Element {
                     Ok(_) => {
                         toast_helpers::success("Settings saved successfully!");
                         on_settings_updated.call(());
-                    }
+                    },
                     Err(e) => {
                         toast_helpers::error(format!("Failed to save settings: {e}"));
-                    }
+                    },
                 }
 
                 is_saving.set(false);

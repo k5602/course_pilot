@@ -2,46 +2,22 @@ use dioxus::prelude::*;
 use dioxus_free_icons::Icon;
 use dioxus_free_icons::icons::fa_solid_icons::{FaBook, FaGauge, FaGear, FaPlus};
 
+use crate::state::close_mobile_sidebar_reactive;
 use crate::types::Route;
 use crate::ui::ThemeToggleButton;
-use crate::ui::use_app_state;
 
 // Navigation items configuration
 const NAV_ITEMS: &[NavItem] = if cfg!(debug_assertions) {
     &[
-        NavItem {
-            icon: IconData::Dashboard,
-            label: "Dashboard",
-            route: Route::Dashboard {},
-        },
-        NavItem {
-            icon: IconData::LibraryBooks,
-            label: "All Courses",
-            route: Route::AllCourses {},
-        },
-        NavItem {
-            icon: IconData::Settings,
-            label: "Settings",
-            route: Route::Settings {},
-        },
+        NavItem { icon: IconData::Dashboard, label: "Dashboard", route: Route::Dashboard {} },
+        NavItem { icon: IconData::LibraryBooks, label: "All Courses", route: Route::AllCourses {} },
+        NavItem { icon: IconData::Settings, label: "Settings", route: Route::Settings {} },
     ]
 } else {
     &[
-        NavItem {
-            icon: IconData::Dashboard,
-            label: "Dashboard",
-            route: Route::Dashboard {},
-        },
-        NavItem {
-            icon: IconData::LibraryBooks,
-            label: "All Courses",
-            route: Route::AllCourses {},
-        },
-        NavItem {
-            icon: IconData::Settings,
-            label: "Settings",
-            route: Route::Settings {},
-        },
+        NavItem { icon: IconData::Dashboard, label: "Dashboard", route: Route::Dashboard {} },
+        NavItem { icon: IconData::LibraryBooks, label: "All Courses", route: Route::AllCourses {} },
+        NavItem { icon: IconData::Settings, label: "Settings", route: Route::Settings {} },
     ]
 };
 
@@ -57,20 +33,14 @@ pub struct SidebarProps {
 /// DaisyUI-styled sidebar with native hover expansion
 #[component]
 pub fn Sidebar(props: SidebarProps) -> Element {
-    let mut app_state = use_app_state();
-
-    let mobile_translate = if props.is_mobile_open {
-        "translate-x-0"
-    } else {
-        "-translate-x-full"
-    };
+    let mobile_translate = if props.is_mobile_open { "translate-x-0" } else { "-translate-x-full" };
 
     rsx! {
         // Mobile backdrop overlay (DaisyUI drawer-overlay)
         if props.is_mobile_open {
             div {
                 class: "drawer-overlay fixed inset-0 z-10 md:hidden bg-black/50",
-                onclick: move |_| app_state.write().sidebar_open_mobile = false,
+                onclick: move |_| close_mobile_sidebar_reactive(),
             }
         }
 
@@ -174,16 +144,8 @@ fn SidebarNavItem(
     is_expanded: bool,
     route: Route,
 ) -> Element {
-    let active_class = if active {
-        "bg-primary text-primary-content"
-    } else {
-        "hover:bg-base-300"
-    };
-    let tooltip_class = if !is_expanded {
-        "tooltip tooltip-right"
-    } else {
-        ""
-    };
+    let active_class = if active { "bg-primary text-primary-content" } else { "hover:bg-base-300" };
+    let tooltip_class = if !is_expanded { "tooltip tooltip-right" } else { "" };
 
     rsx! {
         li {
@@ -224,18 +186,9 @@ enum IconData {
 impl IconData {
     fn render(self) -> Element {
         match self {
-            IconData::Dashboard => rsx!(Icon {
-                icon: FaGauge,
-                class: "w-5 h-5",
-            }),
-            IconData::LibraryBooks => rsx!(Icon {
-                icon: FaBook,
-                class: "w-5 h-5",
-            }),
-            IconData::Settings => rsx!(Icon {
-                icon: FaGear,
-                class: "w-5 h-5",
-            }),
+            IconData::Dashboard => rsx!(Icon { icon: FaGauge, class: "w-5 h-5" }),
+            IconData::LibraryBooks => rsx!(Icon { icon: FaBook, class: "w-5 h-5" }),
+            IconData::Settings => rsx!(Icon { icon: FaGear, class: "w-5 h-5" }),
         }
     }
 }

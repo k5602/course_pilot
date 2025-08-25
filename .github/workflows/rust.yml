@@ -42,7 +42,7 @@ jobs:
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: '18'
+          node-version: "18"
 
       - name: Verify Node.js files
         run: |
@@ -66,8 +66,42 @@ jobs:
       - name: Build CSS
         run: npm run build:css
 
+      - name: Setup Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          toolchain: stable
+          components: clippy, rustfmt
+
+      - name: Cache cargo dependencies
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/bin/
+            ~/.cargo/registry/index/
+            ~/.cargo/registry/cache/
+            ~/.cargo/git/db/
+            target/
+          key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-cargo-
+
+      - name: Check formatting (rustfmt)
+        run: cargo fmt --all -- --check
+
+      - name: Lint (clippy - deny warnings)
+        run: |
+          export PKG_CONFIG_PATH=/usr/lib/pkgconfig:/usr/lib/x86_64-linux-gnu/pkgconfig:/usr/share/pkgconfig
+          echo "PKG_CONFIG_PATH=$PKG_CONFIG_PATH"
+          cargo clippy --all-targets --all-features -- -D warnings
+
       - name: Build
         run: |
           export PKG_CONFIG_PATH=/usr/lib/pkgconfig:/usr/lib/x86_64-linux-gnu/pkgconfig:/usr/share/pkgconfig
           echo "PKG_CONFIG_PATH=$PKG_CONFIG_PATH"
           cargo build --verbose
+
+      - name: Test
+        run: |
+          export PKG_CONFIG_PATH=/usr/lib/pkgconfig:/usr/lib/x86_64-linux-gnu/pkgconfig:/usr/share/pkgconfig
+          echo "PKG_CONFIG_PATH=$PKG_CONFIG_PATH"
+          cargo test --all --locked --verbose

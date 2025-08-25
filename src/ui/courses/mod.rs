@@ -10,6 +10,9 @@ pub mod course_grid;
 
 // Re-export all course components
 pub use all_courses_view::AllCoursesView;
-pub use course_actions::{CourseActions, CourseActionsProps, ContentReorganizationModals, ContentReorganizationModalsProps};
+pub use course_actions::{
+    ContentReorganizationModals, ContentReorganizationModalsProps, CourseActions,
+    CourseActionsProps,
+};
 pub use course_card::{CourseCard, CourseCardProps};
 pub use course_grid::{CourseGrid, CourseGridProps};

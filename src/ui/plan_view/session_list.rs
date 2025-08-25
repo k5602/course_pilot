@@ -5,14 +5,12 @@ use dioxus_motion::prelude::*;
 use std::collections::HashSet;
 use uuid::Uuid;
 
-use crate::state::set_video_context_and_open_notes_reactive;
+use crate::state::{set_video_context_and_open_notes_reactive, use_courses_reactive};
 use crate::types::{Plan, PlanItem, VideoContext};
-use crate::ui::{Badge, toast_helpers, use_app_state};
 use crate::ui::components::video_player_modal::{VideoPlayerModal, use_video_player_modal};
 use crate::ui::hooks::use_backend;
-use crate::video_player::{VideoSource};
-
-
+use crate::ui::{Badge, toast_helpers};
+use crate::video_player::VideoSource;
 
 /// Session group data structure for organizing plan items by date
 #[derive(Debug, Clone, PartialEq)]
@@ -33,10 +31,7 @@ pub fn group_items_by_session(items: &[PlanItem]) -> Vec<SessionGroup> {
         HashMap::new();
 
     for (index, item) in items.iter().enumerate() {
-        sessions
-            .entry(item.date)
-            .or_default()
-            .push((index, item.clone()));
+        sessions.entry(item.date).or_default().push((index, item.clone()));
     }
 
     let mut session_groups: Vec<SessionGroup> = sessions
@@ -45,10 +40,11 @@ pub fn group_items_by_session(items: &[PlanItem]) -> Vec<SessionGroup> {
         .map(|(session_idx, (date, items))| {
             // Calculate total videos and completed videos across all items in the session
             let total_videos: usize = items.iter().map(|(_, item)| item.video_indices.len()).sum();
-            
+
             // For now, we'll use plan item completion as a proxy for individual video completion
             // In a full implementation, this would check individual video completion status
-            let completed_videos: usize = items.iter()
+            let completed_videos: usize = items
+                .iter()
                 .map(|(_, item)| {
                     if item.completed {
                         item.video_indices.len() // All videos in completed items are considered completed
@@ -57,7 +53,7 @@ pub fn group_items_by_session(items: &[PlanItem]) -> Vec<SessionGroup> {
                     }
                 })
                 .sum();
-            
+
             let progress = if total_videos > 0 {
                 (completed_videos as f32 / total_videos as f32) * 100.0
             } else {
@@ -102,14 +98,9 @@ pub fn SessionList(props: SessionListProps) -> Element {
     let mut container_y = use_motion(20.0f32);
 
     use_effect(move || {
-        container_opacity.animate_to(
-            1.0,
-            AnimationConfig::new(AnimationMode::Tween(Tween::default())),
-        );
-        container_y.animate_to(
-            0.0,
-            AnimationConfig::new(AnimationMode::Spring(Spring::default())),
-        );
+        container_opacity
+            .animate_to(1.0, AnimationConfig::new(AnimationMode::Tween(Tween::default())));
+        container_y.animate_to(0.0, AnimationConfig::new(AnimationMode::Spring(Spring::default())));
     });
 
     let container_style = use_memo(move || {
@@ -213,10 +204,8 @@ fn SessionAccordion(props: SessionAccordionProps) -> Element {
                 tokio::time::sleep(tokio::time::Duration::from_millis((delay * 1000.0) as u64))
                     .await;
 
-                session_opacity.animate_to(
-                    1.0,
-                    AnimationConfig::new(AnimationMode::Tween(Tween::default())),
-                );
+                session_opacity
+                    .animate_to(1.0, AnimationConfig::new(AnimationMode::Tween(Tween::default())));
                 session_x.animate_to(
                     0.0,
                     AnimationConfig::new(AnimationMode::Spring(Spring::default())),
@@ -374,6 +363,7 @@ fn SessionAccordion(props: SessionAccordionProps) -> Element {
                                     session_item_index: session_item_idx,
                                     course_id: props.course_id,
                                     is_session_expanded: is_expanded,
+                                    open_video: video_player_modal.open_video.clone(),
                                 }
                             }
                         } else {
@@ -388,10 +378,11 @@ fn SessionAccordion(props: SessionAccordionProps) -> Element {
                                 session_item_index: session_item_idx,
                                 course_id: props.course_id,
                                 is_session_expanded: is_expanded,
+                                open_video: video_player_modal.open_video.clone(),
                             }
                         }
                     }
-                    
+
                     // Session progress summary
                     SessionProgressBar {
                         completed_videos: props.session.completed,
@@ -421,15 +412,15 @@ pub struct VideoContentItemProps {
     pub session_item_index: usize,
     pub course_id: Uuid,
     pub is_session_expanded: bool,
+    pub open_video: Callback<(VideoSource, Option<String>)>,
 }
 
 /// Individual video content item component with DaisyUI styling and individual video completion tracking
 #[component]
 fn VideoContentItem(props: VideoContentItemProps) -> Element {
-    let app_state = use_app_state();
+    let courses_signal = use_courses_reactive();
     let backend = use_backend();
-    let video_player_modal = use_video_player_modal();
-    
+
     // Individual video completion tracking
     let video_completed = use_signal(|| {
         // For now, we'll use the plan item completion status as a fallback
@@ -440,9 +431,10 @@ fn VideoContentItem(props: VideoContentItemProps) -> Element {
 
     // Get video title from course data
     let video_title = use_memo(move || {
-        let courses = app_state.read().courses.clone();
+        let courses = courses_signal.read().clone();
         if let Some(course) = courses.iter().find(|c| c.id == props.course_id) {
-            course.get_video_title(props.video_index)
+            course
+                .get_video_title(props.video_index)
                 .unwrap_or(&format!("Video {}", props.video_index + 1))
                 .to_string()
         } else {
@@ -470,7 +462,10 @@ fn VideoContentItem(props: VideoContentItemProps) -> Element {
 
             spawn(async move {
                 // Implement actual video completion tracking
-                match backend.mark_video_completed(plan_id, session_item_index, video_index, new_state).await {
+                match backend
+                    .mark_video_completed(plan_id, session_item_index, video_index, new_state)
+                    .await
+                {
                     Ok(_) => {
                         is_updating.set(false);
                         if new_state {
@@ -478,12 +473,12 @@ fn VideoContentItem(props: VideoContentItemProps) -> Element {
                         } else {
                             toast_helpers::info("Video marked as incomplete");
                         }
-                    }
+                    },
                     Err(e) => {
                         is_updating.set(false);
                         video_completed.set(!new_state); // Revert on error
                         toast_helpers::error(format!("Failed to update video progress: {}", e));
-                    }
+                    },
                 }
             });
         }
@@ -494,82 +489,104 @@ fn VideoContentItem(props: VideoContentItemProps) -> Element {
         let course_id = props.course_id;
         let video_index = props.video_index;
         let video_title = video_title.clone();
-        let video_player_modal = video_player_modal.clone();
+        let open_video = props.open_video.clone();
         let db = use_context::<std::sync::Arc<crate::storage::Database>>();
 
         move |_| {
             let course_id = course_id;
             let video_index = video_index;
             let video_title = video_title();
-            let video_player_modal = video_player_modal.clone();
+            let open_video = open_video.clone();
             let db = db.clone();
-            
+
             spawn(async move {
                 // Get the course data directly from database to ensure consistency
                 match tokio::task::spawn_blocking({
                     let db = db.clone();
                     move || crate::storage::get_course_by_id(&db, &course_id)
-                }).await {
+                })
+                .await
+                {
                     Ok(Ok(Some(course))) => {
-                    // Try to get video metadata first, fallback to raw_titles
-                    let video_source = if let Some(video_metadata) = course.get_video_metadata(video_index) {
-                        // Debug logging to see what's in the metadata
-                        log::info!("Video metadata for index {}: title='{}', video_id={:?}, source_url={:?}, is_local={}", 
-                                   video_index, video_metadata.title, video_metadata.video_id, video_metadata.source_url, video_metadata.is_local);
-                        
-                        // Use structured video metadata
-                        if let Some(source) = video_metadata.get_video_source() {
-                            source
-                        } else {
-                            log::error!("Could not create video source from metadata for video index {}: video_id={:?}, source_url={:?}, is_local={}", 
-                                       video_index, video_metadata.video_id, video_metadata.source_url, video_metadata.is_local);
-                            toast_helpers::error("Invalid video metadata");
-                            return;
-                        }
-                    } else if let Some(title) = course.get_video_title(video_index) {
-                        // Fallback to raw title analysis
-                        if is_youtube_video(title) {
-                            if let Some(video_id) = extract_youtube_video_id(title) {
-                                VideoSource::YouTube {
-                                    video_id,
-                                    playlist_id: None,
-                                    title: clean_youtube_title(title),
-                                }
+                        // Try to get video metadata first, fallback to raw_titles
+                        let video_source = if let Some(video_metadata) =
+                            course.get_video_metadata(video_index)
+                        {
+                            // Debug logging to see what's in the metadata
+                            log::info!(
+                                "Video metadata for index {}: title='{}', video_id={:?}, source_url={:?}, is_local={}",
+                                video_index,
+                                video_metadata.title,
+                                video_metadata.video_id,
+                                video_metadata.source_url,
+                                video_metadata.is_local
+                            );
+
+                            // Use structured video metadata
+                            if let Some(source) = video_metadata.get_video_source() {
+                                source
                             } else {
-                                log::warn!("Could not extract YouTube video ID from title: {}", title);
-                                toast_helpers::error("Could not extract YouTube video ID");
+                                log::error!(
+                                    "Could not create video source from metadata for video index {}: video_id={:?}, source_url={:?}, is_local={}",
+                                    video_index,
+                                    video_metadata.video_id,
+                                    video_metadata.source_url,
+                                    video_metadata.is_local
+                                );
+                                toast_helpers::error("Invalid video metadata");
                                 return;
                             }
-                        } else {
-                            // Assume it's a local video
-                            VideoSource::Local {
-                                path: std::path::PathBuf::from(title),
-                                title: title.to_string(),
+                        } else if let Some(title) = course.get_video_title(video_index) {
+                            // Fallback to raw title analysis
+                            if is_youtube_video(title) {
+                                if let Some(video_id) = extract_youtube_video_id(title) {
+                                    VideoSource::YouTube {
+                                        video_id,
+                                        playlist_id: None,
+                                        title: clean_youtube_title(title),
+                                    }
+                                } else {
+                                    log::warn!(
+                                        "Could not extract YouTube video ID from title: {}",
+                                        title
+                                    );
+                                    toast_helpers::error("Could not extract YouTube video ID");
+                                    return;
+                                }
+                            } else {
+                                // Assume it's a local video
+                                VideoSource::Local {
+                                    path: std::path::PathBuf::from(title),
+                                    title: title.to_string(),
+                                }
                             }
-                        }
-                    } else {
-                        log::error!("Video index {} not found in course", video_index);
-                        toast_helpers::error("Video not found in course data");
-                        return;
-                    };
+                        } else {
+                            log::error!("Video index {} not found in course", video_index);
+                            toast_helpers::error("Video not found in course data");
+                            return;
+                        };
 
-                    // Open video player modal with the video source
-                    log::info!("Opening video player for: {} - {}", &video_title, video_source.title());
-                    video_player_modal.open_video.call((video_source, Some(video_title.clone())));
-                    toast_helpers::success(format!("Opening video player: {}", video_title));
-                    }
+                        // Open video player modal with the video source
+                        log::info!(
+                            "Opening video player for: {} - {}",
+                            &video_title,
+                            video_source.title()
+                        );
+                        open_video.call((video_source, Some(video_title.clone())));
+                        toast_helpers::success(format!("Opening video player: {}", video_title));
+                    },
                     Ok(Ok(None)) => {
                         log::error!("Course not found in database: {}", course_id);
                         toast_helpers::error("Course not found");
-                    }
+                    },
                     Ok(Err(e)) => {
                         log::error!("Database error loading course {}: {}", course_id, e);
                         toast_helpers::error("Failed to load course data");
-                    }
+                    },
                     Err(e) => {
                         log::error!("Task error loading course {}: {}", course_id, e);
                         toast_helpers::error("Failed to load course data");
-                    }
+                    },
                 }
             });
         }
@@ -589,11 +606,8 @@ fn VideoContentItem(props: VideoContentItemProps) -> Element {
                 module_title: plan_item.module_title.clone(),
             };
 
-            if let Err(e) = set_video_context_and_open_notes_reactive(video_context) {
-                toast_helpers::error(format!("Failed to open notes: {e}"));
-            } else {
-                toast_helpers::success("Notes panel opened for this video");
-            }
+            set_video_context_and_open_notes_reactive(video_context);
+            toast_helpers::success("Notes panel opened for this video");
         }
     };
 
@@ -626,10 +640,8 @@ fn VideoContentItem(props: VideoContentItemProps) -> Element {
                 });
             } else {
                 // Reset animation when session collapses
-                item_opacity.animate_to(
-                    0.0,
-                    AnimationConfig::new(AnimationMode::Tween(Tween::default())),
-                );
+                item_opacity
+                    .animate_to(0.0, AnimationConfig::new(AnimationMode::Tween(Tween::default())));
                 item_x.animate_to(
                     -12.0,
                     AnimationConfig::new(AnimationMode::Tween(Tween::default())),
@@ -641,16 +653,8 @@ fn VideoContentItem(props: VideoContentItemProps) -> Element {
     let item_style = use_memo(move || {
         format!(
             "opacity: {}; transform: translateX({}px); transition: all 0.2s ease-out;",
-            if props.is_session_expanded {
-                item_opacity.get_value()
-            } else {
-                1.0
-            },
-            if props.is_session_expanded {
-                item_x.get_value()
-            } else {
-                0.0
-            }
+            if props.is_session_expanded { item_opacity.get_value() } else { 1.0 },
+            if props.is_session_expanded { item_x.get_value() } else { 0.0 }
         )
     });
 
@@ -684,10 +688,10 @@ fn VideoContentItem(props: VideoContentItemProps) -> Element {
     };
 
     rsx! {
-        div { 
+        div {
             class: "{card_classes} border shadow-sm",
             style: "{item_style}",
-            
+
             div { class: "card-body p-3 flex-row items-center gap-3",
                 // Completion checkbox with DaisyUI styling
                 div { class: "form-control",
@@ -704,19 +708,19 @@ fn VideoContentItem(props: VideoContentItemProps) -> Element {
                         }
                     }
                 }
-                
+
                 // Video info section
                 div { class: "flex-1 min-w-0",
-                    h4 { 
-                        class: "font-medium text-sm {text_classes} truncate", 
+                    h4 {
+                        class: "font-medium text-sm {text_classes} truncate",
                         title: "{video_title()}",
-                        "{video_title()}" 
+                        "{video_title()}"
                     }
                     div { class: "text-xs text-base-content/60 mt-1 truncate",
                         title: "Module: {props.plan_item.module_title}",
                         "Module: {props.plan_item.module_title}"
                     }
-                    
+
                     // Show video index within multi-video items
                     if props.plan_item.video_indices.len() > 1 {
                         div { class: "flex items-center gap-1 mt-1",
@@ -726,7 +730,7 @@ fn VideoContentItem(props: VideoContentItemProps) -> Element {
                         }
                     }
                 }
-                
+
                 // Action buttons with DaisyUI styling
                 div { class: "flex items-center gap-2 shrink-0",
                     // Play button
@@ -742,7 +746,7 @@ fn VideoContentItem(props: VideoContentItemProps) -> Element {
                             span { class: "hidden sm:inline", "Play" }
                         }
                     }
-                    
+
                     // Notes button
                     button {
                         class: "btn btn-sm btn-ghost btn-square hover:btn-accent",
@@ -754,7 +758,7 @@ fn VideoContentItem(props: VideoContentItemProps) -> Element {
                         }
                     }
                 }
-                
+
                 // Status badge
                 div { class: "badge badge-sm",
                     class: if video_completed() { "badge-success" } else { "badge-ghost" },
@@ -766,7 +770,7 @@ fn VideoContentItem(props: VideoContentItemProps) -> Element {
 }
 /// Helper function to determine if a video title/URL is from YouTube
 fn is_youtube_video(title: &str) -> bool {
-    title.contains("youtube.com") || title.contains("youtu.be") || 
+    title.contains("youtube.com") || title.contains("youtu.be") ||
     // For now, assume most imported videos are YouTube unless they look like file paths
     (!title.contains('/') && !title.ends_with(".mp4") && !title.ends_with(".avi") && !title.ends_with(".mov"))
 }
@@ -785,7 +789,7 @@ fn extract_youtube_video_id(url_or_title: &str) -> Option<String> {
             return Some(video_id.to_string());
         }
     }
-    
+
     // Try to extract from youtu.be URLs
     if let Some(start) = url_or_title.find("youtu.be/") {
         let id_start = start + 9;
@@ -798,7 +802,7 @@ fn extract_youtube_video_id(url_or_title: &str) -> Option<String> {
             return Some(video_id.to_string());
         }
     }
-    
+
     // If no URL pattern found, return None
     // In a real implementation, you might want to search for the video by title
     None
@@ -830,7 +834,7 @@ fn SessionProgressBar(props: SessionProgressBarProps) -> Element {
     } else {
         0.0
     };
-    
+
     let progress_color = if progress_percentage >= 100.0 {
         "progress-success"
     } else if progress_percentage >= 75.0 {
@@ -851,7 +855,7 @@ fn SessionProgressBar(props: SessionProgressBarProps) -> Element {
                     "{props.completed_videos}/{props.total_videos} videos completed"
                 }
             }
-            
+
             progress {
                 class: "progress {progress_color} w-full h-2",
                 value: "{progress_percentage}",

@@ -1,9 +1,11 @@
-use crate::planner::scheduler::{
+use crate::planner::{
     LearningVelocityAnalysis, LoadDistribution as SchedulerLoadDistribution, PlanAnalysis,
     analyze_plan_effectiveness,
 };
 use crate::storage::database::Database;
-use crate::types::{AdvancedSchedulerSettings, Course, DifficultyLevel, DistributionStrategy, VideoProgressUpdate};
+use crate::types::{
+    AdvancedSchedulerSettings, Course, DifficultyLevel, DistributionStrategy, VideoProgressUpdate,
+};
 use crate::ui::toast_helpers;
 use anyhow::Result;
 use dioxus::prelude::*;
@@ -73,7 +75,7 @@ impl AnalyticsManager {
                                 .to_string(),
                         );
                     }
-                }
+                },
                 DistributionStrategy::DifficultyBased => {
                     if !settings.difficulty_adaptation {
                         errors.push(
@@ -81,7 +83,7 @@ impl AnalyticsManager {
                                 .to_string(),
                         );
                     }
-                }
+                },
                 DistributionStrategy::Adaptive => {
                     if !settings.cognitive_load_balancing {
                         errors.push(
@@ -89,8 +91,8 @@ impl AnalyticsManager {
                                 .to_string(),
                         );
                     }
-                }
-                _ => {} // Other strategies don't have specific requirements
+                },
+                _ => {}, // Other strategies don't have specific requirements
             }
 
             Ok(errors)
@@ -321,23 +323,20 @@ pub fn use_analytics_manager() -> AnalyticsManager {
                 match result {
                     Ok(Ok(_)) => {
                         toast_helpers::success("Course structured successfully");
-                    }
+                    },
                     Ok(Err(e)) => {
                         toast_helpers::error(format!("Failed to structure course: {e}"));
-                    }
+                    },
                     Err(e) => {
                         toast_helpers::error(format!("Failed to structure course: {e}"));
-                    }
+                    },
                 }
             });
             // Return () to match expected callback type
         }
     });
 
-    AnalyticsManager {
-        db,
-        structure_course,
-    }
+    AnalyticsManager { db, structure_course }
 }
 
 /// Hook for reactive AI recommendations
@@ -350,9 +349,7 @@ pub fn use_ai_recommendations(
     use_resource(move || {
         let analytics_manager = analytics_manager.clone();
         async move {
-            analytics_manager
-                .get_recommended_advanced_settings(course_id, user_experience)
-                .await
+            analytics_manager.get_recommended_advanced_settings(course_id, user_experience).await
         }
     })
 }
@@ -369,7 +366,12 @@ impl AnalyticsManager {
     }
 
     /// Get video completion status
-    pub async fn get_video_completion_status(&self, plan_id: Uuid, session_index: usize, video_index: usize) -> Result<bool> {
+    pub async fn get_video_completion_status(
+        &self,
+        plan_id: Uuid,
+        session_index: usize,
+        video_index: usize,
+    ) -> Result<bool> {
         let db = self.db.clone();
         tokio::task::spawn_blocking(move || {
             crate::storage::get_video_completion_status(&db, &plan_id, session_index, video_index)

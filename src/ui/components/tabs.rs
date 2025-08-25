@@ -26,10 +26,8 @@ pub fn Tabs(
             })),
         );
     });
-    let indicator_style = format!(
-        "transform: scale({}); transition: transform 0.2s;",
-        indicator_scale.get_value()
-    );
+    let indicator_style =
+        format!("transform: scale({}); transition: transform 0.2s;", indicator_scale.get_value());
 
     rsx! {
         div { class: "{class}",

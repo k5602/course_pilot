@@ -8,7 +8,7 @@ use std::sync::Arc;
 
 use crate::state::{
     ContextualPanelContextProvider, CourseContextProvider, ImportContextProvider,
-    MobileSidebarContextProvider, NotesContextProvider, PlanContextProvider,
+    MobileSidebarContextProvider, NotesContextProvider, PlanContextProvider, VideoContextProvider,
     initialize_global_state,
 };
 use crate::storage::database::Database;
@@ -43,7 +43,11 @@ pub fn AppRoot() -> Element {
                     ImportContextProvider {
                         ContextualPanelContextProvider {
                             MobileSidebarContextProvider {
-                                AppWithContexts { app_state: services.app_state }
+                                VideoContextProvider {
+                                    crate::state::ExportProgressProvider {
+                                        AppWithContexts { app_state: services.app_state }
+                                    }
+                                }
                             }
                         }
                     }
@@ -87,23 +91,20 @@ fn use_app_services() -> AppServices {
                         "Using temporary in-memory database. Data will not be saved.".to_string(),
                     );
                     Arc::new(fallback_db)
-                }
+                },
                 Err(fallback_err) => {
                     error!("Failed to create fallback database: {fallback_err}");
                     panic!("Cannot initialize any database. Application cannot continue.");
-                }
+                },
             }
-        }
+        },
     };
 
     // Load initial data
     let initial_state = load_initial_state(&db);
     let app_state = use_signal(|| initial_state);
 
-    AppServices {
-        database: db,
-        app_state,
-    }
+    AppServices { database: db, app_state }
 }
 
 /// Load initial application state from database
@@ -116,7 +117,7 @@ fn load_initial_state(db: &Arc<Database>) -> AppState {
                 "Failed to load courses. Starting with empty course list.".to_string(),
             );
             Vec::new()
-        }
+        },
     };
 
     let mut plans = Vec::new();
@@ -127,11 +128,11 @@ fn load_initial_state(db: &Arc<Database>) -> AppState {
         // Load plans with error handling
         match crate::storage::get_plan_by_course_id(db, &course.id) {
             Ok(Some(plan)) => plans.push(plan),
-            Ok(None) => {} // No plan exists for this course, which is fine
+            Ok(None) => {}, // No plan exists for this course, which is fine
             Err(e) => {
                 error!("Failed to load plan for course {}: {}", course.name, e);
                 // Continue loading other data instead of failing completely
-            }
+            },
         }
 
         // Load notes with error handling
@@ -142,13 +143,13 @@ fn load_initial_state(db: &Arc<Database>) -> AppState {
                     Err(e) => {
                         error!("Failed to load notes for course {}: {}", course.name, e);
                         // Continue loading other data instead of failing completely
-                    }
+                    },
                 }
-            }
+            },
             Err(e) => {
                 error!("Failed to get database connection for loading notes: {e}");
                 // Continue without loading notes for this course
-            }
+            },
         }
     }
 

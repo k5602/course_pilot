@@ -21,10 +21,7 @@ impl FeatureVector {
     /// Create a new feature vector from term frequencies
     pub fn new(features: HashMap<String, f32>) -> Self {
         let magnitude = features.values().map(|&v| v * v).sum::<f32>().sqrt();
-        Self {
-            features,
-            magnitude,
-        }
+        Self { features, magnitude }
     }
 
     /// Calculate cosine similarity with another feature vector
@@ -37,10 +34,7 @@ impl FeatureVector {
             .features
             .iter()
             .filter_map(|(term, &value)| {
-                other
-                    .features
-                    .get(term)
-                    .map(|&other_value| value * other_value)
+                other.features.get(term).map(|&other_value| value * other_value)
             })
             .sum();
 
@@ -49,11 +43,8 @@ impl FeatureVector {
 
     /// Get the top N most significant features
     pub fn top_features(&self, n: usize) -> Vec<(String, f32)> {
-        let mut features: Vec<_> = self
-            .features
-            .iter()
-            .map(|(term, &score)| (term.clone(), score))
-            .collect();
+        let mut features: Vec<_> =
+            self.features.iter().map(|(term, &score)| (term.clone(), score)).collect();
         features.sort_by(|a, b| b.1.partial_cmp(&a.1).unwrap_or(std::cmp::Ordering::Equal));
         features.into_iter().take(n).collect()
     }
@@ -69,10 +60,7 @@ pub struct SimilarityMatrix {
 impl SimilarityMatrix {
     /// Create a new similarity matrix
     pub fn new(size: usize) -> Self {
-        Self {
-            matrix: vec![vec![0.0; size]; size],
-            size,
-        }
+        Self { matrix: vec![vec![0.0; size]; size], size }
     }
 
     /// Set similarity score between two items
@@ -85,11 +73,7 @@ impl SimilarityMatrix {
 
     /// Get similarity score between two items
     pub fn get(&self, i: usize, j: usize) -> f32 {
-        if i < self.size && j < self.size {
-            self.matrix[i][j]
-        } else {
-            0.0
-        }
+        if i < self.size && j < self.size { self.matrix[i][j] } else { 0.0 }
     }
 
     /// Find the most similar items to a given item
@@ -228,9 +212,7 @@ impl TfIdfAnalyzer {
         }
 
         // Filter by minimum frequency
-        df.into_iter()
-            .filter(|(_, freq)| *freq >= self.min_term_frequency)
-            .collect()
+        df.into_iter().filter(|(_, freq)| *freq >= self.min_term_frequency).collect()
     }
 
     /// Calculate TF-IDF scores for all documents
@@ -269,10 +251,7 @@ impl TfIdfAnalyzer {
 
     /// Extract feature vectors from titles
     pub fn extract_features(&self, titles: &[String]) -> Vec<FeatureVector> {
-        let all_tokens: Vec<_> = titles
-            .iter()
-            .map(|title| self.preprocess_text(title))
-            .collect();
+        let all_tokens: Vec<_> = titles.iter().map(|title| self.preprocess_text(title)).collect();
 
         let document_frequencies = self.calculate_document_frequencies(&all_tokens);
         self.calculate_tfidf_vectors(&all_tokens, &document_frequencies)
@@ -294,10 +273,7 @@ impl TfIdfAnalyzer {
 
     /// Identify topic keywords from TF-IDF features
     pub fn identify_topic_keywords(&self, titles: &[String]) -> HashMap<String, f32> {
-        let all_tokens: Vec<_> = titles
-            .iter()
-            .map(|title| self.preprocess_text(title))
-            .collect();
+        let all_tokens: Vec<_> = titles.iter().map(|title| self.preprocess_text(title)).collect();
 
         let document_frequencies = self.calculate_document_frequencies(&all_tokens);
         let feature_vectors = self.calculate_tfidf_vectors(&all_tokens, &document_frequencies);
@@ -327,10 +303,7 @@ impl ContentClusterer for TfIdfAnalyzer {
             return Err(ClusteringError::InsufficientContent(titles.len()));
         }
 
-        let all_tokens: Vec<_> = titles
-            .iter()
-            .map(|title| self.preprocess_text(title))
-            .collect();
+        let all_tokens: Vec<_> = titles.iter().map(|title| self.preprocess_text(title)).collect();
 
         let document_frequencies = self.calculate_document_frequencies(&all_tokens);
         let feature_vectors = self.calculate_tfidf_vectors(&all_tokens, &document_frequencies);
@@ -341,11 +314,8 @@ impl ContentClusterer for TfIdfAnalyzer {
         let topic_keywords = self.identify_topic_keywords(titles);
         let mut sorted_keywords: Vec<_> = topic_keywords.into_iter().collect();
         sorted_keywords.sort_by(|a, b| b.1.partial_cmp(&a.1).unwrap_or(std::cmp::Ordering::Equal));
-        let topic_keywords: Vec<String> = sorted_keywords
-            .into_iter()
-            .take(10)
-            .map(|(keyword, _)| keyword)
-            .collect();
+        let topic_keywords: Vec<String> =
+            sorted_keywords.into_iter().take(10).map(|(keyword, _)| keyword).collect();
 
         Ok(ContentAnalysis {
             feature_vectors,
@@ -374,9 +344,7 @@ impl ContentClusterer for TfIdfAnalyzer {
             assigned[i] = true;
 
             // Find similar videos
-            let similar = analysis
-                .similarity_matrix
-                .most_similar(i, self.min_similarity_threshold);
+            let similar = analysis.similarity_matrix.most_similar(i, self.min_similarity_threshold);
             for (j, _similarity) in similar {
                 if !assigned[j] && cluster_videos.len() < target_clusters {
                     cluster_videos.push(j);
@@ -399,21 +367,14 @@ impl ContentClusterer for TfIdfAnalyzer {
                         }
                     }
                 }
-                if count > 0 {
-                    total_similarity / count as f32
-                } else {
-                    0.0
-                }
+                if count > 0 { total_similarity / count as f32 } else { 0.0 }
             } else {
                 1.0
             };
 
             // Extract topic keywords for this cluster
-            let topic_keywords = centroid
-                .top_features(5)
-                .into_iter()
-                .map(|(keyword, _)| keyword)
-                .collect();
+            let topic_keywords =
+                centroid.top_features(5).into_iter().map(|(keyword, _)| keyword).collect();
 
             clusters.push(VideoCluster {
                 videos: cluster_videos,
@@ -570,9 +531,6 @@ mod tests {
         let titles = vec!["Title 1".to_string(), "Title 2".to_string()];
 
         let result = analyzer.analyze_content(&titles);
-        assert!(matches!(
-            result,
-            Err(ClusteringError::InsufficientContent(2))
-        ));
+        assert!(matches!(result, Err(ClusteringError::InsufficientContent(2))));
     }
 }

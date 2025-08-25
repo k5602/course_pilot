@@ -118,11 +118,9 @@ fn generate_breadcrumbs(current_route: Route, courses: &[Course]) -> Vec<Breadcr
             route: Some(Route::Dashboard {}),
             active: true,
         }],
-        Route::Dashboard {} => vec![BreadcrumbItem {
-            label: "Dashboard".to_string(),
-            route: None,
-            active: true,
-        }],
+        Route::Dashboard {} => {
+            vec![BreadcrumbItem { label: "Dashboard".to_string(), route: None, active: true }]
+        },
         Route::PlanView { course_id } => {
             // Parse course_id string to UUID with better error handling
             let course_uuid = match uuid::Uuid::parse_str(&course_id) {
@@ -140,7 +138,7 @@ fn generate_breadcrumbs(current_route: Route, courses: &[Course]) -> Vec<Breadcr
                             active: true,
                         },
                     ];
-                }
+                },
             };
 
             // Find course with better fallback handling
@@ -178,18 +176,14 @@ fn generate_breadcrumbs(current_route: Route, courses: &[Course]) -> Vec<Breadcr
             }
 
             breadcrumbs
-        }
+        },
         Route::Settings {} => vec![
             BreadcrumbItem {
                 label: "Dashboard".to_string(),
                 route: Some(Route::Dashboard {}),
                 active: false,
             },
-            BreadcrumbItem {
-                label: "Settings".to_string(),
-                route: None,
-                active: true,
-            },
+            BreadcrumbItem { label: "Settings".to_string(), route: None, active: true },
         ],
         Route::AddCourse {} => vec![
             BreadcrumbItem {
@@ -197,11 +191,7 @@ fn generate_breadcrumbs(current_route: Route, courses: &[Course]) -> Vec<Breadcr
                 route: Some(Route::Dashboard {}),
                 active: false,
             },
-            BreadcrumbItem {
-                label: "Import Course".to_string(),
-                route: None,
-                active: true,
-            },
+            BreadcrumbItem { label: "Import Course".to_string(), route: None, active: true },
         ],
         Route::AllCourses {} => vec![
             BreadcrumbItem {
@@ -209,11 +199,7 @@ fn generate_breadcrumbs(current_route: Route, courses: &[Course]) -> Vec<Breadcr
                 route: Some(Route::Dashboard {}),
                 active: false,
             },
-            BreadcrumbItem {
-                label: "All Courses".to_string(),
-                route: None,
-                active: true,
-            },
+            BreadcrumbItem { label: "All Courses".to_string(), route: None, active: true },
         ],
         #[cfg(debug_assertions)]
         Route::ToastTest {} => vec![
@@ -222,11 +208,7 @@ fn generate_breadcrumbs(current_route: Route, courses: &[Course]) -> Vec<Breadcr
                 route: Some(Route::Dashboard {}),
                 active: false,
             },
-            BreadcrumbItem {
-                label: "Toast Test".to_string(),
-                route: None,
-                active: true,
-            },
+            BreadcrumbItem { label: "Toast Test".to_string(), route: None, active: true },
         ],
     }
 }

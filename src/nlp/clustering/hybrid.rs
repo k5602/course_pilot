@@ -133,10 +133,10 @@ impl HybridClusterer {
                 Ok((clusters, quality)) => {
                     results.quality_scores.insert("kmeans".to_string(), quality);
                     results.kmeans_result = Some(clusters);
-                }
+                },
                 Err(e) => {
                     eprintln!("K-means clustering failed: {e}");
-                }
+                },
             }
         }
 
@@ -144,14 +144,12 @@ impl HybridClusterer {
         if use_hierarchical {
             match self.run_hierarchical_clustering(titles) {
                 Ok((clusters, quality)) => {
-                    results
-                        .quality_scores
-                        .insert("hierarchical".to_string(), quality);
+                    results.quality_scores.insert("hierarchical".to_string(), quality);
                     results.hierarchical_result = Some(clusters);
-                }
+                },
                 Err(e) => {
                     eprintln!("Hierarchical clustering failed: {e}");
-                }
+                },
             }
         }
 
@@ -161,10 +159,10 @@ impl HybridClusterer {
                 Ok((clusters, quality)) => {
                     results.quality_scores.insert("lda".to_string(), quality);
                     results.lda_result = Some(clusters);
-                }
+                },
                 Err(e) => {
                     eprintln!("LDA clustering failed: {e}");
-                }
+                },
             }
         }
 
@@ -203,18 +201,12 @@ impl HybridClusterer {
         }
 
         let vocabulary_size = vocabulary.len();
-        let average_document_length = if document_count > 0 {
-            total_words as f32 / document_count as f32
-        } else {
-            0.0
-        };
+        let average_document_length =
+            if document_count > 0 { total_words as f32 / document_count as f32 } else { 0.0 };
 
         // Calculate vocabulary diversity (unique words / total words)
-        let vocabulary_diversity = if total_words > 0 {
-            vocabulary_size as f32 / total_words as f32
-        } else {
-            0.0
-        };
+        let vocabulary_diversity =
+            if total_words > 0 { vocabulary_size as f32 / total_words as f32 } else { 0.0 };
 
         // Estimate topic coherence by analyzing word co-occurrence
         let topic_coherence_estimate = self.estimate_topic_coherence(titles);
@@ -260,11 +252,7 @@ impl HybridClusterer {
         let repeated_words = word_counts.values().filter(|&&count| count > 1).count();
         let unique_words = word_counts.len();
 
-        if unique_words > 0 {
-            repeated_words as f32 / unique_words as f32
-        } else {
-            0.0
-        }
+        if unique_words > 0 { repeated_words as f32 / unique_words as f32 } else { 0.0 }
     }
 
     /// Analyze the distribution of pairwise similarities
@@ -306,27 +294,16 @@ impl HybridClusterer {
 
         // Calculate statistics
         let mean = similarities.iter().sum::<f32>() / similarities.len() as f32;
-        let variance = similarities
-            .iter()
-            .map(|&x| (x - mean).powi(2))
-            .sum::<f32>()
+        let variance = similarities.iter().map(|&x| (x - mean).powi(2)).sum::<f32>()
             / similarities.len() as f32;
         let std_dev = variance.sqrt();
         let min = similarities.iter().fold(f32::INFINITY, |a, &b| a.min(b));
-        let max = similarities
-            .iter()
-            .fold(f32::NEG_INFINITY, |a, &b| a.max(b));
+        let max = similarities.iter().fold(f32::NEG_INFINITY, |a, &b| a.max(b));
 
         // Determine if there are clear clusters (bimodal distribution)
         let has_clear_clusters = std_dev > 0.2 && (max - min) > 0.4;
 
-        Ok(SimilarityDistribution {
-            mean,
-            std_dev,
-            min,
-            max,
-            has_clear_clusters,
-        })
+        Ok(SimilarityDistribution { mean, std_dev, min, max, has_clear_clusters })
     }
 
     /// Select which algorithms to use based on content characteristics
@@ -352,7 +329,7 @@ impl HybridClusterer {
                 } else {
                     (use_kmeans, use_hierarchical, use_lda)
                 }
-            }
+            },
         }
     }
 
@@ -362,9 +339,7 @@ impl HybridClusterer {
         titles: &[String],
     ) -> Result<(Vec<VideoCluster>, f32), ClusteringError> {
         let analysis = self.kmeans_clusterer.analyze_content(titles)?;
-        let optimal_k = self
-            .kmeans_clusterer
-            .determine_optimal_k(&analysis.feature_vectors);
+        let optimal_k = self.kmeans_clusterer.determine_optimal_k(&analysis.feature_vectors);
         let clusters = self.kmeans_clusterer.cluster_videos(&analysis, optimal_k)?;
 
         // Calculate quality score
@@ -444,11 +419,7 @@ impl HybridClusterer {
             }
         }
 
-        if total_points > 0 {
-            total_score / total_points as f32
-        } else {
-            0.0
-        }
+        if total_points > 0 { total_score / total_points as f32 } else { 0.0 }
     }
 
     /// Calculate LDA quality score based on topic coherence
@@ -471,11 +442,7 @@ impl HybridClusterer {
 
             // Normalize entropy to [0, 1] range
             let max_entropy = (topic.word_probabilities.len() as f32).ln();
-            let normalized_entropy = if max_entropy > 0.0 {
-                entropy / max_entropy
-            } else {
-                0.0
-            };
+            let normalized_entropy = if max_entropy > 0.0 { entropy / max_entropy } else { 0.0 };
 
             total_coherence += normalized_entropy;
         }
@@ -643,9 +610,7 @@ impl ContentClusterer for HybridClusterer {
     ) -> Result<Vec<VideoCluster>, ClusteringError> {
         // This method is not directly used for hybrid clustering
         // Instead, use cluster_hybrid for full hybrid functionality
-        Err(ClusteringError::AnalysisFailed(
-            "Use cluster_hybrid for hybrid clustering".to_string(),
-        ))
+        Err(ClusteringError::AnalysisFailed("Use cluster_hybrid for hybrid clustering".to_string()))
     }
 
     fn optimize_clusters(
@@ -677,10 +642,7 @@ mod tests {
             EnsembleMethod::Voting,
             0.8,
         );
-        assert_eq!(
-            clusterer.strategy_selection,
-            StrategySelection::Custom(true, false, true)
-        );
+        assert_eq!(clusterer.strategy_selection, StrategySelection::Custom(true, false, true));
         assert_eq!(clusterer.ensemble_method, EnsembleMethod::Voting);
         assert_eq!(clusterer.quality_threshold, 0.8);
     }

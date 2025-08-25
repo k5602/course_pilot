@@ -11,7 +11,6 @@
     --color-red-100: oklch(93.6% 0.032 17.717);
     --color-red-200: oklch(88.5% 0.062 18.334);
     --color-red-500: oklch(63.7% 0.237 25.331);
-    --color-red-600: oklch(57.7% 0.245 27.325);
     --color-red-900: oklch(39.6% 0.141 25.723);
     --color-orange-400: oklch(75% 0.183 55.934);
     --color-blue-500: oklch(62.3% 0.214 259.815);
@@ -978,6 +977,9 @@
   }
   .collapse {
     visibility: collapse;
+  }
+  .visible {
+    visibility: visible;
   }
   .radial-progress {
     position: relative;
@@ -4854,16 +4856,6 @@
     &:hover {
       @media (hover: hover) {
         background-color: var(--color-base-300);
-      }
-    }
-  }
-  .hover\:bg-black\/10 {
-    &:hover {
-      @media (hover: hover) {
-        background-color: color-mix(in srgb, #000 10%, transparent);
-        @supports (color: color-mix(in lab, red, red)) {
-          background-color: color-mix(in oklab, var(--color-black) 10%, transparent);
-        }
       }
     }
   }

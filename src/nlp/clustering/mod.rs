@@ -3,35 +3,238 @@
 //! This module provides content-aware clustering algorithms that analyze video titles
 //! to group related content together while respecting duration constraints.
 
+#[cfg(feature = "advanced_nlp")]
 pub mod content_similarity;
 pub mod difficulty_analyzer;
+#[cfg(feature = "advanced_nlp")]
 pub mod duration_balancer;
+#[cfg(feature = "advanced_nlp")]
 pub mod hierarchical;
+#[cfg(feature = "advanced_nlp")]
 pub mod hybrid;
+#[cfg(feature = "advanced_nlp")]
 pub mod kmeans;
+#[cfg(feature = "advanced_nlp")]
 pub mod lda;
+#[cfg(feature = "advanced_nlp")]
 pub mod metadata_generator;
+#[cfg(feature = "advanced_nlp")]
 pub mod preference_learning;
+#[cfg(feature = "advanced_nlp")]
 pub mod topic_extractor;
 
+#[cfg(not(feature = "advanced_nlp"))]
+mod stubs {
+    use std::collections::HashMap;
+
+    #[derive(Debug, Clone, Default)]
+    pub struct FeatureVector(pub HashMap<String, f32>);
+
+    pub type SimilarityMatrix = Vec<Vec<f32>>;
+
+    #[derive(Debug, Clone, Default)]
+    pub struct TfIdfAnalyzer;
+
+    #[derive(Debug, Clone, Default)]
+    pub struct ContentAnalysis;
+
+    // Strategy/Ensemble stubs
+    #[derive(Debug, Clone)]
+    pub enum StrategySelection {
+        Sequential,
+        DurationBalanced,
+        ContentBased,
+        Hybrid,
+        Fallback,
+    }
+
+    #[derive(Debug, Clone)]
+    pub enum EnsembleMethod {
+        Weighted,
+        MajorityVote,
+        Stacking,
+    }
+
+    #[derive(Debug, Clone, Default)]
+    pub struct ContentCharacteristics;
+
+    #[derive(Debug, Clone, Default)]
+    pub struct EnsembleResults;
+
+    // Preference learning and feedback stubs
+    #[derive(Clone, Debug, Default, PartialEq)]
+    pub struct ClusteringPreferences;
+
+    #[derive(Clone, Debug)]
+    pub enum FeedbackType {
+        ImplicitAcceptance,
+        Rejection,
+        ManualAdjustment,
+        ParameterChange,
+    }
+
+    #[derive(Clone, Debug, Default)]
+    pub struct ManualAdjustment {
+        pub reason: String,
+    }
+
+    #[derive(Clone, Debug)]
+    pub enum ABTestVariant {
+        A,
+        B,
+    }
+
+    #[derive(Clone, Debug)]
+    pub enum AdjustmentType {
+        Increase,
+        Decrease,
+        Toggle,
+    }
+
+    #[derive(Clone, Debug)]
+    pub struct ClusteringFeedback {
+        pub id: uuid::Uuid,
+        pub course_id: uuid::Uuid,
+        pub clustering_parameters: ClusteringPreferences,
+        pub feedback_type: FeedbackType,
+        pub rating: f32,
+        pub comments: Option<String>,
+        pub manual_adjustments: Vec<ManualAdjustment>,
+        pub created_at: chrono::DateTime<chrono::Utc>,
+    }
+
+    #[derive(Clone, Debug, Default)]
+    pub struct ABTestConfig {
+        pub id: uuid::Uuid,
+        pub name: String,
+        pub description: Option<String>,
+        pub created_at: Option<chrono::DateTime<chrono::Utc>>,
+        pub current_sample_size: i64,
+        pub target_sample_size: i64,
+        pub is_active: bool,
+    }
+
+    #[derive(Clone, Debug)]
+    pub struct ABTestAnalysis;
+
+    #[derive(Clone, Debug)]
+    pub struct ABTestResult {
+        pub test_id: uuid::Uuid,
+        pub course_id: uuid::Uuid,
+        pub variant: ABTestVariant,
+        pub parameters_used: ClusteringPreferences,
+        pub user_satisfaction: f32,
+        pub processing_time_ms: u64,
+        pub quality_score: f32,
+        pub user_made_adjustments: bool,
+        pub adjustment_count: usize,
+        pub created_at: chrono::DateTime<chrono::Utc>,
+    }
+
+    #[derive(Default)]
+    pub struct PreferenceLearningEngine;
+
+    impl PreferenceLearningEngine {
+        pub fn new(_settings: &crate::storage::AppSettings) -> Self {
+            Self
+        }
+
+        pub fn with_preferences(_p: ClusteringPreferences) -> Self {
+            Self
+        }
+
+        pub fn get_preferences(&self) -> ClusteringPreferences {
+            ClusteringPreferences::default()
+        }
+
+        pub fn get_recommended_parameters(
+            &self,
+            _course: &crate::types::Course,
+        ) -> ClusteringPreferences {
+            ClusteringPreferences::default()
+        }
+
+        pub fn submit_feedback(&self, _feedback: &ClusteringFeedback) {}
+
+        pub fn update_preferences_from_feedback(
+            &mut self,
+            _feedback: ClusteringFeedback,
+        ) -> anyhow::Result<()> {
+            Ok(())
+        }
+
+        pub fn record_manual_adjustment(&self, _a: &ManualAdjustment) {}
+
+        pub fn create_ab_test(
+            &self,
+            _course_id: uuid::Uuid,
+        ) -> Option<(ABTestVariant, ClusteringPreferences)> {
+            None
+        }
+
+        pub fn get_ab_test_parameters(
+            &self,
+            _course_id: uuid::Uuid,
+        ) -> Option<(ABTestVariant, ClusteringPreferences)> {
+            None
+        }
+
+        pub fn record_ab_test_result(&self, _r: &ABTestResult) {}
+
+        pub fn analyze_ab_test(&self, _test_id: uuid::Uuid) -> Option<ABTestAnalysis> {
+            None
+        }
+
+        pub fn optimize_parameters(&self, _course: &crate::types::Course) -> ClusteringPreferences {
+            ClusteringPreferences::default()
+        }
+
+        pub fn get_feedback_history(&self) -> Vec<ClusteringFeedback> {
+            vec![]
+        }
+
+        pub fn get_active_ab_tests(&self) -> Vec<ABTestConfig> {
+            vec![]
+        }
+
+        pub fn update_settings(&self, _settings: &crate::storage::AppSettings) {}
+    }
+}
+
 // Re-export main clustering types and functions
+#[cfg(feature = "advanced_nlp")]
 pub use content_similarity::{ContentAnalysis, FeatureVector, SimilarityMatrix, TfIdfAnalyzer};
 pub use difficulty_analyzer::{
     DifficultyAnalyzer, DifficultyProgression, PacingRecommendation, ProgressionIssue,
     ProgressionValidation, SessionDifficultyAnalysis,
 };
+#[cfg(feature = "advanced_nlp")]
 pub use duration_balancer::{BalancedCluster, DurationBalancer};
+#[cfg(feature = "advanced_nlp")]
 pub use hierarchical::{HierarchicalClusterer, LinkageMethod};
+#[cfg(feature = "advanced_nlp")]
 pub use hybrid::{
     ContentCharacteristics, EnsembleMethod, EnsembleResults, HybridClusterer, StrategySelection,
 };
+#[cfg(feature = "advanced_nlp")]
 pub use kmeans::{Cluster, KMeansClusterer};
+#[cfg(feature = "advanced_nlp")]
 pub use lda::{DocumentTopics, LdaClusterer, LdaModel, Topic};
+#[cfg(feature = "advanced_nlp")]
 pub use preference_learning::{
     ABTestAnalysis, ABTestConfig, ABTestResult, ABTestVariant, AdjustmentType, ClusteringFeedback,
     ClusteringPreferences, FeedbackType, ManualAdjustment, PreferenceLearningEngine,
 };
+#[cfg(feature = "advanced_nlp")]
 pub use topic_extractor::TopicExtractor;
+
+#[cfg(not(feature = "advanced_nlp"))]
+pub use stubs::{
+    ABTestAnalysis, ABTestConfig, ABTestResult, ABTestVariant, AdjustmentType, ClusteringFeedback,
+    ClusteringPreferences, ContentAnalysis, ContentCharacteristics, EnsembleMethod,
+    EnsembleResults, FeatureVector, FeedbackType, ManualAdjustment, PreferenceLearningEngine,
+    SimilarityMatrix, StrategySelection, TfIdfAnalyzer,
+};
 
 use crate::types::Section;
 use anyhow::Result;
@@ -202,10 +405,7 @@ mod tests {
     #[test]
     fn test_clustering_metadata_default() {
         let metadata = ClusteringMetadata::default();
-        assert_eq!(
-            metadata.algorithm_used,
-            crate::types::ClusteringAlgorithm::TfIdf
-        );
+        assert_eq!(metadata.algorithm_used, crate::types::ClusteringAlgorithm::Fallback);
         assert_eq!(metadata.similarity_threshold, 0.6);
         assert_eq!(metadata.cluster_count, 0);
     }

@@ -54,12 +54,7 @@ impl KMeansClusterer {
         convergence_threshold: f32,
         random_seed: Option<u64>,
     ) -> Self {
-        Self {
-            max_iterations,
-            convergence_threshold,
-            random_seed,
-            min_similarity_threshold: 0.3,
-        }
+        Self { max_iterations, convergence_threshold, random_seed, min_similarity_threshold: 0.3 }
     }
 
     /// Determine optimal number of clusters using elbow method
@@ -94,9 +89,7 @@ impl KMeansClusterer {
         }
 
         if k == 0 || k > features.len() {
-            return Err(ClusteringError::AnalysisFailed(format!(
-                "Invalid k value: {k}"
-            )));
+            return Err(ClusteringError::AnalysisFailed(format!("Invalid k value: {k}")));
         }
 
         // Initialize centroids
@@ -216,11 +209,7 @@ impl KMeansClusterer {
             }
         }
 
-        if valid_points > 0 {
-            total_silhouette / valid_points as f32
-        } else {
-            0.0
-        }
+        if valid_points > 0 { total_silhouette / valid_points as f32 } else { 0.0 }
     }
 
     /// Evaluate clustering quality with multiple metrics
@@ -385,20 +374,12 @@ impl KMeansClusterer {
                             }
                         }
                     }
-                    if count > 0 {
-                        total_similarity / count as f32
-                    } else {
-                        1.0
-                    }
+                    if count > 0 { total_similarity / count as f32 } else { 1.0 }
                 } else {
                     1.0
                 };
 
-                clusters.push(Cluster {
-                    points,
-                    centroid: centroid.clone(),
-                    similarity_score,
-                });
+                clusters.push(Cluster { points, centroid: centroid.clone(), similarity_score });
             }
         }
 
@@ -487,11 +468,7 @@ impl KMeansClusterer {
             }
         }
 
-        if total_pairs > 0 {
-            total_similarity / total_pairs as f32
-        } else {
-            0.0
-        }
+        if total_pairs > 0 { total_similarity / total_pairs as f32 } else { 0.0 }
     }
 
     /// Calculate average inter-cluster separation
@@ -516,11 +493,7 @@ impl KMeansClusterer {
             }
         }
 
-        if total_pairs > 0 {
-            total_distance / total_pairs as f32
-        } else {
-            0.0
-        }
+        if total_pairs > 0 { total_distance / total_pairs as f32 } else { 0.0 }
     }
 
     /// Create a simple random number generator
@@ -572,10 +545,7 @@ impl KMeansClusterer {
             if !is_duplicate {
                 let unique_idx = unique_features.len();
                 unique_features.push(feature.clone());
-                feature_map
-                    .entry(unique_idx)
-                    .or_insert_with(Vec::new)
-                    .push(i);
+                feature_map.entry(unique_idx).or_insert_with(Vec::new).push(i);
             }
         }
 
@@ -590,10 +560,8 @@ impl KMeansClusterer {
         }
 
         // If we have very few unique features, adjust k accordingly
-        let optimal_k = std::cmp::min(
-            unique_features.len(),
-            self.determine_optimal_k(&unique_features),
-        );
+        let optimal_k =
+            std::cmp::min(unique_features.len(), self.determine_optimal_k(&unique_features));
         self.cluster_with_k(features, optimal_k)
     }
 }
@@ -626,12 +594,8 @@ impl ContentClusterer for KMeansClusterer {
         // Convert internal clusters to VideoCluster format
         let mut video_clusters = Vec::new();
         for cluster in clusters {
-            let topic_keywords = cluster
-                .centroid
-                .top_features(5)
-                .into_iter()
-                .map(|(keyword, _)| keyword)
-                .collect();
+            let topic_keywords =
+                cluster.centroid.top_features(5).into_iter().map(|(keyword, _)| keyword).collect();
 
             video_clusters.push(VideoCluster {
                 videos: cluster.points,
@@ -694,10 +658,8 @@ mod tests {
     use std::collections::HashMap;
 
     fn create_test_feature_vector(terms: &[(&str, f32)]) -> FeatureVector {
-        let features: HashMap<String, f32> = terms
-            .iter()
-            .map(|(term, score)| (term.to_string(), *score))
-            .collect();
+        let features: HashMap<String, f32> =
+            terms.iter().map(|(term, score)| (term.to_string(), *score)).collect();
         FeatureVector::new(features)
     }
 
@@ -817,10 +779,7 @@ mod tests {
             centroid: create_test_feature_vector(&[("test", 1.0)]),
             similarity_score: 1.0,
         }];
-        assert_eq!(
-            clusterer.calculate_silhouette_score(&single_feature, &single_cluster),
-            0.0
-        );
+        assert_eq!(clusterer.calculate_silhouette_score(&single_feature, &single_cluster), 0.0);
 
         // Single cluster
         let features = vec![
@@ -832,10 +791,7 @@ mod tests {
             centroid: create_test_feature_vector(&[("a", 0.5), ("b", 0.5)]),
             similarity_score: 0.5,
         }];
-        assert_eq!(
-            clusterer.calculate_silhouette_score(&features, &single_cluster),
-            0.0
-        );
+        assert_eq!(clusterer.calculate_silhouette_score(&features, &single_cluster), 0.0);
     }
 
     #[test]
@@ -874,10 +830,7 @@ mod tests {
         // Test empty features
         let empty_features = vec![];
         let result = clusterer.handle_edge_cases(&empty_features);
-        assert!(matches!(
-            result,
-            Err(ClusteringError::InsufficientContent(0))
-        ));
+        assert!(matches!(result, Err(ClusteringError::InsufficientContent(0))));
 
         // Test insufficient features
         let few_features = vec![
@@ -885,10 +838,7 @@ mod tests {
             create_test_feature_vector(&[("example", 1.0)]),
         ];
         let result = clusterer.handle_edge_cases(&few_features);
-        assert!(matches!(
-            result,
-            Err(ClusteringError::InsufficientContent(2))
-        ));
+        assert!(matches!(result, Err(ClusteringError::InsufficientContent(2))));
 
         // Test identical content
         let identical_features = vec![

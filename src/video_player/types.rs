@@ -1,4 +1,3 @@
-
 use serde::{Deserialize, Serialize};
 use std::path::PathBuf;
 
@@ -6,16 +5,9 @@ use std::path::PathBuf;
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub enum VideoSource {
     /// Local video file
-    Local {
-        path: PathBuf,
-        title: String,
-    },
+    Local { path: PathBuf, title: String },
     /// YouTube video
-    YouTube {
-        video_id: String,
-        playlist_id: Option<String>,
-        title: String,
-    },
+    YouTube { video_id: String, playlist_id: Option<String>, title: String },
 }
 
 impl VideoSource {
@@ -159,8 +151,7 @@ impl VideoInfo {
 
     /// Get remaining time in seconds
     pub fn remaining_seconds(&self) -> Option<f64> {
-        self.duration_seconds
-            .map(|duration| (duration - self.position_seconds).max(0.0))
+        self.duration_seconds.map(|duration| (duration - self.position_seconds).max(0.0))
     }
 
     /// Format duration as MM:SS or HH:MM:SS
@@ -268,16 +259,16 @@ pub enum VideoPlayerError {
     FileNotFound(std::path::PathBuf),
     FileAccessDenied(std::path::PathBuf),
     UnsupportedFormat(String),
-    
+
     // Network-related errors
     NetworkError(String),
     YouTubeApiError { code: i32, message: String },
-    
+
     // Player-related errors
     InitializationFailed(String),
     PlaybackError(String),
     WebViewError(String),
-    
+
     // Validation errors
     InvalidVideoId(String),
     InvalidSource(String),
@@ -286,18 +277,22 @@ pub enum VideoPlayerError {
 impl std::fmt::Display for VideoPlayerError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            VideoPlayerError::FileNotFound(path) => write!(f, "Video file not found: {}", path.display()),
-            VideoPlayerError::FileAccessDenied(path) => write!(f, "Cannot access video file: {}", path.display()),
+            VideoPlayerError::FileNotFound(path) => {
+                write!(f, "Video file not found: {}", path.display())
+            },
+            VideoPlayerError::FileAccessDenied(path) => {
+                write!(f, "Cannot access video file: {}", path.display())
+            },
             VideoPlayerError::UnsupportedFormat(format) => {
                 write!(f, "Unsupported video format: {format}")
-            }
+            },
             VideoPlayerError::NetworkError(msg) => write!(f, "Network error: {msg}"),
             VideoPlayerError::YouTubeApiError { code, message } => {
                 write!(f, "YouTube API error {code}: {message}")
-            }
+            },
             VideoPlayerError::InitializationFailed(msg) => {
                 write!(f, "Player initialization failed: {msg}")
-            }
+            },
             VideoPlayerError::PlaybackError(msg) => write!(f, "Playback error: {msg}"),
             VideoPlayerError::WebViewError(msg) => write!(f, "WebView error: {msg}"),
             VideoPlayerError::InvalidVideoId(id) => write!(f, "Invalid video ID: {id}"),
@@ -380,7 +375,6 @@ impl Default for YouTubePlayerState {
         Self::new()
     }
 }
-
 
 /// Video metadata extracted from files or URLs
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
@@ -529,10 +523,8 @@ mod tests {
 
     #[test]
     fn test_video_info() {
-        let source = VideoSource::Local {
-            path: PathBuf::from("/test.mp4"),
-            title: "Test".to_string(),
-        };
+        let source =
+            VideoSource::Local { path: PathBuf::from("/test.mp4"), title: "Test".to_string() };
         let mut info = VideoInfo::new(source);
         info.duration_seconds = Some(120.0);
         info.position_seconds = 60.0;

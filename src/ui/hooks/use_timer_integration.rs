@@ -7,10 +7,7 @@ pub fn use_timer_integration() -> TimerIntegration {
     let active_timer_session = use_signal(|| None::<TimerSession>);
     let timer_stats = use_signal(TimerStats::new);
 
-    TimerIntegration {
-        active_timer_session,
-        timer_stats,
-    }
+    TimerIntegration { active_timer_session, timer_stats }
 }
 
 pub struct TimerIntegration {

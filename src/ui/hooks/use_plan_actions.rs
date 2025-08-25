@@ -38,13 +38,13 @@ pub fn use_toggle_plan_item_action() -> Callback<(Uuid, usize)> {
             match result {
                 Ok(Ok(_)) => {
                     toast_helpers::success("Item status updated");
-                }
+                },
                 Ok(Err(e)) => {
                     toast_helpers::error(format!("Failed to update item: {e}"));
-                }
+                },
                 Err(e) => {
                     toast_helpers::error(format!("Failed to update item: {e}"));
-                }
+                },
             }
         });
     })

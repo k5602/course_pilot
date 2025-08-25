@@ -2,19 +2,21 @@ use dioxus::prelude::*;
 use dioxus_motion::prelude::*;
 
 use super::{ContextualPanel, Sidebar};
+use crate::state::{use_contextual_panel_reactive, use_mobile_sidebar_reactive};
 use crate::types::Route;
+use crate::ui::TopBar;
 use crate::ui::{Breadcrumbs, DeepLinkingHandler};
-use crate::ui::{TopBar, use_app_state};
 
 // Route components are now in src/ui/routes.rs
 
 /// Clean app shell with integrated layout management - serves as router layout
 #[component]
 pub fn AppShell() -> Element {
-    let app_state = use_app_state();
     let current_route = use_route::<Route>();
-    let sidebar_open_mobile = app_state.read().sidebar_open_mobile;
-    let panel_is_open = app_state.read().contextual_panel.is_open;
+    let mobile_sidebar = use_mobile_sidebar_reactive();
+    let contextual_panel = use_contextual_panel_reactive();
+    let is_mobile_open = *mobile_sidebar.read();
+    let panel_is_open = contextual_panel.read().is_open;
 
     // Animation state
     let mut is_sidebar_hovered = use_signal(|| false);
@@ -23,14 +25,9 @@ pub fn AppShell() -> Element {
 
     // Animate main content entrance
     use_effect(move || {
-        main_opacity.animate_to(
-            1.0,
-            AnimationConfig::new(AnimationMode::Spring(Spring::default())),
-        );
-        main_y.animate_to(
-            0.0,
-            AnimationConfig::new(AnimationMode::Spring(Spring::default())),
-        );
+        main_opacity
+            .animate_to(1.0, AnimationConfig::new(AnimationMode::Spring(Spring::default())));
+        main_y.animate_to(0.0, AnimationConfig::new(AnimationMode::Spring(Spring::default())));
     });
 
     let main_content_style = use_memo(move || {
@@ -42,11 +39,7 @@ pub fn AppShell() -> Element {
     });
 
     // Calculate margins for main content area
-    let sidebar_margin = if is_sidebar_hovered() {
-        "ml-45"
-    } else {
-        "ml-20"
-    };
+    let sidebar_margin = if is_sidebar_hovered() { "ml-45" } else { "ml-20" };
     let panel_margin = if panel_is_open { "md:mr-96" } else { "md:mr-0" };
 
     let main_class = format!(
@@ -61,7 +54,7 @@ pub fn AppShell() -> Element {
 
                 Sidebar {
                     current_route: current_route.clone(),
-                    is_mobile_open: sidebar_open_mobile,
+                    is_mobile_open: is_mobile_open,
                     is_hovered: is_sidebar_hovered(),
                     on_hover: move |hover_state| is_sidebar_hovered.set(hover_state),
                     on_width_change: move |_width| {

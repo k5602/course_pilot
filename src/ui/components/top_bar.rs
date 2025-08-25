@@ -1,11 +1,14 @@
-use crate::ui::use_app_state;
+use crate::state::{
+    close_contextual_panel_reactive, set_contextual_panel_tab_reactive,
+    toggle_mobile_sidebar_reactive, use_contextual_panel_reactive,
+};
 use dioxus::prelude::*;
 use dioxus_free_icons::Icon;
 use dioxus_free_icons::icons::fa_solid_icons::{FaBars, FaNoteSticky};
 
 #[component]
 pub fn TopBar() -> Element {
-    let mut app_state = use_app_state();
+    let contextual_panel = use_contextual_panel_reactive();
 
     rsx! {
         div {
@@ -18,8 +21,7 @@ pub fn TopBar() -> Element {
                 button {
                     class: "btn btn-ghost btn-square md:hidden",
                     onclick: move |_| {
-                        let current_state = app_state.read().sidebar_open_mobile;
-                        app_state.write().sidebar_open_mobile = !current_state;
+                        toggle_mobile_sidebar_reactive();
                     },
                     Icon { icon: FaBars, class: "w-6 h-6" }
                 },
@@ -33,27 +35,24 @@ pub fn TopBar() -> Element {
             // Right side: contextual panel toggle
             div {
                 class: "tooltip tooltip-left",
-                "data-tip": if app_state.read().contextual_panel.is_open { "Hide Notes Panel" } else { "Show Notes Panel" },
+                "data-tip": if contextual_panel.read().is_open { "Hide Notes Panel" } else { "Show Notes Panel" },
                 button {
                     class: format!("btn btn-square {}",
-                        if app_state.read().contextual_panel.is_open &&
-                           app_state.read().contextual_panel.active_tab == crate::types::ContextualPanelTab::Notes {
+                        if contextual_panel.read().is_open &&
+                           contextual_panel.read().active_tab == crate::types::ContextualPanelTab::Notes {
                             "btn-primary"
                         } else {
                             "btn-ghost"
                         }
                     ),
                     onclick: move |_| {
-                        let mut state = app_state.write();
-                        let is_open = state.contextual_panel.is_open;
+                        let is_open = contextual_panel.read().is_open;
+                        let active_tab = contextual_panel.read().active_tab;
 
-                        if is_open && state.contextual_panel.active_tab == crate::types::ContextualPanelTab::Notes {
-                            // If notes panel is open and notes tab is active, close the panel
-                            state.contextual_panel.is_open = false;
+                        if is_open && active_tab == crate::types::ContextualPanelTab::Notes {
+                            close_contextual_panel_reactive();
                         } else {
-                            // Otherwise, open the panel and switch to notes tab
-                            state.contextual_panel.is_open = true;
-                            state.contextual_panel.active_tab = crate::types::ContextualPanelTab::Notes;
+                            set_contextual_panel_tab_reactive(crate::types::ContextualPanelTab::Notes);
                         }
                     },
                     Icon { icon: FaNoteSticky, class: "w-6 h-6" }

@@ -3,6 +3,13 @@ use serde::{Deserialize, Serialize};
 use std::fs;
 use std::path::PathBuf;
 
+#[cfg(feature = "advanced_nlp")]
+use crate::nlp::clustering::ClusteringPreferences as NLPClusteringPreferences;
+
+#[cfg(not(feature = "advanced_nlp"))]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Default)]
+pub struct NLPClusteringPreferences {}
+
 /// Application settings that are persisted locally
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub struct AppSettings {
@@ -24,7 +31,7 @@ pub struct AppSettings {
     pub track_study_time: bool,
 
     // Clustering Preferences
-    pub clustering_preferences: crate::nlp::clustering::ClusteringPreferences,
+    pub clustering_preferences: NLPClusteringPreferences,
     pub enable_preference_learning: bool,
     pub enable_ab_testing: bool,
 
@@ -55,6 +62,12 @@ pub struct ImportPreferences {
     pub preserve_playlist_order: bool,
     pub extract_timestamps: bool,
     pub download_thumbnails: bool,
+
+    // Ingest/Preview performance and UX
+    /// Max number of parallel threads for duration probing in previews/import (bounded)
+    pub preview_probe_max_concurrency: usize,
+    /// Enable cancellation UI for long-running previews/import scans
+    pub preview_cancellation_enabled: bool,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
@@ -100,7 +113,7 @@ impl Default for AppSettings {
             track_study_time: true,
 
             // Clustering Preferences
-            clustering_preferences: crate::nlp::clustering::ClusteringPreferences::default(),
+            clustering_preferences: NLPClusteringPreferences::default(),
             enable_preference_learning: true,
             enable_ab_testing: false, // Disabled by default for stability
 
@@ -134,6 +147,10 @@ impl Default for ImportPreferences {
             preserve_playlist_order: false,
             extract_timestamps: true,
             download_thumbnails: true,
+
+            // Ingest/Preview performance and UX
+            preview_probe_max_concurrency: 8,
+            preview_cancellation_enabled: true,
         }
     }
 }
@@ -247,14 +264,14 @@ impl AppSettings {
     /// Update clustering preferences and save
     pub fn set_clustering_preferences(
         &mut self,
-        preferences: crate::nlp::clustering::ClusteringPreferences,
+        preferences: NLPClusteringPreferences,
     ) -> Result<()> {
         self.clustering_preferences = preferences;
         self.save()
     }
 
     /// Get clustering preferences
-    pub fn get_clustering_preferences(&self) -> &crate::nlp::clustering::ClusteringPreferences {
+    pub fn get_clustering_preferences(&self) -> &NLPClusteringPreferences {
         &self.clustering_preferences
     }
 
@@ -295,7 +312,6 @@ pub fn save_app_settings(settings: &AppSettings) -> Result<()> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use tempfile::tempdir;
 
     #[test]
     fn test_settings_creation() {

@@ -1,5 +1,5 @@
-use crate::types::Note;
 use crate::storage::Database;
+use crate::types::Note;
 use anyhow::{Context, Result};
 use chrono::{DateTime, Utc};
 use rusqlite::{Connection, OptionalExtension, Row, ToSql, params};
@@ -17,8 +17,8 @@ pub fn init_notes_table(conn: &Connection) -> Result<()> {
             video_index INTEGER,
             content     TEXT NOT NULL,
             timestamp   INTEGER,
-            created_at  TEXT NOT NULL,
-            updated_at  TEXT NOT NULL,
+            created_at  TEXT NOT NULL CHECK (created_at GLOB '????-??-??T??:??:??*'),
+            updated_at  TEXT NOT NULL CHECK (updated_at GLOB '????-??-??T??:??:??*'),
             tags        TEXT DEFAULT '[]'
         );
         CREATE INDEX IF NOT EXISTS idx_notes_course_id ON notes(course_id);
@@ -28,15 +28,76 @@ pub fn init_notes_table(conn: &Connection) -> Result<()> {
         CREATE INDEX IF NOT EXISTS idx_notes_updated_at ON notes(updated_at);
         CREATE INDEX IF NOT EXISTS idx_notes_timestamp ON notes(timestamp);
         CREATE INDEX IF NOT EXISTS idx_notes_content_search ON notes(content);
+        CREATE UNIQUE INDEX IF NOT EXISTS idx_notes_course_videoidx_ts_content ON notes(course_id, video_id, video_index, timestamp, content);
         "#,
     )
     .context("Failed to create notes table")?;
 
+    // Optional: FTS5 virtual table for ranked full-text search and sync triggers
+    if let Err(e) = conn.execute_batch(
+        r#"
+        CREATE VIRTUAL TABLE IF NOT EXISTS notes_fts USING fts5(
+            content,
+            note_id UNINDEXED,
+            created_at UNINDEXED,
+            tokenize = 'unicode61'
+        );
+
+        CREATE TRIGGER IF NOT EXISTS notes_ai_fts AFTER INSERT ON notes BEGIN
+            INSERT INTO notes_fts(rowid, content, note_id, created_at)
+            VALUES (new.rowid, new.content, new.id, new.created_at);
+        END;
+
+        CREATE TRIGGER IF NOT EXISTS notes_au_fts AFTER UPDATE OF content, created_at ON notes BEGIN
+            DELETE FROM notes_fts WHERE rowid = old.rowid;
+            INSERT INTO notes_fts(rowid, content, note_id, created_at)
+            VALUES (new.rowid, new.content, new.id, new.created_at);
+        END;
+
+        CREATE TRIGGER IF NOT EXISTS notes_ad_fts AFTER DELETE ON notes BEGIN
+            DELETE FROM notes_fts WHERE rowid = old.rowid;
+        END;
+        "#,
+    ) {
+        log::warn!("FTS5 not available or failed to initialize: {}", e);
+    }
+
+    // Optional: exact tag queries via JSON1-backed notes_tags table + triggers
+    if let Err(e) = conn.execute_batch(
+        r#"
+        CREATE TABLE IF NOT EXISTS notes_tags (
+            note_id TEXT NOT NULL,
+            tag     TEXT NOT NULL,
+            PRIMARY KEY (note_id, tag)
+        );
+        CREATE INDEX IF NOT EXISTS idx_notes_tags_tag ON notes_tags(tag);
+
+        CREATE TRIGGER IF NOT EXISTS notes_ai_tags AFTER INSERT ON notes BEGIN
+            DELETE FROM notes_tags WHERE note_id = new.id;
+            INSERT INTO notes_tags(note_id, tag)
+            SELECT new.id, trim(value) FROM json_each(new.tags)
+            WHERE trim(value) != '';
+        END;
+
+        CREATE TRIGGER IF NOT EXISTS notes_au_tags AFTER UPDATE OF tags ON notes BEGIN
+            DELETE FROM notes_tags WHERE note_id = new.id;
+            INSERT INTO notes_tags(note_id, tag)
+            SELECT new.id, trim(value) FROM json_each(new.tags)
+            WHERE trim(value) != '';
+        END;
+
+        CREATE TRIGGER IF NOT EXISTS notes_ad_tags AFTER DELETE ON notes BEGIN
+            DELETE FROM notes_tags WHERE note_id = old.id;
+        END;
+        "#,
+    ) {
+        log::warn!("JSON1 not available or notes_tags setup failed: {}", e);
+    }
+
     // Migration: add missing columns if needed
     let mut stmt = conn.prepare("PRAGMA table_info(notes);")?;
-    let columns: Vec<String> = stmt
-        .query_map([], |row| row.get(1))?
-        .collect::<std::result::Result<Vec<String>, _>>()?;
+    let columns: Vec<String> =
+        stmt.query_map([], |row| row.get(1))?.collect::<std::result::Result<Vec<String>, _>>()?;
 
     log::info!("Existing columns in notes table: {columns:?}");
 
@@ -63,44 +124,74 @@ pub fn init_notes_table(conn: &Connection) -> Result<()> {
                 if let Err(e) = conn.execute("CREATE INDEX IF NOT EXISTS idx_notes_course_video_index ON notes(course_id, video_index);", []) {
                     log::warn!("Failed to create index for video_index: {e}");
                 }
-            }
+            },
             Err(e) => {
                 log::error!("Failed to add video_index column: {e}");
                 return Err(anyhow::anyhow!("Failed to add video_index column: {}", e));
-            }
+            },
         }
     }
 
     // Verify the migration worked by checking columns again
     let mut stmt = conn.prepare("PRAGMA table_info(notes);")?;
-    let final_columns: Vec<String> = stmt
-        .query_map([], |row| row.get(1))?
-        .collect::<std::result::Result<Vec<String>, _>>()?;
+    let final_columns: Vec<String> =
+        stmt.query_map([], |row| row.get(1))?.collect::<std::result::Result<Vec<String>, _>>()?;
 
     log::info!("Final columns in notes table: {final_columns:?}");
 
     if !final_columns.iter().any(|c| c == "video_index") {
         log::error!("video_index column still missing after migration attempt");
-        return Err(anyhow::anyhow!(
-            "Failed to add video_index column to notes table"
-        ));
+        return Err(anyhow::anyhow!("Failed to add video_index column to notes table"));
     }
 
     Ok(())
 }
 
 /// Insert a new note into the database using connection pooling.
+fn sanitize_tags(raw: &[String]) -> Vec<String> {
+    use std::collections::HashSet;
+    let mut seen = HashSet::new();
+    let mut out = Vec::new();
+    for t in raw {
+        let trimmed = t.trim();
+        if trimmed.is_empty() {
+            continue;
+        }
+        let norm = trimmed.to_string();
+        if seen.insert(norm.clone()) {
+            out.push(norm);
+        }
+    }
+    out
+}
+
 pub fn create_note_pooled(db: &Database, note: &Note) -> Result<()> {
     let conn = db.get_conn()?;
     create_note(&conn, note)
 }
 
+/// Async pooled wrapper using spawn_blocking to avoid blocking the async runtime.
+pub async fn create_note_pooled_async(db: Database, note: Note) -> Result<()> {
+    tokio::task::spawn_blocking(move || {
+        let conn = db.get_conn()?;
+        create_note(&conn, &note)
+    })
+    .await
+    .map_err(|e| anyhow::anyhow!("Join error while creating note: {}", e))??;
+    Ok(())
+}
+
 /// Insert a new note into the database.
 pub fn create_note(conn: &Connection, note: &Note) -> Result<()> {
+    let tags_json = serde_json::to_string(&sanitize_tags(&note.tags))?;
     conn.execute(
         r#"
         INSERT INTO notes (id, course_id, video_id, video_index, content, timestamp, created_at, updated_at, tags)
         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9)
+        ON CONFLICT(course_id, video_id, video_index, timestamp, content)
+        DO UPDATE SET
+            updated_at = excluded.updated_at,
+            tags = excluded.tags
         "#,
         params![
             note.id.to_string(),
@@ -111,7 +202,7 @@ pub fn create_note(conn: &Connection, note: &Note) -> Result<()> {
             note.timestamp.map(|t| t as i64),
             note.created_at.to_rfc3339(),
             note.updated_at.to_rfc3339(),
-            serde_json::to_string(&note.tags)?,
+            tags_json,
         ],
     )
     .context("Failed to insert note")?;
@@ -124,8 +215,20 @@ pub fn update_note_pooled(db: &Database, note: &Note) -> Result<()> {
     update_note(&conn, note)
 }
 
+/// Async pooled wrapper using spawn_blocking to avoid blocking the async runtime.
+pub async fn update_note_pooled_async(db: Database, note: Note) -> Result<()> {
+    tokio::task::spawn_blocking(move || {
+        let conn = db.get_conn()?;
+        update_note(&conn, &note)
+    })
+    .await
+    .map_err(|e| anyhow::anyhow!("Join error while updating note: {}", e))??;
+    Ok(())
+}
+
 /// Update an existing note by id.
 pub fn update_note(conn: &Connection, note: &Note) -> Result<()> {
+    let tags_json = serde_json::to_string(&sanitize_tags(&note.tags))?;
     conn.execute(
         r#"
         UPDATE notes
@@ -139,7 +242,7 @@ pub fn update_note(conn: &Connection, note: &Note) -> Result<()> {
             note.content,
             note.timestamp.map(|t| t as i64),
             note.updated_at.to_rfc3339(),
-            serde_json::to_string(&note.tags)?,
+            tags_json,
             note.id.to_string(),
         ],
     )
@@ -153,13 +256,21 @@ pub fn delete_note_pooled(db: &Database, note_id: Uuid) -> Result<()> {
     delete_note(&conn, note_id)
 }
 
+/// Async pooled wrapper using spawn_blocking to avoid blocking the async runtime.
+pub async fn delete_note_pooled_async(db: Database, note_id: Uuid) -> Result<()> {
+    tokio::task::spawn_blocking(move || {
+        let conn = db.get_conn()?;
+        delete_note(&conn, note_id)
+    })
+    .await
+    .map_err(|e| anyhow::anyhow!("Join error while deleting note: {}", e))??;
+    Ok(())
+}
+
 /// Delete a note by id.
 pub fn delete_note(conn: &Connection, note_id: Uuid) -> Result<()> {
-    conn.execute(
-        "DELETE FROM notes WHERE id = ?1",
-        params![note_id.to_string()],
-    )
-    .context("Failed to delete note")?;
+    conn.execute("DELETE FROM notes WHERE id = ?1", params![note_id.to_string()])
+        .context("Failed to delete note")?;
     Ok(())
 }
 
@@ -174,9 +285,7 @@ pub fn get_all_notes(conn: &Connection) -> Result<Vec<Note>> {
     let mut stmt = conn.prepare(
         "SELECT id, course_id, video_id, video_index, content, timestamp, created_at, updated_at, tags FROM notes ORDER BY updated_at DESC",
     )?;
-    let notes = stmt
-        .query_map([], note_from_row)?
-        .collect::<Result<Vec<_>, _>>()?;
+    let notes = stmt.query_map([], note_from_row)?.collect::<Result<Vec<_>, _>>()?;
     Ok(notes)
 }
 
@@ -251,10 +360,7 @@ pub fn get_notes_by_video_index(
         "SELECT id, course_id, video_id, video_index, content, timestamp, created_at, updated_at, tags FROM notes WHERE course_id = ?1 AND video_index = ?2 ORDER BY created_at ASC",
     )?;
     let notes = stmt
-        .query_map(
-            params![course_id.to_string(), video_index as i64],
-            note_from_row,
-        )?
+        .query_map(params![course_id.to_string(), video_index as i64], note_from_row)?
         .collect::<Result<Vec<_>, _>>()?;
     Ok(notes)
 }
@@ -284,32 +390,273 @@ pub fn search_notes_pooled(db: &Database, query: &str) -> Result<Vec<Note>> {
 
 /// Search notes by content (case-insensitive LIKE).
 pub fn search_notes(conn: &Connection, query: &str) -> Result<Vec<Note>> {
-    let pattern = format!("%{query}%");
+    // Escape %, _ and \ for LIKE pattern, then wrap with %...%
+    let escaped = query.replace('\\', "\\\\").replace('%', "\\%").replace('_', "\\_");
+    let pattern = format!("%{escaped}%");
     let mut stmt = conn.prepare(
-        "SELECT id, course_id, video_id, video_index, content, timestamp, created_at, updated_at, tags FROM notes WHERE content LIKE ?1 COLLATE NOCASE ORDER BY updated_at DESC",
+        "SELECT id, course_id, video_id, video_index, content, timestamp, created_at, updated_at, tags \
+         FROM notes WHERE content LIKE ?1 ESCAPE '\\' COLLATE NOCASE ORDER BY updated_at DESC",
+    )?;
+    let notes = stmt.query_map(params![pattern], note_from_row)?.collect::<Result<Vec<_>, _>>()?;
+    Ok(notes)
+}
+
+/// Paginated content search using LIKE
+pub fn search_notes_paginated(
+    conn: &Connection,
+    query: &str,
+    limit: i64,
+    offset: i64,
+) -> Result<Vec<Note>> {
+    let escaped = query.replace('\\', "\\\\").replace('%', "\\%").replace('_', "\\_");
+    let pattern = format!("%{escaped}%");
+    let mut stmt = conn.prepare(
+        "SELECT id, course_id, video_id, video_index, content, timestamp, created_at, updated_at, tags \
+         FROM notes WHERE content LIKE ?1 ESCAPE '\\' COLLATE NOCASE \
+         ORDER BY updated_at DESC LIMIT ?2 OFFSET ?3",
     )?;
     let notes = stmt
-        .query_map(params![pattern], note_from_row)?
+        .query_map(params![pattern, limit, offset], note_from_row)?
+        .collect::<Result<Vec<_>, _>>()?;
+    Ok(notes)
+}
+
+/// Ranked FTS5 search (if FTS5 is available). Falls back to error if module missing.
+pub fn search_notes_fts(
+    conn: &Connection,
+    query: &str,
+    limit: i64,
+    offset: i64,
+) -> Result<Vec<Note>> {
+    let mut stmt = conn.prepare(
+        "SELECT n.id, n.course_id, n.video_id, n.video_index, n.content, n.timestamp, n.created_at, n.updated_at, n.tags \
+         FROM notes_fts f \
+         JOIN notes n ON n.rowid = f.rowid \
+         WHERE notes_fts MATCH ?1 \
+         ORDER BY bm25(notes_fts) ASC \
+         LIMIT ?2 OFFSET ?3",
+    )?;
+    let notes = stmt
+        .query_map(params![query, limit, offset], note_from_row)?
+        .collect::<Result<Vec<_>, _>>()?;
+    Ok(notes)
+}
+
+/// Detect if notes_fts is available
+fn is_fts_available(conn: &Connection) -> bool {
+    conn.query_row(
+        "SELECT 1 FROM sqlite_master WHERE type='table' AND name='notes_fts' LIMIT 1",
+        [],
+        |_row| Ok(()),
+    )
+    .is_ok()
+}
+
+/// Unified search that selects backend automatically or per preference
+pub fn search_notes_unified(
+    conn: &Connection,
+    query: &str,
+    backend: NotesSearchBackend,
+    limit: i64,
+    offset: i64,
+) -> Result<Vec<Note>> {
+    match backend {
+        NotesSearchBackend::Fts => search_notes_fts(conn, query, limit, offset),
+        NotesSearchBackend::Like => search_notes_paginated(conn, query, limit, offset),
+        NotesSearchBackend::Auto => {
+            if is_fts_available(conn) {
+                search_notes_fts(conn, query, limit, offset)
+            } else {
+                search_notes_paginated(conn, query, limit, offset)
+            }
+        },
+    }
+}
+
+/// Keyset-pagination for simple LIKE search (stable by updated_at DESC, id DESC)
+pub fn search_notes_keyset(
+    conn: &Connection,
+    query: &str,
+    before_updated_at: Option<DateTime<Utc>>,
+    before_id: Option<Uuid>,
+    limit: i64,
+) -> Result<Vec<Note>> {
+    let escaped = query.replace('\\', "\\\\").replace('%', "\\%").replace('_', "\\_");
+    let pattern = format!("%{escaped}%");
+
+    let (time_str, id_str) = if let (Some(ts), Some(id)) = (before_updated_at, before_id) {
+        (ts.to_rfc3339(), id.to_string())
+    } else {
+        // Use max bounds when no cursor provided
+        ("9999-12-31T23:59:59Z".to_string(), Uuid::nil().to_string())
+    };
+
+    let mut stmt = conn.prepare(
+        "SELECT id, course_id, video_id, video_index, content, timestamp, created_at, updated_at, tags \
+         FROM notes \
+         WHERE content LIKE ?1 ESCAPE '\\' COLLATE NOCASE \
+           AND ((updated_at < ?2) OR (updated_at = ?2 AND id < ?3)) \
+         ORDER BY updated_at DESC, id DESC \
+         LIMIT ?4",
+    )?;
+    let notes = stmt
+        .query_map(params![pattern, time_str, id_str, limit], note_from_row)?
+        .collect::<Result<Vec<_>, _>>()?;
+    Ok(notes)
+}
+
+/// Keyset-pagination for advanced search with tag match mode
+pub fn search_notes_advanced_keyset(
+    conn: &Connection,
+    mut filters: NoteSearchFilters,
+    before_updated_at: Option<DateTime<Utc>>,
+    before_id: Option<Uuid>,
+    limit: i64,
+) -> Result<Vec<Note>> {
+    let mut sql = String::from(
+        "SELECT id, course_id, video_id, video_index, content, timestamp, created_at, updated_at, tags FROM notes WHERE 1=1",
+    );
+    let mut params: Vec<Box<dyn ToSql>> = Vec::new();
+
+    if let Some(course_id) = filters.course_id.take() {
+        sql.push_str(" AND course_id = ? ");
+        params.push(Box::new(course_id.to_string()));
+    }
+    if let Some(video_id_opt) = filters.video_id.take() {
+        match video_id_opt {
+            Some(video_id) => {
+                sql.push_str(" AND video_id = ? ");
+                params.push(Box::new(video_id.to_string()));
+            },
+            None => {
+                sql.push_str(" AND video_id IS NULL ");
+            },
+        }
+    }
+    if let Some(content) = filters.content.take() {
+        let escaped = content.replace('\\', "\\\\").replace('%', "\\%").replace('_', "\\_");
+        sql.push_str(" AND content LIKE ? ESCAPE '\\' COLLATE NOCASE ");
+        params.push(Box::new(format!("%{escaped}%")));
+    }
+    if let Some(tags) = filters.tags.take() {
+        if !tags.is_empty() {
+            match filters.tag_match_mode.unwrap_or(TagMatchMode::Any) {
+                TagMatchMode::Any => {
+                    sql.push_str(
+                        " AND EXISTS (SELECT 1 FROM notes_tags t WHERE t.note_id = notes.id AND t.tag IN (",
+                    );
+                    for i in 0..tags.len() {
+                        if i > 0 {
+                            sql.push_str(", ");
+                        }
+                        sql.push_str("?");
+                    }
+                    sql.push_str(")) ");
+                    for tag in tags {
+                        params.push(Box::new(tag.to_string()));
+                    }
+                },
+                TagMatchMode::All => {
+                    sql.push_str(
+                        " AND (SELECT COUNT(DISTINCT t.tag) FROM notes_tags t WHERE t.note_id = notes.id AND t.tag IN (",
+                    );
+                    for i in 0..tags.len() {
+                        if i > 0 {
+                            sql.push_str(", ");
+                        }
+                        sql.push_str("?");
+                    }
+                    sql.push_str(")) >= ? ");
+                    for tag in tags {
+                        params.push(Box::new(tag.to_string()));
+                    }
+                    params.push(Box::new(tags.len() as i64));
+                },
+            }
+        }
+    }
+    if let Some(ts_min) = filters.timestamp_min.take() {
+        sql.push_str(" AND timestamp >= ? ");
+        params.push(Box::new(ts_min as i64));
+    }
+    if let Some(ts_max) = filters.timestamp_max.take() {
+        sql.push_str(" AND timestamp <= ? ");
+        params.push(Box::new(ts_max as i64));
+    }
+    if let Some(created_after) = filters.created_after.take() {
+        sql.push_str(" AND created_at >= ? ");
+        params.push(Box::new(created_after.to_rfc3339()));
+    }
+    if let Some(created_before) = filters.created_before.take() {
+        sql.push_str(" AND created_at <= ? ");
+        params.push(Box::new(created_before.to_rfc3339()));
+    }
+    if let Some(updated_after) = filters.updated_after.take() {
+        sql.push_str(" AND updated_at >= ? ");
+        params.push(Box::new(updated_after.to_rfc3339()));
+    }
+    if let Some(updated_before) = filters.updated_before.take() {
+        sql.push_str(" AND updated_at <= ? ");
+        params.push(Box::new(updated_before.to_rfc3339()));
+    }
+
+    // Keyset predicate
+    let (time_str, id_str) = if let (Some(ts), Some(id)) = (before_updated_at, before_id) {
+        (ts.to_rfc3339(), id.to_string())
+    } else {
+        ("9999-12-31T23:59:59Z".to_string(), Uuid::nil().to_string())
+    };
+    sql.push_str(" AND ((updated_at < ?) OR (updated_at = ? AND id < ?)) ");
+    params.push(Box::new(time_str.clone()));
+    params.push(Box::new(time_str));
+    params.push(Box::new(id_str));
+
+    sql.push_str(" ORDER BY updated_at DESC, id DESC LIMIT ? ");
+    params.push(Box::new(limit));
+
+    let mut stmt = conn.prepare(&sql)?;
+    let notes = stmt
+        .query_map(rusqlite::params_from_iter(params.iter().map(|b| &**b)), note_from_row)?
         .collect::<Result<Vec<_>, _>>()?;
     Ok(notes)
 }
 
 /// Advanced search filters for notes.
+/// Tag match mode for advanced search
+#[derive(Clone, Copy, Debug)]
+pub enum TagMatchMode {
+    Any, // match any of the provided tags
+    All, // require all of the provided tags
+}
+
+/// Backend preference for text search
+#[derive(Clone, Copy, Debug)]
+pub enum NotesSearchBackend {
+    Auto, // use FTS if available, else LIKE
+    Fts,  // force FTS
+    Like, // force LIKE
+}
+
 pub struct NoteSearchFilters<'a> {
     pub course_id: Option<Uuid>,
     pub video_id: Option<Option<Uuid>>, // Some(Some) = filter by video, Some(None) = course-level, None = ignore
     pub content: Option<&'a str>,
-    pub tags: Option<&'a [&'a str]>, // match any tag in list
+    pub tags: Option<&'a [&'a str]>,
     pub timestamp_min: Option<u32>,
     pub timestamp_max: Option<u32>,
     pub created_after: Option<DateTime<Utc>>,
     pub created_before: Option<DateTime<Utc>>,
     pub updated_after: Option<DateTime<Utc>>,
     pub updated_before: Option<DateTime<Utc>>,
+    // New: tag match behavior (defaults to Any if None)
+    pub tag_match_mode: Option<TagMatchMode>,
 }
 
 /// Advanced search for notes with flexible filters using connection pooling.
-pub fn search_notes_advanced_pooled(db: &Database, filters: NoteSearchFilters) -> Result<Vec<Note>> {
+pub fn search_notes_advanced_pooled(
+    db: &Database,
+    filters: NoteSearchFilters,
+) -> Result<Vec<Note>> {
     let conn = db.get_conn()?;
     search_notes_advanced(&conn, filters)
 }
@@ -331,21 +678,55 @@ pub fn search_notes_advanced(conn: &Connection, filters: NoteSearchFilters) -> R
             Some(video_id) => {
                 sql.push_str(" AND video_id = ? ");
                 params.push(Box::new(video_id.to_string()));
-            }
+            },
             None => {
                 sql.push_str(" AND video_id IS NULL ");
-            }
+            },
         }
     }
     if let Some(content) = filters.content {
-        sql.push_str(" AND content LIKE ? ");
-        params.push(Box::new(format!("%{content}%")));
+        // Escape %, _ and \ and search case-insensitively
+        let escaped = content.replace('\\', "\\\\").replace('%', "\\%").replace('_', "\\_");
+        sql.push_str(" AND content LIKE ? ESCAPE '\\' COLLATE NOCASE ");
+        params.push(Box::new(format!("%{escaped}%")));
     }
     if let Some(tags) = filters.tags {
-        // Match any tag in the array (simple LIKE for MVP, can be improved with JSON1 extension)
-        for tag in tags {
-            sql.push_str(" AND tags LIKE ? ");
-            params.push(Box::new(format!("%{tag}%")));
+        if !tags.is_empty() {
+            match filters.tag_match_mode.unwrap_or(TagMatchMode::Any) {
+                TagMatchMode::Any => {
+                    // ANY: EXISTS + IN (...)
+                    sql.push_str(
+                        " AND EXISTS (SELECT 1 FROM notes_tags t WHERE t.note_id = notes.id AND t.tag IN (",
+                    );
+                    for i in 0..tags.len() {
+                        if i > 0 {
+                            sql.push_str(", ");
+                        }
+                        sql.push_str("?");
+                    }
+                    sql.push_str(")) ");
+                    for tag in tags {
+                        params.push(Box::new(tag.to_string()));
+                    }
+                },
+                TagMatchMode::All => {
+                    // ALL: Ensure count of distinct matched tags equals provided tags length
+                    sql.push_str(
+                        " AND (SELECT COUNT(DISTINCT t.tag) FROM notes_tags t WHERE t.note_id = notes.id AND t.tag IN (",
+                    );
+                    for i in 0..tags.len() {
+                        if i > 0 {
+                            sql.push_str(", ");
+                        }
+                        sql.push_str("?");
+                    }
+                    sql.push_str(")) >= ? ");
+                    for tag in tags {
+                        params.push(Box::new(tag.to_string()));
+                    }
+                    params.push(Box::new(tags.len() as i64));
+                },
+            }
         }
     }
     if let Some(ts_min) = filters.timestamp_min {
@@ -376,10 +757,92 @@ pub fn search_notes_advanced(conn: &Connection, filters: NoteSearchFilters) -> R
 
     let mut stmt = conn.prepare(&sql)?;
     let notes = stmt
-        .query_map(
-            rusqlite::params_from_iter(params.iter().map(|b| &**b)),
-            note_from_row,
-        )?
+        .query_map(rusqlite::params_from_iter(params.iter().map(|b| &**b)), note_from_row)?
+        .collect::<Result<Vec<_>, _>>()?;
+    Ok(notes)
+}
+
+/// Paginated advanced search
+pub fn search_notes_advanced_paginated(
+    conn: &Connection,
+    mut filters: NoteSearchFilters,
+    limit: i64,
+    offset: i64,
+) -> Result<Vec<Note>> {
+    let mut sql = String::from(
+        "SELECT id, course_id, video_id, video_index, content, timestamp, created_at, updated_at, tags FROM notes WHERE 1=1",
+    );
+    let mut params: Vec<Box<dyn ToSql>> = Vec::new();
+
+    if let Some(course_id) = filters.course_id.take() {
+        sql.push_str(" AND course_id = ? ");
+        params.push(Box::new(course_id.to_string()));
+    }
+    if let Some(video_id_opt) = filters.video_id.take() {
+        match video_id_opt {
+            Some(video_id) => {
+                sql.push_str(" AND video_id = ? ");
+                params.push(Box::new(video_id.to_string()));
+            },
+            None => {
+                sql.push_str(" AND video_id IS NULL ");
+            },
+        }
+    }
+    if let Some(content) = filters.content.take() {
+        let escaped = content.replace('\\', "\\\\").replace('%', "\\%").replace('_', "\\_");
+        sql.push_str(" AND content LIKE ? ESCAPE '\\' COLLATE NOCASE ");
+        params.push(Box::new(format!("%{escaped}%")));
+    }
+    if let Some(tags) = filters.tags.take() {
+        if !tags.is_empty() {
+            sql.push_str(
+                " AND EXISTS (SELECT 1 FROM notes_tags t WHERE t.note_id = notes.id AND t.tag IN (",
+            );
+            for i in 0..tags.len() {
+                if i > 0 {
+                    sql.push_str(", ");
+                }
+                sql.push_str("?");
+            }
+            sql.push_str(")) ");
+            for tag in tags {
+                params.push(Box::new(tag.to_string()));
+            }
+        }
+    }
+    if let Some(ts_min) = filters.timestamp_min.take() {
+        sql.push_str(" AND timestamp >= ? ");
+        params.push(Box::new(ts_min as i64));
+    }
+    if let Some(ts_max) = filters.timestamp_max.take() {
+        sql.push_str(" AND timestamp <= ? ");
+        params.push(Box::new(ts_max as i64));
+    }
+    if let Some(created_after) = filters.created_after.take() {
+        sql.push_str(" AND created_at >= ? ");
+        params.push(Box::new(created_after.to_rfc3339()));
+    }
+    if let Some(created_before) = filters.created_before.take() {
+        sql.push_str(" AND created_at <= ? ");
+        params.push(Box::new(created_before.to_rfc3339()));
+    }
+    if let Some(updated_after) = filters.updated_after.take() {
+        sql.push_str(" AND updated_at >= ? ");
+        params.push(Box::new(updated_after.to_rfc3339()));
+    }
+    if let Some(updated_before) = filters.updated_before.take() {
+        sql.push_str(" AND updated_at <= ? ");
+        params.push(Box::new(updated_before.to_rfc3339()));
+    }
+
+    sql.push_str(" ORDER BY updated_at DESC LIMIT ? OFFSET ? ");
+    params.push(Box::new(limit));
+    params.push(Box::new(offset));
+
+    let mut stmt = conn.prepare(&sql)?;
+    let notes = stmt
+        .query_map(rusqlite::params_from_iter(params.iter().map(|b| &**b)), note_from_row)?
         .collect::<Result<Vec<_>, _>>()?;
     Ok(notes)
 }
@@ -395,10 +858,7 @@ pub fn export_notes_markdown_by_course(conn: &Connection, course_id: Uuid) -> Re
     let notes = get_notes_by_course(conn, course_id)?;
     let mut md = String::new();
     for note in notes {
-        let ts = note
-            .timestamp
-            .map(|t| format!(" at {t}s"))
-            .unwrap_or_default();
+        let ts = note.timestamp.map(|t| format!(" at {t}s")).unwrap_or_default();
         let video_info = match note.video_id {
             Some(_) => format!("Video Note{ts}"),
             None => "Course Note".to_string(),
@@ -424,10 +884,7 @@ pub fn export_notes_markdown_by_video(conn: &Connection, video_id: Uuid) -> Resu
     let notes = get_notes_by_video(conn, video_id)?;
     let mut md = String::new();
     for note in notes {
-        let ts = note
-            .timestamp
-            .map(|t| format!(" at {t}s"))
-            .unwrap_or_default();
+        let ts = note.timestamp.map(|t| format!(" at {t}s")).unwrap_or_default();
         md.push_str(&format!(
             "### Video Note{} ({})\n{}\n\n---\n\n",
             ts,
@@ -454,7 +911,7 @@ fn note_from_row(row: &Row) -> std::result::Result<Note, rusqlite::Error> {
     let video_id = match row.get::<_, Option<String>>(2)? {
         Some(s) => {
             Some(Uuid::parse_str(&s).map_err(|e| SqlError::ToSqlConversionFailure(Box::new(e)))?)
-        }
+        },
         None => None,
     };
     let video_index = row.get::<_, Option<i64>>(3)?.map(|i| i as usize);
@@ -467,7 +924,10 @@ fn note_from_row(row: &Row) -> std::result::Result<Note, rusqlite::Error> {
         .map_err(|e| SqlError::ToSqlConversionFailure(Box::new(e)))?
         .with_timezone(&Utc);
     let tags = match row.get::<_, Option<String>>(8)? {
-        Some(json) => serde_json::from_str(&json).unwrap_or_default(),
+        Some(json) => {
+            let parsed: Vec<String> = serde_json::from_str(&json).unwrap_or_default();
+            sanitize_tags(&parsed)
+        },
         None => Vec::new(),
     };
 
@@ -501,7 +961,7 @@ mod tests {
             id: Uuid::new_v4(),
             course_id,
             video_id,
-            video_index: Some(0), // Default video index for tests
+            video_index: if video_id.is_some() { Some(0) } else { None },
             content: "This is a **test** note.".to_string(),
             timestamp: Some(42),
             created_at: now,
@@ -667,6 +1127,7 @@ mod tests {
             created_before: None,
             updated_after: None,
             updated_before: None,
+            tag_match_mode: None,
         };
         let results = super::search_notes_advanced(&conn, filters).unwrap();
         assert_eq!(results.len(), 1);
@@ -684,6 +1145,7 @@ mod tests {
             created_before: None,
             updated_after: None,
             updated_before: None,
+            tag_match_mode: None,
         };
         let results = super::search_notes_advanced(&conn, filters).unwrap();
         assert_eq!(results.len(), 1);
@@ -701,6 +1163,7 @@ mod tests {
             created_before: None,
             updated_after: None,
             updated_before: None,
+            tag_match_mode: None,
         };
         let results = super::search_notes_advanced(&conn, filters).unwrap();
         assert_eq!(results.len(), 1);
@@ -718,6 +1181,7 @@ mod tests {
             created_before: None,
             updated_after: None,
             updated_before: None,
+            tag_match_mode: None,
         };
         let results = super::search_notes_advanced(&conn, filters).unwrap();
         assert_eq!(results.len(), 1);

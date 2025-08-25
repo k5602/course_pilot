@@ -43,10 +43,10 @@ pub fn ImportSettings(props: ImportSettingsProps) -> Element {
                     Ok(_) => {
                         toast_helpers::success("Import preferences saved successfully!");
                         on_settings_updated.call(());
-                    }
+                    },
                     Err(e) => {
                         toast_helpers::error(format!("Failed to save import preferences: {e}"));
-                    }
+                    },
                 }
 
                 is_saving.set(false);
@@ -394,6 +394,49 @@ pub fn ImportSettings(props: ImportSettingsProps) -> Element {
                                         import_prefs.set(prefs);
                                     }
                                 }
+                            }
+                        }
+
+                        // Preview probe max concurrency
+                        div { class: "form-control",
+                            label { class: "label",
+                                span { class: "label-text font-medium", "Preview probe max concurrency" }
+                            }
+                            input {
+                                r#type: "number",
+                                class: "input input-bordered",
+                                min: "1",
+                                max: "64",
+                                value: import_prefs().preview_probe_max_concurrency.to_string(),
+                                oninput: move |evt| {
+                                    let mut prefs = import_prefs();
+                                    let val = evt.value().parse().unwrap_or(8);
+                                    prefs.preview_probe_max_concurrency = val.max(1);
+                                    import_prefs.set(prefs);
+                                }
+                            }
+                            label { class: "label",
+                                span { class: "label-text-alt", "Controls parallelism during preview duration probing" }
+                            }
+                        }
+
+                        // Enable preview cancellation UI
+                        div { class: "form-control",
+                            label { class: "label cursor-pointer",
+                                span { class: "label-text", "Enable preview cancellation UI" }
+                                input {
+                                    r#type: "checkbox",
+                                    class: "toggle toggle-info",
+                                    checked: import_prefs().preview_cancellation_enabled,
+                                    onchange: move |evt| {
+                                        let mut prefs = import_prefs();
+                                        prefs.preview_cancellation_enabled = evt.value().parse().unwrap_or(true);
+                                        import_prefs.set(prefs);
+                                    }
+                                }
+                            }
+                            label { class: "label",
+                                span { class: "label-text-alt", "Show Cancel Preview button and allow stopping long previews" }
                             }
                         }
                     }

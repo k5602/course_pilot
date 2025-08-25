@@ -14,12 +14,7 @@ pub enum SettingsTab {
 
 impl SettingsTab {
     pub fn all() -> Vec<Self> {
-        vec![
-            Self::General,
-            Self::ApiKeys,
-            Self::CourseDefaults,
-            Self::ImportSettings,
-        ]
+        vec![Self::General, Self::ApiKeys, Self::CourseDefaults, Self::ImportSettings]
     }
 
     pub fn label(&self) -> &'static str {
@@ -147,7 +142,7 @@ pub fn SettingsView() -> Element {
                     }
                 }
             }
-        }
+        },
         Some(Err(e)) => {
             rsx! {
                 div { class: "min-h-screen flex items-center justify-center",
@@ -165,7 +160,7 @@ pub fn SettingsView() -> Element {
                     }
                 }
             }
-        }
+        },
         None => {
             rsx! {
                 div { class: "min-h-screen flex items-center justify-center",
@@ -175,7 +170,7 @@ pub fn SettingsView() -> Element {
                     }
                 }
             }
-        }
+        },
     };
 
     rsx! {

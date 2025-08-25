@@ -28,10 +28,7 @@ impl MemoryTracker {
     /// Create a new memory tracker
     pub fn new() -> Self {
         let initial = Self::get_current_memory_usage();
-        Self {
-            initial_memory: initial,
-            peak_memory: initial,
-        }
+        Self { initial_memory: initial, peak_memory: initial }
     }
 
     /// Update peak memory usage
@@ -213,11 +210,9 @@ impl ConfidenceCalculator {
         }
 
         // Base confidence from average module confidence
-        let avg_module_confidence = module_confidences
-            .iter()
-            .map(|mc| mc.confidence_score)
-            .sum::<f32>()
-            / module_confidences.len() as f32;
+        let avg_module_confidence =
+            module_confidences.iter().map(|mc| mc.confidence_score).sum::<f32>()
+                / module_confidences.len() as f32;
 
         // Algorithm reliability factor
         let algorithm_factor = match algorithm_used {
@@ -231,10 +226,7 @@ impl ConfidenceCalculator {
 
         // Consistency bonus: higher confidence if modules have similar confidence scores
         let confidence_variance = Self::calculate_variance(
-            &module_confidences
-                .iter()
-                .map(|mc| mc.confidence_score)
-                .collect::<Vec<_>>(),
+            &module_confidences.iter().map(|mc| mc.confidence_score).collect::<Vec<_>>(),
         );
         let consistency_bonus = (1.0 - confidence_variance).max(0.0) * 0.1;
 
@@ -248,11 +240,9 @@ impl ConfidenceCalculator {
         }
 
         // Average similarity strength across all modules
-        let avg_similarity = module_confidences
-            .iter()
-            .map(|mc| mc.similarity_strength)
-            .sum::<f32>()
-            / module_confidences.len() as f32;
+        let avg_similarity =
+            module_confidences.iter().map(|mc| mc.similarity_strength).sum::<f32>()
+                / module_confidences.len() as f32;
 
         // Penalize if we have too many or too few modules
         let module_count_factor = match module_confidences.len() {
@@ -294,16 +284,17 @@ impl ConfidenceCalculator {
         }
 
         let total_videos = clusters.iter().map(|c| c.videos.len()).sum::<usize>();
-        let videos_with_topics = clusters
-            .iter()
-            .map(|c| {
-                if c.videos.iter().any(|v| !v.topic_tags.is_empty()) {
-                    c.videos.len()
-                } else {
-                    0
-                }
-            })
-            .sum::<usize>();
+        let videos_with_topics =
+            clusters
+                .iter()
+                .map(|c| {
+                    if c.videos.iter().any(|v| !v.topic_tags.is_empty()) {
+                        c.videos.len()
+                    } else {
+                        0
+                    }
+                })
+                .sum::<usize>();
 
         if total_videos == 0 {
             0.0
@@ -346,19 +337,12 @@ impl ConfidenceCalculator {
             return 1.0; // Perfect balance for single video
         }
 
-        let durations: Vec<f32> = cluster
-            .videos
-            .iter()
-            .map(|v| v.duration.as_secs() as f32)
-            .collect();
+        let durations: Vec<f32> =
+            cluster.videos.iter().map(|v| v.duration.as_secs() as f32).collect();
 
         let mean = durations.iter().sum::<f32>() / durations.len() as f32;
         let variance = Self::calculate_variance(&durations);
-        let coefficient_of_variation = if mean > 0.0 {
-            variance.sqrt() / mean
-        } else {
-            0.0
-        };
+        let coefficient_of_variation = if mean > 0.0 { variance.sqrt() / mean } else { 0.0 };
 
         // Lower coefficient of variation = better balance
         (1.0 - coefficient_of_variation.min(1.0)).clamp(0.0, 1.0)
@@ -418,18 +402,18 @@ impl RationaleGenerator {
             crate::types::ClusteringAlgorithm::KMeans => "K-Means Content Clustering".to_string(),
             crate::types::ClusteringAlgorithm::Hierarchical => {
                 "Hierarchical Content Clustering".to_string()
-            }
+            },
             crate::types::ClusteringAlgorithm::Hybrid => {
                 if clusters.len() <= 3 {
                     "Hybrid Approach with Content Focus".to_string()
                 } else {
                     "Hybrid Approach with Structure Focus".to_string()
                 }
-            }
+            },
             crate::types::ClusteringAlgorithm::Lda => "Topic Modeling (LDA)".to_string(),
             crate::types::ClusteringAlgorithm::Fallback => {
                 "Sequential Grouping (Fallback)".to_string()
-            }
+            },
         }
     }
 
@@ -447,36 +431,36 @@ impl RationaleGenerator {
                      Videos with similarity scores above {:.1}% were grouped together.",
                     similarity_threshold * 100.0
                 )
-            }
+            },
             ClusteringAlgorithm::KMeans => {
                 format!(
                     "K-means clustering algorithm identified {} optimal content groups. \
                      Videos were assigned to clusters based on semantic similarity of their titles.",
                     clusters.len()
                 )
-            }
+            },
             ClusteringAlgorithm::Hierarchical => {
                 "Hierarchical clustering built a tree of content relationships, \
                  grouping videos from most similar to least similar."
                     .to_string()
-            }
+            },
             ClusteringAlgorithm::Hybrid => {
                 "A hybrid approach combined content similarity analysis with duration balancing \
                  to create well-structured learning modules."
                     .to_string()
-            }
+            },
             ClusteringAlgorithm::Lda => {
                 format!(
                     "Latent Dirichlet Allocation (LDA) discovered {} latent topics in the content. \
                      Videos were grouped based on their topic distributions and thematic similarity.",
                     clusters.len()
                 )
-            }
+            },
             ClusteringAlgorithm::Fallback => {
                 "Content clustering was not possible due to insufficient similarity patterns. \
                  Videos were grouped sequentially to maintain logical progression."
                     .to_string()
-            }
+            },
         };
 
         let confidence_note = if confidence_scores.overall_confidence >= 0.8 {
@@ -514,12 +498,9 @@ impl RationaleGenerator {
         }
 
         // Duration balancing factor
-        let avg_duration_balance = confidence_scores
-            .module_confidences
-            .iter()
-            .map(|mc| mc.duration_balance)
-            .sum::<f32>()
-            / confidence_scores.module_confidences.len().max(1) as f32;
+        let avg_duration_balance =
+            confidence_scores.module_confidences.iter().map(|mc| mc.duration_balance).sum::<f32>()
+                / confidence_scores.module_confidences.len().max(1) as f32;
 
         if avg_duration_balance >= 0.7 {
             factors.push("Good duration balance achieved across modules".to_string());
@@ -586,13 +567,8 @@ impl RationaleGenerator {
             .map(|(index, cluster)| {
                 let grouping_reason = Self::determine_grouping_reason(cluster);
                 let similarity_explanation = Self::explain_similarity(cluster);
-                let topic_keywords = cluster
-                    .videos
-                    .iter()
-                    .flat_map(|v| &v.topic_tags)
-                    .take(5)
-                    .cloned()
-                    .collect();
+                let topic_keywords =
+                    cluster.videos.iter().flat_map(|v| &v.topic_tags).take(5).cloned().collect();
 
                 ModuleRationale {
                     module_index: index,
@@ -658,17 +634,11 @@ impl InputMetricsCalculator {
             .iter()
             .flat_map(|s| {
                 let title_lower = s.title.to_lowercase();
-                title_lower
-                    .split_whitespace()
-                    .map(|w| w.to_string())
-                    .collect::<Vec<_>>()
+                title_lower.split_whitespace().map(|w| w.to_string()).collect::<Vec<_>>()
             })
             .collect();
 
-        let unique_words = all_words
-            .iter()
-            .collect::<std::collections::HashSet<_>>()
-            .len();
+        let unique_words = all_words.iter().collect::<std::collections::HashSet<_>>().len();
         let vocabulary_size = Self::calculate_vocabulary_size(&all_words);
 
         let average_title_length = if video_count > 0 {
@@ -729,11 +699,8 @@ impl InputMetricsCalculator {
             }
         }
 
-        let average_similarity = if pair_count > 0 {
-            total_similarity / pair_count as f32
-        } else {
-            0.0
-        };
+        let average_similarity =
+            if pair_count > 0 { total_similarity / pair_count as f32 } else { 0.0 };
 
         // Diversity is inverse of similarity
         1.0 - average_similarity.clamp(0.0, 1.0)
@@ -743,23 +710,15 @@ impl InputMetricsCalculator {
     fn calculate_title_similarity(title1: &str, title2: &str) -> f32 {
         let title1_lower = title1.to_lowercase();
         let title2_lower = title2.to_lowercase();
-        let words1: std::collections::HashSet<String> = title1_lower
-            .split_whitespace()
-            .map(|s| s.to_string())
-            .collect();
-        let words2: std::collections::HashSet<String> = title2_lower
-            .split_whitespace()
-            .map(|s| s.to_string())
-            .collect();
+        let words1: std::collections::HashSet<String> =
+            title1_lower.split_whitespace().map(|s| s.to_string()).collect();
+        let words2: std::collections::HashSet<String> =
+            title2_lower.split_whitespace().map(|s| s.to_string()).collect();
 
         let intersection = words1.intersection(&words2).count();
         let union = words1.union(&words2).count();
 
-        if union == 0 {
-            0.0
-        } else {
-            intersection as f32 / union as f32
-        }
+        if union == 0 { 0.0 } else { intersection as f32 / union as f32 }
     }
 }
 
@@ -788,10 +747,8 @@ impl MetadataGenerator {
         content_topics: Vec<TopicInfo>,
         performance_metrics: PerformanceMetrics,
     ) -> ClusteringMetadata {
-        let optimized_clusters: Vec<OptimizedCluster> = balanced_clusters
-            .iter()
-            .map(convert_balanced_to_optimized_cluster)
-            .collect();
+        let optimized_clusters: Vec<OptimizedCluster> =
+            balanced_clusters.iter().map(convert_balanced_to_optimized_cluster).collect();
 
         Self::generate_complete_metadata(
             sections,

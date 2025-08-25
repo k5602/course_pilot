@@ -14,14 +14,9 @@ pub fn Dashboard() -> Element {
     let mut dashboard_y = use_motion(-24.0f32);
 
     use_effect(move || {
-        dashboard_opacity.animate_to(
-            1.0,
-            AnimationConfig::new(AnimationMode::Tween(Tween::default())),
-        );
-        dashboard_y.animate_to(
-            0.0,
-            AnimationConfig::new(AnimationMode::Spring(Spring::default())),
-        );
+        dashboard_opacity
+            .animate_to(1.0, AnimationConfig::new(AnimationMode::Tween(Tween::default())));
+        dashboard_y.animate_to(0.0, AnimationConfig::new(AnimationMode::Spring(Spring::default())));
     });
 
     let dashboard_style = use_memo(move || {
