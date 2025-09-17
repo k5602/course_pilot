@@ -116,9 +116,6 @@ pub enum DatabaseError {
     #[error("Database transaction failed: {message}")]
     TransactionFailed { message: String },
 
-    #[error("Database migration failed: {version} - {message}")]
-    MigrationFailed { version: String, message: String },
-
     #[error("Database constraint violation: {constraint} - {message}")]
     ConstraintViolation { constraint: String, message: String },
 
@@ -395,9 +392,7 @@ impl ErrorMessageMapper {
             DatabaseError::TransactionFailed { message } => {
                 format!("Database transaction failed: {message}. Changes may not have been saved.")
             },
-            DatabaseError::MigrationFailed { version, message } => {
-                format!("Database migration to version {version} failed: {message}")
-            },
+
             DatabaseError::ConstraintViolation { constraint: _, message } => {
                 format!("Data validation error: {message}")
             },

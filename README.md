@@ -563,7 +563,6 @@ src/
 │   └── notes.rs        # Notes export with tagging support
 ├── storage/            # Advanced data persistence layer
 │   ├── database.rs     # SQLite operations with connection pooling and clustering analytics
-│   ├── maintenance.rs  # Database maintenance and optimization utilities
 │   ├── optimized_queries.rs # Performance-optimized queries with prepared statements
 │   ├── settings.rs     # User settings with clustering preferences
 │   └── preference_storage.rs # Preference learning data persistence
