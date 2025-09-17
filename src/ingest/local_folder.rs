@@ -8,7 +8,7 @@ use crate::ImportError;
 use crate::nlp::sequential_detection::{
     ContentType, ContentTypeAnalysis, ProcessingRecommendation, detect_sequential_patterns,
 };
-use crate::storage::{self, database::Database};
+use crate::storage::{self, core::Database};
 use crate::types::Course;
 use chrono::Utc;
 use std::collections::HashSet;

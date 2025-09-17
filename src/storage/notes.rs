@@ -1,4 +1,4 @@
-use crate::storage::Database;
+use crate::storage::core::Database;
 use crate::types::Note;
 use anyhow::{Context, Result};
 use chrono::{DateTime, Utc};

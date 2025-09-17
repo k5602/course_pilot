@@ -28,7 +28,7 @@ use super::use_settings::SettingsManager;
 /// Unified backend interface that combines all the specialized hooks
 #[derive(Clone)]
 pub struct Backend {
-    db: Arc<crate::storage::database::Database>,
+    db: Arc<crate::storage::core::Database>,
     pub courses: CourseManager,
     pub plans: PlanManager,
     pub notes: NotesManager,
@@ -321,7 +321,7 @@ impl Backend {
 
 /// Hook for accessing the unified backend interface
 pub fn use_backend() -> Backend {
-    let db = use_context::<Arc<crate::storage::database::Database>>();
+    let db = use_context::<Arc<crate::storage::core::Database>>();
     Backend {
         db,
         courses: use_course_manager(),

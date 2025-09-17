@@ -8,10 +8,10 @@ use std::sync::Arc;
 
 use crate::state::{
     ContextualPanelContextProvider, CourseContextProvider, ImportContextProvider,
-    MobileSidebarContextProvider, NotesContextProvider, PlanContextProvider, VideoContextProvider,
+    MobileSidebarContextProvider, PlanContextProvider, VideoContextProvider,
     initialize_global_state,
 };
-use crate::storage::database::Database;
+use crate::storage::core::Database;
 use crate::types::{AppState, Route};
 
 use crate::ui::{ToastContainer, provide_toast_manager, toast_helpers};
@@ -38,15 +38,13 @@ pub fn AppRoot() -> Element {
 
         // Wrap the app with modern context providers
         CourseContextProvider {
-            NotesContextProvider {
-                PlanContextProvider {
-                    ImportContextProvider {
-                        ContextualPanelContextProvider {
-                            MobileSidebarContextProvider {
-                                VideoContextProvider {
-                                    crate::state::ExportProgressProvider {
-                                        AppWithContexts { app_state: services.app_state }
-                                    }
+            PlanContextProvider {
+                ImportContextProvider {
+                    ContextualPanelContextProvider {
+                        MobileSidebarContextProvider {
+                            VideoContextProvider {
+                                crate::state::ExportProgressProvider {
+                                    AppWithContexts { app_state: services.app_state }
                                 }
                             }
                         }

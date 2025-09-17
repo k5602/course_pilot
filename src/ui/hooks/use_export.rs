@@ -9,7 +9,7 @@ use uuid::Uuid;
 /// Export operations hook
 #[derive(Clone)]
 pub struct ExportManager {
-    db: Arc<crate::storage::database::Database>,
+    db: Arc<crate::storage::core::Database>,
 
     pub export_course_with_progress:
         Callback<(Uuid, crate::export::ExportFormat, Box<dyn Fn(f32, String) + Send + Sync>)>,
@@ -157,7 +157,7 @@ impl ExportManager {
 }
 
 pub fn use_export_manager() -> ExportManager {
-    let db = use_context::<Arc<crate::storage::database::Database>>();
+    let db = use_context::<Arc<crate::storage::core::Database>>();
 
     let export_course_with_progress = use_callback({
         let db = db.clone();

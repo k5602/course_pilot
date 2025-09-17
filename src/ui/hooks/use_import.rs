@@ -1,4 +1,4 @@
-use crate::storage::database::Database;
+use crate::storage::core::Database;
 use crate::storage::settings::AppSettings;
 use crate::types::Course;
 use crate::ui::toast_helpers;

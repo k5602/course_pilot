@@ -490,7 +490,7 @@ fn VideoContentItem(props: VideoContentItemProps) -> Element {
         let video_index = props.video_index;
         let video_title = video_title.clone();
         let open_video = props.open_video.clone();
-        let db = use_context::<std::sync::Arc<crate::storage::Database>>();
+        let db = use_context::<std::sync::Arc<crate::storage::core::Database>>();
 
         move |_| {
             let course_id = course_id;

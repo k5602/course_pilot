@@ -23,7 +23,7 @@ pub struct PreferenceService {
 
 impl PreferenceService {
     /// Create a new preference service
-    pub fn new(db: crate::storage::Database, settings: AppSettings) -> Result<Self> {
+    pub fn new(db: crate::storage::core::Database, settings: AppSettings) -> Result<Self> {
         let storage = PreferenceStorage::new(db);
         storage.initialize()?;
 
@@ -452,7 +452,7 @@ mod tests {
     fn test_preference_service_creation() {
         let temp_dir = tempdir().unwrap();
         let db_path = temp_dir.path().join("test.db");
-        let db = crate::storage::Database::new(&db_path).unwrap();
+        let db = crate::storage::core::Database::new(&db_path).unwrap();
         let settings = AppSettings::default();
 
         let service = PreferenceService::new(db, settings).unwrap();
@@ -465,7 +465,7 @@ mod tests {
     fn test_course_complexity_estimation() {
         let temp_dir = tempdir().unwrap();
         let db_path = temp_dir.path().join("test.db");
-        let db = crate::storage::Database::new(&db_path).unwrap();
+        let db = crate::storage::core::Database::new(&db_path).unwrap();
         let settings = AppSettings::default();
         let service = PreferenceService::new(db, settings).unwrap();
 

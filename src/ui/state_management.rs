@@ -9,10 +9,9 @@ use dioxus::prelude::*;
 pub use crate::state::{
     ContextualPanelContext, ContextualPanelContextProvider, CourseContext, CourseContextProvider,
     ImportContext, ImportContextProvider, MobileSidebarContext, MobileSidebarContextProvider,
-    NotesContext, NotesContextProvider, PlanContext, PlanContextProvider, initialize_global_state,
-    use_active_import_reactive, use_contextual_panel_reactive, use_course_reactive,
-    use_course_stats_reactive, use_courses_reactive, use_mobile_sidebar_reactive,
-    use_notes_reactive, use_plans_reactive,
+    PlanContext, PlanContextProvider, initialize_global_state, use_active_import_reactive,
+    use_contextual_panel_reactive, use_course_reactive, use_course_stats_reactive,
+    use_courses_reactive, use_mobile_sidebar_reactive, use_plans_reactive,
 };
 
 /// Utility hook for managing loading states across contexts

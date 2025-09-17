@@ -2,7 +2,7 @@ use crate::planner::{
     LearningVelocityAnalysis, LoadDistribution as SchedulerLoadDistribution, PlanAnalysis,
     analyze_plan_effectiveness,
 };
-use crate::storage::database::Database;
+use crate::storage::core::Database;
 use crate::types::{
     AdvancedSchedulerSettings, Course, DifficultyLevel, DistributionStrategy, VideoProgressUpdate,
 };

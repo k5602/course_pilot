@@ -75,7 +75,7 @@ mod nlp_store_fallback {
     }
 }
 
-use crate::storage::Database;
+use crate::storage::core::Database;
 use anyhow::Result;
 #[cfg(not(feature = "advanced_nlp"))]
 use nlp_store_fallback::{
@@ -677,7 +677,7 @@ mod tests {
     fn test_preference_storage_initialization() {
         let temp_dir = tempdir().unwrap();
         let db_path = temp_dir.path().join("test.db");
-        let db = crate::storage::Database::new(&db_path).unwrap();
+        let db = crate::storage::core::Database::new(&db_path).unwrap();
         let storage = PreferenceStorage::new(db);
 
         storage.initialize().unwrap();
@@ -691,7 +691,7 @@ mod tests {
     fn test_preferences_save_load() {
         let temp_dir = tempdir().unwrap();
         let db_path = temp_dir.path().join("test.db");
-        let db = crate::storage::Database::new(&db_path).unwrap();
+        let db = crate::storage::core::Database::new(&db_path).unwrap();
         let storage = PreferenceStorage::new(db);
         storage.initialize().unwrap();
 

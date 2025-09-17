@@ -17,7 +17,7 @@
 pub mod analytics;
 pub mod core;
 pub mod courses;
-pub mod database;
+
 pub mod plans;
 pub mod progress;
 pub mod utils;

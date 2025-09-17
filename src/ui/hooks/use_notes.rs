@@ -1,4 +1,4 @@
-use crate::storage::database::Database;
+use crate::storage::core::Database;
 use crate::types::Note;
 use anyhow::Result;
 use dioxus::prelude::*;

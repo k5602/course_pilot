@@ -9,39 +9,11 @@ use_small_heuristics = "Max"
 newline_style = "Unix"
 hard_tabs = false
 tab_spaces = 4
-group_imports = "StdExternalCrate"
-imports_granularity = "Crate"
 reorder_imports = true
 reorder_modules = true
 
-# Comment formatting
-wrap_comments = true
-comment_width = 100
-format_code_in_doc_comments = true
-doc_comment_code_block_width = 100
-normalize_doc_attributes = true
-
 # Macros
-format_macro_bodies = true
-format_macro_matchers = true
-
-# Expression and punctuation details
-trailing_comma = "Vertical"
-type_punctuation_density = "Compressed"
-spaces_around_ranges = false
-condense_wildcard_suffixes = true
 merge_derives = true
 use_field_init_shorthand = true
-where_single_line = true
 match_block_trailing_comma = true
 match_arm_leading_pipes = "Preserve"
-overflow_delimited_expr = true
-hex_literal_case = "Lower"
-
-# Alignment thresholds
-struct_field_align_threshold = 20
-enum_discrim_align_threshold = 20
-
-# Blank lines policy
-blank_lines_lower_bound = 0
-blank_lines_upper_bound = 1

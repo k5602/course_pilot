@@ -1,4 +1,4 @@
-use crate::storage::database::Database;
+use crate::storage::core::Database;
 use crate::types::Plan;
 use crate::ui::toast_helpers;
 use anyhow::Result;
