@@ -3,7 +3,7 @@
 //! Public API contract (session-group-first):
 //! - NLP only groups raw titles into sessions. It must not reorder imported videos.
 //! - Use `group_sessions(&[String]) -> Vec<Vec<usize>>` for the canonical grouping.
-//! - If you need a `CourseStructure`, use `structure_course(Vec<String>)` which builds
+//! - If you need a `CourseStructure`, use `structure_course(&Course)` which builds
 //!   "Session N" modules from the original order with zero-duration sections.
 //!
 //! Planner integration:
@@ -38,21 +38,29 @@ pub fn group_sessions(titles: &[String]) -> Result<Vec<Vec<usize>>, NlpError> {
 }
 
 /// Build a minimal CourseStructure from session groups while preserving order.
-/// This does NOT perform restructuring or heavy clustering. Durations are set to 0.
-pub fn structure_course(titles: Vec<String>) -> Result<CourseStructure, NlpError> {
-    if titles.is_empty() {
+/// This does NOT perform restructuring or heavy clustering. Durations reflect available metadata.
+pub fn structure_course(course: &Course) -> Result<CourseStructure, NlpError> {
+    if course.raw_titles.is_empty() {
         return Err(NlpError::InvalidInput("No titles provided".to_string()));
     }
 
-    let groups = group_sessions(&titles)?;
+    let groups = group_sessions(&course.raw_titles)?;
 
     // Convert session groups to modules with sections (preserve original order)
     let mut modules = Vec::with_capacity(groups.len());
     for (i, group) in groups.iter().enumerate() {
         let mut sections = Vec::with_capacity(group.len());
         for &idx in group {
-            let title = titles.get(idx).cloned().unwrap_or_else(|| format!("Video {}", idx + 1));
-            sections.push(Section { title, video_index: idx, duration: Duration::from_secs(0) });
+            let title = course
+                .get_video_title(idx)
+                .map(|s| s.to_string())
+                .unwrap_or_else(|| format!("Video {}", idx + 1));
+            let duration = course
+                .get_video_metadata(idx)
+                .and_then(|video| video.duration_seconds)
+                .map(|secs| Duration::from_secs_f64(secs.max(0.0)))
+                .unwrap_or_else(|| Duration::from_secs(0));
+            sections.push(Section { title, video_index: idx, duration });
         }
 
         let module_title = format!("Session {}", i + 1);
@@ -60,7 +68,7 @@ pub fn structure_course(titles: Vec<String>) -> Result<CourseStructure, NlpError
     }
 
     let metadata = StructureMetadata {
-        total_videos: titles.len(),
+        total_videos: course.raw_titles.len(),
         total_duration: Duration::from_secs(0),
         estimated_duration_hours: None,
         difficulty_level: None,
@@ -71,7 +79,13 @@ pub fn structure_course(titles: Vec<String>) -> Result<CourseStructure, NlpError
         processing_strategy_used: Some("PreserveOrder".to_string()),
     };
 
-    Ok(CourseStructure::new_basic(modules, metadata).with_aggregated_metadata())
+    let mut structure = CourseStructure::new_basic(modules, metadata).with_aggregated_metadata();
+    if structure.metadata.total_duration.as_secs() > 0 {
+        structure.metadata.estimated_duration_hours =
+            Some(structure.metadata.total_duration.as_secs_f32() / 3600.0);
+    }
+
+    Ok(structure)
 }
 
 // Re-export preference service
@@ -96,7 +110,7 @@ use regex::Regex;
 use std::sync::OnceLock;
 use std::time::Duration;
 
-use crate::types::{CourseStructure, Module, Section, StructureMetadata};
+use crate::types::{Course, CourseStructure, Module, Section, StructureMetadata};
 
 /// Common course structure keywords and patterns
 pub struct StructurePatterns {
@@ -281,5 +295,31 @@ mod tests {
         assert_eq!(text_similarity("hello world", "hello world"), 1.0);
         assert_eq!(text_similarity("hello", "world"), 0.0);
         assert!(text_similarity("hello world", "hello there") > 0.0);
+    }
+
+    #[test]
+    fn structure_course_uses_video_durations() {
+        use crate::types::{Course, VideoMetadata};
+
+        let mut videos = vec![
+            VideoMetadata::new_local_with_index("Module 1".into(), "/tmp/a.mp4".into(), 0),
+            VideoMetadata::new_local_with_index("Module 2".into(), "/tmp/b.mp4".into(), 1),
+        ];
+        videos[0].duration_seconds = Some(120.0);
+        videos[1].duration_seconds = Some(180.0);
+
+        let course = Course::new_with_videos("Test Course".into(), videos);
+        let structure = structure_course(&course).expect("structure succeeds");
+
+        assert_eq!(structure.metadata.total_videos, 2);
+        assert_eq!(structure.metadata.total_duration.as_secs(), 300);
+        assert_eq!(structure.modules.len(), 1);
+        assert_eq!(structure.modules[0].sections.len(), 2);
+        assert_eq!(structure.modules[0].sections[0].duration.as_secs(), 120);
+        assert_eq!(structure.modules[0].sections[1].duration.as_secs(), 180);
+        assert_eq!(
+            structure.metadata.estimated_duration_hours,
+            Some(structure.metadata.total_duration.as_secs_f32() / 3600.0)
+        );
     }
 }

@@ -22,9 +22,14 @@ use std::collections::HashMap;
 use std::path::Path;
 use std::sync::Mutex;
 
-static VIDEO_DURATION_CACHE: Lazy<
-    Mutex<HashMap<std::path::PathBuf, (u64, Option<std::time::SystemTime>, std::time::Duration)>>,
-> = Lazy::new(|| Mutex::new(HashMap::new()));
+const VIDEO_DURATION_CACHE_TTL: std::time::Duration = std::time::Duration::from_secs(60 * 60);
+const VIDEO_DURATION_CACHE_MAX_ENTRIES: usize = 512;
+
+type DurationCacheEntry =
+    (u64, Option<std::time::SystemTime>, std::time::Duration, std::time::Instant);
+
+static VIDEO_DURATION_CACHE: Lazy<Mutex<HashMap<std::path::PathBuf, DurationCacheEntry>>> =
+    Lazy::new(|| Mutex::new(HashMap::new()));
 
 // Common validation utilities
 
@@ -87,8 +92,11 @@ pub fn probe_video_duration(path: &std::path::Path) -> Option<std::time::Duratio
 
     // Fast path: return cached duration if file is unchanged.
     if let Ok(cache) = VIDEO_DURATION_CACHE.lock() {
-        if let Some((cached_len, cached_mtime, dur)) = cache.get(path) {
-            if *cached_len == len && *cached_mtime == mtime {
+        if let Some((cached_len, cached_mtime, dur, cached_at)) = cache.get(path) {
+            if *cached_len == len
+                && *cached_mtime == mtime
+                && cached_at.elapsed() <= VIDEO_DURATION_CACHE_TTL
+            {
                 return Some(*dur);
             }
         }
@@ -126,10 +134,22 @@ pub fn probe_video_duration(path: &std::path::Path) -> Option<std::time::Duratio
 
     // Update cache and return (fallback to 0s when unknown)
     let d = computed.unwrap_or(std::time::Duration::from_secs(0));
+    let cached_at = std::time::Instant::now();
     if let Ok(mut cache) = VIDEO_DURATION_CACHE.lock() {
-        cache.insert(path.to_path_buf(), (len, mtime, d));
+        cache.insert(path.to_path_buf(), (len, mtime, d, cached_at));
+        if cache.len() > VIDEO_DURATION_CACHE_MAX_ENTRIES {
+            if let Some(oldest_key) =
+                cache.iter().min_by_key(|(_, entry)| entry.3).map(|(key, _)| key.clone())
+            {
+                cache.remove(&oldest_key);
+            }
+        }
     }
     Some(d)
+}
+
+pub async fn probe_video_duration_async(path: std::path::PathBuf) -> Option<std::time::Duration> {
+    tokio::task::spawn_blocking(move || probe_video_duration(&path)).await.ok().flatten()
 }
 
 /// Progress tracking for integrated import operations

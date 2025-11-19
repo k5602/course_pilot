@@ -929,7 +929,7 @@ fn YouTubeImportForm(
                         );
 
                         // Structure the course using NLP
-                        match crate::nlp::structure_course(course.raw_titles.clone()) {
+                        match crate::nlp::structure_course(&course) {
                             Ok(course_structure) => {
                                 // Create clustering preview
                                 let clustering_preview = crate::types::ClusteringPreview {

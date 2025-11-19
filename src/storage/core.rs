@@ -2,7 +2,7 @@
 //! Core storage: database connection pool, schema initialization, optimization, and metrics.
 //!
 //! This module centralizes the SQLite lifecycle for Course Pilot, without any migration
-//! subsystem. It creates all required tables (including video_progress) eagerly at startup
+//! subsystem. It creates all required tables (including video_progress) eagerly
 //! and provides maintenance utilities like optimization and performance metrics.
 
 use anyhow::{Context, Result};
@@ -267,6 +267,75 @@ pub fn init_tables(conn: &mut Connection) -> Result<()> {
         [],
     )?;
 
+    tx.execute(
+        r#"
+        CREATE TABLE IF NOT EXISTS course_videos (
+            course_id TEXT NOT NULL,
+            video_index INTEGER NOT NULL,
+            title TEXT NOT NULL,
+            source_url TEXT,
+            video_id TEXT,
+            playlist_id TEXT,
+            original_index INTEGER NOT NULL,
+            duration_seconds REAL,
+            thumbnail_url TEXT,
+            description TEXT,
+            upload_date INTEGER,
+            author TEXT,
+            view_count INTEGER,
+            tags TEXT,
+            is_local INTEGER NOT NULL,
+            PRIMARY KEY (course_id, video_index),
+            FOREIGN KEY(course_id) REFERENCES courses(id) ON DELETE CASCADE
+        );
+        "#,
+        [],
+    )?;
+
+    tx.execute(
+        r#"
+        CREATE TABLE IF NOT EXISTS course_structures (
+            course_id TEXT PRIMARY KEY,
+            metadata TEXT NOT NULL,
+            clustering_metadata TEXT,
+            FOREIGN KEY(course_id) REFERENCES courses(id) ON DELETE CASCADE
+        );
+        "#,
+        [],
+    )?;
+
+    tx.execute(
+        r#"
+        CREATE TABLE IF NOT EXISTS course_modules (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            course_id TEXT NOT NULL,
+            module_index INTEGER NOT NULL,
+            title TEXT NOT NULL,
+            total_duration INTEGER NOT NULL,
+            similarity_score REAL,
+            topic_keywords TEXT,
+            difficulty_level TEXT,
+            FOREIGN KEY(course_id) REFERENCES courses(id) ON DELETE CASCADE
+        );
+        "#,
+        [],
+    )?;
+
+    tx.execute(
+        r#"
+        CREATE TABLE IF NOT EXISTS module_sections (
+            module_id INTEGER NOT NULL,
+            section_index INTEGER NOT NULL,
+            title TEXT NOT NULL,
+            video_index INTEGER NOT NULL,
+            duration INTEGER NOT NULL,
+            PRIMARY KEY (module_id, section_index),
+            FOREIGN KEY(module_id) REFERENCES course_modules(id) ON DELETE CASCADE
+        );
+        "#,
+        [],
+    )?;
+
     // Video progress tracking (previously created via migrations v4)
     tx.execute(
         r#"
@@ -302,6 +371,18 @@ pub fn init_tables(conn: &mut Connection) -> Result<()> {
     tx.execute("CREATE INDEX IF NOT EXISTS idx_plans_created_at ON plans(created_at);", [])?;
     tx.execute(
         "CREATE INDEX IF NOT EXISTS idx_plans_course_created ON plans(course_id, created_at);",
+        [],
+    )?;
+    tx.execute(
+        "CREATE INDEX IF NOT EXISTS idx_course_videos_course ON course_videos(course_id);",
+        [],
+    )?;
+    tx.execute(
+        "CREATE INDEX IF NOT EXISTS idx_course_modules_course ON course_modules(course_id);",
+        [],
+    )?;
+    tx.execute(
+        "CREATE INDEX IF NOT EXISTS idx_module_sections_module ON module_sections(module_id);",
         [],
     )?;
     tx.commit()?;
@@ -403,4 +484,14 @@ pub fn parse_json_sqlite<T: serde::de::DeserializeOwned>(s: &str) -> Result<T, r
     serde_json::from_str(s).map_err(|e| {
         rusqlite::Error::InvalidColumnType(0, format!("json: {e}"), rusqlite::types::Type::Text)
     })
+}
+
+pub async fn run_blocking_db<F, T>(operation: F) -> Result<T>
+where
+    F: FnOnce() -> Result<T> + Send + 'static,
+    T: Send + 'static,
+{
+    tokio::task::spawn_blocking(operation)
+        .await
+        .map_err(|e| anyhow::anyhow!("Blocking DB task failed: {e}"))?
 }

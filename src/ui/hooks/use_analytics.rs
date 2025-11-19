@@ -107,7 +107,7 @@ impl AnalyticsManager {
         user_experience: DifficultyLevel,
     ) -> Result<AdvancedSchedulerSettings> {
         let db = self.db.clone();
-        tokio::task::spawn_blocking(move || {
+        crate::storage::core::run_blocking_db(move || {
             // Load course data
             let course = crate::storage::get_course_by_id(&db, &course_id)?
                 .ok_or_else(|| anyhow::anyhow!("Course not found: {}", course_id))?;
@@ -154,12 +154,11 @@ impl AnalyticsManager {
             Ok(recommended_settings)
         })
         .await
-        .unwrap_or_else(|e| Err(anyhow::anyhow!("Join error: {}", e)))
     }
 
     pub async fn structure_course(&self, course_id: Uuid) -> Result<Course> {
         let db = self.db.clone();
-        tokio::task::spawn_blocking(move || {
+        crate::storage::core::run_blocking_db(move || {
             // Load course data
             let mut course = crate::storage::get_course_by_id(&db, &course_id)?
                 .ok_or_else(|| anyhow::anyhow!("Course not found: {}", course_id))?;
@@ -170,7 +169,7 @@ impl AnalyticsManager {
             }
 
             // Use NLP module to structure the course
-            let structure = crate::nlp::structure_course(course.raw_titles.clone())
+            let structure = crate::nlp::structure_course(&course)
                 .map_err(|e| anyhow::anyhow!("Course structuring failed: {}", e))?;
 
             // Update course with new structure
@@ -182,7 +181,6 @@ impl AnalyticsManager {
             Ok(course)
         })
         .await
-        .unwrap_or_else(|e| Err(anyhow::anyhow!("Join error: {}", e)))
     }
 
     pub async fn structure_course_with_progress<F>(
@@ -194,7 +192,7 @@ impl AnalyticsManager {
         F: Fn(f32, String) + Send + Sync + 'static,
     {
         let db = self.db.clone();
-        tokio::task::spawn_blocking(move || {
+        crate::storage::core::run_blocking_db(move || {
             progress_callback(0.0, "Loading course data...".to_string());
 
             // Load course data
@@ -204,7 +202,7 @@ impl AnalyticsManager {
             progress_callback(25.0, "Analyzing course content...".to_string());
 
             // Use NLP module to structure the course
-            let structure = crate::nlp::structure_course(course.raw_titles.clone())
+            let structure = crate::nlp::structure_course(&course)
                 .map_err(|e| anyhow::anyhow!("Course structuring failed: {}", e))?;
 
             progress_callback(75.0, "Saving structured course...".to_string());
@@ -220,7 +218,6 @@ impl AnalyticsManager {
             Ok(course)
         })
         .await
-        .unwrap_or_else(|e| Err(anyhow::anyhow!("Join error: {}", e)))
     }
 
     /// Analyze learning velocity for a specific plan
@@ -229,7 +226,7 @@ impl AnalyticsManager {
         plan_id: Uuid,
     ) -> Result<LearningVelocityAnalysis> {
         let db = self.db.clone();
-        tokio::task::spawn_blocking(move || {
+        crate::storage::core::run_blocking_db(move || {
             let plan = crate::storage::load_plan(&db, &plan_id)?
                 .ok_or_else(|| anyhow::anyhow!("Plan not found: {}", plan_id))?;
 
@@ -237,13 +234,12 @@ impl AnalyticsManager {
             Ok(analysis.velocity_analysis)
         })
         .await
-        .unwrap_or_else(|e| Err(anyhow::anyhow!("Join error: {}", e)))
     }
 
     /// Analyze cognitive load distribution for a specific plan
     pub async fn analyze_cognitive_load(&self, plan_id: Uuid) -> Result<SchedulerLoadDistribution> {
         let db = self.db.clone();
-        tokio::task::spawn_blocking(move || {
+        crate::storage::core::run_blocking_db(move || {
             let plan = crate::storage::load_plan(&db, &plan_id)?
                 .ok_or_else(|| anyhow::anyhow!("Plan not found: {}", plan_id))?;
 
@@ -251,26 +247,24 @@ impl AnalyticsManager {
             Ok(analysis.load_distribution)
         })
         .await
-        .unwrap_or_else(|e| Err(anyhow::anyhow!("Join error: {}", e)))
     }
 
     /// Get comprehensive plan analysis
     pub async fn get_plan_analysis(&self, plan_id: Uuid) -> Result<PlanAnalysis> {
         let db = self.db.clone();
-        tokio::task::spawn_blocking(move || {
+        crate::storage::core::run_blocking_db(move || {
             let plan = crate::storage::load_plan(&db, &plan_id)?
                 .ok_or_else(|| anyhow::anyhow!("Plan not found: {}", plan_id))?;
 
             Ok(analyze_plan_effectiveness(&plan))
         })
         .await
-        .unwrap_or_else(|e| Err(anyhow::anyhow!("Join error: {}", e)))
     }
 
     /// Get learning analytics across all user plans
     pub async fn get_learning_analytics(&self) -> Result<Vec<PlanAnalysis>> {
         let db = self.db.clone();
-        tokio::task::spawn_blocking(move || {
+        crate::storage::core::run_blocking_db(move || {
             let courses = crate::storage::load_courses(&db)?;
             let mut analyses = Vec::new();
 
@@ -284,7 +278,6 @@ impl AnalyticsManager {
             Ok(analyses)
         })
         .await
-        .unwrap_or_else(|e| Err(anyhow::anyhow!("Join error: {}", e)))
     }
 }
 
@@ -296,7 +289,7 @@ pub fn use_analytics_manager() -> AnalyticsManager {
         move |course_id: Uuid| {
             let db = db.clone();
             spawn(async move {
-                let result = tokio::task::spawn_blocking(move || {
+                let result = crate::storage::core::run_blocking_db(move || {
                     // Load course data
                     let mut course = crate::storage::get_course_by_id(&db, &course_id)?
                         .ok_or_else(|| anyhow::anyhow!("Course not found: {}", course_id))?;
@@ -307,7 +300,7 @@ pub fn use_analytics_manager() -> AnalyticsManager {
                     }
 
                     // Use NLP module to structure the course
-                    let structure = crate::nlp::structure_course(course.raw_titles.clone())
+                    let structure = crate::nlp::structure_course(&course)
                         .map_err(|e| anyhow::anyhow!("Course structuring failed: {}", e))?;
 
                     // Update course with new structure
@@ -321,11 +314,8 @@ pub fn use_analytics_manager() -> AnalyticsManager {
                 .await;
 
                 match result {
-                    Ok(Ok(_)) => {
+                    Ok(_) => {
                         toast_helpers::success("Course structured successfully");
-                    },
-                    Ok(Err(e)) => {
-                        toast_helpers::error(format!("Failed to structure course: {e}"));
                     },
                     Err(e) => {
                         toast_helpers::error(format!("Failed to structure course: {e}"));
@@ -358,7 +348,7 @@ impl AnalyticsManager {
     /// Update video progress tracking
     pub async fn update_video_progress(&self, progress_update: VideoProgressUpdate) -> Result<()> {
         let db = self.db.clone();
-        tokio::task::spawn_blocking(move || {
+        crate::storage::core::run_blocking_db(move || {
             crate::storage::save_video_progress(&db, &progress_update)
                 .map_err(|e| anyhow::anyhow!("Failed to save video progress: {}", e))
         })
@@ -373,7 +363,7 @@ impl AnalyticsManager {
         video_index: usize,
     ) -> Result<bool> {
         let db = self.db.clone();
-        tokio::task::spawn_blocking(move || {
+        crate::storage::core::run_blocking_db(move || {
             crate::storage::get_video_completion_status(&db, &plan_id, session_index, video_index)
                 .map_err(|e| anyhow::anyhow!("Failed to get video completion status: {}", e))
         })
@@ -383,7 +373,7 @@ impl AnalyticsManager {
     /// Get session progress as percentage (0.0 to 1.0)
     pub async fn get_session_progress(&self, plan_id: Uuid, session_index: usize) -> Result<f32> {
         let db = self.db.clone();
-        tokio::task::spawn_blocking(move || {
+        crate::storage::core::run_blocking_db(move || {
             crate::storage::get_session_progress(&db, &plan_id, session_index)
                 .map_err(|e| anyhow::anyhow!("Failed to get session progress: {}", e))
         })
