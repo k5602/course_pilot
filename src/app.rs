@@ -25,6 +25,9 @@ pub fn initialize_app() -> Result<(), Box<dyn std::error::Error>> {
         log::info!("Course Pilot application starting in release mode");
     }
 
+    // Initialize video player subsystem
+    crate::video_player::init()?;
+
     // Log system information
     log::info!("Application initialized successfully");
     log::debug!("Debug logging enabled");

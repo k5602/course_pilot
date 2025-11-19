@@ -2,9 +2,8 @@ use dioxus::prelude::*;
 use dioxus_desktop::use_window;
 use uuid::Uuid;
 
-use crate::video_player::{
-    PlaybackState, VideoControls, VideoPlayerError, VideoSource, use_video_player,
-};
+use crate::ui::hooks::use_video_player_manager;
+use crate::video_player::{PlaybackState, VideoControls, VideoPlayerError, VideoSource};
 
 #[derive(Props, PartialEq, Clone)]
 pub struct VideoPlayerProps {
@@ -21,21 +20,21 @@ pub struct VideoPlayerProps {
 /// Unified video player component that handles both local and YouTube videos
 #[component]
 pub fn VideoPlayer(props: VideoPlayerProps) -> Element {
-    let state = use_video_player();
+    let mut state = use_video_player_manager();
     let window = use_window();
     // Clone the current video for use in closures
-    let current_video = state.current_video.clone();
+    let _current_video = state.current_video.clone();
     let player_id = use_signal(|| format!("cp-video-{}", Uuid::new_v4().simple()));
     let youtube_player_id = use_signal(|| format!("youtube-{}", Uuid::new_v4().simple()));
 
     // Load video when source changes
     use_effect({
-        let source = props.source.clone();
+        let video_source = props.source.clone();
         let mut state = state.clone();
         move || {
-            if let Some(video_source) = source.clone() {
-                log::info!("VideoPlayer: Loading video source: {:?}", video_source);
-                state.load_video(video_source);
+            if let Some(source) = &video_source {
+                log::info!("VideoPlayer: Loading video source: {:?}", source);
+                state.load_video(source.clone());
             } else {
                 log::info!("VideoPlayer: No video source provided");
                 state.current_video.set(None);
@@ -74,7 +73,7 @@ pub fn VideoPlayer(props: VideoPlayerProps) -> Element {
         }
     });
 
-    // set active player and dispatch global keyboard keys to the active player
+    // Set active player for keyboard shortcuts
     use_effect({
         let window = window.clone();
         let local_id = player_id();
@@ -82,7 +81,7 @@ pub fn VideoPlayer(props: VideoPlayerProps) -> Element {
         let state = state.clone();
         move || {
             // Set the active player context based on current source
-            let ap_script = match &*state.current_video.read() {
+            let ap_script = match state.current_video() {
                 Some(VideoSource::Local { .. }) => {
                     crate::video_player::ipc::global::set_active_player("local", &local_id)
                 },
@@ -92,28 +91,6 @@ pub fn VideoPlayer(props: VideoPlayerProps) -> Element {
                 None => "window.cpActivePlayer=null;".to_string(),
             };
             let _ = window.webview.evaluate_script(&ap_script);
-
-            // Poll keystrokes from global buffer and dispatch via cpHandleVideoKey
-            spawn({
-                let window = window.clone();
-                async move {
-                    let mut interval =
-                        tokio::time::interval(tokio::time::Duration::from_millis(100));
-                    loop {
-                        interval.tick().await;
-                        let script = r#"
-                                (function() {
-                                    if (window.lastVideoPlayerKey && window.cpHandleVideoKey) {
-                                        const k = window.lastVideoPlayerKey;
-                                        window.lastVideoPlayerKey = null;
-                                        try { window.cpHandleVideoKey(k); } catch(e) {}
-                                    }
-                                })();
-                            "#;
-                        let _ = window.webview.evaluate_script(script);
-                    }
-                }
-            });
         }
     });
 
@@ -130,31 +107,29 @@ pub fn VideoPlayer(props: VideoPlayerProps) -> Element {
     let _handle_seek = use_callback({
         let execute_script = execute_script.clone();
         let id = player_id();
-        let state = state.clone();
+        let mut state = state.clone();
         move |position: f64| {
             let pos = position.max(0.0);
             let script = crate::video_player::ipc::local::seek_to(&id, pos);
             execute_script(script);
-            let mut state = state.clone();
-            state.position.set(pos);
+            state.seek_to(pos);
         }
     });
 
     let _handle_volume_change = use_callback({
         let execute_script = execute_script.clone();
         let id = player_id();
-        let state = state.clone();
+        let mut state = state.clone();
         move |new_volume: f64| {
             let vol = new_volume.clamp(0.0, 1.0);
             let script = crate::video_player::ipc::local::set_volume(&id, vol);
             execute_script(script);
-            let mut state = state.clone();
             state.set_volume(vol);
         }
     });
 
     // Container styling
-    let container_classes = if *state.is_fullscreen.read() {
+    let container_classes = if state.is_fullscreen() {
         "fixed inset-0 z-50 bg-black flex flex-col"
     } else {
         "relative bg-black rounded-lg overflow-hidden"
@@ -167,40 +142,36 @@ pub fn VideoPlayer(props: VideoPlayerProps) -> Element {
     );
 
     // Check for errors outside the rsx! macro
-    let has_error = {
-        let error_ref = state.error.read();
-        error_ref.is_some()
-    };
+    let has_error = state.error().is_some();
 
     rsx! {
         div {
             class: "{container_classes}",
-            style: if !*state.is_fullscreen.read() { video_area_style } else { String::new() },
+            style: if !state.is_fullscreen() { video_area_style } else { String::new() },
 
             // Render appropriate player based on video source
-            match &*state.current_video.read() {
+            match state.current_video() {
                 Some(VideoSource::Local { path, .. }) => rsx! {
                     LocalVideoPlayer {
                         player_id: player_id(),
                         path: path.clone(),
                         autoplay: props.autoplay.unwrap_or(false),
                         on_play: {
-                            let mut playback_state = state.playback_state.clone();
+                            let mut state = state.clone();
                             move |_| {
-                                playback_state.set(PlaybackState::Playing)
+                                state.play();
                             }
                         },
                         on_pause: {
-                            let mut playback_state = state.playback_state.clone();
+                            let mut state = state.clone();
                             move |_| {
-                                playback_state.set(PlaybackState::Paused)
+                                state.pause();
                             }
                         },
                         on_ended: {
-                            let state = state.clone();
+                            let mut state = state.clone();
                             let on_complete = props.on_complete.clone();
                             move |_| {
-                                let mut state = state.clone();
                                 state.stop();
                                 if let Some(on_complete) = &on_complete {
                                     on_complete.call(());
@@ -213,20 +184,19 @@ pub fn VideoPlayer(props: VideoPlayerProps) -> Element {
                             move |_| {
                                 // Position updates handled by sync interval
                                 if let Some(on_progress) = &on_progress {
-                                    on_progress.call(*state.position.read());
+                                    on_progress.call(state.position());
                                 }
                             }
                         },
                         on_loadedmetadata: {
-                            let mut loading = state.loading.clone();
+                            let mut state = state.clone();
                             move |_| {
-                                loading.set(false);
+                                state.set_loading(false);
                             }
                         },
                         on_error: {
-                            let state = state.clone();
+                            let mut state = state.clone();
                             move |error: String| {
-                                let mut state = state.clone();
                                 state.set_error(Some(VideoPlayerError::PlaybackError(error)));
                             }
                         },
@@ -238,32 +208,31 @@ pub fn VideoPlayer(props: VideoPlayerProps) -> Element {
                         video_id: video_id.clone(),
                         playlist_id: playlist_id.clone(),
                         on_state_change: {
-                            let mut playback_state = state.playback_state.clone();
+                            let mut state = state.clone();
                             move |new_playback_state| {
                                 // Update the state with the new playback state
-                                playback_state.set(new_playback_state);
+                                state.playback_state.set(new_playback_state);
                             }
                         },
                         on_progress: {
-                            let mut state_position = state.position.clone();
+                            let mut state = state.clone();
                             let on_progress = props.on_progress.clone();
                             move |position| {
-                                state_position.set(position);
+                                state.update_position(position);
                                 if let Some(on_progress) = &on_progress {
                                     on_progress.call(position);
                                 }
                             }
                         },
                         on_duration: {
-                            let mut duration = state.duration.clone();
+                            let mut state = state.clone();
                             move |duration_value| {
-                                duration.set(duration_value);
+                                state.update_duration(duration_value);
                             }
                         },
                         on_error: {
-                            let state = state.clone();
+                            let mut state = state.clone();
                             move |error: String| {
-                                let mut state = state.clone();
                                 state.set_error(Some(VideoPlayerError::PlaybackError(error)));
                             }
                         },
@@ -286,16 +255,15 @@ pub fn VideoPlayer(props: VideoPlayerProps) -> Element {
                 VideoControls {
                     player_id: player_id(),
                     show_playlist_controls: {
-                        let current_video_ref = current_video.read();
-                        matches!(&*current_video_ref, Some(VideoSource::YouTube { playlist_id: Some(_), .. }))
+                        matches!(state.current_video(), Some(VideoSource::YouTube { playlist_id: Some(_), .. }))
                     },
                     on_play_pause: {
-                        let state = state.clone();
-                        let current_video = current_video.clone();
+                        let mut state = state.clone();
+                        let current_video = state.current_video();
                         let execute_script = execute_script.clone();
                         move |_| {
                             // Handle play/pause for the appropriate player type
-                            match &*current_video.read() {
+                            match current_video {
                                 Some(VideoSource::Local { .. }) => {
                                     // Mark active and toggle HTML5 <video>
                                     let set_active = crate::video_player::ipc::global::set_active_player("local", &player_id());
@@ -304,7 +272,6 @@ pub fn VideoPlayer(props: VideoPlayerProps) -> Element {
                                     execute_script(toggle);
 
                                     // Update state
-                                    let mut state = state.clone();
                                     state.toggle_play_pause();
                                 }
                                 Some(VideoSource::YouTube { .. }) => {
@@ -318,13 +285,12 @@ pub fn VideoPlayer(props: VideoPlayerProps) -> Element {
                         }
                     },
                         on_seek: {
-                            let state = state.clone();
-                            let current_video = current_video.clone();
+                            let mut state = state.clone();
+                            let current_video = state.current_video();
                             let execute_script = execute_script.clone();
                             move |position| {
-                                match &*current_video.read() {
+                                match current_video {
                                     Some(VideoSource::Local { .. }) => {
-                                        let mut state = state.clone();
                                         state.seek_to(position);
 
                                         // Reflect in DOM
@@ -341,13 +307,12 @@ pub fn VideoPlayer(props: VideoPlayerProps) -> Element {
                             }
                         },
                         on_volume_change: {
-                            let state = state.clone();
-                            let current_video = current_video.clone();
+                            let mut state = state.clone();
+                            let current_video = state.current_video();
                             let execute_script = execute_script.clone();
                             move |volume| {
-                                match &*current_video.read() {
+                                match current_video {
                                     Some(VideoSource::Local { .. }) => {
-                                        let mut state = state.clone();
                                         state.set_volume(volume);
 
                                         // Reflect in DOM
@@ -364,9 +329,8 @@ pub fn VideoPlayer(props: VideoPlayerProps) -> Element {
                             }
                         },
                         on_fullscreen_toggle: {
-                            let state = state.clone();
+                            let mut state = state.clone();
                             move |_| {
-                                let mut state = state.clone();
                                 state.toggle_fullscreen();
                             }
                         },
@@ -375,32 +339,24 @@ pub fn VideoPlayer(props: VideoPlayerProps) -> Element {
                 }
 
             // Error overlay
-            {
-                let error_ref = state.error.read();
-                if let Some(error) = &*error_ref {
-                    rsx! {
-                        VideoErrorDisplay {
-                            error: error.clone(),
-                            on_retry: {
-                                let state = state.clone();
-                                let current_video = current_video.clone();
-                                move |_| {
-                                    let mut state = state.clone();
-                                    state.error.set(None);
-                                    if let Some(source) = &*current_video.read() {
-                                        state.load_video(source.clone());
-                                    }
-                                }
-                            },
+            if let Some(error) = state.error() {
+                VideoErrorDisplay {
+                    error: error.clone(),
+                    on_retry: {
+                        let mut state = state.clone();
+                        let current_video = state.current_video();
+                        move |_| {
+                            state.set_error(None);
+                            if let Some(source) = current_video.clone() {
+                                state.load_video(source);
+                            }
                         }
-                    }
-                } else {
-                    rsx! { div {} }
+                    },
                 }
             }
 
             // Loading overlay
-            if *state.loading.read() {
+            if state.is_loading() {
                 div {
                     class: "absolute inset-0 bg-black/50 flex items-center justify-center",
                     div {

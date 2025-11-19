@@ -6,7 +6,8 @@ use dioxus_free_icons::icons::fa_solid_icons::{
     FaVolumeXmark,
 };
 
-use crate::video_player::{PlaybackState, VideoSource, use_video_player};
+use crate::ui::hooks::use_video_player_manager;
+use crate::video_player::{PlaybackState, VideoSource};
 
 #[derive(Props, PartialEq, Clone)]
 pub struct VideoControlsProps {
@@ -22,7 +23,7 @@ pub struct VideoControlsProps {
 /// Custom video controls overlay with DaisyUI styling
 #[component]
 pub fn VideoControls(props: VideoControlsProps) -> Element {
-    let state = use_video_player();
+    let mut state = use_video_player_manager();
     let window = use_window();
     let show_playlist_controls = props.show_playlist_controls.unwrap_or(false);
     let controls_visible = use_signal(|| true);
@@ -63,16 +64,18 @@ pub fn VideoControls(props: VideoControlsProps) -> Element {
 
     // Auto-hide controls in fullscreen after 3s of inactivity
     use_effect({
-        let mut controls_visible = controls_visible.clone();
+        let controls_visible = controls_visible.clone();
         let last_mouse_move = last_mouse_move.clone();
-        let is_fullscreen = state.is_fullscreen.clone();
+        let state_clone = state.clone();
         move || {
-            let is_fullscreen_clone = is_fullscreen.clone();
+            let mut controls_visible = controls_visible.clone();
+            let last_mouse_move = last_mouse_move.clone();
+            let state_for_async = state_clone.clone();
             spawn(async move {
                 let mut interval = tokio::time::interval(tokio::time::Duration::from_millis(250));
                 loop {
                     interval.tick().await;
-                    if *is_fullscreen_clone.read() && *controls_visible.read() {
+                    if state_for_async.is_fullscreen() && *controls_visible.read() {
                         if let Some(t) = *last_mouse_move.read() {
                             if t.elapsed() >= std::time::Duration::from_secs(3) {
                                 controls_visible.set(false);
@@ -185,7 +188,7 @@ pub fn VideoControls(props: VideoControlsProps) -> Element {
         let mut state = state.clone();
         let on_seek = props.on_seek.clone();
         move |_evt: MouseEvent| {
-            let duration = *state.duration.read();
+            let duration = state.duration();
             if duration > 0.0 {
                 let percentage = 0.5;
                 let new_position = duration * percentage;
@@ -202,7 +205,7 @@ pub fn VideoControls(props: VideoControlsProps) -> Element {
         return rsx! { div {} };
     }
 
-    let controls_class = if *state.is_fullscreen.read() && !*controls_visible.read() {
+    let controls_class = if state.is_fullscreen() && !*controls_visible.read() {
         "absolute bottom-0 left-0 right-0 bg-gradient-to-t from-black/80 to-transparent p-6 opacity-0 transition-opacity duration-300"
     } else {
         "absolute bottom-0 left-0 right-0 bg-gradient-to-t from-black/80 to-transparent p-4 opacity-100 transition-opacity duration-300"
@@ -219,7 +222,7 @@ pub fn VideoControls(props: VideoControlsProps) -> Element {
 
                 span {
                     class: "text-xs font-mono min-w-[3rem]",
-                    "{format_time(*state.position.read())}"
+                    "{format_time(state.position())}"
                 }
 
                 div {
@@ -247,7 +250,7 @@ pub fn VideoControls(props: VideoControlsProps) -> Element {
 
                 span {
                     class: "text-xs font-mono min-w-[3rem]",
-                    "{format_time(*state.duration.read())}"
+                    "{format_time(state.duration())}"
                 }
             }
 
@@ -292,9 +295,9 @@ pub fn VideoControls(props: VideoControlsProps) -> Element {
                         class: "btn btn-ghost btn-lg text-white hover:text-primary",
                         onclick: handle_play_pause,
                         "aria-label": if *state.playback_state.read() == PlaybackState::Playing { "Pause" } else { "Play" },
-                        title: if *state.playback_state.read() == PlaybackState::Playing { "Pause (Space)" } else { "Play (Space)" },
+                        title: if state.playback_state() == PlaybackState::Playing { "Pause (Space)" } else { "Play (Space)" },
 
-                        if *state.playback_state.read() == PlaybackState::Playing {
+                        if state.playback_state() == PlaybackState::Playing {
                             Icon {
                                 icon: FaPause,
                                 class: "w-6 h-6"
@@ -352,7 +355,7 @@ pub fn VideoControls(props: VideoControlsProps) -> Element {
                 // Center info (video title for YouTube)
                 div {
                     class: "flex-1 text-center",
-                    if let Some(VideoSource::YouTube { title, .. }) = &*state.current_video.read() {
+                    if let Some(VideoSource::YouTube { title, .. }) = state.current_video() {
                         div {
                             class: "text-sm text-white/80 truncate max-w-md mx-auto",
                             title: "{title}",
@@ -376,7 +379,7 @@ pub fn VideoControls(props: VideoControlsProps) -> Element {
                             "aria-label": if *state.is_muted.read() { "Unmute" } else { "Mute" },
                             title: if *state.is_muted.read() { "Unmute (M)" } else { "Mute (M)" },
 
-                            if *state.is_muted.read() {
+                            if state.is_muted() {
                                 Icon {
                                     icon: FaVolumeXmark,
                                     class: "w-4 h-4"
@@ -396,15 +399,15 @@ pub fn VideoControls(props: VideoControlsProps) -> Element {
                             min: "0",
                             max: "1",
                             step: "0.1",
-                            value: "{*state.volume.read()}",
+                            value: "{state.volume()}",
                             oninput: handle_volume_change,
-                            title: "Volume: {(*state.volume.read() * 100.0) as i32}%",
+                            title: "Volume: {(state.volume() * 100.0) as i32}%",
                         }
 
                         // Volume percentage
                         span {
                             class: "text-xs text-white/60 min-w-[2rem]",
-                            "{(*state.volume.read() * 100.0) as i32}%"
+                            "{(state.volume() * 100.0) as i32}%"
                         }
                     }
 
@@ -443,10 +446,10 @@ pub fn VideoControls(props: VideoControlsProps) -> Element {
                     button {
                         class: "btn btn-ghost btn-sm text-white hover:text-primary",
                         onclick: handle_fullscreen_toggle,
-                        "aria-label": if *state.is_fullscreen.read() { "Exit fullscreen" } else { "Enter fullscreen" },
-                        title: if *state.is_fullscreen.read() { "Exit fullscreen (F)" } else { "Enter fullscreen (F)" },
+                        "aria-label": if state.is_fullscreen() { "Exit fullscreen" } else { "Enter fullscreen" },
+                        title: if state.is_fullscreen() { "Exit fullscreen (F)" } else { "Enter fullscreen (F)" },
 
-                        if *state.is_fullscreen.read() {
+                        if state.is_fullscreen() {
                             Icon {
                                 icon: FaCompress,
                                 class: "w-4 h-4"
@@ -467,7 +470,7 @@ pub fn VideoControls(props: VideoControlsProps) -> Element {
 /// Simplified controls for minimal UI
 #[component]
 pub fn MinimalVideoControls(on_play_pause: EventHandler<()>) -> Element {
-    let state = use_video_player();
+    let mut state = use_video_player_manager();
 
     rsx! {
         div {
@@ -476,16 +479,15 @@ pub fn MinimalVideoControls(on_play_pause: EventHandler<()>) -> Element {
             button {
                 class: "btn btn-circle btn-lg bg-black/50 border-white/20 text-white hover:bg-black/70",
                 onclick: {
-                    let state = state.clone();
+                    let mut state = state.clone();
                     move |_| {
-                        let mut state = state.clone();
                         state.toggle_play_pause();
                         on_play_pause.call(());
                     }
                 },
-                "aria-label": if *state.playback_state.read() == PlaybackState::Playing { "Pause" } else { "Play" },
+                "aria-label": if state.playback_state() == PlaybackState::Playing { "Pause" } else { "Play" },
 
-                if *state.playback_state.read() == PlaybackState::Playing {
+                if state.playback_state() == PlaybackState::Playing {
                     Icon {
                         icon: FaPause,
                         class: "w-8 h-8"
@@ -504,17 +506,16 @@ pub fn MinimalVideoControls(on_play_pause: EventHandler<()>) -> Element {
 /// Progress bar only (for compact layouts)
 #[component]
 pub fn VideoProgressBar(on_seek: EventHandler<f64>) -> Element {
-    let state = use_video_player();
+    let mut state = use_video_player_manager();
 
     let handle_progress_click = use_callback({
-        let state = state.clone();
+        let mut state = state.clone();
         move |_evt: MouseEvent| {
-            let duration = *state.duration.read();
+            let duration = state.duration();
             if duration > 0.0 {
                 // Simplified click handling - would need proper bounds calculation
                 let percentage = 0.5; // Placeholder
                 let new_position = duration * percentage;
-                let mut state = state.clone();
                 state.seek_to(new_position);
                 on_seek.call(new_position);
             }

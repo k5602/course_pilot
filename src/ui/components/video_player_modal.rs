@@ -24,34 +24,37 @@ pub fn VideoPlayerModal(props: VideoPlayerModalProps) -> Element {
     let mut is_loading = use_signal(|| false);
 
     // Initialize video when source changes
-    let video_source_clone = props.video_source.clone();
-    use_effect(move || {
-        log::info!("VideoPlayerModal: Source changed to: {:?}", video_source_clone);
-        if let Some(source) = &video_source_clone {
-            if props.is_open {
-                log::info!(
-                    "VideoPlayerModal: Modal is open, initializing video: {}",
-                    source.title()
-                );
-                is_loading.set(true);
-                error_message.set(None);
+    use_effect({
+        let video_source = props.video_source.clone();
+        let is_open = props.is_open;
+        move || {
+            log::info!("VideoPlayerModal: Source changed to: {:?}", video_source);
+            if let Some(source) = &video_source {
+                if is_open {
+                    log::info!(
+                        "VideoPlayerModal: Modal is open, initializing video: {}",
+                        source.title()
+                    );
+                    is_loading.set(true);
+                    error_message.set(None);
 
-                // Create video info from source
-                let info = VideoInfo::new(source.clone());
-                video_info.set(Some(info));
-                playback_state.set(PlaybackState::Buffering);
+                    // Create video info from source
+                    let info = VideoInfo::new(source.clone());
+                    video_info.set(Some(info));
+                    playback_state.set(PlaybackState::Buffering);
 
-                // Simulate loading completion (in real implementation, this would be based on player events)
-                spawn(async move {
-                    tokio::time::sleep(tokio::time::Duration::from_millis(500)).await;
-                    is_loading.set(false);
-                    playback_state.set(PlaybackState::Playing);
-                });
+                    // Simulate loading completion (in real implementation, this would be based on player events)
+                    spawn(async move {
+                        tokio::time::sleep(tokio::time::Duration::from_millis(500)).await;
+                        is_loading.set(false);
+                        playback_state.set(PlaybackState::Playing);
+                    });
+                } else {
+                    log::info!("VideoPlayerModal: Modal is closed, not initializing video");
+                }
             } else {
-                log::info!("VideoPlayerModal: Modal is closed, not initializing video");
+                log::info!("VideoPlayerModal: No video source provided");
             }
-        } else {
-            log::info!("VideoPlayerModal: No video source provided");
         }
     });
 

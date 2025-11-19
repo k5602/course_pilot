@@ -12,6 +12,7 @@ pub mod use_plan_actions;
 pub mod use_plans;
 pub mod use_settings;
 pub mod use_timer_integration;
+pub mod use_video_player_manager;
 pub mod use_videoplayer;
 
 // Re-export commonly used hooks
@@ -45,8 +46,8 @@ pub use use_settings::{
     SettingsManager, use_api_key_manager, use_settings_manager, use_settings_resource,
 };
 pub use use_timer_integration::{TimerIntegration, use_timer_integration};
+pub use use_video_player_manager::{VideoPlayerManager, use_video_player_manager};
 pub use use_videoplayer::{
-    KeyboardShortcuts, VideoAnalytics, VideoPerformanceMetrics, VideoPlayerManager,
-    use_video_analytics, use_video_focus, use_video_keyboard_shortcuts, use_video_performance,
-    use_videoplayer,
+    KeyboardShortcuts, VideoAnalytics, VideoPerformanceMetrics, use_video_analytics,
+    use_video_focus, use_video_keyboard_shortcuts, use_video_performance,
 };

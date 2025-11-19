@@ -1,9 +1,9 @@
 use dioxus::prelude::*;
-use dioxus_desktop::use_window;
 
-use crate::video_player::{VideoPlayerContext, use_video_player};
+use crate::ui::hooks::use_video_player_manager;
+use crate::ui::hooks::use_video_player_manager::VideoPlayerManager;
 
-/// Keyboard shortcut mappings and handlers for the video player
+/// Simplified keyboard shortcuts for the modern video player manager
 pub struct KeyboardShortcuts;
 
 impl KeyboardShortcuts {
@@ -37,69 +37,69 @@ impl KeyboardShortcuts {
     /// Handle a keyboard shortcut and mutate the player state
     pub fn handle_shortcut(
         key: &str,
-        state: &mut VideoPlayerContext,
+        manager: &mut VideoPlayerManager,
         on_handled: Option<&dyn Fn()>,
     ) -> bool {
         // Only handle shortcuts if video is loaded
-        if !state.has_video() {
+        if !manager.has_video() {
             return false;
         }
 
         let handled = match key.to_lowercase().as_str() {
             " " | "space" | "k" => {
-                state.toggle_play_pause();
+                manager.toggle_play_pause();
                 true
             },
             "j" => {
-                state.seek_relative(-10.0);
+                manager.seek_relative(-10.0);
                 true
             },
             "l" => {
-                state.seek_relative(10.0);
+                manager.seek_relative(10.0);
                 true
             },
             "arrowleft" => {
-                state.seek_relative(-5.0);
+                manager.seek_relative(-5.0);
                 true
             },
             "arrowright" => {
-                state.seek_relative(5.0);
+                manager.seek_relative(5.0);
                 true
             },
             "arrowup" => {
-                let new_volume = (*state.volume.read() + 0.1).clamp(0.0, 1.0);
-                state.set_volume(new_volume);
+                let new_volume = (manager.volume() + 0.1).clamp(0.0, 1.0);
+                manager.set_volume(new_volume);
                 true
             },
             "arrowdown" => {
-                let new_volume = (*state.volume.read() - 0.1).clamp(0.0, 1.0);
-                state.set_volume(new_volume);
+                let new_volume = (manager.volume() - 0.1).clamp(0.0, 1.0);
+                manager.set_volume(new_volume);
                 true
             },
             "m" => {
-                state.toggle_mute();
+                manager.toggle_mute();
                 true
             },
             "f" => {
-                state.toggle_fullscreen();
+                manager.toggle_fullscreen();
                 true
             },
             "escape" => {
-                if *state.is_fullscreen.read() {
-                    state.set_fullscreen(false);
+                if manager.is_fullscreen() {
+                    manager.set_fullscreen(false);
                     true
                 } else {
                     false
                 }
             },
             "0" => {
-                state.seek_to(0.0);
+                manager.seek_to(0.0);
                 true
             },
             "1" | "2" | "3" | "4" | "5" | "6" | "7" | "8" | "9" => {
                 if let Ok(digit) = key.parse::<f64>() {
                     let percentage = digit / 10.0;
-                    state.seek_to_percentage(percentage);
+                    manager.seek_to_percentage(percentage);
                     true
                 } else {
                     false
@@ -118,114 +118,10 @@ impl KeyboardShortcuts {
     }
 }
 
-/// Manager returned by `use_videoplayer()` following the hooks-driven state pattern.
-/// Provides the reactive state and callable operations.
-#[derive(Clone)]
-pub struct VideoPlayerManager {
-    pub state: VideoPlayerContext,
-}
-
-impl VideoPlayerManager {
-    // Playback controls
-    pub fn play(&mut self) {
-        self.state.play();
-    }
-    pub fn pause(&mut self) {
-        self.state.pause();
-    }
-    pub fn toggle_play_pause(&mut self) {
-        self.state.toggle_play_pause();
-    }
-    pub fn stop(&mut self) {
-        self.state.stop();
-    }
-
-    // Seeking
-    pub fn seek_to(&mut self, seconds: f64) {
-        self.state.seek_to(seconds);
-    }
-    pub fn seek_relative(&mut self, delta: f64) {
-        self.state.seek_relative(delta);
-    }
-    pub fn seek_to_percentage(&mut self, pct_0_to_1: f64) {
-        self.state.seek_to_percentage(pct_0_to_1);
-    }
-
-    // Volume
-    pub fn set_volume(&mut self, vol_0_to_1: f64) {
-        self.state.set_volume(vol_0_to_1);
-    }
-    pub fn toggle_mute(&mut self) {
-        self.state.toggle_mute();
-    }
-
-    // Fullscreen
-    pub fn toggle_fullscreen(&mut self) {
-        self.state.toggle_fullscreen();
-    }
-    pub fn set_fullscreen(&mut self, value: bool) {
-        self.state.set_fullscreen(value);
-    }
-}
-
-/// Primary hook for the Video Player SoT manager.
-/// - Returns a `VideoPlayerManager`
-/// - Attaches global keyboard handler via centralized IPC
-/// - Starts a lightweight polling loop for key events bridge (non-blocking)
-pub fn use_videoplayer() -> VideoPlayerManager {
-    let state = use_video_player();
-    let window = use_window();
-
-    // Attach the global keyboard handler once
-    use_effect({
-        let window = window.clone();
-        move || {
-            let setup_script = crate::video_player::ipc::global::attach_keyboard_handler();
-            if let Err(e) = window.webview.evaluate_script(&setup_script) {
-                log::error!("Failed to set up keyboard shortcuts: {}", e);
-            }
-        }
-    });
-
-    // Periodically check for last captured key from the global bridge
-    use_effect({
-        let window = window.clone();
-        let mut state = state.clone();
-        move || {
-            let window_clone = window.clone();
-            let mut state_clone = state.clone();
-            spawn(async move {
-                let mut interval = tokio::time::interval(tokio::time::Duration::from_millis(100));
-                loop {
-                    interval.tick().await;
-                    // Pop last key from the global handler, if any, and apply mapping
-                    let script = crate::video_player::ipc::global::pop_last_keyboard_key();
-                    if let Err(e) = window_clone.webview.evaluate_script(&script) {
-                        log::trace!("Keyboard poll eval failed: {}", e);
-                        continue;
-                    }
-                    // Note:
-                    // - The evaluate_script API returns (), so the bridge should route events
-                    //   to window.cp.keyboardAction(key) which then invokes our Rust-side mapping
-                    //   via IPC. This polling loop exists as a safety net and can be removed
-                    //   when the event-driven bridge fully replaces it.
-                    //
-                    // - If/when a return channel is wired, the following can be enabled:
-                    // if let Ok(Some(key)) = ... { KeyboardShortcuts::handle_shortcut(&key, &mut state, None); }
-                    let _ = &mut state_clone; // keep state captured
-                }
-            });
-        }
-    });
-
-    VideoPlayerManager { state }
-}
-
-/// Hook for keyboard shortcuts (migrated).
-/// Prefer using `use_videoplayer()` which auto-initializes the global handler.
-/// This remains for compatibility and explicit initialization.
+/// Hook for keyboard shortcuts (simplified).
+/// Uses the video player manager directly.
 pub fn use_video_keyboard_shortcuts() -> impl Fn() {
-    let manager = use_videoplayer();
+    let manager = use_video_player_manager();
 
     // Return a function placeholder for explicit manual triggering if needed
     move || {
@@ -269,9 +165,9 @@ impl VideoAnalytics {
     }
 }
 
-/// Hook for video player analytics and metrics (migrated)
+/// Hook for video player analytics and metrics
 pub fn use_video_analytics() -> VideoAnalytics {
-    let state = use_video_player();
+    let manager = use_video_player_manager();
     let watch_start_time = use_signal(|| None::<std::time::Instant>);
     let total_watch_time = use_signal(|| std::time::Duration::ZERO);
     let seek_count = use_signal(|| 0u32);
@@ -282,8 +178,8 @@ pub fn use_video_analytics() -> VideoAnalytics {
         let mut watch_start_time = watch_start_time.clone();
         let mut total_watch_time = total_watch_time.clone();
         let mut pause_count = pause_count.clone();
-        let state = state.clone();
-        move || match *state.playback_state.read() {
+        let manager = manager.clone();
+        move || match manager.playback_state() {
             crate::video_player::PlaybackState::Playing => {
                 if watch_start_time.read().is_none() {
                     watch_start_time.set(Some(std::time::Instant::now()));
@@ -320,9 +216,9 @@ pub fn use_video_analytics() -> VideoAnalytics {
     use_effect({
         let mut seek_count = seek_count.clone();
         let mut previous_position = previous_position.clone();
-        let state = state.clone();
+        let manager = manager.clone();
         move || {
-            let current_position = *state.position.read();
+            let current_position = manager.position();
             let prev_pos = *previous_position.read();
 
             // Detect seeks (position jumps > 2 seconds)
@@ -339,7 +235,7 @@ pub fn use_video_analytics() -> VideoAnalytics {
         total_watch_time: *total_watch_time.read(),
         seek_count: *seek_count.read(),
         pause_count: *pause_count.read(),
-        completion_percentage: state.progress_percentage(),
+        completion_percentage: manager.progress_percentage(),
     }
 }
 
@@ -363,20 +259,20 @@ impl VideoPerformanceMetrics {
     }
 }
 
-/// Hook for video player performance monitoring (migrated)
+/// Hook for video player performance monitoring
 pub fn use_video_performance() -> VideoPerformanceMetrics {
     let load_start_time = use_signal(|| None::<std::time::Instant>);
     let load_duration = use_signal(|| None::<std::time::Duration>);
     let error_count = use_signal(|| 0u32);
-    let state = use_video_player();
+    let manager = use_video_player_manager();
 
     // Track loading performance
     use_effect({
         let mut load_start_time = load_start_time.clone();
         let mut load_duration = load_duration.clone();
-        let state = state.clone();
+        let manager = manager.clone();
         move || {
-            let is_loading = *state.loading.read();
+            let is_loading = manager.is_loading();
             let start_time_opt = *load_start_time.read();
 
             if is_loading && start_time_opt.is_none() {
@@ -393,9 +289,9 @@ pub fn use_video_performance() -> VideoPerformanceMetrics {
     // Track errors
     use_effect({
         let mut error_count = error_count.clone();
-        let state = state.clone();
+        let manager = manager.clone();
         move || {
-            if state.error.read().is_some() {
+            if manager.error().is_some() {
                 let current_count = *error_count.read();
                 error_count.set(current_count + 1);
             }
@@ -405,8 +301,8 @@ pub fn use_video_performance() -> VideoPerformanceMetrics {
     VideoPerformanceMetrics {
         load_duration: *load_duration.read(),
         error_count: *error_count.read(),
-        is_loading: *state.loading.read(),
-        has_error: state.error.read().is_some(),
+        is_loading: manager.is_loading(),
+        has_error: manager.error().is_some(),
     }
 }
 

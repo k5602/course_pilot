@@ -8,9 +8,6 @@ pub mod protocol;
 pub mod types;
 pub mod utils;
 
-pub use crate::state::video_player::{
-    VideoPlayerContext, VideoPlayerProvider, VideoPlayerProviderProps, use_video_player,
-};
 pub use controls::*;
 
 pub use ipc::*;
