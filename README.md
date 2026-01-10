@@ -37,7 +37,7 @@ Course Pilot bridges the gap between scattered video content and structured lear
 - **Rust's Zero-Cost Abstractions**: Maximum performance, minimal overhead
 - **Efficient Rendering**: Virtual DOM with smart diffing
 - **Lazy Loading**: Components and data loaded on demand
-- **Memory Safety**: No garbage collection pauses or memory leaks
+- **Optimized Algorithms**: Fast video analysis and scheduling
 
 ## 📄 License
 
