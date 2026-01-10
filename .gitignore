@@ -87,3 +87,4 @@ hover_car
 assets/tailwind.out.css
 # GitHub Actions
 /.theme_config.toml
+/.fastembed_cache/
