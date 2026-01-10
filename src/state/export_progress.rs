@@ -144,9 +144,7 @@ impl ExportProgressContext {
     pub fn clear_finished(&mut self) {
         let tasks = self.tasks.read();
         let remaining: Vec<ExportTask> = tasks
-            .iter()
-            .cloned()
-            .filter(|t| matches!(t.status, ExportTaskStatus::Running))
+            .iter().filter(|&t| matches!(t.status, ExportTaskStatus::Running)).cloned()
             .collect();
         drop(tasks);
         self.tasks.set(remaining);
@@ -223,14 +221,14 @@ impl ExportProgressReporter {
 #[component]
 pub fn ExportProgressProvider(children: Element) -> Element {
     // Reactive task list
-    let mut tasks = use_signal(|| Vec::<ExportTask>::new());
+    let mut tasks = use_signal(Vec::<ExportTask>::new);
 
     // Cross-thread event channel
     let (tx, mut rx): (UnboundedSender<ProgressEvent>, UnboundedReceiver<ProgressEvent>) =
         mpsc_unbounded_channel();
 
     // Install context
-    let ctx = ExportProgressContext { tasks: tasks.clone(), sender: tx.clone() };
+    let ctx = ExportProgressContext { tasks: tasks, sender: tx.clone() };
     use_context_provider(|| ctx);
 
     // Async event loop to safely mutate UI signals from mpsc channel

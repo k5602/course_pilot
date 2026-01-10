@@ -549,7 +549,7 @@ pub fn search_notes_advanced_keyset(
                         if i > 0 {
                             sql.push_str(", ");
                         }
-                        sql.push_str("?");
+                        sql.push('?');
                     }
                     sql.push_str(")) ");
                     for tag in tags {
@@ -564,7 +564,7 @@ pub fn search_notes_advanced_keyset(
                         if i > 0 {
                             sql.push_str(", ");
                         }
-                        sql.push_str("?");
+                        sql.push('?');
                     }
                     sql.push_str(")) >= ? ");
                     for tag in tags {
@@ -702,7 +702,7 @@ pub fn search_notes_advanced(conn: &Connection, filters: NoteSearchFilters) -> R
                         if i > 0 {
                             sql.push_str(", ");
                         }
-                        sql.push_str("?");
+                        sql.push('?');
                     }
                     sql.push_str(")) ");
                     for tag in tags {
@@ -718,7 +718,7 @@ pub fn search_notes_advanced(conn: &Connection, filters: NoteSearchFilters) -> R
                         if i > 0 {
                             sql.push_str(", ");
                         }
-                        sql.push_str("?");
+                        sql.push('?');
                     }
                     sql.push_str(")) >= ? ");
                     for tag in tags {
@@ -803,7 +803,7 @@ pub fn search_notes_advanced_paginated(
                 if i > 0 {
                     sql.push_str(", ");
                 }
-                sql.push_str("?");
+                sql.push('?');
             }
             sql.push_str(")) ");
             for tag in tags {

@@ -1,6 +1,6 @@
 //! Video player modal using new YouTube/Local player components
 
-use crate::video_player::{LocalPlayer, PlaybackState, VideoSource, YouTubePlayer};
+use crate::video_player::{LocalPlayer, VideoSource, YouTubePlayer};
 use dioxus::prelude::*;
 
 #[derive(Props, Clone, PartialEq)]
@@ -26,7 +26,7 @@ pub fn VideoPlayerModal(props: VideoPlayerModalProps) -> Element {
     let modal_title = props.title.clone().unwrap_or_else(|| source.title().to_string());
 
     let close_handler = {
-        let on_close = props.on_close.clone();
+        let on_close = props.on_close;
         move |_| on_close.call(())
     };
 
@@ -75,7 +75,7 @@ pub fn VideoPlayerModal(props: VideoPlayerModalProps) -> Element {
 /// Render the appropriate player based on video source
 fn render_player(source: &VideoSource) -> Element {
     match source {
-        VideoSource::YouTube { video_id, playlist_id, title } => {
+        VideoSource::YouTube { video_id, playlist_id, title: _ } => {
             rsx! {
                 YouTubePlayer {
                     video_id: video_id.clone(),

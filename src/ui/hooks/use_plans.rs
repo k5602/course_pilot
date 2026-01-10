@@ -1,4 +1,3 @@
-use crate::error_handling::{ErrorLogger, ErrorMessageMapper};
 use crate::storage::core::Database;
 use crate::types::{Plan, PlanSettings};
 use crate::ui::toast_helpers;
@@ -30,8 +29,7 @@ impl PlanManager {
 
         let result = tokio::task::spawn_blocking(move || {
             info!("Loading plan for course: {course_id}");
-            crate::storage::get_plan_by_course_id(&db, &course_id).map_err(Into::into)
-        })
+            crate::storage::get_plan_by_course_id(&db, &course_id)})
         .await;
 
         match result {
@@ -40,20 +38,15 @@ impl PlanManager {
                     Ok(Some(_)) => info!("Successfully loaded plan for course: {course_id}"),
                     Ok(None) => info!("No plan found for course: {course_id}"),
                     Err(e) => {
-                        ErrorLogger::log_error(
-                            e,
-                            "get_plan_by_course",
-                            Some(&format!("course_id: {course_id}")),
-                        );
-                        let user_message = ErrorMessageMapper::map_error(e);
-                        toast_helpers::error(user_message);
+                        log::error!("Failed to load plan for course {course_id}: {e}");
+                        toast_helpers::error(format!("Failed to load plan: {e}"));
                     },
                 }
                 plan_result
             },
             Err(join_error) => {
                 let error = anyhow::anyhow!("Task join error: {}", join_error);
-                ErrorLogger::log_error(&error, "get_plan_by_course", Some("Task execution failed"));
+                log::error!("Failed to load plan: {error}");
                 toast_helpers::error("Failed to load study plan. Please try again.".to_string());
                 Err(error)
             },
@@ -67,8 +60,7 @@ impl PlanManager {
         info!("Saving plan (ID: {plan_id})");
 
         let result = tokio::task::spawn_blocking(move || {
-            crate::storage::save_plan(&db, &plan).map_err(Into::into)
-        })
+            crate::storage::save_plan(&db, &plan)})
         .await;
 
         match result {
@@ -79,20 +71,15 @@ impl PlanManager {
                         toast_helpers::success("Study plan saved successfully".to_string());
                     },
                     Err(e) => {
-                        ErrorLogger::log_error(
-                            e,
-                            "save_plan",
-                            Some(&format!("plan ID: {plan_id}")),
-                        );
-                        let user_message = ErrorMessageMapper::map_error(e);
-                        toast_helpers::error(format!("Failed to save study plan: {user_message}"));
+                        log::error!("Failed to save plan {plan_id}: {e}");
+                        toast_helpers::error(format!("Failed to save study plan: {e}"));
                     },
                 }
                 save_result
             },
             Err(join_error) => {
                 let error = anyhow::anyhow!("Task join error: {}", join_error);
-                ErrorLogger::log_error(&error, "save_plan", Some("Task execution failed"));
+                log::error!("Failed to save plan: {error}");
                 toast_helpers::error("Failed to save study plan. Please try again.".to_string());
                 Err(error)
             },
@@ -102,8 +89,7 @@ impl PlanManager {
     pub async fn delete_plan(&self, plan_id: Uuid) -> Result<()> {
         let db = self.db.clone();
         tokio::task::spawn_blocking(move || {
-            crate::storage::delete_plan(&db, &plan_id).map_err(Into::into)
-        })
+            crate::storage::delete_plan(&db, &plan_id)})
         .await
         .unwrap_or_else(|e| Err(anyhow::anyhow!("Join error: {e}")))
     }
@@ -133,8 +119,7 @@ impl PlanManager {
             plan.items[item_index].completed = completed;
 
             // Save updated plan
-            crate::storage::save_plan(&db, &plan).map_err(Into::into)
-        })
+            crate::storage::save_plan(&db, &plan)})
         .await
         .unwrap_or_else(|e| Err(anyhow::anyhow!("Join error: {}", e)))
     }

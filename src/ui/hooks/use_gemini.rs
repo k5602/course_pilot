@@ -61,7 +61,7 @@ impl GeminiManager {
 
     /// Return whether the manager considers the client initialized (has an API key set).
     pub fn is_initialized(&self) -> bool {
-        self.is_initialized.read().clone()
+        *self.is_initialized.read()
     }
 
     /// Expose a reactive signal for initialized state.

@@ -1,7 +1,7 @@
 use dioxus::prelude::*;
 use dioxus_free_icons::Icon;
 use dioxus_free_icons::icons::fa_solid_icons::{FaMoon, FaSun};
-use dioxus_signals::{Readable, Signal, Writable};
+use dioxus_signals::Signal;
 use log;
 use serde::{Deserialize, Serialize};
 use std::fs;

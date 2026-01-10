@@ -115,7 +115,7 @@ pub fn use_course_manager() -> CourseManager {
     });
 
     let refresh = use_callback({
-        let mut courses_resource = courses_resource.clone();
+        let mut courses_resource = courses_resource;
         move |_| {
             // Restart the resource to trigger a re-fetch
             courses_resource.restart();
@@ -169,10 +169,10 @@ pub fn use_course_manager() -> CourseManager {
 
     let delete_course = use_callback({
         let db = db.clone();
-        let courses_resource = courses_resource.clone();
+        let courses_resource = courses_resource;
         move |course_id: Uuid| {
             let db = db.clone();
-            let mut courses_resource = courses_resource.clone();
+            let mut courses_resource = courses_resource;
             spawn(async move {
                 let result = tokio::task::spawn_blocking(move || {
                     crate::storage::delete_course(&db, &course_id)

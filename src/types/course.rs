@@ -497,14 +497,14 @@ impl VideoMetadata {
     pub fn is_metadata_complete(&self) -> bool {
         if self.is_local {
             !self.title.trim().is_empty()
-                && self.source_url.as_ref().map_or(false, |url| !url.trim().is_empty())
+                && self.source_url.as_ref().is_some_and(|url| !url.trim().is_empty())
         } else {
             !self.title.trim().is_empty()
                 && self
                     .video_id
                     .as_ref()
-                    .map_or(false, |id| !id.trim().is_empty() && !id.starts_with("PLACEHOLDER_"))
-                && self.source_url.as_ref().map_or(false, |url| !url.trim().is_empty())
+                    .is_some_and(|id| !id.trim().is_empty() && !id.starts_with("PLACEHOLDER_"))
+                && self.source_url.as_ref().is_some_and(|url| !url.trim().is_empty())
         }
     }
 

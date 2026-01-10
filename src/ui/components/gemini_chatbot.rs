@@ -63,11 +63,11 @@ pub fn GeminiChatbot() -> Element {
     });
 
     let handle_send = {
-        let mut messages = messages.clone();
-        let mut is_loading = is_loading.clone();
-        let mut error_message = error_message.clone();
-        let mut conversation_history = conversation_history.clone();
-        let mut input_text_signal = input_text.clone();
+        let mut messages = messages;
+        let mut is_loading = is_loading;
+        let mut error_message = error_message;
+        let mut conversation_history = conversation_history;
+        let mut input_text_signal = input_text;
         let gem = gemini.clone();
 
         move |_| {
@@ -115,11 +115,11 @@ pub fn GeminiChatbot() -> Element {
     };
 
     let handle_key_down = {
-        let mut messages = messages.clone();
-        let mut is_loading = is_loading.clone();
-        let mut error_message = error_message.clone();
-        let mut conversation_history = conversation_history.clone();
-        let mut input_text_signal = input_text.clone();
+        let mut messages = messages;
+        let mut is_loading = is_loading;
+        let mut error_message = error_message;
+        let mut conversation_history = conversation_history;
+        let mut input_text_signal = input_text;
         let gem = gemini.clone();
 
         move |e: KeyboardEvent| {
@@ -223,11 +223,11 @@ pub fn GeminiChatbot() -> Element {
                                 button {
                                     class: "btn btn-sm btn-outline btn-primary",
                                     onclick: {
-                                        let mut messages = messages.clone();
-                                        let mut is_loading = is_loading.clone();
-                                        let mut error_message = error_message.clone();
-                                        let mut conversation_history = conversation_history.clone();
-                                        let mut input_text_signal = input_text.clone();
+                                        let mut messages = messages;
+                                        let mut is_loading = is_loading;
+                                        let mut error_message = error_message;
+                                        let mut conversation_history = conversation_history;
+                                        let mut input_text_signal = input_text;
                                         let gem = gemini.clone();
                                         move |_| {
                                             let suggestion = "Tell me about this course".to_string();
@@ -272,11 +272,11 @@ pub fn GeminiChatbot() -> Element {
                                 button {
                                     class: "btn btn-sm btn-outline btn-primary",
                                     onclick: {
-                                        let mut messages = messages.clone();
-                                        let mut is_loading = is_loading.clone();
-                                        let mut error_message = error_message.clone();
-                                        let mut conversation_history = conversation_history.clone();
-                                        let mut input_text_signal = input_text.clone();
+                                        let mut messages = messages;
+                                        let mut is_loading = is_loading;
+                                        let mut error_message = error_message;
+                                        let mut conversation_history = conversation_history;
+                                        let mut input_text_signal = input_text;
                                         let gem = gemini.clone();
                                         move |_| {
                                             let suggestion = "What should I study first?".to_string();
@@ -321,11 +321,11 @@ pub fn GeminiChatbot() -> Element {
                                 button {
                                     class: "btn btn-sm btn-outline btn-primary",
                                     onclick: {
-                                        let mut messages = messages.clone();
-                                        let mut is_loading = is_loading.clone();
-                                        let mut error_message = error_message.clone();
-                                        let mut conversation_history = conversation_history.clone();
-                                        let mut input_text_signal = input_text.clone();
+                                        let mut messages = messages;
+                                        let mut is_loading = is_loading;
+                                        let mut error_message = error_message;
+                                        let mut conversation_history = conversation_history;
+                                        let mut input_text_signal = input_text;
                                         let gem = gemini.clone();
                                         move |_| {
                                             let suggestion = "Explain the course structure".to_string();

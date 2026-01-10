@@ -17,7 +17,7 @@
 //! CREATE INDEX IF NOT EXISTS idx_video_progress_plan_session
 //!   ON video_progress(plan_id, session_index);
 
-use crate::error_handling::DatabaseError;
+use crate::DatabaseError;
 use crate::storage::core::Database;
 use rusqlite::params;
 
@@ -79,7 +79,7 @@ pub fn get_video_completion_status(
 
     let result = stmt
         .query_row(params![plan_id.to_string(), session_index as i64, video_index as i64], |row| {
-            Ok(row.get::<_, bool>(0)?)
+            row.get::<_, bool>(0)
         });
 
     match result {

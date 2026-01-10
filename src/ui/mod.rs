@@ -7,7 +7,6 @@ pub mod app_root;
 pub mod components;
 pub mod courses;
 pub mod dashboard;
-pub mod error_handling;
 pub mod hooks;
 pub mod layout;
 pub mod navigation;
@@ -23,9 +22,6 @@ pub mod theme_unified;
 pub use app_root::AppRoot;
 pub use notes_panel::{NotesPanel, NotesPanelMode};
 pub use theme_unified::{AppTheme, ThemeContext, ThemeToggleButton, use_theme_context};
-
-// Re-export error handling utilities
-pub use error_handling::{handle_ui_error, use_error_handler};
 
 // Re-export commonly used components for convenience
 pub use components::{

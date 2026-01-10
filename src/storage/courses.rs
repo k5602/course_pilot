@@ -151,7 +151,7 @@ fn persist_course_structure(
                 structure
                     .clustering_metadata
                     .as_ref()
-                    .map(|meta| serde_json::to_string(meta))
+                    .map(serde_json::to_string)
                     .transpose()?
             ],
         )?;
@@ -174,7 +174,7 @@ fn persist_course_structure(
                     module
                         .difficulty_level
                         .as_ref()
-                        .map(|level| serde_json::to_string(level))
+                        .map(serde_json::to_string)
                         .transpose()?
                 ],
             )?;

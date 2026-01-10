@@ -363,7 +363,7 @@ fn SessionAccordion(props: SessionAccordionProps) -> Element {
                                     session_item_index: session_item_idx,
                                     course_id: props.course_id,
                                     is_session_expanded: is_expanded,
-                                    open_video: video_player_modal.open_video.clone(),
+                                    open_video: video_player_modal.open_video,
                                 }
                             }
                         } else {
@@ -378,7 +378,7 @@ fn SessionAccordion(props: SessionAccordionProps) -> Element {
                                 session_item_index: session_item_idx,
                                 course_id: props.course_id,
                                 is_session_expanded: is_expanded,
-                                open_video: video_player_modal.open_video.clone(),
+                                open_video: video_player_modal.open_video,
                             }
                         }
                     }
@@ -488,15 +488,15 @@ fn VideoContentItem(props: VideoContentItemProps) -> Element {
     let play_handler = {
         let course_id = props.course_id;
         let video_index = props.video_index;
-        let video_title = video_title.clone();
-        let open_video = props.open_video.clone();
+        let video_title = video_title;
+        let open_video = props.open_video;
         let db = use_context::<std::sync::Arc<crate::storage::core::Database>>();
 
         move |_| {
             let course_id = course_id;
             let video_index = video_index;
             let video_title = video_title();
-            let open_video = open_video.clone();
+            let open_video = open_video;
             let db = db.clone();
 
             spawn(async move {
@@ -595,7 +595,7 @@ fn VideoContentItem(props: VideoContentItemProps) -> Element {
     let notes_handler = {
         let course_id = props.course_id;
         let video_index = props.video_index;
-        let video_title = video_title.clone();
+        let video_title = video_title;
         let plan_item = props.plan_item.clone();
 
         move |_| {

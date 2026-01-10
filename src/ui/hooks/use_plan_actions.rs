@@ -31,8 +31,7 @@ pub fn use_toggle_plan_item_action() -> Callback<(Uuid, usize)> {
                 plan.items[item_index].completed = true;
 
                 // Save updated plan
-                crate::storage::save_plan(&db, &plan).map_err(Into::into)
-            })
+                crate::storage::save_plan(&db, &plan)})
             .await;
 
             match result {
@@ -58,8 +57,7 @@ pub fn use_plan_resource(course_id: Uuid) -> Resource<Result<Option<Plan>, anyho
         let db = db.clone();
         async move {
             tokio::task::spawn_blocking(move || {
-                crate::storage::get_plan_by_course_id(&db, &course_id).map_err(Into::into)
-            })
+                crate::storage::get_plan_by_course_id(&db, &course_id)})
             .await
             .unwrap_or_else(|e| Err(anyhow::anyhow!("Join error: {}", e)))
         }

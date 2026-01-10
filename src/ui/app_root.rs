@@ -1,5 +1,4 @@
 use dioxus::prelude::*;
-use dioxus_desktop::use_window;
 use dioxus_signals::Signal;
 use log::{error, info};
 use std::fmt;

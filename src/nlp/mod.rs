@@ -1,13 +1,11 @@
 //! NLP module for Course Pilot
 //!
 
-
 use crate::types::{Course, CourseStructure, Module, Section, StructureMetadata};
 use std::time::Duration;
 
 // Re-export error types
 pub use crate::NlpError;
-
 
 pub fn structure_course(course: &Course) -> Result<CourseStructure, NlpError> {
     if course.raw_titles.is_empty() && course.videos.is_empty() {

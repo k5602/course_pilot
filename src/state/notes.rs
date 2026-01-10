@@ -30,7 +30,7 @@ impl NotesContext {
 /// Notes context provider component
 #[component]
 pub fn NotesContextProvider(children: Element) -> Element {
-    use_context_provider(|| NotesContext::new());
+    use_context_provider(NotesContext::new);
     rsx! { {children} }
 }
 

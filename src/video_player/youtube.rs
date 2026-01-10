@@ -3,7 +3,7 @@
 //! Simple YouTube IFrame API integration inspired by Yudoku.
 //! Uses onStateChange callback for progress tracking.
 
-use crate::video_player::{PlaybackState, VideoSource};
+use crate::video_player::PlaybackState;
 use dioxus::prelude::*;
 
 /// YouTube player component props

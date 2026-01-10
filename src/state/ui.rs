@@ -91,28 +91,28 @@ impl NavigationState {
 /// Contextual panel context provider component
 #[component]
 pub fn ContextualPanelContextProvider(children: Element) -> Element {
-    use_context_provider(|| ContextualPanelContext::new());
+    use_context_provider(ContextualPanelContext::new);
     rsx! { {children} }
 }
 
 /// Mobile sidebar context provider component
 #[component]
 pub fn MobileSidebarContextProvider(children: Element) -> Element {
-    use_context_provider(|| MobileSidebarContext::new());
+    use_context_provider(MobileSidebarContext::new);
     rsx! { {children} }
 }
 
 /// Video context provider component
 #[component]
 pub fn VideoContextProvider(children: Element) -> Element {
-    use_context_provider(|| VideoContextState::new());
+    use_context_provider(VideoContextState::new);
     rsx! { {children} }
 }
 
 /// Navigation context provider component
 #[component]
 pub fn NavigationContextProvider(children: Element) -> Element {
-    use_context_provider(|| NavigationState::new());
+    use_context_provider(NavigationState::new);
     rsx! { {children} }
 }
 
@@ -182,7 +182,7 @@ pub fn clear_video_context_reactive() {
 /// Toggle mobile sidebar
 pub fn toggle_mobile_sidebar_reactive() {
     let mut sidebar = use_mobile_sidebar_reactive();
-    let current_state = sidebar.read().clone();
+    let current_state = *sidebar.read();
     sidebar.set(!current_state);
 }
 

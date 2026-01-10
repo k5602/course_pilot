@@ -36,7 +36,7 @@ pub use plans::{delete_plan, get_plan_by_course_id, load_plan, save_plan};
 pub use progress::{get_session_progress, get_video_completion_status, save_video_progress};
 
 // Re-export error types
-pub use crate::error_handling::DatabaseError;
+pub use crate::DatabaseError;
 
 // Re-export notes functions
 pub use notes::{

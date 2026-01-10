@@ -43,9 +43,9 @@ pub fn LocalPlayer(props: LocalPlayerProps) -> Element {
     let video_url = format!("local-video://{}", props.path.replace('\\', "/"));
 
     let class = props.class.clone().unwrap_or_default();
-    let on_ended = props.on_ended.clone();
-    let on_progress = props.on_progress.clone();
-    let on_state_change = props.on_state_change.clone();
+    let on_ended = props.on_ended;
+    let _on_progress = props.on_progress;
+    let on_state_change = props.on_state_change;
 
     rsx! {
         div {

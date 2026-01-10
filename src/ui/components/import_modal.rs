@@ -817,8 +817,7 @@ fn YouTubeImportForm(
                         // Convert YoutubeSection objects to VideoMetadata with proper video_id and URLs
                         let videos: Vec<crate::types::VideoMetadata> = sections
                             .iter()
-                            .enumerate()
-                            .map(|(_index, section)| {
+                            .map(|section| {
                                 let mut video =
                                     crate::types::VideoMetadata::new_youtube_with_playlist(
                                         section.title.clone(),

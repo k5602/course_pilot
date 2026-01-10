@@ -8,7 +8,7 @@ use crate::ui::routes::{AddCourse, AllCourses, Dashboard, Home, PlanView, Settin
 
 use super::course::{Course, Note};
 use super::import::ImportJob;
-use super::plan::{Plan, PlanViewState};
+use super::plan::Plan;
 
 #[derive(Clone, Debug, PartialEq, Routable)]
 pub enum Route {

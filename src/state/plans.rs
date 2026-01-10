@@ -30,7 +30,7 @@ impl PlanContext {
 /// Plans context provider component
 #[component]
 pub fn PlanContextProvider(children: Element) -> Element {
-    use_context_provider(|| PlanContext::new());
+    use_context_provider(PlanContext::new);
     rsx! { {children} }
 }
 
