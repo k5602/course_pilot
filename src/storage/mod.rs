@@ -5,11 +5,9 @@
 //! - courses: course CRUD
 //! - plans: plan CRUD
 //! - progress: video progress tracking
-//! - analytics: clustering analytics
 //! - notes: notes persistence
 //! - settings: app settings
 
-pub mod analytics;
 pub mod core;
 pub mod courses;
 pub mod notes;
@@ -19,13 +17,6 @@ pub mod settings;
 pub mod utils;
 
 // Re-export main storage API
-pub use analytics::{
-    ClusteringAnalytics, ClusteringPerformancePoint, ProcessingTimeStats, QualityDistribution,
-    get_clustering_analytics, get_clustering_performance_history,
-    get_courses_by_clustering_quality, get_similar_courses_by_clustering,
-    update_clustering_metadata,
-};
-
 pub use core::{
     ConnectionPoolHealth, Database, DatabasePerformanceMetrics, get_database_performance_metrics,
     init_db, optimize_database,

@@ -297,26 +297,6 @@ impl Backend {
     pub async fn reset_settings(&self) -> Result<()> {
         self.settings.reset_settings().await
     }
-
-    // --- Clustering analytics & quality ---
-    pub async fn get_clustering_analytics(&self) -> Result<crate::storage::ClusteringAnalytics> {
-        let db = self.db.clone();
-        tokio::task::spawn_blocking(move || crate::storage::get_clustering_analytics(&db))
-            .await
-            .unwrap_or_else(|e| Err(anyhow::anyhow!("Join error: {}", e)))
-    }
-
-    pub async fn get_courses_by_clustering_quality(
-        &self,
-        min_quality: f32,
-    ) -> Result<Vec<crate::types::Course>> {
-        let db = self.db.clone();
-        tokio::task::spawn_blocking(move || {
-            crate::storage::get_courses_by_clustering_quality(&db, min_quality)
-        })
-        .await
-        .unwrap_or_else(|e| Err(anyhow::anyhow!("Join error: {}", e)))
-    }
 }
 
 /// Hook for accessing the unified backend interface

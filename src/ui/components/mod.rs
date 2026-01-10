@@ -23,8 +23,7 @@ pub mod video_player_modal;
 
 // exports for convenience
 pub use analytics::{
-    AIRecommendationsPanel, LastAccessedCourse, LearningAnalytics, PomodoroTimer, TodaysSessions,
-    UpcomingDeadlines,
+    AIRecommendationsPanel, LastAccessedCourse, PomodoroTimer, TodaysSessions, UpcomingDeadlines,
 };
 pub use base::{BaseButton, BaseCard, BaseList, BaseListItem, BaseModal, BasePage};
 pub use breadcrumb::{Breadcrumb, BreadcrumbItem};

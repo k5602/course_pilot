@@ -3,7 +3,7 @@ use dioxus_motion::prelude::*;
 
 use crate::ui::components::base::BaseCard;
 use crate::ui::components::{
-    AIRecommendationsPanel, LastAccessedCourse, LearningAnalytics, PomodoroTimer, TodaysSessions,
+    AIRecommendationsPanel, LastAccessedCourse, PomodoroTimer, TodaysSessions,
 };
 
 /// Analytics-focused dashboard component
@@ -43,17 +43,10 @@ pub fn Dashboard() -> Element {
 
             // Analytics Grid Layout
             div { class: "grid grid-cols-1 lg:grid-cols-3 gap-6",
-                // Learning Analytics Section (spans 2 columns on large screens)
-                BaseCard {
-                    title: "Learning Analytics",
-                    class: "lg:col-span-2",
-                    children: rsx! {
-                        LearningAnalytics {}
-                    }
-                }
-
+                // AI Recommendations Section
                 BaseCard {
                     title: "AI Recommendations",
+                    class: "lg:col-span-2",
                     children: rsx! {
                         AIRecommendationsPanel {}
                     }

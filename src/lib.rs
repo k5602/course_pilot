@@ -24,10 +24,10 @@ pub mod video_player;
 
 // Re-export commonly used types
 pub use types::{
-    AdvancedSchedulerSettings, AppState, ClusteringAlgorithm, ClusteringMetadata,
-    ClusteringStrategy, ContextualPanelState, ContextualPanelTab, Course, CourseStructure,
-    DifficultyLevel, DistributionStrategy, ImportJob, ImportStatus, Module, Note, Plan, PlanExt,
-    PlanItem, PlanSettings, RegenerationStatus, Route, Section, StructureMetadata, VideoContext,
+    AdvancedSchedulerSettings, AppState, ContextualPanelState, ContextualPanelTab, Course,
+    CourseStructure, DifficultyLevel, DistributionStrategy, ImportJob, ImportStatus, Module, Note,
+    Plan, PlanExt, PlanItem, PlanSettings, RegenerationStatus, Route, Section, StructureMetadata,
+    VideoContext,
 };
 
 // Re-export core functionality
