@@ -24,7 +24,7 @@ yarn.lock
 *.env.production
 /.envrc
 /.direnv
-
+/.fastembed_cache
 # IDE/Editor files
 /.idea
 /.vscode
