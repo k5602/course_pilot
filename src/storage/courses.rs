@@ -486,11 +486,11 @@ pub fn save_course(db: &Database, course: &Course) -> Result<()> {
             e
         })?;
 
-    let conn = db.get_conn().with_context(|| {
+    let mut conn = db.get_conn().with_context(|| {
         format!("Failed to get database connection for saving course {}", course.name)
     })?;
 
-    let mut tx = conn.transaction()?;
+    let tx = conn.transaction()?;
     tx.execute(
         r#"
         INSERT OR REPLACE INTO courses (id, name, created_at, raw_titles, videos, structure)
@@ -546,11 +546,8 @@ pub fn get_course_by_id(db: &Database, course_id: &Uuid) -> Result<Option<Course
         "#,
     )?;
 
-    let course = stmt
-        .query_row(params![course_id.to_string()], |row| load_course_row(&conn, row))
-        .optional()?;
-
-    Ok(course)
+    let mut rows = stmt.query(params![course_id.to_string()])?;
+    if let Some(row) = rows.next()? { Ok(Some(load_course_row(&conn, row)?)) } else { Ok(None) }
 }
 
 pub fn delete_course(db: &Database, course_id: &Uuid) -> Result<()> {

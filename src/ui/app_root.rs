@@ -163,15 +163,14 @@ fn load_initial_state(db: &Arc<Database>) -> AppState {
 
 /// Handle theme synchronization with WebView
 fn use_theme_sync() {
-    let window = use_window();
+    let eval_js = use_eval();
     let theme_signal = crate::ui::theme_unified::use_theme_context();
 
     use_effect(move || {
         let theme_name = theme_signal.read().theme.to_string();
         info!("🎨 Applying theme to WebView: {theme_name}");
 
-        window
-            .eval(&format!("document.documentElement.setAttribute('data-theme', '{theme_name}');"));
+        eval_js(&format!("document.documentElement.setAttribute('data-theme', '{theme_name}');"));
 
         toast_helpers::info(format!("Theme set to: {theme_name}"));
     });

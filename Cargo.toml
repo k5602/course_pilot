@@ -9,9 +9,6 @@ doctest = false
 [dev-dependencies]
 dioxus-ssr = "0.7"
 
-[features]
-advanced_nlp = ["dep:linfa-clustering"]
-
 [dependencies]
 # Core UI framework
 dioxus = { version = "0.7", features = ["desktop", "macro", "hooks", "router"] }
@@ -80,10 +77,6 @@ mp4 = "0.14"
 matroska = "0.30"
 http-range = "0.1"
 mime_guess = "2.0"
-
-# Machine Learning
-linfa-clustering = { version = "0.8.1", optional = true }
-
 
 # App-specific Logic
 reqwest = { version = "0.13.1", features = ["json"], default-features = false }

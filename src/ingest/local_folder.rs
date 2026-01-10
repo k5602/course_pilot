@@ -2,12 +2,8 @@
 //!
 //! This module provides functionality to scan local directories for video files
 //! and extract their titles and durations for course creation.
-//! Enhanced with recursive directory scanning, nested folder support, and sequential pattern detection.
 
 use crate::ImportError;
-use crate::nlp::sequential_detection::{
-    ContentType, ContentTypeAnalysis, ProcessingRecommendation, detect_sequential_patterns,
-};
 use crate::storage::{self, core::Database};
 use crate::types::Course;
 use chrono::Utc;
@@ -17,6 +13,90 @@ use std::path::{Path, PathBuf};
 use std::time::SystemTime;
 use uuid::Uuid;
 use walkdir::WalkDir;
+
+// ===== Inlined types (previously in nlp/sequential_detection.rs) =====
+
+/// Content type classification
+#[derive(Debug, Clone, PartialEq)]
+pub enum ContentType {
+    Sequential, // Numbered/ordered content
+    Thematic,   // Topic-based content
+    Mixed,      // Both patterns present
+    Ambiguous,  // Cannot determine
+}
+
+/// Analysis result for content type detection
+#[derive(Debug, Clone)]
+pub struct ContentTypeAnalysis {
+    pub content_type: ContentType,
+    pub confidence_score: f32,
+    pub recommendation: ProcessingRecommendation,
+}
+
+/// Processing recommendation based on content analysis
+#[derive(Debug, Clone, PartialEq)]
+pub enum ProcessingRecommendation {
+    PreserveOrder,      // Keep original order
+    ApplyClustering,    // Apply topic clustering
+    UserChoice,         // Let user decide
+    FallbackProcessing, // Use default processing
+}
+
+/// Simple sequential pattern detection (replaces complex NLP)
+pub fn detect_sequential_patterns(titles: &[String]) -> ContentTypeAnalysis {
+    if titles.is_empty() {
+        return ContentTypeAnalysis {
+            content_type: ContentType::Ambiguous,
+            confidence_score: 0.0,
+            recommendation: ProcessingRecommendation::FallbackProcessing,
+        };
+    }
+
+    // Count titles with numbers (e.g., "01 - Intro", "Lesson 2", etc.)
+    let numbered_count = titles.iter().filter(|t| has_sequence_number(t)).count();
+    let numbered_ratio = numbered_count as f32 / titles.len() as f32;
+
+    if numbered_ratio > 0.7 {
+        ContentTypeAnalysis {
+            content_type: ContentType::Sequential,
+            confidence_score: numbered_ratio,
+            recommendation: ProcessingRecommendation::PreserveOrder,
+        }
+    } else if numbered_ratio > 0.3 {
+        ContentTypeAnalysis {
+            content_type: ContentType::Mixed,
+            confidence_score: 0.5,
+            recommendation: ProcessingRecommendation::UserChoice,
+        }
+    } else {
+        ContentTypeAnalysis {
+            content_type: ContentType::Thematic,
+            confidence_score: 1.0 - numbered_ratio,
+            recommendation: ProcessingRecommendation::ApplyClustering,
+        }
+    }
+}
+
+/// Check if a title contains a sequence number
+fn has_sequence_number(title: &str) -> bool {
+    // Common patterns: "01", "1.", "Lesson 1", "Chapter 2", etc.
+    let patterns = [
+        r"^\d+[\.\-\s]", // Starts with number
+        r"(?i)lesson\s*\d+",
+        r"(?i)chapter\s*\d+",
+        r"(?i)part\s*\d+",
+        r"(?i)module\s*\d+",
+        r"(?i)video\s*\d+",
+        r"(?i)lecture\s*\d+",
+    ];
+
+    for pattern in &patterns {
+        if regex::Regex::new(pattern).map(|re| re.is_match(title)).unwrap_or(false) {
+            return true;
+        }
+    }
+    false
+}
 
 // ===== Constants & helpers =====
 const DEFAULT_MAX_DEPTH: usize = 25;

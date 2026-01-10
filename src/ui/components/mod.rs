@@ -5,7 +5,6 @@ pub mod base;
 pub mod breadcrumb;
 pub mod button;
 pub mod card;
-pub mod clustering_settings;
 pub mod command_palette;
 pub mod dropdown;
 pub mod export_format_dialog;
@@ -20,18 +19,16 @@ pub mod tag_input;
 pub mod timer;
 pub mod toast;
 pub mod top_bar;
-pub mod video_player;
 pub mod video_player_modal;
 
 // exports for convenience
 pub use analytics::{
-    AIRecommendationsPanel, ClusteringInsights, LastAccessedCourse, LearningAnalytics,
-    PomodoroTimer, TodaysSessions, UpcomingDeadlines,
+    AIRecommendationsPanel, LastAccessedCourse, LearningAnalytics, PomodoroTimer, TodaysSessions,
+    UpcomingDeadlines,
 };
 pub use base::{BaseButton, BaseCard, BaseList, BaseListItem, BaseModal, BasePage};
 pub use breadcrumb::{Breadcrumb, BreadcrumbItem};
 pub use card::{ActionItem, BadgeData, Card, CardVariant};
-pub use clustering_settings::{ABTestResults, ClusteringSettings, ManualAdjustmentInterface};
 pub use dropdown::{DropdownItem, DropdownTrigger, UnifiedDropdown, create_course_actions};
 pub use export_format_dialog::ExportFormatDialog;
 pub use gemini_chatbot::GeminiChatbot;
@@ -50,4 +47,4 @@ pub use toast::{
     use_toast_manager,
 };
 pub use top_bar::TopBar;
-pub use video_player::VideoPlayerComponent;
+pub use video_player_modal::{VideoPlayerModal, VideoPlayerModalManager, use_video_player_modal};

@@ -155,6 +155,8 @@ pub enum VideoPlayerError {
     YouTubeApiError { code: i32, message: String },
     PlaybackError(String),
     InvalidSource(String),
+    FileAccessDenied(PathBuf),
+    InvalidVideoId(String),
 }
 
 impl std::fmt::Display for VideoPlayerError {
@@ -172,6 +174,10 @@ impl std::fmt::Display for VideoPlayerError {
             },
             VideoPlayerError::PlaybackError(msg) => write!(f, "Playback error: {msg}"),
             VideoPlayerError::InvalidSource(msg) => write!(f, "Invalid source: {msg}"),
+            VideoPlayerError::FileAccessDenied(path) => {
+                write!(f, "Access denied to video file: {}", path.display())
+            },
+            VideoPlayerError::InvalidVideoId(id) => write!(f, "Invalid video ID: {id}"),
         }
     }
 }
