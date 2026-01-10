@@ -343,9 +343,6 @@ impl VideoPlayerError {
             Self::FileNotFound(path) => {
                 format!("Video file not found: {}", path.display())
             },
-            Self::FileAccessDenied(path) => {
-                format!("Cannot access video file: {}", path.display())
-            },
             Self::UnsupportedFormat(ext) => {
                 format!("Unsupported video format: .{}", ext)
             },
@@ -353,10 +350,7 @@ impl VideoPlayerError {
             Self::YouTubeApiError { message, .. } => {
                 format!("YouTube error: {}", message)
             },
-            Self::InitializationFailed(_) => "Video player failed to initialize".to_string(),
             Self::PlaybackError(_) => "Video playback error occurred".to_string(),
-            Self::WebViewError(_) => "Browser component error".to_string(),
-            Self::InvalidVideoId(_) => "Invalid or missing video ID".to_string(),
             Self::InvalidSource(_) => "Invalid video source".to_string(),
         }
     }
@@ -368,10 +362,6 @@ impl VideoPlayerError {
                 "Check that the file exists".to_string(),
                 "Verify file permissions".to_string(),
             ],
-            Self::FileAccessDenied(_) => vec![
-                "Check file permissions".to_string(),
-                "Try running as administrator".to_string(),
-            ],
             Self::NetworkError(_) => {
                 vec!["Check internet connection".to_string(), "Try again later".to_string()]
             },
@@ -382,10 +372,6 @@ impl VideoPlayerError {
             Self::YouTubeApiError { .. } => {
                 vec!["Check internet connection".to_string(), "Try refreshing the page".to_string()]
             },
-            Self::InvalidVideoId(_) => vec![
-                "Check the video URL or ID".to_string(),
-                "Ensure the video is public".to_string(),
-            ],
             _ => vec!["Try refreshing the page".to_string()],
         }
     }

@@ -183,24 +183,17 @@ pub fn AddCourse() -> Element {
         navigator.push(Route::Dashboard {});
     };
 
-    let handle_import = EventHandler::new(
-        move |data: (
-            crate::ui::components::import_modal::ImportSource,
-            String,
-            crate::ui::components::import_modal::ImportSettings,
-        )| {
-            let (source, url, settings) = data;
-            // Import logic will be handled by the ImportModal component
-            log::info!(
-                "Import requested: {:?} with URL: {} and settings: {:?}",
-                source,
-                url,
-                settings
-            );
-            show_import_modal.set(false);
-            navigator.push(Route::Dashboard {});
-        },
-    );
+    let handle_import = move |data: (
+        crate::ui::components::import_modal::ImportSource,
+        String,
+        crate::ui::components::import_modal::ImportSettings,
+    )| {
+        let (source, url, settings) = data;
+        // Import logic will be handled by the ImportModal component
+        log::info!("Import requested: {:?} with URL: {} and settings: {:?}", source, url, settings);
+        show_import_modal.set(false);
+        navigator.push(Route::Dashboard {});
+    };
 
     rsx! {
         LayoutWrapper {

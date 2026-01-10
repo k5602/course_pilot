@@ -75,7 +75,7 @@ fn NotesTab(
 
     // Get all available tags from notes
     let all_tags = use_memo(move || {
-        if let Some(Ok(notes)) = &*notes_resource.read_unchecked() {
+        if let Some(Ok(notes)) = &*notes_resource.read() {
             let mut tags = HashSet::new();
             for note in notes {
                 for tag in &note.tags {
@@ -90,7 +90,7 @@ fn NotesTab(
 
     // Filter notes based on search query and selected tags
     let filtered_notes = use_memo(move || {
-        if let Some(Ok(notes)) = &*notes_resource.read_unchecked() {
+        if let Some(Ok(notes)) = &*notes_resource.read() {
             notes
                 .iter()
                 .filter(|note| {
@@ -137,7 +137,7 @@ fn NotesTab(
             let note = match editing_note_id() {
                 Some(id) => {
                     // Update existing note
-                    if let Some(Ok(notes)) = &*notes_resource.read_unchecked() {
+                    if let Some(Ok(notes)) = &*notes_resource.read() {
                         if let Some(existing_note) = notes.iter().find(|n| n.id == id) {
                             let mut updated_note = existing_note.clone();
                             updated_note.content = content;
@@ -201,7 +201,7 @@ fn NotesTab(
 
     // Tag statistics
     let tag_stats = use_memo(move || {
-        if let Some(Ok(notes)) = &*notes_resource.read_unchecked() {
+        if let Some(Ok(notes)) = &*notes_resource.read() {
             let mut stats = std::collections::HashMap::new();
             for note in notes {
                 for tag in &note.tags {
@@ -267,7 +267,7 @@ fn NotesTab(
         toast_helpers::info("Search history cleared");
     };
 
-    match &*notes_resource.read_unchecked() {
+    match &*notes_resource.read() {
         None => {
             return rsx! {
                 div {
@@ -292,7 +292,7 @@ fn NotesTab(
         },
         Some(Ok(_)) => {
             // Extract temporary values to avoid borrowing issues
-            let tag_stats_data = tag_stats.read_unchecked();
+            let tag_stats_data = tag_stats.read();
             let filtered_notes_data = filtered_notes();
 
             rsx! {
@@ -703,7 +703,7 @@ fn AllNotesTab() -> Element {
     let mut show_search = use_signal(|| false);
 
     // Extract notes early to avoid borrowing issues
-    let notes_result = match &*notes_resource.read_unchecked() {
+    let notes_result = match &*notes_resource.read() {
         None => {
             return rsx! {
                 div {

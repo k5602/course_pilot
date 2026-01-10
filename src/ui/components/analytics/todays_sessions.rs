@@ -45,7 +45,7 @@ pub fn TodaysSessions() -> Element {
         }
     });
 
-    match &*todays_sessions_resource.read_unchecked() {
+    match &*todays_sessions_resource.read() {
         Some(Ok(todays_sessions)) => {
             if todays_sessions.is_empty() {
                 return rsx! {

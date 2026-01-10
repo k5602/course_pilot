@@ -50,7 +50,7 @@ fn CourseQuickAccess(props: CourseQuickAccessProps) -> Element {
     });
 
     let course_plan = course_plan_resource
-        .read_unchecked()
+        .read()
         .as_ref()
         .and_then(|result| result.as_ref().ok())
         .and_then(|plan| plan.as_ref())

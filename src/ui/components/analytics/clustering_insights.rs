@@ -25,8 +25,8 @@ pub fn ClusteringInsights() -> Element {
     });
 
     match (
-        &*clustering_analytics_resource.read_unchecked(),
-        &*high_quality_courses_resource.read_unchecked(),
+        &*clustering_analytics_resource.read(),
+        &*high_quality_courses_resource.read(),
     ) {
         (Some(Ok(analytics)), Some(Ok(high_quality_courses))) => rsx! {
             div { class: "space-y-6",

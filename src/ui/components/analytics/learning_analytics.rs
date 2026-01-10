@@ -23,8 +23,8 @@ pub fn LearningAnalytics() -> Element {
     });
 
     match (
-        &*learning_analytics_resource.read_unchecked(),
-        &*clustering_analytics_resource.read_unchecked(),
+        &*learning_analytics_resource.read(),
+        &*clustering_analytics_resource.read(),
     ) {
         (Some(Ok(plan_analyses)), Some(Ok(clustering_analytics))) => rsx! {
             div { class: "space-y-6",

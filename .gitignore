@@ -5,12 +5,6 @@
 *.wasm
 *.wasm.d.ts
 
-# Dioxus component build artifacts
-
-
-# Rust artifacts
-Cargo.lock
-
 # CSS/Tailwind artifacts
 /css/target
 *.css.map
@@ -90,8 +84,6 @@ Readme.pdf
 
 # Misc
 hover_car
-plan.md
 assets/tailwind.out.css
 # GitHub Actions
-.github/copilot-instructions.md
 /.theme_config.toml

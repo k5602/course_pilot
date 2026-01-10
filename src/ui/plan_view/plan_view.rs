@@ -29,7 +29,7 @@ pub fn PlanView(props: PlanViewProps) -> Element {
         }
     }));
 
-    match &*plan_resource.read_unchecked() {
+    match &*plan_resource.read() {
         None => render_loading_state(),
         Some(Err(err)) => render_error_state(err),
         Some(Ok(Some(plan))) => {
@@ -367,7 +367,7 @@ fn render_duration_summary(plan: &crate::types::Plan) -> Element {
 fn render_content_organization_indicator(
     course_resource: &Resource<Result<Option<crate::types::Course>, anyhow::Error>>,
 ) -> Element {
-    match &*course_resource.read_unchecked() {
+    match &*course_resource.read() {
         Some(Ok(Some(course))) => {
             if let Some(structure) = &course.structure {
                 let content_type = structure.get_content_organization_type();

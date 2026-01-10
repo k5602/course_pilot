@@ -264,7 +264,7 @@ fn load_course_modules(conn: &Connection, course_id: &Uuid) -> Result<Vec<Module
 
     while let Some(row) = rows.next()? {
         let module_id: i64 = row.get(0)?;
-        let similarity_score: Option<f64> = row.get(4).ok();
+        let similarity_score: Option<f32> = row.get(4).ok();
         let topic_keywords_json: String = row.get(5).unwrap_or_else(|_| "[]".to_string());
         let difficulty_json: Option<String> = row.get(6).ok();
 
@@ -490,7 +490,7 @@ pub fn save_course(db: &Database, course: &Course) -> Result<()> {
         format!("Failed to get database connection for saving course {}", course.name)
     })?;
 
-    let tx = conn.transaction()?;
+    let mut tx = conn.transaction()?;
     tx.execute(
         r#"
         INSERT OR REPLACE INTO courses (id, name, created_at, raw_titles, videos, structure)

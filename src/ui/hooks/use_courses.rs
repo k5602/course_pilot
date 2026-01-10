@@ -96,8 +96,8 @@ pub fn use_course_manager() -> CourseManager {
         }
     });
 
-    let courses_state = courses_resource.read_unchecked();
-    let is_loading = (*courses_state).is_none();
+    let courses_state = courses_resource.read();
+    let is_loading = courses_state.is_none();
     let error = match &*courses_state {
         Some(Err(e)) => Some(e.to_string()),
         _ => None,
@@ -238,7 +238,7 @@ pub fn use_course_progress(course_id: Uuid) -> (f32, String, Option<String>) {
         async move { plan_manager.get_course_progress(course_id).await }
     });
 
-    match &*progress_resource.read_unchecked() {
+    match &*progress_resource.read() {
         Some(Ok(Some(progress_info))) => {
             let progress = progress_info.percentage / 100.0;
             let status = if progress >= 1.0 {
@@ -272,8 +272,8 @@ pub fn use_course_management() -> (Vec<Course>, bool, Option<String>, impl Fn())
         async move { course_manager.list_courses().await }
     });
 
-    let courses_state = courses_resource.read_unchecked();
-    let is_loading = (*courses_state).is_none();
+    let courses_state = courses_resource.read();
+    let is_loading = courses_state.is_none();
     let error = match &*courses_state {
         Some(Err(e)) => Some(e.to_string()),
         _ => None,

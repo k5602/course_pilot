@@ -42,7 +42,7 @@ pub fn UpcomingDeadlines() -> Element {
         }
     });
 
-    match &*upcoming_deadlines_resource.read_unchecked() {
+    match &*upcoming_deadlines_resource.read() {
         Some(Ok(upcoming_sessions)) => {
             if upcoming_sessions.is_empty() {
                 return rsx! {

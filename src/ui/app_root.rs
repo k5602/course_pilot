@@ -170,9 +170,8 @@ fn use_theme_sync() {
         let theme_name = theme_signal.read().theme.to_string();
         info!("🎨 Applying theme to WebView: {theme_name}");
 
-        let _ = window.webview.evaluate_script(&format!(
-            "document.documentElement.setAttribute('data-theme', '{theme_name}');"
-        ));
+        window
+            .eval(&format!("document.documentElement.setAttribute('data-theme', '{theme_name}');"));
 
         toast_helpers::info(format!("Theme set to: {theme_name}"));
     });

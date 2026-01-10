@@ -85,7 +85,7 @@ pub fn AIRecommendationsPanel(props: AIRecommendationsPanelProps) -> Element {
         }
     });
 
-    match &*recommendations_resource.read_unchecked() {
+    match &*recommendations_resource.read() {
         Some(Ok(data)) => rsx! {
             div { class: "space-y-4",
                 // Strategy recommendations

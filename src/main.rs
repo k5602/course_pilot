@@ -36,5 +36,5 @@ fn main() {
 
     info!("Launching Dioxus desktop application");
 
-    dioxus::LaunchBuilder::desktop().with_cfg(config).launch(AppRoot);
+    dioxus::LaunchBuilder::new().with_cfg(config).launch(AppRoot);
 }
