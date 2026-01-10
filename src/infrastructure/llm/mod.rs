@@ -1,27 +1,49 @@
-//! LLM adapter using google_ai_rs (Gemini).
+//! LLM adapter using genai-rs for Gemini.
+
+use genai_rs::Client;
 
 use crate::domain::ports::{CompanionAI, CompanionContext, ExaminerAI, LLMError, MCQuestion};
 
-/// Gemini API adapter using google_ai_rs.
+/// Gemini API adapter for AI features.
 pub struct GeminiAdapter {
-    api_key: String,
+    client: Client,
 }
 
 impl GeminiAdapter {
+    /// Creates a new Gemini adapter with the given API key.
     pub fn new(api_key: String) -> Self {
-        Self { api_key }
+        let client = Client::new(api_key);
+        Self { client }
     }
 }
 
 impl CompanionAI for GeminiAdapter {
     async fn ask(&self, question: &str, context: &CompanionContext) -> Result<String, LLMError> {
-        // TODO: Implement with google_ai_rs
-        // 1. Build prompt with context
-        // 2. Call Gemini API
-        // 3. Parse response
+        let prompt = format!(
+            r#"You are a learning companion for course "{}".
+Video: "{}" (Module: "{}")
+{}
 
-        let _ = (&self.api_key, question, context);
-        todo!("Implement with google_ai_rs crate")
+Student asks: {}
+
+Provide a concise, academic response."#,
+            context.course_name,
+            context.video_title,
+            context.module_title,
+            context.video_description.as_deref().unwrap_or(""),
+            question
+        );
+
+        let response = self
+            .client
+            .interaction()
+            .with_model("gemini-1.5-flash")
+            .with_text(&prompt)
+            .create()
+            .await
+            .map_err(|e| LLMError::Api(e.to_string()))?;
+
+        Ok(response.text().unwrap_or("No response").to_string())
     }
 }
 
@@ -32,12 +54,35 @@ impl ExaminerAI for GeminiAdapter {
         video_description: Option<&str>,
         num_questions: u8,
     ) -> Result<Vec<MCQuestion>, LLMError> {
-        // TODO: Implement with google_ai_rs
-        // 1. Build MCQ generation prompt
-        // 2. Call Gemini API with JSON mode
-        // 3. Parse structured response
+        let prompt = format!(
+            r#"Generate {} MCQs for: "{}"
+{}
 
-        let _ = (&self.api_key, video_title, video_description, num_questions);
-        todo!("Implement with google_ai_rs crate")
+Reply ONLY with JSON array:
+[{{"question": "...", "options": ["A", "B", "C", "D"], "correct_index": 0}}]"#,
+            num_questions,
+            video_title,
+            video_description.unwrap_or("")
+        );
+
+        let response = self
+            .client
+            .interaction()
+            .with_model("gemini-1.5-flash")
+            .with_text(&prompt)
+            .create()
+            .await
+            .map_err(|e| LLMError::Api(e.to_string()))?;
+
+        let text = response.text().unwrap_or("");
+        let json_text = text
+            .trim()
+            .trim_start_matches("```json")
+            .trim_start_matches("```")
+            .trim_end_matches("```")
+            .trim();
+
+        serde_json::from_str(json_text)
+            .map_err(|e| LLMError::InvalidResponse(format!("JSON parse error: {}", e)))
     }
 }

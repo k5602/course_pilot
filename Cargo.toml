@@ -62,10 +62,10 @@ hyper-util = { version = "0.1", features = ["client-legacy", "http1", "http2"] }
 tower-service = "0.3"
 
 # Local ML
-fastembed = "4"
+fastembed = "5.7.0"
 
 # LLM (Gemini)
-google_ai_rs = "0.4"
+genai-rs = "0.4"
 
 # Secure Storage
 keyring = { version = "3", features = ["linux-native"] }
