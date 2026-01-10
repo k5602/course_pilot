@@ -1,37 +1,77 @@
 # Course Pilot: AI Agent Instructions
 
-## 🏗️ Architecture & Philosophy
-Course Pilot is a **Local-First Learning Sanctuary** designed to transform YouTube playlists into structured study plans.
-- **Distraction-Free**: No recommendations or comments. Just the video and your progress.
-- **Local-First**: User data and progress are stored entirely on the local machine (Diesel/SQLite).
-- **Hybrid AI**: 
-  - **Local ML**: For semantic vectorization and clustering of video titles (`fastembed-rs`).
-  - **Cloud LLM**: User-provided Gemini API keys (BYOK) for contextual Q&A and MCQ generation.
-## 🛠️ Tech Stack & Conventions
-- **Rust (1.80+, Edition 2024)**: Use modern Rust patterns.
-- **Dioxus 0.7 (Desktop)**:
-  - Use **Signals** (`use_signal`, `use_memo`) for reactive state.
-  - Functional components only. Use `rsx!` for UI.
-  - Desktop-specific features for video playback (YouTube iFrame integration).
-- **Tailwind CSS 4.0 & DaisyUI 5.0**:
-  - Styles are defined in `assets/tailwind.css` using the V4 CLI.
-  - Use DaisyUI themes: `corporate` (Light) and `business` (Dark).
-  - CSS is output to `assets/tailwind.out.css`.
+## 🏗️ Architecture
 
-## 🔄 Critical Workflows
-- **CSS Development**: Run `npm run watch:css` to automatically rebuild styles when editing Rust files or CSS.
-- **Build & Run**: Use `cargo run` for the desktop application.
-- **Linting**: Respect `clippy.toml` and `rustfmt.toml`.
+**Local-First Learning Sanctuary** - Transforms YouTube playlists into structured study plans.
 
-## 🧩 Project Patterns
-- **Ingestion Pipeline**: Extraction -> Normalization -> Embedding -> Clustering -> Persistence.
-- **Security**: Never hardcode API keys. Always use a BYOK model where the user provides their Gemini key.
-- **UI Components**: Keep components small and focused.using Dioxus-components from the dx cli tool.
+### DDD Hexagonal Architecture
+```
+src/
+├── domain/          # Entities, Value Objects, Ports, Services
+├── application/     # Use Cases, AppContext (DI Container)
+├── infrastructure/  # Adapters (SQLite, YouTube, FastEmbed, Gemini, Keyring)
+└── schema.rs        # Diesel-generated
+```
 
-## 📁 Key Directories
-- `src/`: Main application logic (currently being rebuilt).
-- `docs/`: Comprehensive technical specs and philosophy (High source of truth).
-- `assets/`: UI resources including Tailwind config and output.
-- `theme_config.toml`: Current active DaisyUI theme.
+### Key Patterns
+- **Domain Ports** define interfaces; **Infrastructure Adapters** implement them
+- **AppContext** wires all dependencies via `AppConfig.from_env()` or `AppConfigBuilder`
+- **ServiceFactory** creates use cases with injected dependencies
 
-When implementing features, always prioritize **completion over consumption** and **privacy over convenience**.
+## 🛠️ Tech Stack
+
+| Layer | Technology |
+|-------|------------|
+| UI | Dioxus 0.7 Desktop|
+| Database | Diesel + SQLite + r2d2 pool |
+| YouTube | google-youtube3 v7 |
+| ML Embeddings | fastembed (optional) |
+| LLM | genai-rs (Gemini API) |
+| Secrets | keyring (OS keychain) |
+| Config | dotenvy (.env files) |
+
+## 🔧 Configuration
+
+All config via `.env` (see `.env.example`):
+
+```env
+DATABASE_URL=course_pilot.db
+YOUTUBE_API_KEY=required
+GEMINI_API_KEY=optional
+ENABLE_ML_BOUNDARY_DETECTION=false  # Default: import playlists as-is
+```
+
+For GUI, use `AppConfigBuilder`:
+```rust
+let config = AppConfig::builder()
+    .youtube_api_key("...")
+    .enable_ml_boundary_detection(true)
+    .build();
+```
+
+## 🔄 Workflows
+
+```bash
+# Development
+cargo check && cargo test
+
+# Run with logging
+RUST_LOG=info cargo run
+```
+
+## 🧩 Key Components
+
+| Component | Purpose |
+|-----------|---------|
+| `AppContext` | DI container, holds all adapters |
+| `ServiceFactory` | Creates use cases with dependencies |
+| `IngestPlaylistUseCase` | YouTube → structured course |
+| `PlanSessionUseCase` | Daily study scheduling |
+| `AskCompanionUseCase` | Contextual AI Q&A |
+| `TakeExamUseCase` | MCQ generation & grading |
+
+## ⚡ Principles
+
+- **Privacy First**: All data local, BYOK for cloud APIs
+- **Completion > Consumption**: Focus on learning retention
+- **Graceful Degradation**: Works without ML/LLM (basic import mode)

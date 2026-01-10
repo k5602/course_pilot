@@ -1,3 +1,4 @@
+
 [package]
 name = "course_pilot"
 version = "0.1.0"
@@ -5,22 +6,17 @@ edition = "2024"
 
 
 [dependencies]
-# # Core UI framework
-# dioxus = { version = "0.7", features = ["desktop", "macro", "hooks", "router"] }
-# dioxus-signals = "0.7"
-# # UI Components & Styling
-# dioxus-free-icons = { version = "0.10.0", features = [
-#     "material-design-icons-action",
-#     "material-design-icons-content",
-#     "material-design-icons-editor",
-#     "material-design-icons-av",
-#     "material-design-icons-device",
-#     "font-awesome-solid",
-#     "font-awesome-brands",
-# ] }
-# dioxus-motion = { version = "0.3.2", default-features = false, features = [
-#     "desktop",
-# ] }
+# Core UI framework
+dioxus = { version = "0.7", features = ["web", "router"] }
+
+# UI Components & Styling
+dioxus-free-icons = { version = "0.10", features = [
+    "material-design-icons-action",
+    "material-design-icons-navigation",
+    "material-design-icons-av",
+    "material-design-icons-content",
+    "material-design-icons-social",
+] }
 
 # Utilities
 serde = { version = "1.0", features = ["derive"] }
