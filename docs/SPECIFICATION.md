@@ -21,7 +21,7 @@ The database is designed to enforce a structured learning path. Every entity rel
 | :----------- | :------ | :----------------------------- |
 | `id`         | Uuid    | Primary Key                    |
 | `course_id`  | Uuid    | Foreign Key to `courses`       |
-| `title`      | Text    | AI or ML generated module name |
+| `title`      | Text    | session number|
 | `sort_order` | Integer | Position within the course     |
 
 ### `videos`

@@ -34,8 +34,9 @@ tokio-util = { version = "0.7.18", features = ["full"] }
 futures = "0.3.31"
 futures-util = "0.3"
 # Data Handling & Serialization
-diesel = "2.3.5"
+diesel = { version = "2.2", features = ["sqlite", "r2d2"] }
 uuid = { version = "1", features = ["v4", "serde"] }
+chrono = { version = "0.4", features = ["serde"] }
 
 # Error Handling & Logging
 anyhow = "1.0"
