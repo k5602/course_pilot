@@ -66,6 +66,7 @@ genai-rs = "0.4"
 
 # Secure Storage
 keyring = { version = "3", features = ["linux-native"] }
+dioxus-primitives = { git = "https://github.com/DioxusLabs/components", version = "0.0.1", default-features = false }
 
 [profile.release]
 opt-level = "z"   # Optimize for size
