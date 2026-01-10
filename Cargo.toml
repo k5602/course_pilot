@@ -47,7 +47,6 @@ tokio-util = { version = "0.7.18", features = ["full"] }
 futures = "0.3.31"
 futures-util = "0.3"
 async-trait = "0.1.89"
-
 # Data Handling & Serialization
 rusqlite = { version = "0.38.0", features = ["bundled"] }
 r2d2 = "0.8.10"
