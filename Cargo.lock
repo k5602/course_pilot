@@ -94,8 +94,6 @@ dependencies = [
 [[package]]
 name = "ashpd"
 version = "0.11.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "6cbdf310d77fd3aaee6ea2093db7011dc2d35d2eb3481e5607f1f8d942ed99df"
 dependencies = [
  "enumflags2",
  "futures-channel",
@@ -110,6 +108,7 @@ dependencies = [
  "wayland-client",
  "wayland-protocols",
  "zbus",
+ "zvariant",
 ]
 
 [[package]]
@@ -579,7 +578,6 @@ dependencies = [
  "dioxus-desktop",
  "dioxus-free-icons",
  "dioxus-motion",
- "dioxus-router",
  "dioxus-signals",
  "dioxus-ssr",
  "dirs",
@@ -3978,6 +3976,9 @@ checksum = "069d6129dede311430d0dcf1ded88a7affc7a342c2d8e6336043d43ed14dac17"
 dependencies = [
  "block2",
  "dispatch2",
+ "glib-sys",
+ "gobject-sys",
+ "gtk-sys",
  "js-sys",
  "libc",
  "log",
@@ -3986,7 +3987,6 @@ dependencies = [
  "objc2-core-foundation",
  "objc2-foundation",
  "percent-encoding",
- "pollster",
  "raw-window-handle 0.6.2",
  "wasm-bindgen",
  "wasm-bindgen-futures",

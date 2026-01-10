@@ -15,16 +15,6 @@ pub fn initialize_app() -> Result<(), Box<dyn std::error::Error>> {
         log::info!("Course Pilot application starting in debug mode with  logging");
     }
 
-    #[cfg(not(debug_assertions))]
-    {
-        env_logger::Builder::from_default_env()
-            .filter_level(log::LevelFilter::Info)
-            .filter_module("symphonia_core::probe", log::LevelFilter::Off)
-            .format_timestamp_secs()
-            .init();
-        log::info!("Course Pilot application starting in release mode");
-    }
-
     // Initialize video player subsystem
     crate::video_player::init()?;
 

@@ -100,7 +100,7 @@ pub struct PerformanceMetrics {
     pub input_metrics: InputMetrics,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Default)]
 pub struct InputMetrics {
     pub video_count: usize,
     pub unique_words: usize,

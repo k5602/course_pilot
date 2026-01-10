@@ -38,6 +38,7 @@ fn main() {
 
 /// local video file handler using mime_guess
 fn handle_local_video(
+    webview_id: dioxus_desktop::wry::WebViewId,
     request: dioxus_desktop::wry::http::Request<Vec<u8>>,
 ) -> Response<Cow<'static, [u8]>> {
     let uri = request.uri().to_string();

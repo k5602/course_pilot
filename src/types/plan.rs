@@ -14,7 +14,6 @@ pub struct Plan {
     pub items: Vec<PlanItem>,
     pub created_at: DateTime<Utc>,
 }
-
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub struct PlanSettings {
     pub start_date: DateTime<Utc>,
@@ -23,7 +22,6 @@ pub struct PlanSettings {
     pub include_weekends: bool,
     pub advanced_settings: Option<AdvancedSchedulerSettings>,
 }
-
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub struct AdvancedSchedulerSettings {
     pub strategy: DistributionStrategy,

@@ -95,15 +95,15 @@ pub fn TagInput(props: TagInputProps) -> Element {
         move |event: KeyboardEvent| {
             let key = event.key();
             match key {
-                dioxus::events::Key::Enter => {
+                Key::Enter => {
                     event.prevent_default();
                     add_tag(input_value().clone());
                 },
-                dioxus::events::Key::Character(c) if c == "," => {
+                Key::Character(c) if c == "," => {
                     event.prevent_default();
                     add_tag(input_value().clone());
                 },
-                dioxus::events::Key::Escape => {
+                Key::Escape => {
                     show_suggestions.set(false);
                 },
                 _ => {},

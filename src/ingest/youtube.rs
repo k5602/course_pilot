@@ -13,8 +13,6 @@ fn create_http_client() -> Result<reqwest::Client, ImportError> {
     reqwest::Client::builder()
         .timeout(Duration::from_secs(30))
         .user_agent("CoursePilot/0.1.0")
-        .danger_accept_invalid_certs(false)
-        .use_rustls_tls()
         .build()
         .map_err(|e| ImportError::Network(format!("Failed to create HTTP client: {e}")))
 }

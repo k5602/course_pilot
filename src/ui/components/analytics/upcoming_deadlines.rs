@@ -158,7 +158,7 @@ fn UpcomingDeadlineCard(props: UpcomingDeadlineCardProps) -> Element {
                     class: "btn btn-primary btn-xs",
                     onclick: move |_| {
                         // Navigate to the plan view for this session
-                        let navigator = dioxus_router::prelude::use_navigator();
+                        let navigator = use_navigator();
                         navigator.push(format!("/plan/{}", props.plan_id));
                     },
                     "View Plan"

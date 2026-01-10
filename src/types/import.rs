@@ -15,7 +15,7 @@ pub struct ImportJob {
     pub can_cancel: bool,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq)]
 pub enum ImportStage {
     Fetching,
     Processing,

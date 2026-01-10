@@ -3,6 +3,7 @@ use uuid::Uuid;
 
 use crate::types::{Course, Route};
 use crate::ui::hooks::use_course_manager;
+use dioxus::router::Navigator;
 
 /// Route guard result indicating whether navigation should proceed
 #[derive(Debug, Clone, PartialEq)]

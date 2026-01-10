@@ -25,6 +25,24 @@ pub struct AppSettings {
 
     // Import Preferences
     pub import_preferences: ImportPreferences,
+
+    // Clustering Preferences
+    pub clustering_preferences: ClusteringPreferences,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+pub struct ClusteringPreferences {
+    pub preferred_algorithm: crate::types::ClusteringAlgorithm,
+    pub similarity_threshold: f32,
+}
+
+impl Default for ClusteringPreferences {
+    fn default() -> Self {
+        Self {
+            preferred_algorithm: crate::types::ClusteringAlgorithm::Hybrid,
+            similarity_threshold: 0.75,
+        }
+    }
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
@@ -49,6 +67,7 @@ pub struct ImportPreferences {
     pub preserve_playlist_order: bool,
     pub extract_timestamps: bool,
     pub download_thumbnails: bool,
+    pub enable_ai_clustering: bool,
 
     // Preview performance
     pub preview_probe_max_concurrency: usize,
@@ -90,6 +109,7 @@ impl Default for AppSettings {
             analytics_enabled: true,
             track_study_time: true,
             import_preferences: ImportPreferences::default(),
+            clustering_preferences: ClusteringPreferences::default(),
         }
     }
 }
@@ -110,6 +130,7 @@ impl Default for ImportPreferences {
             preserve_playlist_order: false,
             extract_timestamps: true,
             download_thumbnails: true,
+            enable_ai_clustering: true,
             preview_probe_max_concurrency: 8,
             preview_cancellation_enabled: true,
         }

@@ -104,8 +104,9 @@ pub fn get_clustering_analytics(db: &Database) -> Result<ClusteringAnalytics> {
     let conn = db.get_conn()?;
 
     // Get total course count
-    let total_courses: usize =
-        conn.query_row("SELECT COUNT(*) FROM courses", [], |row| row.get(0))?;
+    let total_courses: usize = conn.query_row("SELECT COUNT(*) FROM courses", [], |row| {
+        row.get::<_, i64>(0).map(|v| v as usize)
+    })?;
 
     // Get courses with clustering data
     let mut stmt = conn.prepare("SELECT structure FROM courses WHERE structure IS NOT NULL")?;
@@ -203,7 +204,14 @@ pub fn get_similar_courses_by_clustering(
         |row| {
             let structure_json: String = row.get(0)?;
             let structure: CourseStructure = parse_json_sqlite_at(&structure_json, 0)?;
-            Ok(structure.clustering_metadata.unwrap_or_default())
+            match structure.clustering_metadata {
+                Some(meta) => Ok(meta),
+                None => Err(rusqlite::Error::InvalidColumnType(
+                    0,
+                    "no clustering metadata".to_string(),
+                    rusqlite::types::Type::Null,
+                )),
+            }
         },
     )?;
 

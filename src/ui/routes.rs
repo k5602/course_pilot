@@ -3,6 +3,7 @@ use uuid::Uuid;
 
 use crate::types::Route;
 use crate::ui::layout::LayoutWrapper;
+use dioxus::router::Navigator;
 
 // Route components - these will be rendered by the router
 #[component]

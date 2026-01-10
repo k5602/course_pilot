@@ -352,7 +352,7 @@ impl AnalyticsManager {
             crate::storage::save_video_progress(&db, &progress_update)
                 .map_err(|e| anyhow::anyhow!("Failed to save video progress: {}", e))
         })
-        .await?
+        .await
     }
 
     /// Get video completion status
@@ -363,20 +363,20 @@ impl AnalyticsManager {
         video_index: usize,
     ) -> Result<bool> {
         let db = self.db.clone();
-        crate::storage::core::run_blocking_db(move || {
+        Ok(crate::storage::core::run_blocking_db(move || {
             crate::storage::get_video_completion_status(&db, &plan_id, session_index, video_index)
                 .map_err(|e| anyhow::anyhow!("Failed to get video completion status: {}", e))
         })
-        .await?
+        .await?)
     }
 
     /// Get session progress as percentage (0.0 to 1.0)
     pub async fn get_session_progress(&self, plan_id: Uuid, session_index: usize) -> Result<f32> {
         let db = self.db.clone();
-        crate::storage::core::run_blocking_db(move || {
+        Ok(crate::storage::core::run_blocking_db(move || {
             crate::storage::get_session_progress(&db, &plan_id, session_index)
                 .map_err(|e| anyhow::anyhow!("Failed to get session progress: {}", e))
         })
-        .await?
+        .await?)
     }
 }

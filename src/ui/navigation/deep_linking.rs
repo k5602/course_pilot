@@ -1,6 +1,7 @@
 use crate::types::Route;
 use crate::ui::hooks::use_course_manager;
 use dioxus::prelude::*;
+use dioxus::router::Navigator;
 
 /// Deep linking verification component that ensures routes work when accessed directly
 #[component]

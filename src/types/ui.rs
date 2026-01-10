@@ -10,7 +10,7 @@ use super::course::{Course, Note};
 use super::import::ImportJob;
 use super::plan::{Plan, PlanViewState};
 
-#[derive(Clone, Debug, PartialEq, dioxus_router::prelude::Routable)]
+#[derive(Clone, Debug, PartialEq, Routable)]
 pub enum Route {
     #[route("/")]
     Home {},

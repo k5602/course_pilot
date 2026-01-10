@@ -123,7 +123,7 @@ pub fn GeminiChatbot() -> Element {
         let gem = gemini.clone();
 
         move |e: KeyboardEvent| {
-            if e.key() == dioxus::events::Key::Enter && !e.modifiers().shift() {
+            if e.key() == Key::Enter && !e.modifiers().shift() {
                 e.prevent_default();
 
                 let current = input_text_signal();
