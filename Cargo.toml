@@ -34,7 +34,7 @@ tokio-util = { version = "0.7.18", features = ["full"] }
 futures = "0.3.31"
 futures-util = "0.3"
 # Data Handling & Serialization
-diesel = { version = "2.2", features = ["sqlite", "r2d2"] }
+diesel = { version = "2.3", features = ["sqlite", "r2d2"] }
 uuid = { version = "1", features = ["v4", "serde"] }
 chrono = { version = "0.4", features = ["serde"] }
 
@@ -53,6 +53,22 @@ rfd = { version = "0.17.1", default-features = false, features = ["gtk3"] }
 
 # App-specific Logic
 reqwest = { version = "0.13.1", features = ["json"], default-features = false }
+
+# YouTube API
+google-youtube3 = "6"
+hyper = "1"
+hyper-rustls = { version = "0.27", features = ["http2"] }
+hyper-util = { version = "0.1", features = ["client-legacy", "http1", "http2"] }
+tower-service = "0.3"
+
+# Local ML
+fastembed = "4"
+
+# LLM (Gemini)
+google_ai_rs = "0.4"
+
+# Secure Storage
+keyring = { version = "3", features = ["linux-native"] }
 
 [profile.release]
 opt-level = "z"   # Optimize for size
