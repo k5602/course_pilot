@@ -39,6 +39,56 @@ Course Pilot bridges the gap between scattered video content and structured lear
 - **Lazy Loading**: Components and data loaded on demand
 - **Optimized Algorithms**: Fast video analysis and scheduling
 
+## Quick Start
+
+### 1. Configure
+
+Copy the example config and add your API keys:
+
+```bash
+cp .env.example .env
+```
+
+Edit `.env`:
+
+```env
+DATABASE_URL=course_pilot.db
+YOUTUBE_API_KEY=your_youtube_api_key_here
+GEMINI_API_KEY=your_gemini_api_key_here  # optional
+ENABLE_ML_BOUNDARY_DETECTION=false       # optional
+```
+
+### 2. Run
+
+```bash
+cargo run
+# or with logging:
+RUST_LOG=info cargo run
+```
+
+## Configuration Options
+
+| Variable | Required | Default | Description |
+|----------|----------|---------|-------------|
+| `DATABASE_URL` | No | `course_pilot.db` | SQLite database path |
+| `YOUTUBE_API_KEY` | Yes | - | YouTube Data API v3 key |
+| `GEMINI_API_KEY` | No | - | Gemini API key for AI features |
+| `ENABLE_ML_BOUNDARY_DETECTION` | No | `false` | Use ML to detect module boundaries |
+
+## API Keys
+
+### YouTube API Key (Required)
+
+1. Go to [Google Cloud Console](https://console.cloud.google.com)
+2. Create a project or select existing
+3. Enable **YouTube Data API v3**
+4. Create an API key under Credentials
+
+### Gemini API Key (Optional)
+
+1. Visit [Google AI Studio](https://aistudio.google.com/app/apikey)
+2. Create an API key
+
 ## 📄 License
 
 This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
