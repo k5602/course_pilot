@@ -222,6 +222,45 @@ impl AppContext {
         }
         Ok(())
     }
+
+    /// Gets user preferences from the database.
+    pub fn get_preferences(&self) -> Result<(bool, u32), AppContextError> {
+        use crate::infrastructure::persistence::models::UserPreferencesRow;
+        use crate::schema::user_preferences;
+        use diesel::prelude::*;
+
+        let mut conn = self.db_pool.get().map_err(|e| AppContextError::Database(e.to_string()))?;
+
+        let result: Option<UserPreferencesRow> = user_preferences::table
+            .find("default")
+            .first(&mut conn)
+            .optional()
+            .map_err(|e| AppContextError::Database(e.to_string()))?;
+
+        match result {
+            Some(pref) => Ok((pref.ml_boundary_enabled != 0, pref.cognitive_limit_minutes as u32)),
+            None => Ok((false, 45)), // Defaults
+        }
+    }
+
+    /// Sets ML boundary detection preference.
+    pub fn set_ml_preference(&self, enabled: bool) -> Result<(), AppContextError> {
+        use crate::infrastructure::persistence::models::UpdatePreferences;
+        use crate::schema::user_preferences;
+        use diesel::prelude::*;
+
+        let mut conn = self.db_pool.get().map_err(|e| AppContextError::Database(e.to_string()))?;
+
+        diesel::update(user_preferences::table.find("default"))
+            .set(UpdatePreferences {
+                ml_boundary_enabled: Some(if enabled { 1 } else { 0 }),
+                cognitive_limit_minutes: None,
+            })
+            .execute(&mut conn)
+            .map_err(|e| AppContextError::Database(e.to_string()))?;
+
+        Ok(())
+    }
 }
 
 /// Errors that can occur during context creation.

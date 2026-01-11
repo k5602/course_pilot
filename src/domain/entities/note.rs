@@ -26,10 +26,6 @@ impl NoteId {
         Self(uuid)
     }
 
-    pub fn from_str(s: &str) -> Result<Self, uuid::Error> {
-        Uuid::parse_str(s).map(Self)
-    }
-
     pub fn as_uuid(&self) -> &Uuid {
         &self.0
     }
@@ -38,6 +34,14 @@ impl NoteId {
 impl Default for NoteId {
     fn default() -> Self {
         Self::new()
+    }
+}
+
+impl std::str::FromStr for NoteId {
+    type Err = uuid::Error;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        Uuid::parse_str(s).map(Self)
     }
 }
 

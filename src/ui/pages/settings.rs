@@ -29,12 +29,17 @@ pub fn Settings() -> Element {
             if ctx.has_llm() {
                 gemini_key.set("••••••••••••••••".to_string());
             }
+            // Load ML preference from database
+            if let Ok((ml_pref, _)) = ctx.get_preferences() {
+                ml_enabled.set(ml_pref);
+            }
         }
     });
 
     let handle_save = move |_| {
         let yt_key = youtube_key.read().clone();
         let gem_key = gemini_key.read().clone();
+        let ml_pref = *ml_enabled.read();
 
         // Only save if not masked placeholder
         if let Some(ref ctx) = backend_save {
@@ -57,15 +62,25 @@ pub fn Settings() -> Element {
                 }
             }
 
+            // Save ML preference
+            if let Err(e) = ctx.set_ml_preference(ml_pref) {
+                success = false;
+                errors.push(format!("ML preference: {}", e));
+            }
+
             if success {
-                save_status
-                    .set(Some((true, "Settings saved. Restart app to apply changes.".to_string())));
+                save_status.set(Some((true, "Settings saved successfully!".to_string())));
             } else {
                 save_status.set(Some((false, errors.join(", "))));
             }
         } else {
             save_status.set(Some((false, "Backend not available".to_string())));
         }
+    };
+
+    // Toggle ML preference
+    let on_ml_toggle = move |e: Event<FormData>| {
+        ml_enabled.set(e.checked());
     };
 
     rsx! {
@@ -176,7 +191,7 @@ pub fn Settings() -> Element {
                         r#type: "checkbox",
                         class: "toggle toggle-primary",
                         checked: *ml_enabled.read(),
-                        onchange: move |e| ml_enabled.set(e.checked()),
+                        onchange: on_ml_toggle,
                     }
                 }
             }

@@ -1,6 +1,7 @@
 //! Repository implementations using Diesel.
 
 use diesel::prelude::*;
+use std::str::FromStr;
 use std::sync::Arc;
 
 use super::connection::DbPool;

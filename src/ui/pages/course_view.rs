@@ -1,6 +1,7 @@
 //! Course view page - modules and videos with real data
 
 use dioxus::prelude::*;
+use std::str::FromStr;
 
 use crate::application::{ServiceFactory, use_cases::PlanSessionInput};
 use crate::domain::ports::{CourseRepository, VideoRepository};

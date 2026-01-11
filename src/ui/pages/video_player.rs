@@ -1,6 +1,7 @@
 //! Video player page - Sanctuary for focused learning.
 
 use dioxus::prelude::*;
+use std::str::FromStr;
 
 use crate::domain::ports::VideoRepository;
 use crate::domain::value_objects::{CourseId, VideoId};

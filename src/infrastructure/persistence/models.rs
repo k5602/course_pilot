@@ -3,7 +3,7 @@
 use diesel::prelude::*;
 use diesel::sqlite::Sqlite;
 
-use crate::schema::{courses, exams, modules, notes, videos};
+use crate::schema::{courses, exams, modules, notes, user_preferences, videos};
 
 /// Diesel model for the courses table.
 #[derive(Queryable, Selectable, Identifiable, Debug)]
@@ -124,4 +124,22 @@ pub struct NewNote<'a> {
     pub id: &'a str,
     pub video_id: &'a str,
     pub content: &'a str,
+}
+
+/// Diesel model for the user_preferences table.
+#[derive(Queryable, Selectable, Identifiable, Debug)]
+#[diesel(table_name = user_preferences)]
+#[diesel(check_for_backend(Sqlite))]
+pub struct UserPreferencesRow {
+    pub id: String,
+    pub ml_boundary_enabled: i32,
+    pub cognitive_limit_minutes: i32,
+}
+
+/// Changeset for updating user preferences.
+#[derive(AsChangeset)]
+#[diesel(table_name = user_preferences)]
+pub struct UpdatePreferences {
+    pub ml_boundary_enabled: Option<i32>,
+    pub cognitive_limit_minutes: Option<i32>,
 }

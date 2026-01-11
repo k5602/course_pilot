@@ -1,5 +1,6 @@
 //! Strongly-typed identifiers for domain entities.
 
+use std::str::FromStr;
 use uuid::Uuid;
 
 /// Unique identifier for a Course.
@@ -15,10 +16,6 @@ impl CourseId {
         Self(uuid)
     }
 
-    pub fn from_str(s: &str) -> Result<Self, uuid::Error> {
-        Uuid::parse_str(s).map(Self)
-    }
-
     pub fn as_uuid(&self) -> &Uuid {
         &self.0
     }
@@ -27,6 +24,14 @@ impl CourseId {
 impl Default for CourseId {
     fn default() -> Self {
         Self::new()
+    }
+}
+
+impl FromStr for CourseId {
+    type Err = uuid::Error;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        Uuid::parse_str(s).map(Self)
     }
 }
 
@@ -43,10 +48,6 @@ impl ModuleId {
         Self(uuid)
     }
 
-    pub fn from_str(s: &str) -> Result<Self, uuid::Error> {
-        Uuid::parse_str(s).map(Self)
-    }
-
     pub fn as_uuid(&self) -> &Uuid {
         &self.0
     }
@@ -55,6 +56,14 @@ impl ModuleId {
 impl Default for ModuleId {
     fn default() -> Self {
         Self::new()
+    }
+}
+
+impl FromStr for ModuleId {
+    type Err = uuid::Error;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        Uuid::parse_str(s).map(Self)
     }
 }
 
@@ -71,10 +80,6 @@ impl VideoId {
         Self(uuid)
     }
 
-    pub fn from_str(s: &str) -> Result<Self, uuid::Error> {
-        Uuid::parse_str(s).map(Self)
-    }
-
     pub fn as_uuid(&self) -> &Uuid {
         &self.0
     }
@@ -83,6 +88,14 @@ impl VideoId {
 impl Default for VideoId {
     fn default() -> Self {
         Self::new()
+    }
+}
+
+impl FromStr for VideoId {
+    type Err = uuid::Error;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        Uuid::parse_str(s).map(Self)
     }
 }
 
@@ -99,10 +112,6 @@ impl ExamId {
         Self(uuid)
     }
 
-    pub fn from_str(s: &str) -> Result<Self, uuid::Error> {
-        Uuid::parse_str(s).map(Self)
-    }
-
     pub fn as_uuid(&self) -> &Uuid {
         &self.0
     }
@@ -111,5 +120,13 @@ impl ExamId {
 impl Default for ExamId {
     fn default() -> Self {
         Self::new()
+    }
+}
+
+impl FromStr for ExamId {
+    type Err = uuid::Error;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        Uuid::parse_str(s).map(Self)
     }
 }

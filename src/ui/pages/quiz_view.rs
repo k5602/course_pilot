@@ -1,6 +1,7 @@
 //! Quiz view page - MCQ interface for taking and reviewing exams.
 
 use dioxus::prelude::*;
+use std::str::FromStr;
 
 use crate::application::ServiceFactory;
 use crate::application::use_cases::SubmitExamInput;
@@ -31,7 +32,7 @@ pub fn QuizView(exam_id: String) -> Element {
     // UI State
     let mut current_index = use_signal(|| 0usize);
     let mut selected_option = use_signal(|| None::<usize>);
-    let mut answers = use_signal(|| Vec::<usize>::new());
+    let mut answers = use_signal(Vec::<usize>::new);
     let mut is_submitting = use_signal(|| false);
     let mut show_review = use_signal(|| false);
 

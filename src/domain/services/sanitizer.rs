@@ -103,8 +103,8 @@ impl TitleSanitizer {
         text.chars()
             .filter(|c| {
                 let code = *c as u32;
-                // Keep ASCII and common extended latin
-                code < 0x1F600 || (code > 0x1FAFF && code < 0x2600) || code > 0x27BF
+                // Filter out common emoji ranges using contains
+                !(0x1F300..=0x1FAFF).contains(&code) && !(0x2600..=0x27BF).contains(&code)
             })
             .collect()
     }
