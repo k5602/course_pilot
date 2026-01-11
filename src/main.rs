@@ -2,8 +2,6 @@
 //!
 //! Transforms YouTube playlists into structured study plans.
 
-use dioxus::prelude::*;
-
 use course_pilot::ui::App;
 
 fn main() {

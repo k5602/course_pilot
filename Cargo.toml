@@ -7,7 +7,7 @@ edition = "2024"
 
 [dependencies]
 # Core UI framework
-dioxus = { version = "0.7", features = ["web", "router"] }
+dioxus = { version = "0.7", features = ["desktop", "router"] }
 
 # UI Components & Styling
 dioxus-free-icons = { version = "0.10", features = [
@@ -59,10 +59,10 @@ hyper-util = { version = "0.1", features = ["client-legacy", "http1", "http2"] }
 tower-service = "0.3"
 
 # Local ML
-fastembed = "5.7.0"
+fastembed = "5.8"
 
 # LLM (Gemini)
-genai-rs = "0.4"
+genai-rs = "0.5"
 
 # Secure Storage
 keyring = { version = "3", features = ["linux-native"] }
