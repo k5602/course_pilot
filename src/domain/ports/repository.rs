@@ -44,6 +44,13 @@ pub trait VideoRepository: Send + Sync {
 pub trait ExamRepository: Send + Sync {
     fn save(&self, exam: &Exam) -> Result<(), RepositoryError>;
     fn find_by_id(&self, id: &ExamId) -> Result<Option<Exam>, RepositoryError>;
+    fn find_all(&self) -> Result<Vec<Exam>, RepositoryError>;
     fn find_by_video(&self, video_id: &VideoId) -> Result<Vec<Exam>, RepositoryError>;
-    fn update_result(&self, id: &ExamId, score: f32, passed: bool) -> Result<(), RepositoryError>;
+    fn update_result(
+        &self,
+        id: &ExamId,
+        score: f32,
+        passed: bool,
+        user_answers_json: Option<String>,
+    ) -> Result<(), RepositoryError>;
 }

@@ -337,6 +337,7 @@ impl ExamRepository for SqliteExamRepository {
             id: &exam.id().as_uuid().to_string(),
             video_id: &exam.video_id().as_uuid().to_string(),
             question_json: exam.question_json(),
+            user_answers_json: exam.user_answers_json(),
         };
 
         diesel::insert_into(exams::table)
@@ -362,6 +363,15 @@ impl ExamRepository for SqliteExamRepository {
         }
     }
 
+    fn find_all(&self) -> Result<Vec<Exam>, RepositoryError> {
+        let mut conn = self.pool.get().map_err(|e| RepositoryError::Database(e.to_string()))?;
+
+        let rows: Vec<ExamRow> =
+            exams::table.load(&mut conn).map_err(|e| RepositoryError::Database(e.to_string()))?;
+
+        rows.into_iter().map(row_to_exam).collect()
+    }
+
     fn find_by_video(&self, video_id: &VideoId) -> Result<Vec<Exam>, RepositoryError> {
         let mut conn = self.pool.get().map_err(|e| RepositoryError::Database(e.to_string()))?;
 
@@ -373,11 +383,21 @@ impl ExamRepository for SqliteExamRepository {
         rows.into_iter().map(row_to_exam).collect()
     }
 
-    fn update_result(&self, id: &ExamId, score: f32, passed: bool) -> Result<(), RepositoryError> {
+    fn update_result(
+        &self,
+        id: &ExamId,
+        score: f32,
+        passed: bool,
+        user_answers_json: Option<String>,
+    ) -> Result<(), RepositoryError> {
         let mut conn = self.pool.get().map_err(|e| RepositoryError::Database(e.to_string()))?;
 
         diesel::update(exams::table.find(id.as_uuid().to_string()))
-            .set((exams::score.eq(score), exams::passed.eq(passed)))
+            .set((
+                exams::score.eq(score),
+                exams::passed.eq(passed),
+                exams::user_answers_json.eq(user_answers_json),
+            ))
             .execute(&mut conn)
             .map_err(|e| RepositoryError::Database(e.to_string()))?;
 
@@ -396,7 +416,7 @@ fn row_to_exam(row: ExamRow) -> Result<Exam, RepositoryError> {
 
     let mut exam = Exam::new(exam_id, video_id, row.question_json);
     if let Some(score) = row.score {
-        exam.record_result(score);
+        exam.record_result(score, row.user_answers_json);
     }
     Ok(exam)
 }

@@ -85,6 +85,12 @@ fn NotesEditor() -> Element {
 fn AiChatView() -> Element {
     let state = use_context::<AppState>();
     let messages = state.chat_history.read();
+    let video_id = state.current_video_id.read().clone();
+    let has_gemini = state.has_gemini();
+
+    let mut input_value = use_signal(String::new);
+    let is_loading = use_signal(|| false);
+    let error_msg = use_signal(|| None::<String>);
 
     rsx! {
         div {
@@ -97,11 +103,35 @@ fn AiChatView() -> Element {
                     ChatBubble { message: msg.clone() }
                 }
 
-                if messages.is_empty() {
+                if *is_loading.read() {
+                    div {
+                        class: "flex justify-start",
+                        div {
+                            class: "max-w-[80%] px-4 py-2 rounded-lg bg-base-300",
+                            span { class: "loading loading-dots loading-sm" }
+                        }
+                    }
+                }
+
+                if messages.is_empty() && !*is_loading.read() {
                     div {
                         class: "text-base-content/50 text-center mt-8",
-                        "Ask questions about the current video"
+                        if video_id.is_none() {
+                            "Select a video to ask questions"
+                        } else if !has_gemini {
+                            "Add a Gemini API key in Settings to enable AI Chat"
+                        } else {
+                            "Ask questions about the current video"
+                        }
                     }
+                }
+            }
+
+            // Error message
+            if let Some(ref err) = *error_msg.read() {
+                div {
+                    class: "text-error text-sm mb-2",
+                    "{err}"
                 }
             }
 
@@ -112,11 +142,21 @@ fn AiChatView() -> Element {
                     class: "flex gap-2",
                     input {
                         class: "input input-bordered flex-1",
-                        placeholder: "Ask a question...",
+                        placeholder: if video_id.is_none() { "Select a video first..." } else if !has_gemini { "Configure Gemini API key..." } else { "Ask a question..." },
+                        value: "{input_value}",
+                        disabled: video_id.is_none() || !has_gemini || *is_loading.read(),
+                        oninput: move |e| input_value.set(e.value()),
                     }
                     button {
                         class: "btn btn-primary",
+                        disabled: video_id.is_none() || !has_gemini || *is_loading.read() || input_value.read().trim().is_empty(),
                         "Send"
+                    }
+                }
+                if !has_gemini {
+                    p {
+                        class: "text-xs text-warning mt-2",
+                        "AI Chat requires a Gemini API key. Configure in Settings."
                     }
                 }
             }

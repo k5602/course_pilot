@@ -90,6 +90,7 @@ pub struct ExamRow {
     pub question_json: String,
     pub score: Option<f32>,
     pub passed: Option<bool>,
+    pub user_answers_json: Option<String>,
 }
 
 /// Insertable model for exams.
@@ -99,4 +100,5 @@ pub struct NewExam<'a> {
     pub id: &'a str,
     pub video_id: &'a str,
     pub question_json: &'a str,
+    pub user_answers_json: Option<&'a str>,
 }

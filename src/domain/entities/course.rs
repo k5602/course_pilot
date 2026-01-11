@@ -3,7 +3,7 @@
 use crate::domain::value_objects::{CourseId, PlaylistUrl};
 
 /// A course represents a structured learning path derived from a YouTube playlist.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct Course {
     id: CourseId,
     name: String,

@@ -35,6 +35,7 @@ pub struct MCQuestion {
     pub question: String,
     pub options: Vec<String>,
     pub correct_index: usize,
+    pub explanation: String,
 }
 
 /// Port for the Manual Examiner (AI-C).

@@ -71,6 +71,10 @@ impl VideoId {
         Self(uuid)
     }
 
+    pub fn from_str(s: &str) -> Result<Self, uuid::Error> {
+        Uuid::parse_str(s).map(Self)
+    }
+
     pub fn as_uuid(&self) -> &Uuid {
         &self.0
     }
@@ -93,6 +97,10 @@ impl ExamId {
 
     pub fn from_uuid(uuid: Uuid) -> Self {
         Self(uuid)
+    }
+
+    pub fn from_str(s: &str) -> Result<Self, uuid::Error> {
+        Uuid::parse_str(s).map(Self)
     }
 
     pub fn as_uuid(&self) -> &Uuid {

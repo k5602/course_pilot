@@ -1601,7 +1601,7 @@ dependencies = [
  "libc",
  "option-ext",
  "redox_users",
- "windows-sys 0.59.0",
+ "windows-sys 0.61.2",
 ]
 
 [[package]]
@@ -1855,7 +1855,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "39cab71617ae0d63f51a36d69f866391735b51691dbda63cf6f96d042b63efeb"
 dependencies = [
  "libc",
- "windows-sys 0.52.0",
+ "windows-sys 0.61.2",
 ]
 
 [[package]]
@@ -2277,9 +2277,9 @@ dependencies = [
 
 [[package]]
 name = "genai-rs"
-version = "0.5.3"
+version = "0.6.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "c0d98b3fb8915b5e6f1f87d50c46a70e39e6c145de4dd75a918b42f6dd26b7ce"
+checksum = "5a756188aa3a1cf3b731ad71fc9b4e899bd8d6f9226d5bc5a40cf93ee43eb206"
 dependencies = [
  "async-stream",
  "async-trait",
@@ -2291,7 +2291,6 @@ dependencies = [
  "futures-util",
  "genai-rs-macros",
  "inventory",
- "log",
  "regex",
  "reqwest 0.12.28",
  "serde",
@@ -2299,14 +2298,15 @@ dependencies = [
  "thiserror 2.0.17",
  "tokio",
  "tokio-util",
+ "tracing",
  "urlencoding",
 ]
 
 [[package]]
 name = "genai-rs-macros"
-version = "0.5.3"
+version = "0.6.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "d460a13fd61d52cb8021cdf820e99207aab583b24efab693655d43efb7a67961"
+checksum = "6cccb75ee2c5aadc355c7ccea82495239bc961e7c0fe4298bc31f32cee0125f5"
 dependencies = [
  "proc-macro2",
  "quote",
@@ -3872,7 +3872,7 @@ version = "0.7.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "ff32365de1b6743cb203b710788263c44a03de03802daf96092f2da4fe6ba4d7"
 dependencies = [
- "proc-macro-crate 1.3.1",
+ "proc-macro-crate 3.4.0",
  "proc-macro2",
  "quote",
  "syn 2.0.114",
@@ -4633,7 +4633,7 @@ dependencies = [
  "once_cell",
  "socket2",
  "tracing",
- "windows-sys 0.52.0",
+ "windows-sys 0.60.2",
 ]
 
 [[package]]
@@ -5128,7 +5128,7 @@ dependencies = [
  "errno",
  "libc",
  "linux-raw-sys",
- "windows-sys 0.52.0",
+ "windows-sys 0.61.2",
 ]
 
 [[package]]
@@ -5914,7 +5914,7 @@ dependencies = [
  "getrandom 0.3.4",
  "once_cell",
  "rustix",
- "windows-sys 0.52.0",
+ "windows-sys 0.61.2",
 ]
 
 [[package]]
@@ -6959,7 +6959,7 @@ version = "0.1.11"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "c2a7b1c03c876122aa43f3020e6c3c3ee5c05081c9a00739faf7503aeba10d22"
 dependencies = [
- "windows-sys 0.52.0",
+ "windows-sys 0.61.2",
 ]
 
 [[package]]

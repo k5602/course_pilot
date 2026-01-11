@@ -15,6 +15,8 @@ use crate::domain::{
 pub enum ExamError {
     #[error("Video not found")]
     VideoNotFound,
+    #[error("Exam not found")]
+    ExamNotFound,
     #[error("AI error: {0}")]
     AI(String),
     #[error("Repository error: {0}")]
@@ -99,12 +101,24 @@ where
         Ok(GenerateExamOutput { exam_id, questions })
     }
 
+    /// Retrieves an exam and its questions.
+    pub fn get_exam(&self, exam_id: &ExamId) -> Result<(Exam, Vec<MCQuestion>), ExamError> {
+        let exam = self
+            .exam_repo
+            .find_by_id(exam_id)
+            .map_err(|e| ExamError::Repository(e.to_string()))?
+            .ok_or(ExamError::ExamNotFound)?;
+
+        let questions: Vec<MCQuestion> = serde_json::from_str(exam.question_json())
+            .map_err(|e| ExamError::AI(format!("Failed to parse exam questions: {}", e)))?;
+
+        Ok((exam, questions))
+    }
+
     /// Submits exam answers and calculates score.
-    pub fn submit(
-        &self,
-        input: SubmitExamInput,
-        questions: &[MCQuestion],
-    ) -> Result<SubmitExamOutput, ExamError> {
+    pub fn submit(&self, input: SubmitExamInput) -> Result<SubmitExamOutput, ExamError> {
+        let (exam, questions) = self.get_exam(&input.exam_id)?;
+
         // Calculate score
         let correct_count = input
             .answers
@@ -117,18 +131,12 @@ where
             if questions.is_empty() { 0.0 } else { correct_count as f32 / questions.len() as f32 };
 
         let passed = score >= 0.7;
+        let user_answers_json = serde_json::to_string(&input.answers).ok();
 
         // Update exam with result
         self.exam_repo
-            .update_result(&input.exam_id, score, passed)
+            .update_result(&input.exam_id, score, passed, user_answers_json)
             .map_err(|e| ExamError::Repository(e.to_string()))?;
-
-        // Get exam to find video ID
-        let exam = self
-            .exam_repo
-            .find_by_id(&input.exam_id)
-            .map_err(|e| ExamError::Repository(e.to_string()))?
-            .ok_or(ExamError::VideoNotFound)?;
 
         // Mark video as complete if passed
         let mut video_marked_complete = false;

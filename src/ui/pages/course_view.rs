@@ -28,6 +28,31 @@ pub fn CourseView(course_id: String) -> Element {
         Err(_) => use_signal(Vec::new),
     };
 
+    let all_videos = match &course_id_parsed {
+        Ok(id) => {
+            let mut videos = use_signal(Vec::new);
+            let id = id.clone();
+            let backend = state.backend.clone();
+            use_effect(move || {
+                if let Some(ref ctx) = backend {
+                    if let Ok(loaded) = ctx.video_repo.find_by_course(&id) {
+                        videos.set(loaded);
+                    }
+                }
+            });
+            videos
+        },
+        Err(_) => use_signal(Vec::new),
+    };
+
+    let total_videos = all_videos.read().len();
+    let completed_videos = all_videos.read().iter().filter(|v| v.is_completed()).count();
+    let progress = if total_videos > 0 {
+        (completed_videos as f32 / total_videos as f32) * 100.0
+    } else {
+        0.0
+    };
+
     rsx! {
         div {
             class: "p-6",
@@ -56,7 +81,7 @@ pub fn CourseView(course_id: String) -> Element {
                 class: "w-full max-w-md bg-base-300 rounded-full h-3 mb-6",
                 div {
                     class: "bg-primary h-3 rounded-full transition-all",
-                    style: "width: 0%",
+                    style: "width: {progress}%",
                 }
             }
 
@@ -125,7 +150,7 @@ fn ModuleAccordion(course_id: String, module_id: String, title: String) -> Eleme
                             video_id: video.id().as_uuid().to_string(),
                             title: video.title().to_string(),
                             duration_secs: video.duration_secs(),
-                            is_completed: false,
+                            is_completed: video.is_completed(),
                         }
                     }
                 }

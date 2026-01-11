@@ -81,10 +81,6 @@ Readme.pdf
 # Test coverage
 *.coverage
 *.lcov
-
 # Misc
-hover_car
-assets/tailwind.out.css
-# GitHub Actions
 /.theme_config.toml
 /.fastembed_cache/

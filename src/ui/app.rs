@@ -11,7 +11,7 @@ use crate::ui::state::AppState;
 /// Root application component.
 #[component]
 pub fn App() -> Element {
-    // initialize backend on first render
+    // Initialize backend on first render
     let app_state = use_signal(|| {
         // Load config from environment
         let config = AppConfig::from_env();
@@ -30,7 +30,13 @@ pub fn App() -> Element {
     use_context_provider(move || app_state.read().clone());
 
     rsx! {
-        // Include dx-components theme CSS
+        // Tailwind CSS + DaisyUI (built output)
+        document::Link {
+            rel: "stylesheet",
+            href: asset!("/assets/tailwind.out.css"),
+        }
+
+        // dx-components theme CSS
         document::Link {
             rel: "stylesheet",
             href: asset!("/assets/dx-components-theme.css"),

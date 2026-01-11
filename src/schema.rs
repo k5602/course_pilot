@@ -18,6 +18,7 @@ diesel::table! {
         question_json -> Text,
         score -> Nullable<Float>,
         passed -> Nullable<Bool>,
+        user_answers_json -> Nullable<Text>,
     }
 }
 

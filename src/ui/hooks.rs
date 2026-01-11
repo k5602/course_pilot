@@ -5,9 +5,9 @@ use std::sync::Arc;
 use dioxus::prelude::*;
 
 use crate::application::AppContext;
-use crate::domain::entities::{Course, Module, Video};
-use crate::domain::ports::{CourseRepository, ModuleRepository, VideoRepository};
-use crate::domain::value_objects::{CourseId, ModuleId, VideoId};
+use crate::domain::entities::{Course, Exam, Module, Video};
+use crate::domain::ports::{CourseRepository, ExamRepository, ModuleRepository, VideoRepository};
+use crate::domain::value_objects::{CourseId, ExamId, ModuleId, VideoId};
 
 /// Load all courses from the database.
 pub fn use_load_courses(backend: Option<Arc<AppContext>>) -> Signal<Vec<Course>> {
@@ -103,4 +103,54 @@ pub fn use_load_video(
     });
 
     video
+}
+
+/// Load a single exam by ID.
+pub fn use_load_exam(backend: Option<Arc<AppContext>>, exam_id: &ExamId) -> Signal<Option<Exam>> {
+    let mut exam = use_signal(|| None);
+    let exam_id = exam_id.clone();
+
+    use_effect(move || {
+        if let Some(ref ctx) = backend {
+            match ctx.exam_repo.find_by_id(&exam_id) {
+                Ok(loaded) => exam.set(loaded),
+                Err(e) => log::error!("Failed to load exam: {}", e),
+            }
+        }
+    });
+
+    exam
+}
+
+/// Load exams for a specific video.
+pub fn use_load_exams(backend: Option<Arc<AppContext>>, video_id: &VideoId) -> Signal<Vec<Exam>> {
+    let mut exams = use_signal(Vec::new);
+    let video_id = video_id.clone();
+
+    use_effect(move || {
+        if let Some(ref ctx) = backend {
+            match ctx.exam_repo.find_by_video(&video_id) {
+                Ok(loaded) => exams.set(loaded),
+                Err(e) => log::error!("Failed to load exams: {}", e),
+            }
+        }
+    });
+
+    exams
+}
+
+/// Load all exams from the database.
+pub fn use_load_all_exams(backend: Option<Arc<AppContext>>) -> Signal<Vec<Exam>> {
+    let mut exams = use_signal(Vec::new);
+
+    use_effect(move || {
+        if let Some(ref ctx) = backend {
+            match ctx.exam_repo.find_all() {
+                Ok(loaded) => exams.set(loaded),
+                Err(e) => log::error!("Failed to load exams: {}", e),
+            }
+        }
+    });
+
+    exams
 }

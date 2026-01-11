@@ -62,7 +62,7 @@ tower-service = "0.3"
 fastembed = "5.8"
 
 # LLM (Gemini)
-genai-rs = "0.5"
+genai-rs = "0.6"
 
 # Secure Storage
 keyring = { version = "3", features = ["linux-native"] }

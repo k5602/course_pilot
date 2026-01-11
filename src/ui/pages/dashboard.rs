@@ -2,10 +2,12 @@
 
 use dioxus::prelude::*;
 
+use crate::domain::entities::Course;
+use crate::domain::ports::VideoRepository;
 use crate::ui::Route;
 use crate::ui::actions::{ImportResult, import_playlist};
 use crate::ui::custom::{CourseCard, ImportPlaylistDialog};
-use crate::ui::hooks::use_load_courses;
+use crate::ui::hooks::{use_load_courses, use_load_modules};
 use crate::ui::state::AppState;
 
 /// Dashboard showing all courses and overall progress.
@@ -114,11 +116,9 @@ pub fn Dashboard() -> Element {
                 div {
                     class: "grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4",
                     for course in courses.read().iter() {
-                        CourseCard {
-                            id: course.id().as_uuid().to_string(),
-                            name: course.name().to_string(),
-                            module_count: 0,  // Will calculate below
-                            completed_modules: 0,
+                        CourseCardWithStats {
+                            key: "{course.id().as_uuid()}",
+                            course: course.clone(),
                         }
                     }
                 }
@@ -129,6 +129,52 @@ pub fn Dashboard() -> Element {
         ImportPlaylistDialog {
             open: import_open,
             on_import: handle_import,
+        }
+    }
+}
+
+#[component]
+fn CourseCardWithStats(course: Course) -> Element {
+    let state = use_context::<AppState>();
+    let backend = state.backend.clone();
+
+    let modules = use_load_modules(backend.clone(), course.id());
+    let mut all_videos = use_signal(Vec::new);
+
+    let course_id = course.id().clone();
+    let backend_inner = backend.clone();
+
+    use_effect(move || {
+        if let Some(ref ctx) = backend_inner {
+            if let Ok(videos) = ctx.video_repo.find_by_course(&course_id) {
+                all_videos.set(videos);
+            }
+        }
+    });
+
+    let module_list = modules.read();
+    let video_list = all_videos.read();
+
+    let module_count = module_list.len();
+    let completed_modules = if video_list.is_empty() {
+        0
+    } else {
+        module_list
+            .iter()
+            .filter(|m| {
+                let module_videos: Vec<_> =
+                    video_list.iter().filter(|v| v.module_id() == m.id()).collect();
+                !module_videos.is_empty() && module_videos.iter().all(|v| v.is_completed())
+            })
+            .count()
+    };
+
+    rsx! {
+        CourseCard {
+            id: course.id().as_uuid().to_string(),
+            name: course.name().to_string(),
+            module_count,
+            completed_modules,
         }
     }
 }

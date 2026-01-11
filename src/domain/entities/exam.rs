@@ -6,19 +6,20 @@ use crate::domain::value_objects::{ExamId, VideoId};
 const PASS_THRESHOLD: f32 = 0.70;
 
 /// An exam represents an AI-generated MCQ test for a video.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct Exam {
     id: ExamId,
     video_id: VideoId,
     question_json: String,
     score: Option<f32>,
     passed: Option<bool>,
+    user_answers_json: Option<String>,
 }
 
 impl Exam {
     /// Creates a new exam with questions but no score yet.
     pub fn new(id: ExamId, video_id: VideoId, question_json: String) -> Self {
-        Self { id, video_id, question_json, score: None, passed: None }
+        Self { id, video_id, question_json, score: None, passed: None, user_answers_json: None }
     }
 
     pub fn id(&self) -> &ExamId {
@@ -41,11 +42,16 @@ impl Exam {
         self.passed
     }
 
+    pub fn user_answers_json(&self) -> Option<&str> {
+        self.user_answers_json.as_deref()
+    }
+
     /// Records the exam result with a score between 0.0 and 1.0.
-    pub fn record_result(&mut self, score: f32) {
+    pub fn record_result(&mut self, score: f32, answers_json: Option<String>) {
         let clamped = score.clamp(0.0, 1.0);
         self.score = Some(clamped);
         self.passed = Some(clamped >= PASS_THRESHOLD);
+        self.user_answers_json = answers_json;
     }
 
     /// Returns true if the exam has been taken.
@@ -62,7 +68,7 @@ mod tests {
     fn test_exam_pass() {
         let mut exam =
             Exam::new(ExamId::new(), VideoId::new(), r#"[{"question": "test"}]"#.to_string());
-        exam.record_result(0.8);
+        exam.record_result(0.8, None);
         assert!(exam.passed().unwrap());
     }
 
@@ -70,7 +76,7 @@ mod tests {
     fn test_exam_fail() {
         let mut exam =
             Exam::new(ExamId::new(), VideoId::new(), r#"[{"question": "test"}]"#.to_string());
-        exam.record_result(0.5);
+        exam.record_result(0.5, None);
         assert!(!exam.passed().unwrap());
     }
 }

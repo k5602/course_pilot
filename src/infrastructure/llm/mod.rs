@@ -59,7 +59,7 @@ impl ExaminerAI for GeminiAdapter {
 {}
 
 Reply ONLY with JSON array:
-[{{"question": "...", "options": ["A", "B", "C", "D"], "correct_index": 0}}]"#,
+[{{"question": "...", "options": ["A", "B", "C", "D"], "correct_index": 0, "explanation": "..."}}]"#,
             num_questions,
             video_title,
             video_description.unwrap_or("")
