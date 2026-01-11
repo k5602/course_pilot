@@ -3,7 +3,7 @@
 use diesel::prelude::*;
 use diesel::sqlite::Sqlite;
 
-use crate::schema::{courses, exams, modules, videos};
+use crate::schema::{courses, exams, modules, notes, videos};
 
 /// Diesel model for the courses table.
 #[derive(Queryable, Selectable, Identifiable, Debug)]
@@ -101,4 +101,25 @@ pub struct NewExam<'a> {
     pub video_id: &'a str,
     pub question_json: &'a str,
     pub user_answers_json: Option<&'a str>,
+}
+
+/// Diesel model for the notes table.
+#[derive(Queryable, Selectable, Identifiable, Associations, Debug)]
+#[diesel(table_name = notes)]
+#[diesel(belongs_to(VideoRow, foreign_key = video_id))]
+#[diesel(check_for_backend(Sqlite))]
+pub struct NoteRow {
+    pub id: String,
+    pub video_id: String,
+    pub content: String,
+    pub updated_at: String, // SQLite stores TIMESTAMP as TEXT
+}
+
+/// Insertable model for notes.
+#[derive(Insertable)]
+#[diesel(table_name = notes)]
+pub struct NewNote<'a> {
+    pub id: &'a str,
+    pub video_id: &'a str,
+    pub content: &'a str,
 }

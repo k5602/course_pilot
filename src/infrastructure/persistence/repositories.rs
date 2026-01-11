@@ -5,14 +5,18 @@ use std::sync::Arc;
 
 use super::connection::DbPool;
 use super::models::{
-    CourseRow, ExamRow, ModuleRow, NewCourse, NewExam, NewModule, NewVideo, VideoRow,
+    CourseRow, ExamRow, ModuleRow, NewCourse, NewExam, NewModule, NewNote, NewVideo, NoteRow,
+    VideoRow,
 };
 use crate::domain::{
-    entities::{Course, Exam, Module, Video},
-    ports::{CourseRepository, ExamRepository, ModuleRepository, RepositoryError, VideoRepository},
+    entities::{Course, Exam, Module, Note, NoteId, Video},
+    ports::{
+        CourseRepository, ExamRepository, ModuleRepository, NoteRepository, RepositoryError,
+        VideoRepository,
+    },
     value_objects::{CourseId, ExamId, ModuleId, PlaylistUrl, VideoId, YouTubeVideoId},
 };
-use crate::schema::{courses, exams, modules, videos};
+use crate::schema::{courses, exams, modules, notes, videos};
 
 /// SQLite-backed course repository.
 pub struct SqliteCourseRepository {
@@ -419,4 +423,71 @@ fn row_to_exam(row: ExamRow) -> Result<Exam, RepositoryError> {
         exam.record_result(score, row.user_answers_json);
     }
     Ok(exam)
+}
+
+/// SQLite-backed note repository.
+pub struct SqliteNoteRepository {
+    pool: Arc<DbPool>,
+}
+
+impl SqliteNoteRepository {
+    pub fn new(pool: Arc<DbPool>) -> Self {
+        Self { pool }
+    }
+}
+
+impl NoteRepository for SqliteNoteRepository {
+    fn save(&self, note: &Note) -> Result<(), RepositoryError> {
+        let mut conn = self.pool.get().map_err(|e| RepositoryError::Database(e.to_string()))?;
+
+        let new_note = NewNote {
+            id: &note.id().as_uuid().to_string(),
+            video_id: &note.video_id().as_uuid().to_string(),
+            content: note.content(),
+        };
+
+        // Use upsert - ON CONFLICT replace
+        diesel::replace_into(notes::table)
+            .values(&new_note)
+            .execute(&mut conn)
+            .map_err(|e| RepositoryError::Database(e.to_string()))?;
+
+        Ok(())
+    }
+
+    fn find_by_video(&self, video_id: &VideoId) -> Result<Option<Note>, RepositoryError> {
+        let mut conn = self.pool.get().map_err(|e| RepositoryError::Database(e.to_string()))?;
+
+        let result = notes::table
+            .filter(notes::video_id.eq(video_id.as_uuid().to_string()))
+            .first::<NoteRow>(&mut conn)
+            .optional()
+            .map_err(|e| RepositoryError::Database(e.to_string()))?;
+
+        match result {
+            Some(row) => row_to_note(row).map(Some),
+            None => Ok(None),
+        }
+    }
+
+    fn delete(&self, video_id: &VideoId) -> Result<(), RepositoryError> {
+        let mut conn = self.pool.get().map_err(|e| RepositoryError::Database(e.to_string()))?;
+
+        diesel::delete(notes::table.filter(notes::video_id.eq(video_id.as_uuid().to_string())))
+            .execute(&mut conn)
+            .map_err(|e| RepositoryError::Database(e.to_string()))?;
+
+        Ok(())
+    }
+}
+
+fn row_to_note(row: NoteRow) -> Result<Note, RepositoryError> {
+    let note_id =
+        NoteId::from_str(&row.id).map_err(|e| RepositoryError::Database(e.to_string()))?;
+    let video_id = VideoId::from_uuid(
+        uuid::Uuid::parse_str(&row.video_id)
+            .map_err(|e| RepositoryError::Database(e.to_string()))?,
+    );
+
+    Ok(Note::new(note_id, video_id, row.content))
 }

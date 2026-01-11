@@ -6,5 +6,6 @@ mod repositories;
 
 pub use connection::{DbPool, establish_connection};
 pub use repositories::{
-    SqliteCourseRepository, SqliteExamRepository, SqliteModuleRepository, SqliteVideoRepository,
+    SqliteCourseRepository, SqliteExamRepository, SqliteModuleRepository, SqliteNoteRepository,
+    SqliteVideoRepository,
 };

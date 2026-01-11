@@ -1,6 +1,6 @@
 //! Repository ports for persistence.
 
-use crate::domain::entities::{Course, Exam, Module, Video};
+use crate::domain::entities::{Course, Exam, Module, Note, Video};
 use crate::domain::value_objects::{CourseId, ExamId, ModuleId, VideoId};
 
 /// Error type for repository operations.
@@ -53,4 +53,11 @@ pub trait ExamRepository: Send + Sync {
         passed: bool,
         user_answers_json: Option<String>,
     ) -> Result<(), RepositoryError>;
+}
+
+/// Repository for Note entities.
+pub trait NoteRepository: Send + Sync {
+    fn save(&self, note: &Note) -> Result<(), RepositoryError>;
+    fn find_by_video(&self, video_id: &VideoId) -> Result<Option<Note>, RepositoryError>;
+    fn delete(&self, video_id: &VideoId) -> Result<(), RepositoryError>;
 }

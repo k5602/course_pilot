@@ -32,6 +32,15 @@ diesel::table! {
 }
 
 diesel::table! {
+    notes (id) {
+        id -> Text,
+        video_id -> Text,
+        content -> Text,
+        updated_at -> Timestamp,
+    }
+}
+
+diesel::table! {
     videos (id) {
         id -> Text,
         module_id -> Text,
@@ -45,6 +54,7 @@ diesel::table! {
 
 diesel::joinable!(exams -> videos (video_id));
 diesel::joinable!(modules -> courses (course_id));
+diesel::joinable!(notes -> videos (video_id));
 diesel::joinable!(videos -> modules (module_id));
 
-diesel::allow_tables_to_appear_in_same_query!(courses, exams, modules, videos,);
+diesel::allow_tables_to_appear_in_same_query!(courses, exams, modules, notes, videos,);
