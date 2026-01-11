@@ -1,0 +1,13 @@
+[application]
+name = "course_pilot"
+default_platform = "desktop"
+
+[desktop]
+enable_hotreload = true
+
+[bundle]
+identifier = "com.k5602.course_pilot"
+name = "Course Pilot"
+
+[bundle.linux]
+strip = true

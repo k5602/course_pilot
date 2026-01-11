@@ -31,14 +31,6 @@ jobs:
           key: ${{ runner.os }}-cargo-deps-${{ hashFiles('Cargo.lock') }}
           restore-keys: ${{ runner.os }}-cargo-deps-
 
-      - name: Cache apt packages
-        uses: actions/cache@v4
-        with:
-          path: /var/cache/apt/archives
-          key: ${{ runner.os }}-apt-cache-${{ hashFiles('.github/workflows/release.yml') }}
-          restore-keys: |
-            ${{ runner.os }}-apt-cache-
-
       - name: Install Linux dependencies
         run: |
           sudo apt-get update
@@ -68,21 +60,13 @@ jobs:
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: "18"
-
-      - name: Verify Node.js files
-        run: |
-          echo "Checking for Node.js dependency files..."
-          ls -la package*.json || echo "No package files found"
-          pwd
+          node-version: "20"
 
       - name: Install Node dependencies
         run: |
           if [ -f package-lock.json ]; then
-            echo "Using npm ci with existing lock file"
             npm ci
           else
-            echo "No lock file found, using npm install"
             npm install
           fi
 
@@ -92,20 +76,13 @@ jobs:
       - name: Build CSS
         run: npm run build:css
 
-      - name: Install Dioxus CLI
-        run: cargo install dioxus-cli --locked --force
-
-      - name: Clean previous build artifacts
-        run: cargo clean
-
-      - name: Build Dioxus app for Linux
+      - name: Build release binary
         run: |
           export PKG_CONFIG_PATH=/usr/lib/pkgconfig:/usr/lib/x86_64-linux-gnu/pkgconfig:/usr/share/pkgconfig
-          echo "PKG_CONFIG_PATH=$PKG_CONFIG_PATH"
-          dx build --release --platform desktop
+          cargo build --release --bin course_pilot
 
       - name: Strip binary (reduce size)
-        run: strip ./target/release/course_pilot
+        run: strip ./target/release/course_pilot || echo "Strip failed, continuing anyway"
 
       - name: Package Linux build
         run: |
@@ -149,21 +126,13 @@ jobs:
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: "18"
-
-      - name: Verify Node.js files
-        run: |
-          Write-Host "Checking for Node.js dependency files..."
-          Get-ChildItem package*.json -ErrorAction SilentlyContinue | ForEach-Object { Write-Host "Found: $($_.Name)" }
-          Write-Host "Current directory: $(Get-Location)"
+          node-version: "20"
 
       - name: Install Node dependencies
         run: |
           if (Test-Path package-lock.json) {
-            Write-Host "Using npm ci with existing lock file"
             npm ci
           } else {
-            Write-Host "No lock file found, using npm install"
             npm install
           }
 
@@ -173,68 +142,19 @@ jobs:
       - name: Build CSS
         run: npm run build:css
 
-      - name: Configure Windows build environment
+      - name: Build release binary
         run: |
-          New-Item -ItemType Directory -Force -Path .cargo
-          @"
-          [target.x86_64-pc-windows-msvc]
-          rustflags = [
-            "-C", "target-feature=+crt-static",
-            "-l", "advapi32",
-            "-l", "crypt32",
-            "-l", "secur32",
-            "-l", "userenv",
-            "-l", "ws2_32"
-          ]
-          "@ | Out-File -FilePath .cargo/config.toml -Encoding utf8
-          Write-Host "Created .cargo/config.toml with Windows system libraries"
-
-      - name: Build Dioxus app for Windows
-        run: |
-          Write-Host "Building Dioxus app for Windows..."
-          Write-Host "Rust version: $(rustc --version)"
-          Write-Host "Cargo version: $(cargo --version)"
-
-          # Build directly with cargo to avoid Dioxus CLI installation issues on Windows
-          Write-Host "Building with cargo directly..."
-          cargo build --release --bin course_pilot --verbose
+          Write-Host "Building release binary for Windows..."
+          cargo build --release --bin course_pilot
         env:
           RUSTFLAGS: "-C target-feature=+crt-static"
 
       - name: Package Windows build
         run: |
-          Write-Host "Packaging Windows build..."
           New-Item -ItemType Directory -Force -Path release-artifacts
-
-          # Try multiple possible locations for the binary
-          $possiblePaths = @(
-            "./target/release/course_pilot.exe",
-            "./target/x86_64-pc-windows-msvc/release/course_pilot.exe"
-          )
-
-          $binaryFound = $false
-          foreach ($path in $possiblePaths) {
-            if (Test-Path $path) {
-              Write-Host "Found binary at: $path"
-              Copy-Item $path ./release-artifacts/
-              $binaryFound = $true
-              break
-            }
-          }
-
-          if (-not $binaryFound) {
-            Write-Host "course_pilot.exe not found at any expected location"
-            Write-Host "Searching for all .exe files in target directory:"
-            Get-ChildItem ./target/ -Recurse -Name "*.exe" | ForEach-Object { Write-Host "Found: $_" }
-            exit 1
-          }
-
+          Copy-Item ./target/release/course_pilot.exe ./release-artifacts/
           Copy-Item -Recurse ./assets ./release-artifacts/
-          Write-Host "Successfully copied course_pilot.exe and assets"
-          Write-Host "Binary size: $((Get-Item ./release-artifacts/course_pilot.exe).Length) bytes"
-
           Compress-Archive -Path ./release-artifacts/* -DestinationPath course-pilot-windows-x64.zip
-          Write-Host "Package created: course-pilot-windows-x64.zip"
 
       - name: Upload Windows artifact
         uses: actions/upload-artifact@v4

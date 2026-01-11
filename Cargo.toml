@@ -73,4 +73,3 @@ opt-level = "z"   # Optimize for size
 lto = true        # Enable Link Time Optimization
 codegen-units = 1 # Allow for maximum cross-module optimization
 panic = "abort"   # Remove unwinding code for smaller binaries
-strip = true      # Strip debug symbols from the final binary

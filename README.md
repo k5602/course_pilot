@@ -2,50 +2,50 @@
 
 [![Rust CI](https://github.com/k5602/course_pilot/actions/workflows/rust.yml/badge.svg?branch=main)](https://github.com/k5602/course_pilot/actions/workflows/rust.yml) [![Clippy](https://img.shields.io/github/actions/workflow/status/k5602/course_pilot/rust.yml?branch=main&label=clippy)](https://github.com/k5602/course_pilot/actions/workflows/rust.yml)
 
-> Transform YouTube playlists and video folders into structured, intelligent study plans
+> Transform YouTube playlists into structured, intelligent study plans
 
-A modern Rust desktop application that automatically analyzes video-based courses, creates logical learning structures, and generates personalized study schedules. Built with performance, accessibility, and user experience at its core.
+A modern Rust desktop application that automatically analyzes video-based courses, creates logical learning structures, and generates personalized study schedules.
 
 ![Rust](https://img.shields.io/badge/rust-1.80+-orange.svg)
-![Dioxus](https://img.shields.io/badge/dioxus-0.6+-blue.svg)
+![Dioxus](https://img.shields.io/badge/dioxus-0.7+-blue.svg)
 ![License](https://img.shields.io/badge/license-MIT-green.svg)
 ![Development Status](https://img.shields.io/badge/status-active%20development-brightgreen.svg)
 
-## 🌟 What Makes Course Pilot Special
+## ✨ Features
 
-Course Pilot bridges the gap between scattered video content and structured learning. Whether you're a student tackling online courses, a professional learning new skills, or an educator organizing content, Course Pilot transforms chaotic video collections into organized, trackable learning experiences.
+### Core Functionality
 
-### Key Problems Solved
+- **Playlist Import** - Import YouTube playlists with automatic metadata extraction
+- **Smart Modules** - AI-powered grouping of videos into logical modules
+- **Progress Tracking** - Track video completion with visual progress bars
+- **Video Navigation** - Previous/next video links for seamless learning flow
 
-- **Content Chaos**: No more losing track of where you left off in long video series
-- **Poor Structure**: Automatically organizes videos into logical modules and sections
-- **No Progress Tracking**: Visual progress indicators and completion tracking
-- **Time Management**: Intelligent scheduling based on your availability
-- **Note Scattered**: Centralized note-taking tied to specific videos and topics
+### Learning Tools
 
-## 🎨 Design Philosophy
+- **Session Planning** - Plan study sessions based on your cognitive limit (15-120 min/day)
+- **AI Companion** - Ask questions about video content (requires Gemini API)
+- **Quiz Generation** - Auto-generated MCQ quizzes from video context
+- **Per-Video Notes** - Take and persist notes for each video
 
-### **User-Centered Design**
+### User Experience
 
-- **Keyboard Navigation**: Complete keyboard accessibility
-- **Dark Mode**: Eye-friendly themes for all lighting conditions
-- **Responsive Layout**: Adapts to various screen sizes and resolutions
-- **Intuitive UI**: Clean, minimalistic interface focused on usability
+- **Dark Theme** - Eye-friendly DaisyUI dark theme
+- **Settings Persistence** - ML toggle and preferences saved to database
+- **Course Management** - Delete courses with confirmation dialog
+- **Loading States** - Skeleton loaders and spinners throughout
 
-### **Performance by Design**
+## 🚀 Quick Start
 
-- **Rust's Zero-Cost Abstractions**: Maximum performance, minimal overhead
-- **Efficient Rendering**: Virtual DOM with smart diffing
-- **Lazy Loading**: Components and data loaded on demand
-- **Optimized Algorithms**: Fast video analysis and scheduling
+### Prerequisites
 
-## Quick Start
+- Rust 1.80+
+- [Dioxus CLI](https://dioxuslabs.com/learn/0.7/getting_started): `cargo install dioxus-cli`
 
-### 1. Configure
-
-Copy the example config and add your API keys:
+### 1. Clone & Configure
 
 ```bash
+git clone https://github.com/k5602/course_pilot.git
+cd course_pilot
 cp .env.example .env
 ```
 
@@ -58,15 +58,27 @@ GEMINI_API_KEY=your_gemini_api_key_here  # optional
 ENABLE_ML_BOUNDARY_DETECTION=false       # optional
 ```
 
-### 2. Run
+### 2. Setup Database
 
 ```bash
-cargo run
-# or with logging:
-RUST_LOG=info cargo run
+diesel migration run
 ```
 
-## Configuration Options
+### 3. Run
+
+```bash
+dx serve
+# or with logging:
+RUST_LOG=info dx serve
+```
+
+### 4. Build Release
+
+```bash
+dx build --release
+```
+
+## ⚙️ Configuration
 
 | Variable | Required | Default | Description |
 |----------|----------|---------|-------------|
@@ -75,7 +87,7 @@ RUST_LOG=info cargo run
 | `GEMINI_API_KEY` | No | - | Gemini API key for AI features |
 | `ENABLE_ML_BOUNDARY_DETECTION` | No | `false` | Use ML to detect module boundaries |
 
-## API Keys
+## 🔑 API Keys
 
 ### YouTube API Key (Required)
 
@@ -89,8 +101,40 @@ RUST_LOG=info cargo run
 1. Visit [Google AI Studio](https://aistudio.google.com/app/apikey)
 2. Create an API key
 
+> API keys can also be configured in Settings page within the app.
+
+## 🛠️ Development
+
+```bash
+# Run development server
+dx serve
+
+# Run tests
+cargo test --lib
+
+# Lint
+cargo clippy --all-targets -- -D warnings
+
+# Format
+cargo fmt
+
+# Rebuild database
+rm course_pilot.db && diesel migration run
+```
+
+## 📁 Project Structure
+
+```
+src/
+├── application/      # Use cases and DI container
+├── domain/           # Entities, ports, value objects
+├── infrastructure/   # SQLite, YouTube, LLM adapters
+└── ui/
+    ├── pages/        # Dashboard, CourseView, VideoPlayer, etc.
+    ├── custom/       # Reusable components
+    └── hooks.rs      # Data loading hooks
+```
+
 ## 📄 License
 
-This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
-
----
+MIT License - see [LICENSE](LICENSE) for details.

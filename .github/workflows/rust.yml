@@ -44,19 +44,11 @@ jobs:
         with:
           node-version: "20"
 
-      - name: Verify Node.js files
-        run: |
-          echo "Checking for Node.js dependency files..."
-          ls -la package*.json || echo "No package files found"
-          pwd
-
       - name: Install Node dependencies
         run: |
           if [ -f package-lock.json ]; then
-            echo "Using npm ci with existing lock file"
             npm ci
           else
-            echo "No lock file found, using npm install"
             npm install
           fi
 
@@ -91,17 +83,14 @@ jobs:
       - name: Lint (clippy - deny warnings)
         run: |
           export PKG_CONFIG_PATH=/usr/lib/pkgconfig:/usr/lib/x86_64-linux-gnu/pkgconfig:/usr/share/pkgconfig
-          echo "PKG_CONFIG_PATH=$PKG_CONFIG_PATH"
           cargo clippy --all-targets --all-features -- -D warnings
 
       - name: Build
         run: |
           export PKG_CONFIG_PATH=/usr/lib/pkgconfig:/usr/lib/x86_64-linux-gnu/pkgconfig:/usr/share/pkgconfig
-          echo "PKG_CONFIG_PATH=$PKG_CONFIG_PATH"
           cargo build --verbose
 
       - name: Test
         run: |
           export PKG_CONFIG_PATH=/usr/lib/pkgconfig:/usr/lib/x86_64-linux-gnu/pkgconfig:/usr/share/pkgconfig
-          echo "PKG_CONFIG_PATH=$PKG_CONFIG_PATH"
           cargo test --all --locked --verbose
