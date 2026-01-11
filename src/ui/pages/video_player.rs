@@ -7,7 +7,7 @@ use crate::domain::value_objects::{CourseId, VideoId};
 use crate::ui::Route;
 use crate::ui::actions::start_exam;
 use crate::ui::custom::YouTubePlayer;
-use crate::ui::hooks::{use_load_modules, use_load_video};
+use crate::ui::hooks::{use_load_modules, use_load_video, use_load_videos_by_course};
 use crate::ui::state::AppState;
 
 /// Video player with controls and completion actions.
@@ -31,6 +31,7 @@ pub fn VideoPlayer(course_id: String, video_id: String) -> Element {
     // Load data
     let video = use_load_video(backend.clone(), &video_id_vo);
     let modules = use_load_modules(backend.clone(), &course_id_vo);
+    let all_videos = use_load_videos_by_course(backend.clone(), &course_id_vo);
 
     // Track current video in global state for AI companion context
     let video_id_for_state = video_id.clone();
@@ -52,6 +53,15 @@ pub fn VideoPlayer(course_id: String, video_id: String) -> Element {
         .find(|m| m.id() == v.module_id())
         .map(|m| m.title().to_string())
         .unwrap_or_else(|| "Module".to_string());
+
+    // Compute prev/next videos
+    let videos_list = all_videos.read();
+    let current_idx = videos_list.iter().position(|vid| vid.id() == v.id());
+
+    let prev_video =
+        current_idx.and_then(|idx| if idx > 0 { videos_list.get(idx - 1).cloned() } else { None });
+
+    let next_video = current_idx.and_then(|idx| videos_list.get(idx + 1).cloned());
 
     // Clone data for closures
     let backend_for_complete = backend.clone();
@@ -139,29 +149,63 @@ pub fn VideoPlayer(course_id: String, video_id: String) -> Element {
 
             // Navigation Footer
             div { class: "mt-auto pt-12 flex justify-between border-t border-base-300",
-                // Note: Logic for finding next/prev video would go here
-                // For now we keep placeholders that go back to course view
-                Link {
-                    to: Route::CourseView { course_id: course_id.clone() },
-                    class: "group flex items-center gap-4 p-4 rounded-2xl hover:bg-base-200 transition-all",
-                    div { class: "w-10 h-10 rounded-full bg-base-300 flex items-center justify-center group-hover:bg-primary group-hover:text-primary-content transition-colors",
-                        "←"
+                // Previous video
+                if let Some(pv) = prev_video {
+                    Link {
+                        to: Route::VideoPlayer {
+                            course_id: course_id.clone(),
+                            video_id: pv.id().as_uuid().to_string()
+                        },
+                        class: "group flex items-center gap-4 p-4 rounded-2xl hover:bg-base-200 transition-all",
+                        div { class: "w-10 h-10 rounded-full bg-base-300 flex items-center justify-center group-hover:bg-primary group-hover:text-primary-content transition-colors",
+                            "←"
+                        }
+                        div {
+                            p { class: "text-xs font-bold opacity-40 uppercase tracking-widest", "Previous" }
+                            p { class: "font-medium truncate max-w-[200px]", "{pv.title()}" }
+                        }
                     }
-                    div {
-                        p { class: "text-xs font-bold opacity-40 uppercase tracking-widest", "Previous" }
-                        p { class: "font-medium", "Module Overview" }
+                } else {
+                    Link {
+                        to: Route::CourseView { course_id: course_id.clone() },
+                        class: "group flex items-center gap-4 p-4 rounded-2xl hover:bg-base-200 transition-all opacity-50",
+                        div { class: "w-10 h-10 rounded-full bg-base-300 flex items-center justify-center",
+                            "←"
+                        }
+                        div {
+                            p { class: "text-xs font-bold opacity-40 uppercase tracking-widest", "Previous" }
+                            p { class: "font-medium", "Back to Course" }
+                        }
                     }
                 }
 
-                Link {
-                    to: Route::CourseView { course_id: course_id.clone() },
-                    class: "group flex items-center text-right gap-4 p-4 rounded-2xl hover:bg-base-200 transition-all",
-                    div {
-                        p { class: "text-xs font-bold opacity-40 uppercase tracking-widest", "Next" }
-                        p { class: "font-medium", "Return to Course" }
+                // Next video
+                if let Some(nv) = next_video {
+                    Link {
+                        to: Route::VideoPlayer {
+                            course_id: course_id.clone(),
+                            video_id: nv.id().as_uuid().to_string()
+                        },
+                        class: "group flex items-center text-right gap-4 p-4 rounded-2xl hover:bg-base-200 transition-all",
+                        div {
+                            p { class: "text-xs font-bold opacity-40 uppercase tracking-widest", "Next" }
+                            p { class: "font-medium truncate max-w-[200px]", "{nv.title()}" }
+                        }
+                        div { class: "w-10 h-10 rounded-full bg-base-300 flex items-center justify-center group-hover:bg-primary group-hover:text-primary-content transition-colors",
+                            "→"
+                        }
                     }
-                    div { class: "w-10 h-10 rounded-full bg-base-300 flex items-center justify-center group-hover:bg-primary group-hover:text-primary-content transition-colors",
-                        "→"
+                } else {
+                    Link {
+                        to: Route::CourseView { course_id: course_id.clone() },
+                        class: "group flex items-center text-right gap-4 p-4 rounded-2xl hover:bg-base-200 transition-all opacity-50",
+                        div {
+                            p { class: "text-xs font-bold opacity-40 uppercase tracking-widest", "Complete" }
+                            p { class: "font-medium", "Back to Course" }
+                        }
+                        div { class: "w-10 h-10 rounded-full bg-base-300 flex items-center justify-center",
+                            "✓"
+                        }
                     }
                 }
             }

@@ -14,7 +14,7 @@ use crate::infrastructure::{
     ml::FastEmbedAdapter,
     persistence::{
         DbPool, SqliteCourseRepository, SqliteExamRepository, SqliteModuleRepository,
-        SqliteVideoRepository,
+        SqliteNoteRepository, SqliteVideoRepository,
     },
     youtube::YouTubeApiAdapter,
 };
@@ -31,7 +31,6 @@ pub struct AppConfig {
     /// Gemini API key (optional - for AI companion and exams).
     pub gemini_api_key: Option<String>,
     /// Enable ML-based module boundary detection.
-    /// When false, playlists are imported as-is without AI grouping.
     pub enable_ml_boundary_detection: bool,
 }
 
@@ -109,6 +108,7 @@ pub struct AppContext {
     pub module_repo: Arc<SqliteModuleRepository>,
     pub video_repo: Arc<SqliteVideoRepository>,
     pub exam_repo: Arc<SqliteExamRepository>,
+    pub note_repo: Arc<SqliteNoteRepository>,
 
     // Infrastructure adapters
     pub youtube: Option<Arc<YouTubeApiAdapter>>,
@@ -133,6 +133,7 @@ impl AppContext {
         let module_repo = Arc::new(SqliteModuleRepository::new(db_pool.clone()));
         let video_repo = Arc::new(SqliteVideoRepository::new(db_pool.clone()));
         let exam_repo = Arc::new(SqliteExamRepository::new(db_pool.clone()));
+        let note_repo = Arc::new(SqliteNoteRepository::new(db_pool.clone()));
 
         // Create keystore
         let keystore = Arc::new(NativeKeystore::new());
@@ -165,6 +166,7 @@ impl AppContext {
             module_repo,
             video_repo,
             exam_repo,
+            note_repo,
             youtube,
             embedder,
             llm,

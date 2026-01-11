@@ -154,3 +154,23 @@ pub fn use_load_all_exams(backend: Option<Arc<AppContext>>) -> Signal<Vec<Exam>>
 
     exams
 }
+
+/// Load all videos for a specific course (across all modules).
+pub fn use_load_videos_by_course(
+    backend: Option<Arc<AppContext>>,
+    course_id: &CourseId,
+) -> Signal<Vec<Video>> {
+    let mut videos = use_signal(Vec::new);
+    let course_id = course_id.clone();
+
+    use_effect(move || {
+        if let Some(ref ctx) = backend {
+            match ctx.video_repo.find_by_course(&course_id) {
+                Ok(loaded) => videos.set(loaded),
+                Err(e) => log::error!("Failed to load videos for course: {}", e),
+            }
+        }
+    });
+
+    videos
+}

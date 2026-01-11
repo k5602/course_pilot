@@ -7,5 +7,5 @@ mod take_exam;
 
 pub use ask_companion::{AskCompanionInput, AskCompanionUseCase};
 pub use ingest_playlist::{IngestPlaylistInput, IngestPlaylistOutput, IngestPlaylistUseCase};
-pub use plan_session::PlanSessionUseCase;
+pub use plan_session::{PlanSessionInput, PlanSessionUseCase};
 pub use take_exam::{GenerateExamInput, SubmitExamInput, SubmitExamOutput, TakeExamUseCase};
