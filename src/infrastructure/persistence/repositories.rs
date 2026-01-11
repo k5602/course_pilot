@@ -223,6 +223,7 @@ impl VideoRepository for SqliteVideoRepository {
             duration_secs: video.duration_secs() as i32,
             is_completed: video.is_completed(),
             sort_order: video.sort_order() as i32,
+            description: video.description(),
         };
 
         diesel::insert_into(videos::table)
@@ -308,11 +309,12 @@ fn row_to_video(row: VideoRow) -> Result<Video, RepositoryError> {
     let youtube_id = YouTubeVideoId::new(&row.youtube_id)
         .map_err(|e| RepositoryError::Database(e.to_string()))?;
 
-    let mut video = Video::new(
+    let mut video = Video::with_description(
         video_id,
         module_id,
         youtube_id,
         row.title,
+        row.description,
         row.duration_secs as u32,
         row.sort_order as u32,
     );

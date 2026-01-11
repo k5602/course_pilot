@@ -3,12 +3,13 @@
 use crate::domain::value_objects::{ModuleId, VideoId, YouTubeVideoId};
 
 /// A video represents a single learning unit within a module.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct Video {
     id: VideoId,
     module_id: ModuleId,
     youtube_id: YouTubeVideoId,
     title: String,
+    description: Option<String>,
     duration_secs: u32,
     is_completed: bool,
     sort_order: u32,
@@ -24,7 +25,38 @@ impl Video {
         duration_secs: u32,
         sort_order: u32,
     ) -> Self {
-        Self { id, module_id, youtube_id, title, duration_secs, is_completed: false, sort_order }
+        Self {
+            id,
+            module_id,
+            youtube_id,
+            title,
+            description: None,
+            duration_secs,
+            is_completed: false,
+            sort_order,
+        }
+    }
+
+    /// Creates a new video with description.
+    pub fn with_description(
+        id: VideoId,
+        module_id: ModuleId,
+        youtube_id: YouTubeVideoId,
+        title: String,
+        description: Option<String>,
+        duration_secs: u32,
+        sort_order: u32,
+    ) -> Self {
+        Self {
+            id,
+            module_id,
+            youtube_id,
+            title,
+            description,
+            duration_secs,
+            is_completed: false,
+            sort_order,
+        }
     }
 
     pub fn id(&self) -> &VideoId {
@@ -41,6 +73,10 @@ impl Video {
 
     pub fn title(&self) -> &str {
         &self.title
+    }
+
+    pub fn description(&self) -> Option<&str> {
+        self.description.as_deref()
     }
 
     pub fn duration_secs(&self) -> u32 {

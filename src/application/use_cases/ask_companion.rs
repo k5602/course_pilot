@@ -86,7 +86,7 @@ where
         // Build context
         let context = CompanionContext {
             video_title: video.title().to_string(),
-            video_description: None, // TODO: Add description to Video entity
+            video_description: video.description().map(|s| s.to_string()),
             module_title: module.title().to_string(),
             course_name: course.name().to_string(),
         };

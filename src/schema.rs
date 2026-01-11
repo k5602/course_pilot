@@ -41,6 +41,14 @@ diesel::table! {
 }
 
 diesel::table! {
+    user_preferences (id) {
+        id -> Text,
+        ml_boundary_enabled -> Integer,
+        cognitive_limit_minutes -> Integer,
+    }
+}
+
+diesel::table! {
     videos (id) {
         id -> Text,
         module_id -> Text,
@@ -49,6 +57,7 @@ diesel::table! {
         duration_secs -> Integer,
         is_completed -> Bool,
         sort_order -> Integer,
+        description -> Nullable<Text>,
     }
 }
 
@@ -57,4 +66,11 @@ diesel::joinable!(modules -> courses (course_id));
 diesel::joinable!(notes -> videos (video_id));
 diesel::joinable!(videos -> modules (module_id));
 
-diesel::allow_tables_to_appear_in_same_query!(courses, exams, modules, notes, videos,);
+diesel::allow_tables_to_appear_in_same_query!(
+    courses,
+    exams,
+    modules,
+    notes,
+    user_preferences,
+    videos,
+);
