@@ -157,7 +157,7 @@ jobs:
       - name: Build with dx (Windows without ML)
         run: |
           Write-Host "Building for Windows (ML disabled due to ort-sys linker issues)..."
-          dx build --release --platform desktop --features ""
+          dx build --release --platform desktop --no-default-features
         env:
           RUSTFLAGS: "-C target-feature=+crt-static"
 
