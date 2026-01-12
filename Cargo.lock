@@ -809,6 +809,7 @@ dependencies = [
  "hyper-rustls",
  "hyper-util",
  "keyring",
+ "libsqlite3-sys",
  "log",
  "once_cell",
  "reqwest 0.13.1",
@@ -3222,8 +3223,10 @@ version = "3.6.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "eebcc3aff044e5944a8fbaf69eb277d11986064cba30c468730e8b9909fb551c"
 dependencies = [
+ "byteorder",
  "linux-keyutils",
  "log",
+ "windows-sys 0.60.2",
  "zeroize",
 ]
 
@@ -3340,6 +3343,7 @@ version = "0.35.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "133c182a6a2c87864fe97778797e46c7e999672690dc9fa3ee8e241aa4a9c13f"
 dependencies = [
+ "cc",
  "pkg-config",
  "vcpkg",
 ]
@@ -5059,9 +5063,6 @@ checksum = "069d6129dede311430d0dcf1ded88a7affc7a342c2d8e6336043d43ed14dac17"
 dependencies = [
  "block2",
  "dispatch2",
- "glib-sys",
- "gobject-sys",
- "gtk-sys",
  "js-sys",
  "libc",
  "log",
@@ -5070,6 +5071,7 @@ dependencies = [
  "objc2-core-foundation",
  "objc2-foundation",
  "percent-encoding",
+ "pollster",
  "raw-window-handle 0.6.2",
  "wasm-bindgen",
  "wasm-bindgen-futures",
