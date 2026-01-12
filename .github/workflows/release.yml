@@ -76,20 +76,29 @@ jobs:
       - name: Build CSS
         run: npm run build:css
 
-      - name: Build release binary
+      - name: Install Dioxus CLI
+        run: cargo install dioxus-cli --locked --force
+
+      - name: Build with dx (Linux with ML)
         run: |
           export PKG_CONFIG_PATH=/usr/lib/pkgconfig:/usr/lib/x86_64-linux-gnu/pkgconfig:/usr/share/pkgconfig
-          cargo build --release --bin course_pilot
+          dx build --release --platform desktop
 
-      - name: Strip binary (reduce size)
-        run: strip ./target/release/course_pilot || echo "Strip failed, continuing anyway"
-
-      - name: Package Linux build
+      - name: Find and package binary
         run: |
           mkdir -p release-artifacts
-          cp ./target/release/course_pilot ./release-artifacts/
+          # dx build outputs to target/dx/<app>/release/linux/<binary> or target/release/
+          if [ -f "./target/dx/course_pilot/release/linux/course_pilot" ]; then
+            cp ./target/dx/course_pilot/release/linux/course_pilot ./release-artifacts/
+          elif [ -f "./target/release/course_pilot" ]; then
+            cp ./target/release/course_pilot ./release-artifacts/
+          else
+            echo "Binary not found, searching..."
+            find ./target -name "course_pilot" -type f -executable | head -1 | xargs -I{} cp {} ./release-artifacts/
+          fi
           cp -r ./assets ./release-artifacts/
           chmod +x ./release-artifacts/course_pilot
+          strip ./release-artifacts/course_pilot || echo "Strip failed, continuing"
           tar -czf course-pilot-linux-x64.tar.gz -C release-artifacts .
 
       - name: Upload Linux artifact
@@ -142,17 +151,48 @@ jobs:
       - name: Build CSS
         run: npm run build:css
 
-      - name: Build release binary
+      - name: Install Dioxus CLI
+        run: cargo install dioxus-cli --locked --force
+
+      - name: Build with dx (Windows without ML)
         run: |
-          Write-Host "Building release binary for Windows..."
-          cargo build --release --bin course_pilot
+          Write-Host "Building for Windows (ML disabled due to ort-sys linker issues)..."
+          dx build --release --platform desktop --features ""
         env:
           RUSTFLAGS: "-C target-feature=+crt-static"
 
-      - name: Package Windows build
+      - name: Find and package binary
         run: |
           New-Item -ItemType Directory -Force -Path release-artifacts
-          Copy-Item ./target/release/course_pilot.exe ./release-artifacts/
+          
+          # Find binary in various possible locations
+          $locations = @(
+            "./target/dx/course_pilot/release/windows/course_pilot.exe",
+            "./target/release/course_pilot.exe"
+          )
+          
+          $found = $false
+          foreach ($loc in $locations) {
+            if (Test-Path $loc) {
+              Write-Host "Found binary at: $loc"
+              Copy-Item $loc ./release-artifacts/
+              $found = $true
+              break
+            }
+          }
+          
+          if (-not $found) {
+            Write-Host "Searching for binary..."
+            $exe = Get-ChildItem -Path ./target -Filter "course_pilot.exe" -Recurse | Select-Object -First 1
+            if ($exe) {
+              Write-Host "Found: $($exe.FullName)"
+              Copy-Item $exe.FullName ./release-artifacts/
+            } else {
+              Write-Host "ERROR: Binary not found"
+              exit 1
+            }
+          }
+          
           Copy-Item -Recurse ./assets ./release-artifacts/
           Compress-Archive -Path ./release-artifacts/* -DestinationPath course-pilot-windows-x64.zip
 
@@ -211,10 +251,12 @@ jobs:
             ## 🚀 Course Pilot ${{ github.ref_name }}
 
             ### 📦 Downloads
-            | Platform | File | Size |
-            |----------|------|------|
-            | 🐧 Linux x64 | [`course-pilot-linux-x64.tar.gz`](https://github.com/${{ github.repository }}/releases/download/${{ github.ref_name }}/course-pilot-linux-x64.tar.gz) | ${{ steps.sizes.outputs.linux_size }} |
-            | 🪟 Windows x64 | [`course-pilot-windows-x64.zip`](https://github.com/${{ github.repository }}/releases/download/${{ github.ref_name }}/course-pilot-windows-x64.zip) | ${{ steps.sizes.outputs.windows_size }} |
+            | Platform | File | Size | ML Support |
+            |----------|------|------|------------|
+            | 🐧 Linux x64 | [`course-pilot-linux-x64.tar.gz`](https://github.com/${{ github.repository }}/releases/download/${{ github.ref_name }}/course-pilot-linux-x64.tar.gz) | ${{ steps.sizes.outputs.linux_size }} | ✅ Yes |
+            | 🪟 Windows x64 | [`course-pilot-windows-x64.zip`](https://github.com/${{ github.repository }}/releases/download/${{ github.ref_name }}/course-pilot-windows-x64.zip) | ${{ steps.sizes.outputs.windows_size }} | ❌ No* |
+
+            > *Windows builds do not include ML-based module boundary detection due to ONNX Runtime linker compatibility issues. All other features work normally.
 
             ### 🚀 Quick Install
 

@@ -4,6 +4,9 @@ name = "course_pilot"
 version = "0.1.0"
 edition = "2024"
 
+[features]
+default = ["ml"]
+ml = ["dep:fastembed"]
 
 [dependencies]
 # Core UI framework
@@ -62,8 +65,8 @@ hyper-rustls = { version = "0.27", features = ["http2"] }
 hyper-util = { version = "0.1", features = ["client-legacy", "http1", "http2"] }
 tower-service = "0.3"
 
-# Local ML
-fastembed = "5.8"
+# Local ML (optional - disabled on Windows due to ort-sys linker issues)
+fastembed = { version = "5.8", optional = true }
 
 # LLM (Gemini)
 genai-rs = "0.6"

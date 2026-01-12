@@ -1,6 +1,8 @@
 //! ML adapter using fastembed for local text embeddings.
 
+#[cfg(feature = "ml")]
 use fastembed::TextEmbedding;
+#[cfg(feature = "ml")]
 use std::sync::Mutex;
 
 use crate::domain::ports::{EmbedError, TextEmbedder};
@@ -10,10 +12,12 @@ use crate::domain::value_objects::Embedding;
 ///
 /// Uses the default model (BGE-small-en-v1.5) which provides good quality
 /// embeddings with a small footprint.
+#[cfg(feature = "ml")]
 pub struct FastEmbedAdapter {
     model: Mutex<TextEmbedding>,
 }
 
+#[cfg(feature = "ml")]
 impl FastEmbedAdapter {
     /// Creates a new FastEmbed adapter with the default model (bge-small-en-v1.5).
     pub fn new() -> Result<Self, EmbedError> {
@@ -25,6 +29,7 @@ impl FastEmbedAdapter {
     }
 }
 
+#[cfg(feature = "ml")]
 impl TextEmbedder for FastEmbedAdapter {
     fn embed(&self, text: &str) -> Result<Embedding, EmbedError> {
         let mut model = self.model.lock().map_err(|e| EmbedError::Generation(e.to_string()))?;
@@ -47,5 +52,27 @@ impl TextEmbedder for FastEmbedAdapter {
             model.embed(text_vec, None).map_err(|e| EmbedError::Generation(e.to_string()))?;
 
         Ok(embeddings.into_iter().map(Embedding::new).collect())
+    }
+}
+
+/// Stub adapter when ML feature is disabled (e.g., on Windows)
+#[cfg(not(feature = "ml"))]
+pub struct FastEmbedAdapter;
+
+#[cfg(not(feature = "ml"))]
+impl FastEmbedAdapter {
+    pub fn new() -> Result<Self, EmbedError> {
+        Err(EmbedError::ModelLoad("ML feature is disabled".to_string()))
+    }
+}
+
+#[cfg(not(feature = "ml"))]
+impl TextEmbedder for FastEmbedAdapter {
+    fn embed(&self, _text: &str) -> Result<Embedding, EmbedError> {
+        Err(EmbedError::Generation("ML feature is disabled".to_string()))
+    }
+
+    fn embed_batch(&self, _texts: &[&str]) -> Result<Vec<Embedding>, EmbedError> {
+        Err(EmbedError::Generation("ML feature is disabled".to_string()))
     }
 }
