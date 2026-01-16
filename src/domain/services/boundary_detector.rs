@@ -1,73 +1,35 @@
-//! Boundary Detector - Identifies module boundaries using embeddings.
+//! Boundary Detector - Groups videos into modules.
 
-use crate::domain::value_objects::Embedding;
-
-/// Threshold for similarity drop to indicate a boundary.
-const DEFAULT_THRESHOLD: f32 = 0.7;
-
-/// Detects module boundaries by analyzing similarity between adjacent embeddings.
+/// Groups videos into modules using a simple batch size approach.
+/// Each module contains up to `batch_size` videos, keeping related content together.
 #[derive(Debug)]
 pub struct BoundaryDetector {
-    threshold: f32,
+    batch_size: usize,
 }
 
 impl BoundaryDetector {
-    /// Creates a new boundary detector with the default threshold.
+    /// Creates a boundary detector with default batch size (8 videos per module).
     pub fn new() -> Self {
-        Self { threshold: DEFAULT_THRESHOLD }
+        Self { batch_size: 5 }
     }
 
-    /// Creates a new boundary detector with a custom threshold.
-    /// Threshold should be between 0.0 and 1.0.
-    pub fn with_threshold(threshold: f32) -> Self {
-        Self { threshold: threshold.clamp(0.0, 1.0) }
+    /// Creates a boundary detector with a custom batch size.
+    pub fn with_batch_size(batch_size: usize) -> Self {
+        Self { batch_size: batch_size.max(1) }
     }
 
-    /// Detects boundaries in a sequence of embeddings.
-    /// Returns indices where boundaries should be placed (AFTER that index).
-    ///
-    /// For example, if returns [2, 5], boundaries are after videos at indices 2 and 5:
-    /// - Module 1: videos 0, 1, 2
-    /// - Module 2: videos 3, 4, 5  
-    /// - Module 3: videos 6, ...
-    pub fn detect_boundaries(&self, embeddings: &[Embedding]) -> Vec<usize> {
-        if embeddings.len() < 2 {
+    /// Groups video indices into modules (each module has up to `batch_size` videos).
+    /// Returns a vector of vectors, where each inner vector contains video indices for a module.
+    pub fn group_into_modules(&self, video_count: usize) -> Vec<Vec<usize>> {
+        if video_count == 0 {
             return vec![];
         }
 
-        let mut boundaries = Vec::new();
-
-        for i in 0..embeddings.len() - 1 {
-            let similarity = embeddings[i].cosine_similarity(&embeddings[i + 1]);
-            if similarity < self.threshold {
-                boundaries.push(i);
-            }
-        }
-
-        boundaries
-    }
-
-    /// Groups video indices into modules based on detected boundaries.
-    /// Returns a vector of vectors, where each inner vector contains video indices for a module.
-    pub fn group_into_modules(&self, embeddings: &[Embedding]) -> Vec<Vec<usize>> {
-        let boundaries = self.detect_boundaries(embeddings);
-        let mut modules = Vec::new();
-        let mut current_module = Vec::new();
-
-        for i in 0..embeddings.len() {
-            current_module.push(i);
-            if boundaries.contains(&i) {
-                modules.push(current_module);
-                current_module = Vec::new();
-            }
-        }
-
-        // Don't forget the last module
-        if !current_module.is_empty() {
-            modules.push(current_module);
-        }
-
-        modules
+        (0..video_count)
+            .collect::<Vec<_>>()
+            .chunks(self.batch_size)
+            .map(|chunk| chunk.to_vec())
+            .collect()
     }
 }
 
@@ -82,42 +44,36 @@ mod tests {
     use super::*;
 
     #[test]
-    fn test_no_boundaries_similar_embeddings() {
+    fn test_empty_videos() {
         let detector = BoundaryDetector::new();
-        let embeddings = vec![
-            Embedding::new(vec![1.0, 0.0, 0.0]),
-            Embedding::new(vec![0.95, 0.1, 0.0]),
-            Embedding::new(vec![0.9, 0.2, 0.0]),
-        ];
-        let boundaries = detector.detect_boundaries(&embeddings);
-        assert!(boundaries.is_empty());
+        let modules = detector.group_into_modules(0);
+        assert!(modules.is_empty());
     }
 
     #[test]
-    fn test_boundary_on_topic_shift() {
-        let detector = BoundaryDetector::with_threshold(0.5);
-        let embeddings = vec![
-            Embedding::new(vec![1.0, 0.0, 0.0]),  // Topic A
-            Embedding::new(vec![0.9, 0.1, 0.0]),  // Topic A
-            Embedding::new(vec![0.0, 1.0, 0.0]),  // Topic B - shift!
-            Embedding::new(vec![0.1, 0.95, 0.0]), // Topic B
-        ];
-        let boundaries = detector.detect_boundaries(&embeddings);
-        assert_eq!(boundaries, vec![1]); // Boundary after index 1
+    fn test_single_module() {
+        let detector = BoundaryDetector::new();
+        let modules = detector.group_into_modules(5);
+        assert_eq!(modules.len(), 1);
+        assert_eq!(modules[0], vec![0, 1, 2, 3, 4]);
     }
 
     #[test]
-    fn test_group_into_modules() {
-        let detector = BoundaryDetector::with_threshold(0.5);
-        let embeddings = vec![
-            Embedding::new(vec![1.0, 0.0, 0.0]),
-            Embedding::new(vec![0.9, 0.1, 0.0]),
-            Embedding::new(vec![0.0, 1.0, 0.0]), // Shift here
-            Embedding::new(vec![0.1, 0.95, 0.0]),
-        ];
-        let modules = detector.group_into_modules(&embeddings);
+    fn test_multiple_modules() {
+        let detector = BoundaryDetector::with_batch_size(3);
+        let modules = detector.group_into_modules(7);
+        assert_eq!(modules.len(), 3);
+        assert_eq!(modules[0], vec![0, 1, 2]);
+        assert_eq!(modules[1], vec![3, 4, 5]);
+        assert_eq!(modules[2], vec![6]);
+    }
+
+    #[test]
+    fn test_exact_batch_size() {
+        let detector = BoundaryDetector::with_batch_size(4);
+        let modules = detector.group_into_modules(8);
         assert_eq!(modules.len(), 2);
-        assert_eq!(modules[0], vec![0, 1]);
-        assert_eq!(modules[1], vec![2, 3]);
+        assert_eq!(modules[0], vec![0, 1, 2, 3]);
+        assert_eq!(modules[1], vec![4, 5, 6, 7]);
     }
 }

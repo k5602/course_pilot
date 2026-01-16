@@ -16,7 +16,7 @@ pub enum ImportResult {
 }
 
 /// Import a playlist from YouTube.
-/// Returns None if YouTube or embedder is not configured.
+/// Returns error if YouTube is not configured.
 pub async fn import_playlist(
     backend: Option<Arc<AppContext>>,
     url: String,
@@ -36,9 +36,7 @@ pub async fn import_playlist(
     let use_case = match ServiceFactory::ingest_playlist(&ctx) {
         Some(uc) => uc,
         None => {
-            return ImportResult::Error(
-                "Required services not available (YouTube + ML)".to_string(),
-            );
+            return ImportResult::Error("YouTube service not available".to_string());
         },
     };
 

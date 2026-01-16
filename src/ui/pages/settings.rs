@@ -12,7 +12,6 @@ pub fn Settings() -> Element {
 
     let mut youtube_key = use_signal(String::new);
     let mut gemini_key = use_signal(String::new);
-    let mut ml_enabled = use_signal(|| false);
     let mut save_status = use_signal(|| None::<(bool, String)>);
 
     // Clone backend for closures
@@ -29,17 +28,12 @@ pub fn Settings() -> Element {
             if ctx.has_llm() {
                 gemini_key.set("••••••••••••••••".to_string());
             }
-            // Load ML preference from database
-            if let Ok((ml_pref, _)) = ctx.get_preferences() {
-                ml_enabled.set(ml_pref);
-            }
         }
     });
 
     let handle_save = move |_| {
         let yt_key = youtube_key.read().clone();
         let gem_key = gemini_key.read().clone();
-        let ml_pref = *ml_enabled.read();
 
         // Only save if not masked placeholder
         if let Some(ref ctx) = backend_save {
@@ -62,12 +56,6 @@ pub fn Settings() -> Element {
                 }
             }
 
-            // Save ML preference
-            if let Err(e) = ctx.set_ml_preference(ml_pref) {
-                success = false;
-                errors.push(format!("ML preference: {}", e));
-            }
-
             if success {
                 save_status.set(Some((true, "Settings saved successfully!".to_string())));
             } else {
@@ -76,11 +64,6 @@ pub fn Settings() -> Element {
         } else {
             save_status.set(Some((false, "Backend not available".to_string())));
         }
-    };
-
-    // Toggle ML preference
-    let on_ml_toggle = move |e: Event<FormData>| {
-        ml_enabled.set(e.checked());
     };
 
     rsx! {
@@ -169,29 +152,6 @@ pub fn Settings() -> Element {
                                 "Get from AI Studio →"
                             }
                         }
-                    }
-                }
-            }
-
-            // Preferences section
-            section {
-                class: "mb-8",
-                h2 { class: "text-lg font-semibold mb-4", "Preferences" }
-
-                div {
-                    class: "flex items-center justify-between p-4 bg-base-200 rounded-lg",
-                    div {
-                        p { class: "font-medium", "ML Boundary Detection" }
-                        p {
-                            class: "text-sm text-base-content/60",
-                            "Use AI to automatically detect module boundaries in playlists"
-                        }
-                    }
-                    input {
-                        r#type: "checkbox",
-                        class: "toggle toggle-primary",
-                        checked: *ml_enabled.read(),
-                        onchange: on_ml_toggle,
                     }
                 }
             }

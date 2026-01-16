@@ -1,12 +1,12 @@
 //! Ingest Playlist Use Case
 //!
-//! Orchestrates: Fetch → Sanitize → Embed → Detect Boundaries → Persist
+//! Orchestrates: Fetch → Sanitize → Group → Persist
 
 use std::sync::Arc;
 
 use crate::domain::{
     entities::{Course, Module, Video},
-    ports::{CourseRepository, ModuleRepository, PlaylistFetcher, TextEmbedder, VideoRepository},
+    ports::{CourseRepository, ModuleRepository, PlaylistFetcher, VideoRepository},
     services::{BoundaryDetector, TitleSanitizer},
     value_objects::{CourseId, ModuleId, PlaylistUrl, VideoId, YouTubeVideoId},
 };
@@ -18,8 +18,6 @@ pub enum IngestError {
     InvalidUrl(String),
     #[error("Failed to fetch playlist: {0}")]
     FetchFailed(String),
-    #[error("Failed to generate embeddings: {0}")]
-    EmbeddingFailed(String),
     #[error("Failed to persist: {0}")]
     PersistFailed(String),
 }
@@ -39,16 +37,14 @@ pub struct IngestPlaylistOutput {
 }
 
 /// Use case for ingesting a YouTube playlist into a structured course.
-pub struct IngestPlaylistUseCase<F, E, CR, MR, VR>
+pub struct IngestPlaylistUseCase<F, CR, MR, VR>
 where
     F: PlaylistFetcher,
-    E: TextEmbedder,
     CR: CourseRepository,
     MR: ModuleRepository,
     VR: VideoRepository,
 {
     fetcher: Arc<F>,
-    embedder: Arc<E>,
     course_repo: Arc<CR>,
     module_repo: Arc<MR>,
     video_repo: Arc<VR>,
@@ -56,24 +52,21 @@ where
     boundary_detector: BoundaryDetector,
 }
 
-impl<F, E, CR, MR, VR> IngestPlaylistUseCase<F, E, CR, MR, VR>
+impl<F, CR, MR, VR> IngestPlaylistUseCase<F, CR, MR, VR>
 where
     F: PlaylistFetcher,
-    E: TextEmbedder,
     CR: CourseRepository,
     MR: ModuleRepository,
     VR: VideoRepository,
 {
     pub fn new(
         fetcher: Arc<F>,
-        embedder: Arc<E>,
         course_repo: Arc<CR>,
         module_repo: Arc<MR>,
         video_repo: Arc<VR>,
     ) -> Self {
         Self {
             fetcher,
-            embedder,
             course_repo,
             module_repo,
             video_repo,
@@ -106,17 +99,10 @@ where
         let sanitized_titles: Vec<String> =
             raw_videos.iter().map(|v| self.sanitizer.sanitize(&v.title)).collect();
 
-        // 4. Generate embeddings
-        let title_refs: Vec<&str> = sanitized_titles.iter().map(String::as_str).collect();
-        let embeddings = self
-            .embedder
-            .embed_batch(&title_refs)
-            .map_err(|e| IngestError::EmbeddingFailed(e.to_string()))?;
+        // 4. Group videos into modules (simple batch grouping)
+        let module_groups = self.boundary_detector.group_into_modules(raw_videos.len());
 
-        // 5. Detect module boundaries
-        let module_groups = self.boundary_detector.group_into_modules(&embeddings);
-
-        // 6. Create course
+        // 5. Create course
         let course_name = input
             .course_name
             .unwrap_or_else(|| sanitized_titles.first().cloned().unwrap_or_default());
@@ -130,12 +116,12 @@ where
         );
         self.course_repo.save(&course).map_err(|e| IngestError::PersistFailed(e.to_string()))?;
 
-        // 7. Create modules and videos
+        // 6. Create modules and videos
         let mut total_videos = 0;
         for (module_idx, video_indices) in module_groups.iter().enumerate() {
             let module_id = ModuleId::new();
 
-            // Use first video title as module title (can be improved with LLM later)
+            // Use first video title as module title
             let module_title = video_indices
                 .first()
                 .map(|&i| sanitized_titles[i].clone())

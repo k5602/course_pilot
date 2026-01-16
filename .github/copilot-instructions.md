@@ -54,7 +54,7 @@ Use components from `src/ui/custom/loading.rs`:
 - `videos` - Video data with youtube_id, duration_secs, description, is_completed
 - `notes` - Per-video user notes
 - `exams` - Generated quizzes with questions and scores
-- `user_preferences` - ML toggle, cognitive_limit_minutes
+- `user_preferences` - cognitive_limit_minutes
 
 ## 🔄 Development Workflow
 - **Run Dev Server**: `dx serve`
@@ -68,9 +68,8 @@ Use components from `src/ui/custom/loading.rs`:
 ## 🧩 Key Integration Points
 - **YouTube**: via `google-youtube3`. Requires `YOUTUBE_API_KEY` in `.env`.
 - **LLM**: Gemini API via `genai-rs`. Optional, used for AI chat and exams.
-- **ML**: `fastembed` for local semantic clustering of videos into modules.
 - **Secrets**: Uses `keyring` for OS-native secure storage of API keys.
-- **User Preferences**: Stored in `user_preferences` table (ML toggle, cognitive limit).
+- **User Preferences**: Stored in `user_preferences` table (cognitive limit).
 
 ## ⚡ Performance & Quality
 - Favor `Arc` sharing for heavy adapters (Repositories, YouTube client).

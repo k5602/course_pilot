@@ -16,7 +16,7 @@ A modern Rust desktop application that automatically analyzes video-based course
 ### Core Functionality
 
 - **Playlist Import** - Import YouTube playlists with automatic metadata extraction
-- **Smart Modules** - AI-powered grouping of videos into logical modules
+- **Smart Modules** - Automatic grouping of videos into logical modules
 - **Progress Tracking** - Track video completion with visual progress bars
 - **Video Navigation** - Previous/next video links for seamless learning flow
 
@@ -30,7 +30,7 @@ A modern Rust desktop application that automatically analyzes video-based course
 ### User Experience
 
 - **Dark Theme** - Eye-friendly DaisyUI dark theme
-- **Settings Persistence** - ML toggle and preferences saved to database
+- **Settings Persistence** - Preferences saved to database
 - **Course Management** - Delete courses with confirmation dialog
 - **Loading States** - Skeleton loaders and spinners throughout
 
@@ -55,7 +55,6 @@ Edit `.env`:
 DATABASE_URL=course_pilot.db
 YOUTUBE_API_KEY=your_youtube_api_key_here
 GEMINI_API_KEY=your_gemini_api_key_here  # optional
-ENABLE_ML_BOUNDARY_DETECTION=false       # optional
 ```
 
 ### 2. Setup Database
@@ -85,7 +84,6 @@ dx build --release
 | `DATABASE_URL` | No | `course_pilot.db` | SQLite database path |
 | `YOUTUBE_API_KEY` | Yes | - | YouTube Data API v3 key |
 | `GEMINI_API_KEY` | No | - | Gemini API key for AI features |
-| `ENABLE_ML_BOUNDARY_DETECTION` | No | `false` | Use ML to detect module boundaries |
 
 ## 🔑 API Keys
 

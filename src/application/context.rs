@@ -11,7 +11,6 @@ use crate::domain::ports::SecretStore;
 use crate::infrastructure::{
     keystore::NativeKeystore,
     llm::GeminiAdapter,
-    ml::FastEmbedAdapter,
     persistence::{
         DbPool, SqliteCourseRepository, SqliteExamRepository, SqliteModuleRepository,
         SqliteNoteRepository, SqliteVideoRepository,
@@ -30,8 +29,6 @@ pub struct AppConfig {
     pub youtube_api_key: Option<String>,
     /// Gemini API key (optional - for AI companion and exams).
     pub gemini_api_key: Option<String>,
-    /// Enable ML-based module boundary detection.
-    pub enable_ml_boundary_detection: bool,
 }
 
 impl Default for AppConfig {
@@ -40,7 +37,6 @@ impl Default for AppConfig {
             database_url: "course_pilot.db".to_string(),
             youtube_api_key: None,
             gemini_api_key: None,
-            enable_ml_boundary_detection: false,
         }
     }
 }
@@ -54,9 +50,6 @@ impl AppConfig {
                 .unwrap_or_else(|_| "course_pilot.db".to_string()),
             youtube_api_key: std::env::var("YOUTUBE_API_KEY").ok().filter(|s| !s.is_empty()),
             gemini_api_key: std::env::var("GEMINI_API_KEY").ok().filter(|s| !s.is_empty()),
-            enable_ml_boundary_detection: std::env::var("ENABLE_ML_BOUNDARY_DETECTION")
-                .map(|v| v.to_lowercase() == "true" || v == "1")
-                .unwrap_or(false),
         }
     }
 
@@ -88,11 +81,6 @@ impl AppConfigBuilder {
         self
     }
 
-    pub fn enable_ml_boundary_detection(mut self, enable: bool) -> Self {
-        self.config.enable_ml_boundary_detection = enable;
-        self
-    }
-
     pub fn build(self) -> AppConfig {
         self.config
     }
@@ -112,7 +100,6 @@ pub struct AppContext {
 
     // Infrastructure adapters
     pub youtube: Option<Arc<YouTubeApiAdapter>>,
-    pub embedder: Option<Arc<FastEmbedAdapter>>,
     pub llm: Option<Arc<GeminiAdapter>>,
     pub keystore: Arc<NativeKeystore>,
 
@@ -153,13 +140,6 @@ impl AppContext {
         let youtube = youtube_api_key.map(|key| Arc::new(YouTubeApiAdapter::new(key)));
         let llm = gemini_api_key.map(|key| Arc::new(GeminiAdapter::new(key)));
 
-        // Only load ML model if boundary detection is enabled
-        let embedder = if config.enable_ml_boundary_detection {
-            FastEmbedAdapter::new().ok().map(Arc::new)
-        } else {
-            None
-        };
-
         Ok(Self {
             config,
             course_repo,
@@ -168,7 +148,6 @@ impl AppContext {
             exam_repo,
             note_repo,
             youtube,
-            embedder,
             llm,
             keystore,
             db_pool,
@@ -183,16 +162,6 @@ impl AppContext {
     /// Checks if the LLM is available.
     pub fn has_llm(&self) -> bool {
         self.llm.is_some()
-    }
-
-    /// Checks if the embedder is available (only when ML is enabled).
-    pub fn has_embedder(&self) -> bool {
-        self.embedder.is_some()
-    }
-
-    /// Checks if ML boundary detection is enabled.
-    pub fn ml_enabled(&self) -> bool {
-        self.config.enable_ml_boundary_detection
     }
 
     /// Stores a YouTube API key in the secure keystore.
@@ -213,18 +182,8 @@ impl AppContext {
         Ok(())
     }
 
-    /// Enables ML boundary detection (loads the model if not already loaded).
-    pub fn enable_ml(&mut self) -> Result<(), AppContextError> {
-        if self.embedder.is_none() {
-            self.embedder = Some(Arc::new(
-                FastEmbedAdapter::new().map_err(|e| AppContextError::MlModel(e.to_string()))?,
-            ));
-        }
-        Ok(())
-    }
-
     /// Gets user preferences from the database.
-    pub fn get_preferences(&self) -> Result<(bool, u32), AppContextError> {
+    pub fn get_preferences(&self) -> Result<u32, AppContextError> {
         use crate::infrastructure::persistence::models::UserPreferencesRow;
         use crate::schema::user_preferences;
         use diesel::prelude::*;
@@ -238,28 +197,9 @@ impl AppContext {
             .map_err(|e| AppContextError::Database(e.to_string()))?;
 
         match result {
-            Some(pref) => Ok((pref.ml_boundary_enabled != 0, pref.cognitive_limit_minutes as u32)),
-            None => Ok((false, 45)), // Defaults
+            Some(pref) => Ok(pref.cognitive_limit_minutes as u32),
+            None => Ok(45), // Default cognitive limit
         }
-    }
-
-    /// Sets ML boundary detection preference.
-    pub fn set_ml_preference(&self, enabled: bool) -> Result<(), AppContextError> {
-        use crate::infrastructure::persistence::models::UpdatePreferences;
-        use crate::schema::user_preferences;
-        use diesel::prelude::*;
-
-        let mut conn = self.db_pool.get().map_err(|e| AppContextError::Database(e.to_string()))?;
-
-        diesel::update(user_preferences::table.find("default"))
-            .set(UpdatePreferences {
-                ml_boundary_enabled: Some(if enabled { 1 } else { 0 }),
-                cognitive_limit_minutes: None,
-            })
-            .execute(&mut conn)
-            .map_err(|e| AppContextError::Database(e.to_string()))?;
-
-        Ok(())
     }
 }
 
@@ -270,8 +210,6 @@ pub enum AppContextError {
     Database(String),
     #[error("Keystore error: {0}")]
     Keystore(String),
-    #[error("ML model error: {0}")]
-    MlModel(String),
 }
 
 /// Service factory for creating use cases with injected dependencies.
@@ -280,24 +218,20 @@ pub struct ServiceFactory;
 impl ServiceFactory {
     /// Creates the playlist ingestion use case.
     /// Returns None if YouTube is not configured.
-    /// Note: Works without embedder - will import as single module.
     pub fn ingest_playlist(
         ctx: &AppContext,
     ) -> Option<
         IngestPlaylistUseCase<
             YouTubeApiAdapter,
-            FastEmbedAdapter,
             SqliteCourseRepository,
             SqliteModuleRepository,
             SqliteVideoRepository,
         >,
     > {
         let youtube = ctx.youtube.as_ref()?.clone();
-        let embedder = ctx.embedder.as_ref()?.clone();
 
         Some(IngestPlaylistUseCase::new(
             youtube,
-            embedder,
             ctx.course_repo.clone(),
             ctx.module_repo.clone(),
             ctx.video_repo.clone(),

@@ -4,11 +4,8 @@ name = "course_pilot"
 version = "0.1.0"
 edition = "2024"
 
-[features]
-default = []
-ml = ["dep:fastembed"]
-
 [dependencies]
+
 # Core UI framework
 dioxus = { version = "0.7", features = ["desktop", "router"] }
 
@@ -20,6 +17,7 @@ dioxus-free-icons = { version = "0.10", features = [
     "material-design-icons-content",
     "material-design-icons-social",
 ] }
+dioxus-primitives = { git = "https://github.com/DioxusLabs/components", version = "0.0.1", default-features = false }
 
 # Utilities
 serde = { version = "1.0", features = ["derive"] }
@@ -65,15 +63,11 @@ hyper-rustls = { version = "0.27", features = ["http2"] }
 hyper-util = { version = "0.1", features = ["client-legacy", "http1", "http2"] }
 tower-service = "0.3"
 
-# Local ML (optional - disabled on Windows due to ort-sys linker issues)
-fastembed = { version = "5.8", optional = true }
-
 # LLM (Gemini)
 genai-rs = "0.6"
 
 # Secure Storage
 keyring = { version = "3", features = ["linux-native"] }
-dioxus-primitives = { git = "https://github.com/DioxusLabs/components", version = "0.0.1", default-features = false }
 
 [target.'cfg(windows)'.dependencies]
 keyring = { version = "3", features = ["windows-native"] }

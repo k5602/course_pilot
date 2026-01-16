@@ -79,10 +79,10 @@ jobs:
       - name: Install Dioxus CLI
         run: cargo install dioxus-cli --locked --force
 
-      - name: Build with dx (Linux with ML)
+      - name: Build with dx (Linux)
         run: |
           export PKG_CONFIG_PATH=/usr/lib/pkgconfig:/usr/lib/x86_64-linux-gnu/pkgconfig:/usr/share/pkgconfig
-          dx build --release --platform desktop --features ml
+          dx build --release --platform desktop
 
       - name: Find and package binary
         run: |
@@ -154,9 +154,9 @@ jobs:
       - name: Install Dioxus CLI
         run: cargo install dioxus-cli --locked --force
 
-      - name: Build with dx (Windows without ML)
+      - name: Build with dx (Windows)
         run: |
-          Write-Host "Building for Windows (ML disabled)..."
+          Write-Host "Building for Windows..."
           dx build --release --platform desktop
         env:
           RUSTFLAGS: "-C target-feature=+crt-static"
@@ -251,12 +251,10 @@ jobs:
             ## 🚀 Course Pilot ${{ github.ref_name }}
 
             ### 📦 Downloads
-            | Platform | File | Size | ML Support |
-            |----------|------|------|------------|
-            | 🐧 Linux x64 | [`course-pilot-linux-x64.tar.gz`](https://github.com/${{ github.repository }}/releases/download/${{ github.ref_name }}/course-pilot-linux-x64.tar.gz) | ${{ steps.sizes.outputs.linux_size }} | ✅ Yes |
-            | 🪟 Windows x64 | [`course-pilot-windows-x64.zip`](https://github.com/${{ github.repository }}/releases/download/${{ github.ref_name }}/course-pilot-windows-x64.zip) | ${{ steps.sizes.outputs.windows_size }} | ❌ No* |
-
-            > *Windows builds do not include ML-based module boundary detection due to ONNX Runtime linker compatibility issues. All other features work normally.
+            | Platform | File | Size |
+            |----------|------|------|
+            | 🐧 Linux x64 | [`course-pilot-linux-x64.tar.gz`](https://github.com/${{ github.repository }}/releases/download/${{ github.ref_name }}/course-pilot-linux-x64.tar.gz) | ${{ steps.sizes.outputs.linux_size }} |
+            | 🪟 Windows x64 | [`course-pilot-windows-x64.zip`](https://github.com/${{ github.repository }}/releases/download/${{ github.ref_name }}/course-pilot-windows-x64.zip) | ${{ steps.sizes.outputs.windows_size }} |
 
             ### 🚀 Quick Install
 
