@@ -82,7 +82,7 @@ jobs:
       - name: Build with dx (Linux with ML)
         run: |
           export PKG_CONFIG_PATH=/usr/lib/pkgconfig:/usr/lib/x86_64-linux-gnu/pkgconfig:/usr/share/pkgconfig
-          dx build --release --platform desktop
+          dx build --release --platform desktop --features ml
 
       - name: Find and package binary
         run: |
@@ -156,21 +156,21 @@ jobs:
 
       - name: Build with dx (Windows without ML)
         run: |
-          Write-Host "Building for Windows (ML disabled due to ort-sys linker issues)..."
-          dx build --release --platform desktop --no-default-features
+          Write-Host "Building for Windows (ML disabled)..."
+          dx build --release --platform desktop
         env:
           RUSTFLAGS: "-C target-feature=+crt-static"
 
       - name: Find and package binary
         run: |
           New-Item -ItemType Directory -Force -Path release-artifacts
-          
+
           # Find binary in various possible locations
           $locations = @(
             "./target/dx/course_pilot/release/windows/course_pilot.exe",
             "./target/release/course_pilot.exe"
           )
-          
+
           $found = $false
           foreach ($loc in $locations) {
             if (Test-Path $loc) {
@@ -180,7 +180,7 @@ jobs:
               break
             }
           }
-          
+
           if (-not $found) {
             Write-Host "Searching for binary..."
             $exe = Get-ChildItem -Path ./target -Filter "course_pilot.exe" -Recurse | Select-Object -First 1
@@ -192,7 +192,7 @@ jobs:
               exit 1
             }
           }
-          
+
           Copy-Item -Recurse ./assets ./release-artifacts/
           Compress-Archive -Path ./release-artifacts/* -DestinationPath course-pilot-windows-x64.zip
 
