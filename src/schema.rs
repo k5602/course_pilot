@@ -1,5 +1,4 @@
 // @generated automatically by Diesel CLI.
-// NOTE: FTS5 virtual tables (search_index*) removed - accessed via raw SQL only
 
 diesel::table! {
     course_tags (course_id, tag_id) {
@@ -74,6 +73,8 @@ diesel::table! {
         is_completed -> Bool,
         sort_order -> Integer,
         description -> Nullable<Text>,
+        transcript -> Nullable<Text>,
+        summary -> Nullable<Text>,
     }
 }
 

@@ -225,6 +225,8 @@ impl VideoRepository for SqliteVideoRepository {
             is_completed: video.is_completed(),
             sort_order: video.sort_order() as i32,
             description: video.description(),
+            transcript: None,
+            summary: None,
         };
 
         diesel::insert_into(videos::table)

@@ -65,6 +65,8 @@ pub struct VideoRow {
     pub is_completed: bool,
     pub sort_order: i32,
     pub description: Option<String>,
+    pub transcript: Option<String>,
+    pub summary: Option<String>,
 }
 
 /// Insertable model for videos.
@@ -79,6 +81,8 @@ pub struct NewVideo<'a> {
     pub is_completed: bool,
     pub sort_order: i32,
     pub description: Option<&'a str>,
+    pub transcript: Option<&'a str>,
+    pub summary: Option<&'a str>,
 }
 
 /// Diesel model for the exams table.
