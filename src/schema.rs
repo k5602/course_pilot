@@ -1,4 +1,5 @@
 // @generated automatically by Diesel CLI.
+// NOTE: FTS5 virtual tables (search_index*) removed - accessed via raw SQL only
 
 diesel::table! {
     course_tags (course_id, tag_id) {

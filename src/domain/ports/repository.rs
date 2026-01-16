@@ -86,3 +86,43 @@ pub trait TagRepository: Send + Sync {
     /// Deletes a tag (and all its course associations).
     fn delete(&self, tag_id: &TagId) -> Result<(), RepositoryError>;
 }
+
+/// Repository for full-text search.
+pub trait SearchRepository: Send + Sync {
+    /// Searches across courses, videos, and notes.
+    /// Returns results ordered by relevance.
+    fn search(
+        &self,
+        query: &str,
+        limit: usize,
+    ) -> Result<Vec<crate::domain::entities::SearchResult>, RepositoryError>;
+
+    /// Indexes a course for search.
+    fn index_course(
+        &self,
+        course_id: &CourseId,
+        name: &str,
+        description: Option<&str>,
+    ) -> Result<(), RepositoryError>;
+
+    /// Indexes a video for search.
+    fn index_video(
+        &self,
+        video_id: &str,
+        title: &str,
+        description: Option<&str>,
+        course_id: &CourseId,
+    ) -> Result<(), RepositoryError>;
+
+    /// Indexes a note for search.
+    fn index_note(
+        &self,
+        note_id: &str,
+        video_title: &str,
+        content: &str,
+        course_id: &CourseId,
+    ) -> Result<(), RepositoryError>;
+
+    /// Removes an entity from the search index.
+    fn remove_from_index(&self, entity_id: &str) -> Result<(), RepositoryError>;
+}
