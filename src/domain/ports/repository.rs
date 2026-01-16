@@ -1,7 +1,7 @@
 //! Repository ports for persistence.
 
-use crate::domain::entities::{Course, Exam, Module, Note, Video};
-use crate::domain::value_objects::{CourseId, ExamId, ModuleId, VideoId};
+use crate::domain::entities::{Course, Exam, Module, Note, Tag, Video};
+use crate::domain::value_objects::{CourseId, ExamId, ModuleId, TagId, VideoId};
 
 /// Error type for repository operations.
 #[derive(Debug, thiserror::Error)]
@@ -60,4 +60,29 @@ pub trait NoteRepository: Send + Sync {
     fn save(&self, note: &Note) -> Result<(), RepositoryError>;
     fn find_by_video(&self, video_id: &VideoId) -> Result<Option<Note>, RepositoryError>;
     fn delete(&self, video_id: &VideoId) -> Result<(), RepositoryError>;
+}
+
+/// Repository for Tag entities (course categorization).
+pub trait TagRepository: Send + Sync {
+    /// Saves a new tag or updates an existing one.
+    fn save(&self, tag: &Tag) -> Result<(), RepositoryError>;
+
+    /// Finds all tags.
+    fn find_all(&self) -> Result<Vec<Tag>, RepositoryError>;
+
+    /// Finds tags associated with a course.
+    fn find_by_course(&self, course_id: &CourseId) -> Result<Vec<Tag>, RepositoryError>;
+
+    /// Associates a tag with a course.
+    fn add_to_course(&self, course_id: &CourseId, tag_id: &TagId) -> Result<(), RepositoryError>;
+
+    /// Removes a tag association from a course.
+    fn remove_from_course(
+        &self,
+        course_id: &CourseId,
+        tag_id: &TagId,
+    ) -> Result<(), RepositoryError>;
+
+    /// Deletes a tag (and all its course associations).
+    fn delete(&self, tag_id: &TagId) -> Result<(), RepositoryError>;
 }

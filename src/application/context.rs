@@ -13,7 +13,7 @@ use crate::infrastructure::{
     llm::GeminiAdapter,
     persistence::{
         DbPool, SqliteCourseRepository, SqliteExamRepository, SqliteModuleRepository,
-        SqliteNoteRepository, SqliteVideoRepository,
+        SqliteNoteRepository, SqliteTagRepository, SqliteVideoRepository,
     },
     youtube::YouTubeApiAdapter,
 };
@@ -97,6 +97,7 @@ pub struct AppContext {
     pub video_repo: Arc<SqliteVideoRepository>,
     pub exam_repo: Arc<SqliteExamRepository>,
     pub note_repo: Arc<SqliteNoteRepository>,
+    pub tag_repo: Arc<SqliteTagRepository>,
 
     // Infrastructure adapters
     pub youtube: Option<Arc<YouTubeApiAdapter>>,
@@ -121,6 +122,7 @@ impl AppContext {
         let video_repo = Arc::new(SqliteVideoRepository::new(db_pool.clone()));
         let exam_repo = Arc::new(SqliteExamRepository::new(db_pool.clone()));
         let note_repo = Arc::new(SqliteNoteRepository::new(db_pool.clone()));
+        let tag_repo = Arc::new(SqliteTagRepository::new(db_pool.clone()));
 
         // Create keystore
         let keystore = Arc::new(NativeKeystore::new());
@@ -147,6 +149,7 @@ impl AppContext {
             video_repo,
             exam_repo,
             note_repo,
+            tag_repo,
             youtube,
             llm,
             keystore,

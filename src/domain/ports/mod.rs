@@ -10,6 +10,6 @@ pub use keystore::{KeystoreError, SecretStore};
 pub use llm::{CompanionAI, CompanionContext, ExaminerAI, LLMError, MCQuestion};
 pub use repository::{
     CourseRepository, ExamRepository, ModuleRepository, NoteRepository, RepositoryError,
-    VideoRepository,
+    TagRepository, VideoRepository,
 };
 pub use youtube::{FetchError, PlaylistFetcher, RawVideoMetadata};

@@ -5,6 +5,7 @@ pub mod import_dialog;
 pub mod loading;
 pub mod right_panel;
 pub mod sidebar;
+pub mod tag_badge;
 pub mod video_item;
 pub mod youtube_player;
 
@@ -15,5 +16,6 @@ pub use loading::{
 };
 pub use right_panel::RightPanel;
 pub use sidebar::Sidebar;
+pub use tag_badge::{TagBadge, TagFilterChip, TagInput};
 pub use video_item::VideoItem;
 pub use youtube_player::YouTubePlayer;

@@ -1,6 +1,13 @@
 // @generated automatically by Diesel CLI.
 
 diesel::table! {
+    course_tags (course_id, tag_id) {
+        course_id -> Text,
+        tag_id -> Text,
+    }
+}
+
+diesel::table! {
     courses (id) {
         id -> Text,
         name -> Text,
@@ -41,6 +48,14 @@ diesel::table! {
 }
 
 diesel::table! {
+    tags (id) {
+        id -> Text,
+        name -> Text,
+        color -> Text,
+    }
+}
+
+diesel::table! {
     user_preferences (id) {
         id -> Text,
         ml_boundary_enabled -> Integer,
@@ -61,16 +76,20 @@ diesel::table! {
     }
 }
 
+diesel::joinable!(course_tags -> courses (course_id));
+diesel::joinable!(course_tags -> tags (tag_id));
 diesel::joinable!(exams -> videos (video_id));
 diesel::joinable!(modules -> courses (course_id));
 diesel::joinable!(notes -> videos (video_id));
 diesel::joinable!(videos -> modules (module_id));
 
 diesel::allow_tables_to_appear_in_same_query!(
+    course_tags,
     courses,
     exams,
     modules,
     notes,
+    tags,
     user_preferences,
     videos,
 );

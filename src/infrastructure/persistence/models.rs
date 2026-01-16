@@ -143,3 +143,31 @@ pub struct UpdatePreferences {
     pub ml_boundary_enabled: Option<i32>,
     pub cognitive_limit_minutes: Option<i32>,
 }
+
+/// Diesel model for the tags table.
+#[derive(Queryable, Selectable, Identifiable, Debug)]
+#[diesel(table_name = crate::schema::tags)]
+#[diesel(check_for_backend(Sqlite))]
+pub struct TagRow {
+    pub id: String,
+    pub name: String,
+    pub color: String,
+}
+
+/// Insertable model for tags.
+#[derive(Insertable)]
+#[diesel(table_name = crate::schema::tags)]
+pub struct NewTag<'a> {
+    pub id: &'a str,
+    pub name: &'a str,
+    pub color: &'a str,
+}
+
+/// Diesel model for the course_tags junction table.
+#[derive(Queryable, Selectable, Insertable, Debug)]
+#[diesel(table_name = crate::schema::course_tags)]
+#[diesel(check_for_backend(Sqlite))]
+pub struct CourseTagRow {
+    pub course_id: String,
+    pub tag_id: String,
+}

@@ -3,10 +3,12 @@
 mod connection;
 pub mod models;
 mod repositories;
+mod tag_repository;
 
 pub use connection::{DbPool, establish_connection};
-pub use models::{UpdatePreferences, UserPreferencesRow};
+pub use models::{CourseTagRow, NewTag, TagRow, UpdatePreferences, UserPreferencesRow};
 pub use repositories::{
     SqliteCourseRepository, SqliteExamRepository, SqliteModuleRepository, SqliteNoteRepository,
     SqliteVideoRepository,
 };
+pub use tag_repository::SqliteTagRepository;
