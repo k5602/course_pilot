@@ -125,29 +125,37 @@ jobs:
         run: |
           mkdir -p release-artifacts
 
-          # 1. Prepare Binary
-          if [ -f "./target/dx/${APP_NAME}/release/linux/${APP_NAME}" ]; then
-            cp "./target/dx/${APP_NAME}/release/linux/${APP_NAME}" ./release-artifacts/
-          else
-            find ./target -name "${APP_NAME}" -type f -executable | head -1 | xargs -I{} cp {} ./release-artifacts/
+          # 1. Prepare Binary (Search for the most likely release binary)
+          BINARY_FILE=$(find target -name "${APP_NAME}" -type f -executable | grep -v "deps/" | grep "release" | head -1)
+          if [ -z "$BINARY_FILE" ]; then
+            echo "Error: Binary not found"
+            exit 1
           fi
+          cp "$BINARY_FILE" ./release-artifacts/
 
           # 2. Add Assets
           cp -r ./assets ./release-artifacts/
 
           # 3. Add Launcher Script
-          cp ./scripts/course-pilot-launcher.sh ./release-artifacts/course-pilot-launcher
-          chmod +x ./release-artifacts/course-pilot-launcher
+          if [ -f "./scripts/course-pilot-launcher.sh" ]; then
+            cp ./scripts/course-pilot-launcher.sh ./release-artifacts/course-pilot-launcher
+            chmod +x ./release-artifacts/course-pilot-launcher
+          fi
+
           chmod +x "./release-artifacts/${APP_NAME}"
           strip "./release-artifacts/${APP_NAME}" || true
 
           # 4. Create Tarball
           tar -czf "${{ matrix.artifact }}" -C release-artifacts .
 
-          # 5. Extract .deb from bundle directory
-          DEB_FILE=$(find target/dx/${APP_NAME}/release/bundle/deb -name "*.deb" | head -1)
-          if [ -n "$DEB_FILE" ]; then
-            cp "$DEB_FILE" "course-pilot-linux-x64.deb"
+          # 5. Extract .deb (Search for any generated .deb in the target directory)
+          DEB_PATH=$(find target -name "*.deb" | head -1)
+          if [ -n "$DEB_PATH" ]; then
+            cp "$DEB_PATH" "course-pilot-linux-x64.deb"
+            echo "Successfully found and copied Debian package: $DEB_PATH"
+          else
+            echo "Warning: Debian package not found in target directory"
+            exit 1
           fi
         shell: bash
 
@@ -155,26 +163,12 @@ jobs:
         if: matrix.platform == 'windows'
         run: |
           New-Item -ItemType Directory -Force -Path release-artifacts | Out-Null
-          $locations = @(
-            "./target/dx/${env:APP_NAME}/release/windows/${env:APP_NAME}.exe",
-            "./target/release/${env:APP_NAME}.exe"
-          )
-          $found = $false
-          foreach ($loc in $locations) {
-            if (Test-Path $loc) {
-              Copy-Item $loc ./release-artifacts/
-              $found = $true
-              break
-            }
-          }
-          if (-not $found) {
-            $exe = Get-ChildItem -Path ./target -Filter "${env:APP_NAME}.exe" -Recurse | Select-Object -First 1
-            if ($exe) {
+          $exe = Get-ChildItem -Path ./target -Filter "${env:APP_NAME}.exe" -Recurse | Where-Object { $_.FullName -notmatch "deps" -and $_.FullName -match "release" } | Select-Object -First 1
+          if ($exe) {
               Copy-Item $exe.FullName ./release-artifacts/
-            } else {
+          } else {
               Write-Error "Binary not found"
               exit 1
-            }
           }
           Copy-Item -Recurse ./assets ./release-artifacts/
           Compress-Archive -Path ./release-artifacts/* -DestinationPath "${{ matrix.artifact }}"
@@ -282,8 +276,8 @@ jobs:
             echo "| 🪟 Windows x64 | course-pilot-windows-x64.zip | ${{ steps.meta.outputs.win_size }} | ${{ steps.meta.outputs.win_sha }} |"
             echo ""
             echo "### 🚀 Installation (Linux)"
-            echo "- **Debian/Ubuntu/Mint**: Download the `.deb` and install via `sudo apt install ./course-pilot-linux-x64.deb`."
-            echo "- **Arch/Others**: Download the `.tar.gz`, extract it, and run `course-pilot-launcher`. This script will automatically check and help install dependencies."
+            echo "- **Debian/Ubuntu/Mint**: Download the `.deb` and install via \`sudo apt install ./course-pilot-linux-x64.deb\`."
+            echo "- **Arch/Others**: Download the \`.tar.gz\`, extract it, and run \`course-pilot-launcher\`. This script will automatically check and help install dependencies."
             echo ""
             echo "### ⚙️ System Requirements"
             echo "- **Linux**: Ubuntu 20.04+ / Debian 11+ / Fedora 35+ / Arch Linux (GTK3/4 compatible WebKit)"
