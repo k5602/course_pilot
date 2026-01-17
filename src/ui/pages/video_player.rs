@@ -7,8 +7,10 @@ use crate::domain::ports::VideoRepository;
 use crate::domain::value_objects::{CourseId, VideoId};
 use crate::ui::Route;
 use crate::ui::actions::start_exam;
-use crate::ui::custom::YouTubePlayer;
-use crate::ui::hooks::{use_load_modules, use_load_video, use_load_videos_by_course};
+use crate::ui::custom::{ErrorAlert, MarkdownRenderer, Spinner, SuccessAlert, YouTubePlayer};
+use crate::ui::hooks::{
+    use_load_modules_state, use_load_video_state, use_load_videos_by_course_state,
+};
 use crate::ui::state::AppState;
 
 /// Video player with controls and completion actions.
@@ -17,6 +19,13 @@ pub fn VideoPlayer(course_id: String, video_id: String) -> Element {
     let mut state = use_context::<AppState>();
     let backend = state.backend.clone();
     let nav = use_navigator();
+
+    {
+        let mut state = state.clone();
+        use_effect(move || {
+            state.right_panel_visible.set(true);
+        });
+    }
 
     // Parse IDs
     let course_id_vo = match CourseId::from_str(&course_id) {
@@ -30,9 +39,10 @@ pub fn VideoPlayer(course_id: String, video_id: String) -> Element {
     };
 
     // Load data
-    let video = use_load_video(backend.clone(), &video_id_vo);
-    let modules = use_load_modules(backend.clone(), &course_id_vo);
-    let all_videos = use_load_videos_by_course(backend.clone(), &course_id_vo);
+    let (video, video_state) = use_load_video_state(backend.clone(), &video_id_vo);
+    let (modules, modules_state) = use_load_modules_state(backend.clone(), &course_id_vo);
+    let (all_videos, videos_state) =
+        use_load_videos_by_course_state(backend.clone(), &course_id_vo);
 
     // Track current video in global state for AI companion context
     let video_id_for_state = video_id.clone();
@@ -44,7 +54,22 @@ pub fn VideoPlayer(course_id: String, video_id: String) -> Element {
     let video_read = video.read();
     let v = match video_read.as_ref() {
         Some(v) => v.clone(),
-        None => return rsx! { div { class: "p-6 animate-pulse", "Loading video..." } },
+        None => {
+            if let Some(ref err) = *video_state.error.read() {
+                return rsx! {
+                    div {
+                        class: "p-6",
+                        ErrorAlert { message: err.clone(), on_dismiss: None }
+                    }
+                };
+            }
+            return rsx! {
+                div {
+                    class: "p-6",
+                    Spinner { message: Some("Loading video...".to_string()) }
+                }
+            };
+        },
     };
 
     // Find current module name
@@ -70,17 +95,33 @@ pub fn VideoPlayer(course_id: String, video_id: String) -> Element {
     let video_id_for_complete = v.id().clone();
     let video_id_for_quiz = v.id().clone();
     let is_completed = v.is_completed();
+    let action_status = use_signal(|| None::<(bool, String)>);
 
     // Handlers
+    let mut action_status_complete = action_status;
+    let mut video_for_complete = video;
     let on_mark_complete = move |_| {
         if let Some(ctx) = backend_for_complete.as_ref() {
             let new_status = !is_completed;
             if let Err(e) = ctx.video_repo.update_completion(&video_id_for_complete, new_status) {
                 log::error!("Failed to update completion: {}", e);
+                action_status_complete
+                    .set(Some((false, format!("Failed to update completion: {}", e))));
+                return;
             }
+
+            if let Ok(Some(updated)) = ctx.video_repo.find_by_id(&video_id_for_complete) {
+                video_for_complete.set(Some(updated));
+            }
+
+            let message = if new_status { "Marked as completed." } else { "Marked as incomplete." };
+            action_status_complete.set(Some((true, message.to_string())));
+        } else {
+            action_status_complete.set(Some((false, "Backend not available".to_string())));
         }
     };
 
+    let mut action_status_quiz = action_status;
     let on_take_quiz = move |_| {
         let backend_inner = backend_for_quiz.clone();
         let vid = video_id_for_quiz.clone();
@@ -91,6 +132,7 @@ pub fn VideoPlayer(course_id: String, video_id: String) -> Element {
                 },
                 Err(e) => {
                     log::error!("Failed to start exam: {}", e);
+                    action_status_quiz.set(Some((false, format!("Failed to start exam: {}", e))));
                 },
             }
         });
@@ -98,7 +140,25 @@ pub fn VideoPlayer(course_id: String, video_id: String) -> Element {
 
     rsx! {
         div {
-            class: "p-6 h-full flex flex-col max-w-5xl mx-auto",
+            class: "p-6 min-h-full flex flex-col max-w-5xl mx-auto",
+
+            if let Some((is_success, ref msg)) = *action_status.read() {
+                if is_success {
+                    SuccessAlert { message: msg.clone(), on_dismiss: None }
+                } else {
+                    ErrorAlert { message: msg.clone(), on_dismiss: None }
+                }
+            }
+
+            if let Some(ref err) = *video_state.error.read() {
+                ErrorAlert { message: err.clone(), on_dismiss: None }
+            }
+            if let Some(ref err) = *modules_state.error.read() {
+                ErrorAlert { message: err.clone(), on_dismiss: None }
+            }
+            if let Some(ref err) = *videos_state.error.read() {
+                ErrorAlert { message: err.clone(), on_dismiss: None }
+            }
 
             // Header/Nav
             div { class: "flex justify-between items-center mb-6",
@@ -146,6 +206,11 @@ pub fn VideoPlayer(course_id: String, video_id: String) -> Element {
                         "📝 Take Quiz"
                     }
                 }
+            }
+
+            // AI Summary Section
+            SummarySection {
+                video_id: v.id().as_uuid().to_string(),
             }
 
             // Navigation Footer
@@ -207,6 +272,200 @@ pub fn VideoPlayer(course_id: String, video_id: String) -> Element {
                         div { class: "w-10 h-10 rounded-full bg-base-300 flex items-center justify-center",
                             "✓"
                         }
+                    }
+                }
+            }
+        }
+    }
+}
+
+/// Summary generation state
+#[derive(Clone, PartialEq)]
+enum SummaryState {
+    Empty,
+    Loading(String),
+    Ready { summary: String, cached: bool },
+    Error(String),
+}
+
+/// AI Summary section with cached transcript + summary persistence
+#[component]
+fn SummarySection(video_id: String) -> Element {
+    let state = use_context::<AppState>();
+    let mut summary_state = use_signal(|| SummaryState::Empty);
+    let mut expanded = use_signal(|| false);
+
+    let backend = state.backend.clone();
+    let video_id_clone = video_id.clone();
+
+    {
+        let backend = backend.clone();
+        let video_id = video_id.clone();
+        let mut summary_state = summary_state;
+        use_effect(move || {
+            let Some(ref ctx) = backend else {
+                return;
+            };
+            let video_id_vo = match VideoId::from_str(&video_id) {
+                Ok(id) => id,
+                Err(_) => return,
+            };
+
+            if let Some(use_case) = crate::application::ServiceFactory::summarize_video(ctx) {
+                spawn(async move {
+                    let input = crate::application::use_cases::SummarizeVideoInput {
+                        video_id: video_id_vo,
+                        force_refresh: false,
+                    };
+                    if let Ok(result) = use_case.execute(input).await {
+                        if result.cached {
+                            summary_state
+                                .set(SummaryState::Ready { summary: result.summary, cached: true });
+                        }
+                    }
+                });
+            }
+        });
+    }
+
+    let generate_summary = move |force_refresh: bool| {
+        let backend = backend.clone();
+        let video_id = video_id_clone.clone();
+
+        spawn(async move {
+            summary_state.set(SummaryState::Loading("Generating summary...".to_string()));
+
+            let video_id_vo = match VideoId::from_str(&video_id) {
+                Ok(id) => id,
+                Err(_) => {
+                    summary_state.set(SummaryState::Error("Invalid Video ID".to_string()));
+                    return;
+                },
+            };
+
+            if let Some(ref ctx) = backend {
+                if let Some(use_case) = crate::application::ServiceFactory::summarize_video(ctx) {
+                    let input = crate::application::use_cases::SummarizeVideoInput {
+                        video_id: video_id_vo,
+                        force_refresh,
+                    };
+
+                    match use_case.execute(input).await {
+                        Ok(result) => {
+                            summary_state.set(SummaryState::Ready {
+                                summary: result.summary,
+                                cached: result.cached,
+                            });
+                        },
+                        Err(e) => {
+                            summary_state
+                                .set(SummaryState::Error(format!("Summary failed: {}", e)));
+                        },
+                    }
+                } else {
+                    summary_state.set(SummaryState::Error("Gemini API not configured".to_string()));
+                }
+            } else {
+                summary_state.set(SummaryState::Error("Backend not available".to_string()));
+            }
+        });
+    };
+
+    rsx! {
+        div {
+            class: "mt-8 bg-base-200 rounded-2xl overflow-hidden",
+
+            // Header (clickable to expand)
+            button {
+                class: "w-full p-4 flex items-center justify-between hover:bg-base-300 transition-colors",
+                onclick: move |_| {
+                    let current = *expanded.read();
+                    expanded.set(!current);
+                },
+
+                div {
+                    class: "flex items-center gap-3",
+                    span { class: "text-xl", "✨" }
+                    span { class: "font-bold", "AI Summary" }
+                    match &*summary_state.read() {
+                        SummaryState::Ready { cached, .. } => rsx! {
+                            span { class: "badge badge-success badge-sm", if *cached { "Cached" } else { "Ready" } }
+                        },
+                        SummaryState::Loading(_) => rsx! {
+                            span { class: "badge badge-warning badge-sm", "Loading" }
+                        },
+                        SummaryState::Error(_) => rsx! {
+                            span { class: "badge badge-error badge-sm", "Error" }
+                        },
+                        SummaryState::Empty => rsx! {},
+                    }
+                }
+
+                span {
+                    class: "transition-transform",
+                    style: if *expanded.read() { "transform: rotate(180deg)" } else { "" },
+                    "▼"
+                }
+            }
+
+            // Content (expanded)
+            if *expanded.read() {
+                div {
+                    class: "p-4 pt-0",
+
+                    match &*summary_state.read() {
+                        SummaryState::Empty => rsx! {
+                            div {
+                                class: "text-center py-8",
+                                p { class: "text-base-content/60 mb-4", "Generate an AI summary from the video transcript" }
+                                button {
+                                    class: "btn btn-primary",
+                                    onclick: move |_| generate_summary(false),
+                                    disabled: !state.has_gemini(),
+                                    "✨ Generate Summary"
+                                }
+                                if !state.has_gemini() {
+                                    p { class: "text-sm text-warning mt-2", "Configure Gemini API key in Settings" }
+                                }
+                            }
+                        },
+                        SummaryState::Loading(msg) => rsx! {
+                            div {
+                                class: "flex flex-col items-center py-8",
+                                div { class: "loading loading-spinner loading-lg text-primary" }
+                                p { class: "text-base-content/60 mt-4", "{msg}" }
+                            }
+                        },
+                        SummaryState::Ready { summary, cached } => rsx! {
+                            div {
+                                class: "space-y-4",
+                                if *cached {
+                                    p { class: "text-xs text-base-content/60", "Loaded from cache" }
+                                }
+                                div {
+                                    class: "prose prose-sm max-w-none",
+                                    MarkdownRenderer { src: summary.clone() }
+                                }
+                                div { class: "flex justify-end",
+                                    button {
+                                        class: "btn btn-outline btn-primary btn-sm",
+                                        onclick: move |_| generate_summary(true),
+                                        "Regenerate"
+                                    }
+                                }
+                            }
+                        },
+                        SummaryState::Error(err) => rsx! {
+                            div {
+                                class: "text-center py-8",
+                                p { class: "text-error mb-4", "{err}" }
+                                button {
+                                    class: "btn btn-outline btn-primary",
+                                    onclick: move |_| generate_summary(false),
+                                    "Try Again"
+                                }
+                            }
+                        },
                     }
                 }
             }

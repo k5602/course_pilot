@@ -1,5 +1,7 @@
 //! YouTube-related value objects.
 
+use rusty_ytdl::get_video_id;
+use rusty_ytdl::search::Playlist;
 use thiserror::Error;
 
 /// Error when parsing YouTube URLs or IDs.
@@ -16,21 +18,38 @@ pub enum YouTubeError {
 pub struct PlaylistUrl {
     raw: String,
     playlist_id: String,
+    video_id: Option<String>,
 }
 
 impl PlaylistUrl {
     /// Creates a new PlaylistUrl from a raw URL string.
     /// Extracts and validates the playlist ID.
     pub fn new(url: &str) -> Result<Self, YouTubeError> {
-        let playlist_id = Self::extract_playlist_id(url)
-            .ok_or_else(|| YouTubeError::InvalidPlaylistUrl(url.to_string()))?;
+        if let Some(playlist_id) = Self::extract_playlist_id(url) {
+            let video_id = Self::extract_video_id(url);
+            let raw = Playlist::get_playlist_url(url).unwrap_or_else(|| url.to_string());
+            return Ok(Self { raw, playlist_id, video_id });
+        }
 
-        Ok(Self { raw: url.to_string(), playlist_id })
+        if let Some(video_id) = Self::extract_video_id(url) {
+            let raw = format!("https://www.youtube.com/watch?v={}", video_id);
+            return Ok(Self { raw, playlist_id: video_id.clone(), video_id: Some(video_id) });
+        }
+
+        Err(YouTubeError::InvalidPlaylistUrl(url.to_string()))
     }
 
     fn extract_playlist_id(url: &str) -> Option<String> {
-        // Handle both youtube.com and youtu.be URLs
-        // Expected format: ?list=PLAYLIST_ID or &list=PLAYLIST_ID
+        // Try finding list= in the raw URL first (handles watch?v=...&list=...)
+        if let Some(id) = Self::parse_list_param(url) {
+            return Some(id);
+        }
+
+        // Fallback to checking what rusty_ytdl considers a playlist URL
+        Playlist::get_playlist_url(url).and_then(|p_url| Self::parse_list_param(&p_url))
+    }
+
+    fn parse_list_param(url: &str) -> Option<String> {
         if let Some(start) = url.find("list=") {
             let id_start = start + 5;
             let id_end = url[id_start..].find('&').map(|i| id_start + i).unwrap_or(url.len());
@@ -42,12 +61,20 @@ impl PlaylistUrl {
         None
     }
 
+    fn extract_video_id(url: &str) -> Option<String> {
+        get_video_id(url)
+    }
+
     pub fn raw(&self) -> &str {
         &self.raw
     }
 
     pub fn playlist_id(&self) -> &str {
         &self.playlist_id
+    }
+
+    pub fn video_id(&self) -> Option<&str> {
+        self.video_id.as_deref()
     }
 }
 
@@ -99,5 +126,11 @@ mod tests {
     fn test_video_id_valid() {
         let id = YouTubeVideoId::new("dQw4w9WgXcQ").unwrap();
         assert_eq!(id.as_str(), "dQw4w9WgXcQ");
+    }
+
+    #[test]
+    fn test_playlist_url_with_video_only() {
+        let url = PlaylistUrl::new("https://www.youtube.com/watch?v=dQw4w9WgXcQ").unwrap();
+        assert_eq!(url.video_id(), Some("dQw4w9WgXcQ"));
     }
 }

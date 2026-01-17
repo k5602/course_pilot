@@ -65,6 +65,8 @@ pub struct VideoRow {
     pub is_completed: bool,
     pub sort_order: i32,
     pub description: Option<String>,
+    pub transcript: Option<String>,
+    pub summary: Option<String>,
 }
 
 /// Insertable model for videos.
@@ -79,6 +81,8 @@ pub struct NewVideo<'a> {
     pub is_completed: bool,
     pub sort_order: i32,
     pub description: Option<&'a str>,
+    pub transcript: Option<&'a str>,
+    pub summary: Option<&'a str>,
 }
 
 /// Diesel model for the exams table.
@@ -136,10 +140,47 @@ pub struct UserPreferencesRow {
     pub cognitive_limit_minutes: i32,
 }
 
+/// Insertable model for user preferences.
+#[derive(Insertable)]
+#[diesel(table_name = user_preferences)]
+pub struct NewUserPreferences<'a> {
+    pub id: &'a str,
+    pub ml_boundary_enabled: i32,
+    pub cognitive_limit_minutes: i32,
+}
+
 /// Changeset for updating user preferences.
 #[derive(AsChangeset)]
 #[diesel(table_name = user_preferences)]
 pub struct UpdatePreferences {
     pub ml_boundary_enabled: Option<i32>,
     pub cognitive_limit_minutes: Option<i32>,
+}
+
+/// Diesel model for the tags table.
+#[derive(Queryable, Selectable, Identifiable, Debug)]
+#[diesel(table_name = crate::schema::tags)]
+#[diesel(check_for_backend(Sqlite))]
+pub struct TagRow {
+    pub id: String,
+    pub name: String,
+    pub color: String,
+}
+
+/// Insertable model for tags.
+#[derive(Insertable)]
+#[diesel(table_name = crate::schema::tags)]
+pub struct NewTag<'a> {
+    pub id: &'a str,
+    pub name: &'a str,
+    pub color: &'a str,
+}
+
+/// Diesel model for the course_tags junction table.
+#[derive(Queryable, Selectable, Insertable, Debug)]
+#[diesel(table_name = crate::schema::course_tags)]
+#[diesel(check_for_backend(Sqlite))]
+pub struct CourseTagRow {
+    pub course_id: String,
+    pub tag_id: String,
 }

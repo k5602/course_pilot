@@ -41,9 +41,11 @@ pub struct AppState {
     // UI State
     pub sidebar_collapsed: Signal<bool>,
     pub right_panel_tab: Signal<RightPanelTab>,
+    pub right_panel_visible: Signal<bool>,
     pub chat_history: Signal<Vec<ChatMessage>>,
     pub notes: Signal<HashMap<String, String>>,
     pub current_video_id: Signal<Option<String>>,
+    pub youtube_embed_relay_url: Signal<Option<String>>,
 
     // Cached data from backend
     pub courses: Signal<Vec<Course>>,
@@ -59,9 +61,11 @@ impl AppState {
             backend: None,
             sidebar_collapsed: Signal::new(false),
             right_panel_tab: Signal::new(RightPanelTab::default()),
+            right_panel_visible: Signal::new(false),
             chat_history: Signal::new(Vec::new()),
             notes: Signal::new(HashMap::new()),
             current_video_id: Signal::new(None),
+            youtube_embed_relay_url: Signal::new(None),
             courses: Signal::new(Vec::new()),
             current_course: Signal::new(None),
             current_modules: Signal::new(Vec::new()),
@@ -77,11 +81,6 @@ impl AppState {
     /// Check if backend is available.
     pub fn has_backend(&self) -> bool {
         self.backend.is_some()
-    }
-
-    /// Check if YouTube API is configured.
-    pub fn has_youtube(&self) -> bool {
-        self.backend.as_ref().map(|b| b.has_youtube()).unwrap_or(false)
     }
 
     /// Check if Gemini API is configured.

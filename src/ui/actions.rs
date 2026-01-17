@@ -16,7 +16,6 @@ pub enum ImportResult {
 }
 
 /// Import a playlist from YouTube.
-/// Returns error if YouTube is not configured.
 pub async fn import_playlist(
     backend: Option<Arc<AppContext>>,
     url: String,
@@ -27,18 +26,8 @@ pub async fn import_playlist(
         None => return ImportResult::Error("Backend not initialized".to_string()),
     };
 
-    // Check if required services are available
-    if !ctx.has_youtube() {
-        return ImportResult::Error("YouTube API not configured".to_string());
-    }
-
-    // Get the use case from factory
-    let use_case = match ServiceFactory::ingest_playlist(&ctx) {
-        Some(uc) => uc,
-        None => {
-            return ImportResult::Error("YouTube service not available".to_string());
-        },
-    };
+    // Get the use case from factory (always available)
+    let use_case = ServiceFactory::ingest_playlist(&ctx);
 
     // Execute the use case
     let input = IngestPlaylistInput { playlist_url: url, course_name: name };
@@ -49,7 +38,7 @@ pub async fn import_playlist(
             modules: output.modules_count,
             videos: output.videos_count,
         },
-        Err(e) => ImportResult::Error(e.to_string()),
+        Err(e) => ImportResult::Error(format!("Failed to fetch playlist: {}", e)),
     }
 }
 

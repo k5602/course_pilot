@@ -1,13 +1,17 @@
 
 [package]
 name = "course_pilot"
+description = "Transform YouTube playlists into structured, intelligent study plans"
+authors = ["k5602"]
 version = "0.1.0"
 edition = "2024"
+readme = "README.md"
 
 [dependencies]
 
 # Core UI framework
 dioxus = { version = "0.7", features = ["desktop", "router"] }
+dioxus-desktop = "0.7.3"
 
 # UI Components & Styling
 dioxus-free-icons = { version = "0.10", features = [
@@ -24,6 +28,7 @@ serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
 walkdir = "2.5.0"
 dotenvy = "0.15"
+rustls = { version = "0.23", features = ["ring"] }
 
 # Async Runtime & Utilities
 tokio = { version = "1", features = ["rt-multi-thread", "macros"] }
@@ -34,9 +39,12 @@ futures-util = "0.3"
 
 # Data Handling & Serialization
 diesel = { version = "2.3", features = ["sqlite", "r2d2"] }
+diesel_migrations = "2.3"
 libsqlite3-sys = { version = "0.35", features = ["bundled"] }
 uuid = { version = "1", features = ["v4", "serde"] }
 chrono = { version = "0.4", features = ["serde"] }
+pulldown-cmark = "0.12"
+ammonia = "4.0"
 
 # Error Handling & Logging
 anyhow = "1.0"
@@ -49,22 +57,18 @@ tracing = { version = "0.1", features = ["std"] }
 dirs = "6.0.0"
 once_cell = "1.21"
 tempfile = "3.24"
-rfd = { version = "0.17.1", default-features = false, features = [
-    "xdg-portal",
-] }
 
 # App-specific Logic
-reqwest = { version = "0.13.1", features = ["json"], default-features = false }
+reqwest = { version = "0.13.1", features = ["json"] }
 
-# YouTube API
-google-youtube3 = "7"
-hyper = "1"
-hyper-rustls = { version = "0.27", features = ["http2"] }
-hyper-util = { version = "0.1", features = ["client-legacy", "http1", "http2"] }
-tower-service = "0.3"
+# YouTube (API-free playlist fetching)
+rusty_ytdl = { git = "https://github.com/k5602/rusty_ytdl", branch = "qol", features = ["search"] }
 
 # LLM (Gemini)
 genai-rs = "0.6"
+
+# YouTube Transcripts
+yt-transcript-rs = "0.1"
 
 # Secure Storage
 keyring = { version = "3", features = ["linux-native"] }
@@ -80,3 +84,7 @@ opt-level = "z"   # Optimize for size
 lto = true        # Enable Link Time Optimization
 codegen-units = 1 # Allow for maximum cross-module optimization
 panic = "abort"   # Remove unwinding code for smaller binaries
+
+[patch.crates-io]
+dioxus = { git = "https://github.com/k5602/dioxus", branch = "navigation_policy_hook", package = "dioxus" }
+dioxus-desktop = { git = "https://github.com/k5602/dioxus", branch = "navigation_policy_hook", package = "dioxus-desktop" }

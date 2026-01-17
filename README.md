@@ -38,8 +38,26 @@ A modern Rust desktop application that automatically analyzes video-based course
 
 ### Prerequisites
 
-- Rust 1.80+
-- [Dioxus CLI](https://dioxuslabs.com/learn/0.7/getting_started): `cargo install dioxus-cli`
+- **Rust 1.80+**
+- **[Dioxus CLI](https://dioxuslabs.com/learn/0.7/getting_started)**: `cargo install dioxus-cli`
+
+#### Linux Dependencies
+
+Building and running on Linux requires several system libraries (WebKit2GTK, GTK3, SQLite3).
+
+**Automatic Setup (Recommended):**
+
+```bash
+chmod +x scripts/setup-linux.sh
+./scripts/setup-linux.sh
+```
+
+**Manual Installation:**
+| Distribution | Command |
+| :--- | :--- |
+| **Ubuntu/Debian** | `sudo apt install libwebkit2gtk-4.1-dev libgtk-3-dev libsqlite3-dev` |
+| **Fedora** | `sudo dnf install webkit2gtk4.1-devel gtk3-devel sqlite-devel` |
+| **Arch Linux** | `sudo pacman -S webkit2gtk-4.1 gtk3 sqlite` |
 
 ### 1. Clone & Configure
 
@@ -77,22 +95,34 @@ RUST_LOG=info dx serve
 dx build --release
 ```
 
+On Linux, you can also use `dx bundle --release` to create a `.deb` package.
+
+## 📦 Distribution
+
+### Linux
+
+We provide two formats for Linux:
+
+1. **Debian Package (.deb)**: Recommended for Ubuntu, Mint, Pop!\_OS. Install via `sudo apt install ./course-pilot-linux-x64.deb`.
+2. **Generic Tarball (.tar.gz)**: Recommended for Arch or other distros. Extract and run `course-pilot-launcher`. This script will automatically check for missing dependencies and offer to install them for you.
+
+### Windows
+
+Download the `.zip`, extract, and run `course_pilot.exe`.
+
 ## ⚙️ Configuration
 
-| Variable | Required | Default | Description |
-|----------|----------|---------|-------------|
-| `DATABASE_URL` | No | `course_pilot.db` | SQLite database path |
-| `YOUTUBE_API_KEY` | Yes | - | YouTube Data API v3 key |
-| `GEMINI_API_KEY` | No | - | Gemini API key for AI features |
+| Variable          | Required | Default           | Description                               |
+| ----------------- | -------- | ----------------- | ----------------------------------------- |
+| `DATABASE_URL`    | No       | `course_pilot.db` | SQLite database path                      |
+| `YOUTUBE_API_KEY` | No       | -                 | Optional YouTube Data API v3 key (unused) |
+| `GEMINI_API_KEY`  | No       | -                 | Gemini API key for AI features            |
 
 ## 🔑 API Keys
 
-### YouTube API Key (Required)
+### YouTube API Key (Optional)
 
-1. Go to [Google Cloud Console](https://console.cloud.google.com)
-2. Create a project or select existing
-3. Enable **YouTube Data API v3**
-4. Create an API key under Credentials
+Course Pilot uses API-free playlist import by default. A YouTube API key is not required for normal use.
 
 ### Gemini API Key (Optional)
 

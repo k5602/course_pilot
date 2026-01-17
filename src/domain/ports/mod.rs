@@ -4,12 +4,14 @@
 mod keystore;
 mod llm;
 mod repository;
+mod transcript;
 mod youtube;
 
 pub use keystore::{KeystoreError, SecretStore};
-pub use llm::{CompanionAI, CompanionContext, ExaminerAI, LLMError, MCQuestion};
+pub use llm::{CompanionAI, CompanionContext, ExaminerAI, LLMError, MCQuestion, SummarizerAI};
 pub use repository::{
     CourseRepository, ExamRepository, ModuleRepository, NoteRepository, RepositoryError,
-    VideoRepository,
+    SearchRepository, TagRepository, UserPreferencesRepository, VideoRepository,
 };
+pub use transcript::{TranscriptError, TranscriptProvider};
 pub use youtube::{FetchError, PlaylistFetcher, RawVideoMetadata};

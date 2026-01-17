@@ -4,6 +4,8 @@ use diesel::prelude::*;
 use std::str::FromStr;
 use std::sync::Arc;
 
+use chrono::{DateTime, NaiveDateTime, Utc};
+
 use super::connection::DbPool;
 use super::models::{
     CourseRow, ExamRow, ModuleRow, NewCourse, NewExam, NewModule, NewNote, NewVideo, NoteRow,
@@ -68,12 +70,18 @@ impl CourseRepository for SqliteCourseRepository {
                 let playlist_url = PlaylistUrl::new(&row.source_url)
                     .map_err(|e| RepositoryError::Database(e.to_string()))?;
 
-                Ok(Some(Course::new(
+                let created_at =
+                    NaiveDateTime::parse_from_str(&row.created_at, "%Y-%m-%d %H:%M:%S")
+                        .map(|dt| DateTime::<Utc>::from_naive_utc_and_offset(dt, Utc))
+                        .map_err(|e| RepositoryError::Database(e.to_string()))?;
+
+                Ok(Some(Course::new_with_created_at(
                     course_id,
                     row.name,
                     playlist_url,
                     row.playlist_id,
                     row.description,
+                    created_at,
                 )))
             },
             None => Ok(None),
@@ -95,7 +103,19 @@ impl CourseRepository for SqliteCourseRepository {
                 let playlist_url = PlaylistUrl::new(&row.source_url)
                     .map_err(|e| RepositoryError::Database(e.to_string()))?;
 
-                Ok(Course::new(course_id, row.name, playlist_url, row.playlist_id, row.description))
+                let created_at =
+                    NaiveDateTime::parse_from_str(&row.created_at, "%Y-%m-%d %H:%M:%S")
+                        .map(|dt| DateTime::<Utc>::from_naive_utc_and_offset(dt, Utc))
+                        .map_err(|e| RepositoryError::Database(e.to_string()))?;
+
+                Ok(Course::new_with_created_at(
+                    course_id,
+                    row.name,
+                    playlist_url,
+                    row.playlist_id,
+                    row.description,
+                    created_at,
+                ))
             })
             .collect()
     }
@@ -216,15 +236,20 @@ impl VideoRepository for SqliteVideoRepository {
     fn save(&self, video: &Video) -> Result<(), RepositoryError> {
         let mut conn = self.pool.get().map_err(|e| RepositoryError::Database(e.to_string()))?;
 
+        let duration_secs = u32_to_i32(video.duration_secs(), "duration_secs")?;
+        let sort_order = u32_to_i32(video.sort_order(), "sort_order")?;
+
         let new_video = NewVideo {
             id: &video.id().as_uuid().to_string(),
             module_id: &video.module_id().as_uuid().to_string(),
             youtube_id: video.youtube_id().as_str(),
             title: video.title(),
-            duration_secs: video.duration_secs() as i32,
+            duration_secs,
             is_completed: video.is_completed(),
-            sort_order: video.sort_order() as i32,
+            sort_order,
             description: video.description(),
+            transcript: video.transcript(),
+            summary: video.summary(),
         };
 
         diesel::insert_into(videos::table)
@@ -288,6 +313,32 @@ impl VideoRepository for SqliteVideoRepository {
         Ok(())
     }
 
+    fn update_transcript(
+        &self,
+        id: &VideoId,
+        transcript: Option<&str>,
+    ) -> Result<(), RepositoryError> {
+        let mut conn = self.pool.get().map_err(|e| RepositoryError::Database(e.to_string()))?;
+
+        diesel::update(videos::table.find(id.as_uuid().to_string()))
+            .set(videos::transcript.eq(transcript))
+            .execute(&mut conn)
+            .map_err(|e| RepositoryError::Database(e.to_string()))?;
+
+        Ok(())
+    }
+
+    fn update_summary(&self, id: &VideoId, summary: Option<&str>) -> Result<(), RepositoryError> {
+        let mut conn = self.pool.get().map_err(|e| RepositoryError::Database(e.to_string()))?;
+
+        diesel::update(videos::table.find(id.as_uuid().to_string()))
+            .set(videos::summary.eq(summary))
+            .execute(&mut conn)
+            .map_err(|e| RepositoryError::Database(e.to_string()))?;
+
+        Ok(())
+    }
+
     fn delete(&self, id: &VideoId) -> Result<(), RepositoryError> {
         let mut conn = self.pool.get().map_err(|e| RepositoryError::Database(e.to_string()))?;
 
@@ -310,15 +361,20 @@ fn row_to_video(row: VideoRow) -> Result<Video, RepositoryError> {
     let youtube_id = YouTubeVideoId::new(&row.youtube_id)
         .map_err(|e| RepositoryError::Database(e.to_string()))?;
 
+    let duration_secs = i32_to_u32(row.duration_secs, "duration_secs")?;
+    let sort_order = i32_to_u32(row.sort_order, "sort_order")?;
+
     let mut video = Video::with_description(
         video_id,
         module_id,
         youtube_id,
         row.title,
         row.description,
-        row.duration_secs as u32,
-        row.sort_order as u32,
+        duration_secs,
+        sort_order,
     );
+    video.update_transcript(row.transcript);
+    video.update_summary(row.summary);
     if row.is_completed {
         video.mark_completed();
     }
@@ -328,6 +384,16 @@ fn row_to_video(row: VideoRow) -> Result<Video, RepositoryError> {
 /// SQLite-backed exam repository.
 pub struct SqliteExamRepository {
     pool: Arc<DbPool>,
+}
+
+fn i32_to_u32(value: i32, field: &str) -> Result<u32, RepositoryError> {
+    u32::try_from(value)
+        .map_err(|_| RepositoryError::Database(format!("Invalid {field} value: {value}")))
+}
+
+fn u32_to_i32(value: u32, field: &str) -> Result<i32, RepositoryError> {
+    i32::try_from(value)
+        .map_err(|_| RepositoryError::Database(format!("Invalid {field} value: {value}")))
 }
 
 impl SqliteExamRepository {

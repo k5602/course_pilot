@@ -1,8 +1,13 @@
 //! Right panel with Notes and AI Chat tabs
 
-use dioxus::prelude::*;
-
+use crate::application::use_cases::{DeleteNoteInput, LoadNoteInput, SaveNoteInput};
+use crate::domain::value_objects::VideoId;
+use crate::ui::custom::{MarkdownRenderer, TagBadge};
 use crate::ui::state::{AppState, ChatMessage, ChatRole, RightPanelTab};
+use dioxus::prelude::*;
+use std::str::FromStr;
+use std::time::Duration;
+use tokio::time::sleep;
 
 /// Right side panel with Notes and AI Chat tabs.
 #[component]
@@ -60,15 +65,187 @@ fn TabButton(label: &'static str, active: bool, onclick: EventHandler<MouseEvent
 fn NotesEditor() -> Element {
     let state = use_context::<AppState>();
     let video_id = state.current_video_id.read().clone();
+    let note_text = use_signal(String::new);
+    let course_tags = use_signal(Vec::<crate::domain::entities::Tag>::new);
+    let load_error = use_signal(|| None::<String>);
+    let is_loading = use_signal(|| false);
+    let save_status = use_signal(|| None::<String>);
+    let save_seq = use_signal(|| 0u64);
+    let is_saving = use_signal(|| false);
+
+    {
+        let state = state.clone();
+        let video_id = video_id.clone();
+        let mut note_text = note_text;
+        let mut course_tags = course_tags;
+        let mut load_error = load_error;
+        let mut is_loading = is_loading;
+        let mut save_status = save_status;
+        let mut save_seq = save_seq;
+        let mut is_saving = is_saving;
+        use_effect(move || {
+            load_error.set(None);
+            course_tags.set(Vec::new());
+            note_text.set(String::new());
+            save_status.set(None);
+            save_seq.set(0);
+            is_saving.set(false);
+
+            let Some(id) = video_id.clone() else {
+                return;
+            };
+            let vid = match VideoId::from_str(&id) {
+                Ok(v) => v,
+                Err(_) => {
+                    load_error.set(Some("Invalid video ID format".to_string()));
+                    return;
+                },
+            };
+
+            let Some(ctx) = state.backend.clone() else {
+                load_error.set(Some("Backend not available".to_string()));
+                return;
+            };
+
+            is_loading.set(true);
+            let mut note_text = note_text;
+            let mut course_tags = course_tags;
+            let mut load_error = load_error;
+            let mut is_loading = is_loading;
+            spawn(async move {
+                let use_case = crate::application::ServiceFactory::notes(&ctx);
+                match use_case.load_note(LoadNoteInput { video_id: vid }) {
+                    Ok(Some(note_view)) => {
+                        note_text.set(note_view.content);
+                        course_tags.set(note_view.course_tags);
+                    },
+                    Ok(None) => {},
+                    Err(e) => {
+                        load_error.set(Some(format!("Failed to load note: {}", e)));
+                    },
+                }
+                is_loading.set(false);
+            });
+        });
+    }
+
+    let on_note_input = {
+        let state = state.clone();
+        let video_id = video_id.clone();
+        let mut note_text = note_text;
+        let mut load_error = load_error;
+        let mut save_status = save_status;
+        let mut save_seq = save_seq;
+        let mut is_saving = is_saving;
+
+        move |e: Event<FormData>| {
+            let text = e.value();
+            note_text.set(text.clone());
+            load_error.set(None);
+
+            let Some(id) = video_id.clone() else {
+                return;
+            };
+            let vid = match VideoId::from_str(&id) {
+                Ok(v) => v,
+                Err(_) => {
+                    load_error.set(Some("Invalid video ID format".to_string()));
+                    return;
+                },
+            };
+
+            let Some(ctx) = state.backend.clone() else {
+                load_error.set(Some("Backend not available".to_string()));
+                return;
+            };
+
+            let current_seq = *save_seq.read() + 1;
+            save_seq.set(current_seq);
+            save_status.set(None);
+            is_saving.set(true);
+
+            let mut course_tags = course_tags;
+            let mut load_error = load_error;
+            let mut save_status = save_status;
+            let mut is_saving = is_saving;
+            let save_seq_check = save_seq;
+            spawn(async move {
+                sleep(Duration::from_millis(500)).await;
+                if *save_seq_check.read() != current_seq {
+                    return;
+                }
+
+                let use_case = crate::application::ServiceFactory::notes(&ctx);
+
+                if text.trim().is_empty() {
+                    if let Err(e) = use_case.delete_note(DeleteNoteInput { video_id: vid }) {
+                        load_error.set(Some(format!("Failed to delete note: {}", e)));
+                    } else {
+                        course_tags.set(Vec::new());
+                        save_status.set(Some("Cleared".to_string()));
+                    }
+                    is_saving.set(false);
+                    return;
+                }
+
+                match use_case.save_note(SaveNoteInput { video_id: vid, content: text }) {
+                    Ok(note_view) => {
+                        course_tags.set(note_view.course_tags);
+                        save_status.set(Some("Saved".to_string()));
+                    },
+                    Err(e) => {
+                        load_error.set(Some(format!("Failed to save note: {}", e)));
+                    },
+                }
+                is_saving.set(false);
+            });
+        }
+    };
 
     rsx! {
         div {
             class: "h-full flex flex-col",
 
             if video_id.is_some() {
+                div { class: "flex items-center justify-between gap-2 mb-2",
+                    if !course_tags.read().is_empty() {
+                        div { class: "flex flex-wrap gap-2",
+                            for tag in course_tags.read().iter() {
+                                TagBadge { tag: tag.clone() }
+                            }
+                        }
+                    }
+                    div { class: "flex items-center gap-2",
+                        if *is_loading.read() {
+                            span { class: "text-xs text-base-content/60", "Loading..." }
+                        }
+                        if *is_saving.read() {
+                            span { class: "text-xs text-base-content/60", "Saving..." }
+                        } else if let Some(ref status) = *save_status.read() {
+                            span { class: "text-xs text-base-content/60", "{status}" }
+                        }
+                    }
+                }
+
+                if let Some(ref err) = *load_error.read() {
+                    div { class: "text-error text-xs mb-2", "{err}" }
+                }
+
                 textarea {
-                    class: "textarea textarea-bordered flex-1 resize-none",
+                    class: "textarea textarea-bordered resize-none",
                     placeholder: "Take notes on this video...",
+                    value: "{note_text.read()}",
+                    oninput: on_note_input,
+                }
+
+                div {
+                    class: "mt-3 flex-1 overflow-auto rounded-lg bg-base-100 p-3 prose prose-sm max-w-none",
+
+                    if note_text.read().trim().is_empty() {
+                        p { class: "text-base-content/50", "Markdown preview will appear here" }
+                    } else {
+                        MarkdownRenderer { src: note_text.read().clone() }
+                    }
                 }
             } else {
                 div {
@@ -83,14 +260,75 @@ fn NotesEditor() -> Element {
 /// AI Chat companion view.
 #[component]
 fn AiChatView() -> Element {
-    let state = use_context::<AppState>();
+    let mut state = use_context::<AppState>();
     let messages = state.chat_history.read();
     let video_id = state.current_video_id.read().clone();
     let has_gemini = state.has_gemini();
 
     let mut input_value = use_signal(String::new);
-    let is_loading = use_signal(|| false);
-    let error_msg = use_signal(|| None::<String>);
+    let mut is_loading = use_signal(|| false);
+    let mut error_msg = use_signal(|| None::<String>);
+
+    let video_id_closure = video_id.clone();
+    // Closure captures Clone-able items (Signals, Option<String>), so it is Clone.
+    let on_send = move || {
+        let question = input_value.read().trim().to_string();
+        if question.is_empty() || *is_loading.read() {
+            return;
+        }
+
+        if let Some(vid_str) = video_id_closure.clone() {
+            // Parse VideoId (UUID)
+            let vid = match VideoId::from_str(&vid_str) {
+                Ok(id) => id,
+                Err(_) => {
+                    error_msg.set(Some("Invalid video ID format".to_string()));
+                    return;
+                },
+            };
+
+            // Add user message immediately
+            state
+                .chat_history
+                .write()
+                .push(ChatMessage { role: ChatRole::User, content: question.clone() });
+            input_value.set(String::new());
+            is_loading.set(true);
+            error_msg.set(None);
+
+            let service_context = state.backend.clone();
+
+            spawn(async move {
+                if let Some(ctx) = service_context {
+                    if let Some(use_case) = crate::application::ServiceFactory::ask_companion(&ctx)
+                    {
+                        let input = crate::application::use_cases::AskCompanionInput {
+                            video_id: vid,
+                            question,
+                        };
+
+                        match use_case.execute(input).await {
+                            Ok(response) => {
+                                state.chat_history.write().push(ChatMessage {
+                                    role: ChatRole::Assistant,
+                                    content: response,
+                                });
+                            },
+                            Err(e) => {
+                                error_msg.set(Some(format!("Error: {}", e)));
+                            },
+                        }
+                    } else {
+                        error_msg.set(Some("Chat service not available".to_string()));
+                    }
+                }
+                is_loading.set(false);
+            });
+        }
+    };
+
+    let mut on_send_click = on_send.clone();
+    let mut on_send_key = on_send.clone();
 
     rsx! {
         div {
@@ -146,10 +384,16 @@ fn AiChatView() -> Element {
                         value: "{input_value}",
                         disabled: video_id.is_none() || !has_gemini || *is_loading.read(),
                         oninput: move |e| input_value.set(e.value()),
+                        onkeydown: move |e| {
+                            if e.key() == Key::Enter {
+                                on_send_key();
+                            }
+                        },
                     }
                     button {
                         class: "btn btn-primary",
                         disabled: video_id.is_none() || !has_gemini || *is_loading.read() || input_value.read().trim().is_empty(),
+                        onclick: move |_| on_send_click(),
                         "Send"
                     }
                 }
@@ -175,8 +419,8 @@ fn ChatBubble(message: ChatMessage) -> Element {
         div {
             class: "flex {align}",
             div {
-                class: "max-w-[80%] px-4 py-2 rounded-lg {bg}",
-                "{message.content}"
+                class: "max-w-[80%] px-4 py-2 rounded-lg {bg} prose prose-sm max-w-none",
+                MarkdownRenderer { src: message.content }
             }
         }
     }

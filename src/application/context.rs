@@ -5,7 +5,8 @@
 use std::sync::Arc;
 
 use crate::application::use_cases::{
-    AskCompanionUseCase, IngestPlaylistUseCase, PlanSessionUseCase, TakeExamUseCase,
+    AskCompanionUseCase, IngestPlaylistUseCase, LoadDashboardUseCase, NotesUseCase,
+    PlanSessionUseCase, PreferencesUseCase, SummarizeVideoUseCase, TakeExamUseCase,
 };
 use crate::domain::ports::SecretStore;
 use crate::infrastructure::{
@@ -13,9 +14,11 @@ use crate::infrastructure::{
     llm::GeminiAdapter,
     persistence::{
         DbPool, SqliteCourseRepository, SqliteExamRepository, SqliteModuleRepository,
-        SqliteNoteRepository, SqliteVideoRepository,
+        SqliteNoteRepository, SqliteSearchRepository, SqliteTagRepository,
+        SqliteUserPreferencesRepository, SqliteVideoRepository,
     },
-    youtube::YouTubeApiAdapter,
+    transcript::TranscriptAdapter,
+    youtube::RustyYtdlAdapter,
 };
 
 /// Configuration for the application.
@@ -25,19 +28,13 @@ use crate::infrastructure::{
 pub struct AppConfig {
     /// Path to SQLite database file.
     pub database_url: String,
-    /// YouTube Data API v3 key (required for playlist import).
-    pub youtube_api_key: Option<String>,
-    /// Gemini API key (optional - for AI companion and exams).
+    /// Gemini API key (optional - for AI companion, exams, and summaries).
     pub gemini_api_key: Option<String>,
 }
 
 impl Default for AppConfig {
     fn default() -> Self {
-        Self {
-            database_url: "course_pilot.db".to_string(),
-            youtube_api_key: None,
-            gemini_api_key: None,
-        }
+        Self { database_url: "course_pilot.db".to_string(), gemini_api_key: None }
     }
 }
 
@@ -48,7 +45,6 @@ impl AppConfig {
         Self {
             database_url: std::env::var("DATABASE_URL")
                 .unwrap_or_else(|_| "course_pilot.db".to_string()),
-            youtube_api_key: std::env::var("YOUTUBE_API_KEY").ok().filter(|s| !s.is_empty()),
             gemini_api_key: std::env::var("GEMINI_API_KEY").ok().filter(|s| !s.is_empty()),
         }
     }
@@ -68,11 +64,6 @@ pub struct AppConfigBuilder {
 impl AppConfigBuilder {
     pub fn database_url(mut self, url: impl Into<String>) -> Self {
         self.config.database_url = url.into();
-        self
-    }
-
-    pub fn youtube_api_key(mut self, key: impl Into<String>) -> Self {
-        self.config.youtube_api_key = Some(key.into());
         self
     }
 
@@ -97,9 +88,13 @@ pub struct AppContext {
     pub video_repo: Arc<SqliteVideoRepository>,
     pub exam_repo: Arc<SqliteExamRepository>,
     pub note_repo: Arc<SqliteNoteRepository>,
+    pub tag_repo: Arc<SqliteTagRepository>,
+    pub search_repo: Arc<SqliteSearchRepository>,
+    pub preferences_repo: Arc<SqliteUserPreferencesRepository>,
 
     // Infrastructure adapters
-    pub youtube: Option<Arc<YouTubeApiAdapter>>,
+    pub youtube: Arc<RustyYtdlAdapter>, // Always available (no API key needed)
+    pub transcript: Arc<TranscriptAdapter>,
     pub llm: Option<Arc<GeminiAdapter>>,
     pub keystore: Arc<NativeKeystore>,
 
@@ -121,23 +116,29 @@ impl AppContext {
         let video_repo = Arc::new(SqliteVideoRepository::new(db_pool.clone()));
         let exam_repo = Arc::new(SqliteExamRepository::new(db_pool.clone()));
         let note_repo = Arc::new(SqliteNoteRepository::new(db_pool.clone()));
+        let tag_repo = Arc::new(SqliteTagRepository::new(db_pool.clone()));
+        let search_repo = Arc::new(SqliteSearchRepository::new(db_pool.clone()));
+        let preferences_repo = Arc::new(SqliteUserPreferencesRepository::new(db_pool.clone()));
 
         // Create keystore
         let keystore = Arc::new(NativeKeystore::new());
 
-        // Get API keys from config or keystore
-        let youtube_api_key = config
-            .youtube_api_key
-            .clone()
-            .or_else(|| keystore.retrieve("youtube_api_key").ok().flatten());
+        // YouTube adapter (always available - no API key needed)
+        let youtube = Arc::new(RustyYtdlAdapter::new());
 
+        // Transcript adapter (for summaries)
+        let transcript = Arc::new(
+            crate::infrastructure::transcript::TranscriptAdapter::new()
+                .map_err(|e| AppContextError::Transcript(e.to_string()))?,
+        );
+
+        // Get Gemini API key from config or keystore
         let gemini_api_key = config
             .gemini_api_key
             .clone()
             .or_else(|| keystore.retrieve("gemini_api_key").ok().flatten());
 
-        // Create optional adapters based on API key availability
-        let youtube = youtube_api_key.map(|key| Arc::new(YouTubeApiAdapter::new(key)));
+        // Create LLM adapter if key is available
         let llm = gemini_api_key.map(|key| Arc::new(GeminiAdapter::new(key)));
 
         Ok(Self {
@@ -147,16 +148,15 @@ impl AppContext {
             video_repo,
             exam_repo,
             note_repo,
+            tag_repo,
+            search_repo,
+            preferences_repo,
             youtube,
+            transcript,
             llm,
             keystore,
             db_pool,
         })
-    }
-
-    /// Checks if YouTube integration is available.
-    pub fn has_youtube(&self) -> bool {
-        self.youtube.is_some()
     }
 
     /// Checks if the LLM is available.
@@ -164,16 +164,7 @@ impl AppContext {
         self.llm.is_some()
     }
 
-    /// Stores a YouTube API key in the secure keystore.
-    pub fn set_youtube_api_key(&mut self, key: &str) -> Result<(), AppContextError> {
-        self.keystore
-            .store("youtube_api_key", key)
-            .map_err(|e| AppContextError::Keystore(e.to_string()))?;
-        self.youtube = Some(Arc::new(YouTubeApiAdapter::new(key.to_string())));
-        Ok(())
-    }
-
-    /// Stores a Gemini API key in the secure keystore.
+    /// Stores a Gemini API key in the secure keystore and reloads the adapter.
     pub fn set_gemini_api_key(&mut self, key: &str) -> Result<(), AppContextError> {
         self.keystore
             .store("gemini_api_key", key)
@@ -182,24 +173,12 @@ impl AppContext {
         Ok(())
     }
 
-    /// Gets user preferences from the database.
-    pub fn get_preferences(&self) -> Result<u32, AppContextError> {
-        use crate::infrastructure::persistence::models::UserPreferencesRow;
-        use crate::schema::user_preferences;
-        use diesel::prelude::*;
-
-        let mut conn = self.db_pool.get().map_err(|e| AppContextError::Database(e.to_string()))?;
-
-        let result: Option<UserPreferencesRow> = user_preferences::table
-            .find("default")
-            .first(&mut conn)
-            .optional()
-            .map_err(|e| AppContextError::Database(e.to_string()))?;
-
-        match result {
-            Some(pref) => Ok(pref.cognitive_limit_minutes as u32),
-            None => Ok(45), // Default cognitive limit
+    /// Reloads the LLM adapter from the keystore (for dynamic key updates).
+    pub fn reload_llm(&mut self) -> Result<(), AppContextError> {
+        if let Ok(Some(key)) = self.keystore.retrieve("gemini_api_key") {
+            self.llm = Some(Arc::new(GeminiAdapter::new(key)));
         }
+        Ok(())
     }
 }
 
@@ -210,6 +189,8 @@ pub enum AppContextError {
     Database(String),
     #[error("Keystore error: {0}")]
     Keystore(String),
+    #[error("Transcript error: {0}")]
+    Transcript(String),
 }
 
 /// Service factory for creating use cases with injected dependencies.
@@ -217,25 +198,21 @@ pub struct ServiceFactory;
 
 impl ServiceFactory {
     /// Creates the playlist ingestion use case.
-    /// Returns None if YouTube is not configured.
+    /// Always available since YouTube adapter doesn't need API key.
     pub fn ingest_playlist(
         ctx: &AppContext,
-    ) -> Option<
-        IngestPlaylistUseCase<
-            YouTubeApiAdapter,
-            SqliteCourseRepository,
-            SqliteModuleRepository,
-            SqliteVideoRepository,
-        >,
+    ) -> IngestPlaylistUseCase<
+        RustyYtdlAdapter,
+        SqliteCourseRepository,
+        SqliteModuleRepository,
+        SqliteVideoRepository,
     > {
-        let youtube = ctx.youtube.as_ref()?.clone();
-
-        Some(IngestPlaylistUseCase::new(
-            youtube,
+        IngestPlaylistUseCase::new(
+            ctx.youtube.clone(),
             ctx.course_repo.clone(),
             ctx.module_repo.clone(),
             ctx.video_repo.clone(),
-        ))
+        )
     }
 
     /// Creates the session planning use case.
@@ -262,6 +239,54 @@ impl ServiceFactory {
             ctx.module_repo.clone(),
             ctx.course_repo.clone(),
         ))
+    }
+
+    /// Creates the notes use case.
+    pub fn notes(
+        ctx: &AppContext,
+    ) -> NotesUseCase<
+        SqliteNoteRepository,
+        SqliteVideoRepository,
+        SqliteModuleRepository,
+        SqliteCourseRepository,
+        SqliteTagRepository,
+        SqliteSearchRepository,
+    > {
+        NotesUseCase::new(
+            ctx.note_repo.clone(),
+            ctx.video_repo.clone(),
+            ctx.module_repo.clone(),
+            ctx.course_repo.clone(),
+            ctx.tag_repo.clone(),
+            ctx.search_repo.clone(),
+        )
+    }
+
+    /// Creates the dashboard analytics use case.
+    pub fn dashboard(
+        ctx: &AppContext,
+    ) -> LoadDashboardUseCase<SqliteCourseRepository, SqliteModuleRepository, SqliteVideoRepository>
+    {
+        LoadDashboardUseCase::new(
+            ctx.course_repo.clone(),
+            ctx.module_repo.clone(),
+            ctx.video_repo.clone(),
+        )
+    }
+
+    /// Creates the preferences use case.
+    pub fn preferences(ctx: &AppContext) -> PreferencesUseCase<SqliteUserPreferencesRepository> {
+        PreferencesUseCase::new(ctx.preferences_repo.clone())
+    }
+
+    /// Creates the summarize video use case.
+    pub fn summarize_video(
+        ctx: &AppContext,
+    ) -> Option<SummarizeVideoUseCase<GeminiAdapter, TranscriptAdapter, SqliteVideoRepository>>
+    {
+        let llm = ctx.llm.as_ref()?.clone();
+
+        Some(SummarizeVideoUseCase::new(llm, ctx.transcript.clone(), ctx.video_repo.clone()))
     }
 
     /// Creates the exam use case.

@@ -10,6 +10,8 @@ pub struct Video {
     youtube_id: YouTubeVideoId,
     title: String,
     description: Option<String>,
+    transcript: Option<String>,
+    summary: Option<String>,
     duration_secs: u32,
     is_completed: bool,
     sort_order: u32,
@@ -31,6 +33,8 @@ impl Video {
             youtube_id,
             title,
             description: None,
+            transcript: None,
+            summary: None,
             duration_secs,
             is_completed: false,
             sort_order,
@@ -53,6 +57,8 @@ impl Video {
             youtube_id,
             title,
             description,
+            transcript: None,
+            summary: None,
             duration_secs,
             is_completed: false,
             sort_order,
@@ -79,6 +85,14 @@ impl Video {
         self.description.as_deref()
     }
 
+    pub fn transcript(&self) -> Option<&str> {
+        self.transcript.as_deref()
+    }
+
+    pub fn summary(&self) -> Option<&str> {
+        self.summary.as_deref()
+    }
+
     pub fn duration_secs(&self) -> u32 {
         self.duration_secs
     }
@@ -89,6 +103,16 @@ impl Video {
 
     pub fn sort_order(&self) -> u32 {
         self.sort_order
+    }
+
+    /// Updates the transcript content.
+    pub fn update_transcript(&mut self, transcript: Option<String>) {
+        self.transcript = transcript;
+    }
+
+    /// Updates the summary content.
+    pub fn update_summary(&mut self, summary: Option<String>) {
+        self.summary = summary;
     }
 
     /// Marks the video as completed.

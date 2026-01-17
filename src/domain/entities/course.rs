@@ -14,7 +14,7 @@ pub struct Course {
 }
 
 impl Course {
-    /// Creates a new course.
+    /// Creates a new course using the current timestamp.
     pub fn new(
         id: CourseId,
         name: String,
@@ -22,7 +22,26 @@ impl Course {
         playlist_id: String,
         description: Option<String>,
     ) -> Self {
-        Self { id, name, source_url, playlist_id, description, created_at: chrono::Utc::now() }
+        Self::new_with_created_at(
+            id,
+            name,
+            source_url,
+            playlist_id,
+            description,
+            chrono::Utc::now(),
+        )
+    }
+
+    /// Creates a new course with an explicit created_at timestamp.
+    pub fn new_with_created_at(
+        id: CourseId,
+        name: String,
+        source_url: PlaylistUrl,
+        playlist_id: String,
+        description: Option<String>,
+        created_at: chrono::DateTime<chrono::Utc>,
+    ) -> Self {
+        Self { id, name, source_url, playlist_id, description, created_at }
     }
 
     pub fn id(&self) -> &CourseId {
