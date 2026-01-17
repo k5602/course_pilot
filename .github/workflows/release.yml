@@ -1,37 +1,55 @@
-name: Release Pipeline
+name: Release
+
 on:
   push:
     tags:
       - "v*.*.*"
 
 permissions:
-  contents: write
+  contents: read
+
+concurrency:
+  group: release-${{ github.ref_name }}
+  cancel-in-progress: false
+
+env:
+  CARGO_TERM_COLOR: always
+  RUST_BACKTRACE: 1
+  NODE_VERSION: "20"
+  APP_NAME: course_pilot
 
 jobs:
-  build-linux:
-    runs-on: ubuntu-latest
+  build:
+    name: Build (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-latest
+            platform: linux
+            artifact: course-pilot-linux-x64.tar.gz
+            binary: course_pilot
+          - os: windows-2022
+            platform: windows
+            artifact: course-pilot-windows-x64.zip
+            binary: course_pilot.exe
+
     steps:
-      - name: Checkout code
+      - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Setup Rust toolchain
+      - name: Setup Rust
         uses: dtolnay/rust-toolchain@stable
         with:
           toolchain: stable
+          targets: ${{ matrix.platform == 'windows' && 'x86_64-pc-windows-msvc' || '' }}
 
-      - name: Cache cargo dependencies
-        uses: actions/cache@v4
-        with:
-          path: |
-            ~/.cargo/bin/
-            ~/.cargo/registry/index/
-            ~/.cargo/registry/cache/
-            ~/.cargo/git/db/
-            target/
-          key: ${{ runner.os }}-cargo-deps-${{ hashFiles('Cargo.lock') }}
-          restore-keys: ${{ runner.os }}-cargo-deps-
+      - name: Rust cache
+        uses: Swatinem/rust-cache@v2
 
       - name: Install Linux dependencies
+        if: matrix.platform == 'linux'
         run: |
           sudo apt-get update
           sudo apt-get install -y \
@@ -56,11 +74,14 @@ jobs:
             libsoup-3.0-dev \
             libjavascriptcoregtk-4.1-dev \
             libgdk3.0-cil
+        shell: bash
 
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: "20"
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+          cache-dependency-path: package-lock.json
 
       - name: Install Node dependencies
         run: |
@@ -69,218 +90,216 @@ jobs:
           else
             npm install
           fi
+        shell: bash
 
       - name: Ensure assets directory exists
         run: mkdir -p assets
+        shell: bash
 
       - name: Build CSS
         run: npm run build:css
+        shell: bash
 
       - name: Install Dioxus CLI
         run: cargo install dioxus-cli --locked --force
+        shell: bash
 
-      - name: Build with dx (Linux)
+      - name: Build & Bundle (Linux)
+        if: matrix.platform == 'linux'
         run: |
           export PKG_CONFIG_PATH=/usr/lib/pkgconfig:/usr/lib/x86_64-linux-gnu/pkgconfig:/usr/share/pkgconfig
           dx build --release --platform desktop
+          dx bundle --release --platform desktop
+        shell: bash
 
-      - name: Find and package binary
+      - name: Build (Windows)
+        if: matrix.platform == 'windows'
         run: |
-          mkdir -p release-artifacts
-          # dx build outputs to target/dx/<app>/release/linux/<binary> or target/release/
-          if [ -f "./target/dx/course_pilot/release/linux/course_pilot" ]; then
-            cp ./target/dx/course_pilot/release/linux/course_pilot ./release-artifacts/
-          elif [ -f "./target/release/course_pilot" ]; then
-            cp ./target/release/course_pilot ./release-artifacts/
-          else
-            echo "Binary not found, searching..."
-            find ./target -name "course_pilot" -type f -executable | head -1 | xargs -I{} cp {} ./release-artifacts/
-          fi
-          cp -r ./assets ./release-artifacts/
-          chmod +x ./release-artifacts/course_pilot
-          strip ./release-artifacts/course_pilot || echo "Strip failed, continuing"
-          tar -czf course-pilot-linux-x64.tar.gz -C release-artifacts .
-
-      - name: Upload Linux artifact
-        uses: actions/upload-artifact@v4
-        with:
-          name: course-pilot-linux
-          path: course-pilot-linux-x64.tar.gz
-
-  build-windows:
-    runs-on: windows-2022
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
-
-      - name: Setup Rust toolchain
-        uses: dtolnay/rust-toolchain@stable
-        with:
-          toolchain: stable
-          targets: x86_64-pc-windows-msvc
-
-      - name: Cache cargo dependencies
-        uses: actions/cache@v4
-        with:
-          path: |
-            ~/.cargo/bin/
-            ~/.cargo/registry/index/
-            ~/.cargo/registry/cache/
-            ~/.cargo/git/db/
-            target/
-          key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}
-          restore-keys: |
-            ${{ runner.os }}-cargo-
-
-      - name: Setup Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: "20"
-
-      - name: Install Node dependencies
-        run: |
-          if (Test-Path package-lock.json) {
-            npm ci
-          } else {
-            npm install
-          }
-
-      - name: Ensure assets directory exists
-        run: New-Item -ItemType Directory -Force -Path assets
-
-      - name: Build CSS
-        run: npm run build:css
-
-      - name: Install Dioxus CLI
-        run: cargo install dioxus-cli --locked --force
-
-      - name: Build with dx (Windows)
-        run: |
-          Write-Host "Building for Windows..."
           dx build --release --platform desktop
         env:
           RUSTFLAGS: "-C target-feature=+crt-static"
+        shell: pwsh
 
-      - name: Find and package binary
+      - name: Package (Linux)
+        if: matrix.platform == 'linux'
         run: |
-          New-Item -ItemType Directory -Force -Path release-artifacts
+          mkdir -p release-artifacts
 
-          # Find binary in various possible locations
+          # 1. Prepare Binary
+          if [ -f "./target/dx/${APP_NAME}/release/linux/${APP_NAME}" ]; then
+            cp "./target/dx/${APP_NAME}/release/linux/${APP_NAME}" ./release-artifacts/
+          else
+            find ./target -name "${APP_NAME}" -type f -executable | head -1 | xargs -I{} cp {} ./release-artifacts/
+          fi
+
+          # 2. Add Assets
+          cp -r ./assets ./release-artifacts/
+
+          # 3. Add Launcher Script
+          cp ./scripts/course-pilot-launcher.sh ./release-artifacts/course-pilot-launcher
+          chmod +x ./release-artifacts/course-pilot-launcher
+          chmod +x "./release-artifacts/${APP_NAME}"
+          strip "./release-artifacts/${APP_NAME}" || true
+
+          # 4. Create Tarball
+          tar -czf "${{ matrix.artifact }}" -C release-artifacts .
+
+          # 5. Extract .deb from bundle directory
+          DEB_FILE=$(find target/dx/${APP_NAME}/release/bundle/deb -name "*.deb" | head -1)
+          if [ -n "$DEB_FILE" ]; then
+            cp "$DEB_FILE" "course-pilot-linux-x64.deb"
+          fi
+        shell: bash
+
+      - name: Package (Windows)
+        if: matrix.platform == 'windows'
+        run: |
+          New-Item -ItemType Directory -Force -Path release-artifacts | Out-Null
           $locations = @(
-            "./target/dx/course_pilot/release/windows/course_pilot.exe",
-            "./target/release/course_pilot.exe"
+            "./target/dx/${env:APP_NAME}/release/windows/${env:APP_NAME}.exe",
+            "./target/release/${env:APP_NAME}.exe"
           )
-
           $found = $false
           foreach ($loc in $locations) {
             if (Test-Path $loc) {
-              Write-Host "Found binary at: $loc"
               Copy-Item $loc ./release-artifacts/
               $found = $true
               break
             }
           }
-
           if (-not $found) {
-            Write-Host "Searching for binary..."
-            $exe = Get-ChildItem -Path ./target -Filter "course_pilot.exe" -Recurse | Select-Object -First 1
+            $exe = Get-ChildItem -Path ./target -Filter "${env:APP_NAME}.exe" -Recurse | Select-Object -First 1
             if ($exe) {
-              Write-Host "Found: $($exe.FullName)"
               Copy-Item $exe.FullName ./release-artifacts/
             } else {
-              Write-Host "ERROR: Binary not found"
+              Write-Error "Binary not found"
               exit 1
             }
           }
-
           Copy-Item -Recurse ./assets ./release-artifacts/
-          Compress-Archive -Path ./release-artifacts/* -DestinationPath course-pilot-windows-x64.zip
+          Compress-Archive -Path ./release-artifacts/* -DestinationPath "${{ matrix.artifact }}"
+        shell: pwsh
 
-      - name: Upload Windows artifact
+      - name: Upload Linux Tarball
+        if: matrix.platform == 'linux'
         uses: actions/upload-artifact@v4
         with:
-          name: course-pilot-windows
-          path: course-pilot-windows-x64.zip
+          name: linux-tarball
+          path: course-pilot-linux-x64.tar.gz
 
-  create-release:
+      - name: Upload Linux Debian Package
+        if: matrix.platform == 'linux'
+        uses: actions/upload-artifact@v4
+        with:
+          name: linux-deb
+          path: course-pilot-linux-x64.deb
+
+      - name: Upload Windows artifact
+        if: matrix.platform == 'windows'
+        uses: actions/upload-artifact@v4
+        with:
+          name: windows-artifact
+          path: ${{ matrix.artifact }}
+
+  release:
+    name: Publish Release
     runs-on: ubuntu-latest
-    needs: [build-linux, build-windows]
-    if: success()
+    needs: build
+    permissions:
+      contents: write
     steps:
-      - name: Checkout code
+      - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Download Linux artifact
+      - name: Download Linux Tarball
         uses: actions/download-artifact@v4
         with:
-          name: course-pilot-linux
+          name: linux-tarball
+
+      - name: Download Linux Debian Package
+        uses: actions/download-artifact@v4
+        with:
+          name: linux-deb
 
       - name: Download Windows artifact
         uses: actions/download-artifact@v4
         with:
-          name: course-pilot-windows
+          name: windows-artifact
 
-      - name: Get file sizes
-        id: sizes
+      - name: Compute checksums and sizes
+        id: meta
         run: |
-          linux_size=$(du -h course-pilot-linux-x64.tar.gz | cut -f1)
-          windows_size=$(du -h course-pilot-windows-x64.zip | cut -f1)
-          echo "linux_size=$linux_size" >> $GITHUB_OUTPUT
-          echo "windows_size=$windows_size" >> $GITHUB_OUTPUT
+          set -euo pipefail
+          linux_tar="course-pilot-linux-x64.tar.gz"
+          linux_deb="course-pilot-linux-x64.deb"
+          windows_zip="course-pilot-windows-x64.zip"
 
-      - name: Generate changelog
-        id: changelog
+          tar_size=$(du -h "$linux_tar" | cut -f1)
+          deb_size=$(du -h "$linux_deb" | cut -f1)
+          win_size=$(du -h "$windows_zip" | cut -f1)
+
+          tar_sha=$(sha256sum "$linux_tar" | cut -d' ' -f1)
+          deb_sha=$(sha256sum "$linux_deb" | cut -d' ' -f1)
+          win_sha=$(sha256sum "$windows_zip" | cut -d' ' -f1)
+
+          {
+            echo "tar_size=$tar_size"
+            echo "deb_size=$deb_size"
+            echo "win_size=$win_size"
+            echo "tar_sha=$tar_sha"
+            echo "deb_sha=$deb_sha"
+            echo "win_sha=$win_sha"
+          } >> "$GITHUB_OUTPUT"
+        shell: bash
+
+      - name: Prepare release notes
         run: |
+          set -euo pipefail
+          version="${GITHUB_REF_NAME#v}"
+          notes_file="release_notes.md"
+
           if [ -f CHANGELOG.md ]; then
-            echo "changelog<<EOF" >> $GITHUB_OUTPUT
-            sed -n '/^## \[/,/^## \[/p' CHANGELOG.md | head -n -1 >> $GITHUB_OUTPUT
-            echo "EOF" >> $GITHUB_OUTPUT
-          else
-            echo "changelog=Automated release build" >> $GITHUB_OUTPUT
+            awk -v v="$version" '
+              BEGIN {found=0}
+              $0 ~ "^## \\[" v "\\]" {found=1; print; next}
+              found && $0 ~ "^## \\[" {exit}
+              found {print}
+            ' CHANGELOG.md > "$notes_file"
           fi
+
+          if [ ! -s "$notes_file" ]; then
+            echo "## [${version}] - $(date -u +%Y-%m-%d)" > "$notes_file"
+            echo "- Release ${GITHUB_REF_NAME}" >> "$notes_file"
+          fi
+
+          {
+            echo ""
+            echo "### 📦 Downloads"
+            echo "| Platform | File | Size | SHA256 |"
+            echo "|----------|------|------|--------|"
+            echo "| 🐧 Linux (Debian/Ubuntu) | course-pilot-linux-x64.deb | ${{ steps.meta.outputs.deb_size }} | ${{ steps.meta.outputs.deb_sha }} |"
+            echo "| 🐧 Linux (Generic/Arch) | course-pilot-linux-x64.tar.gz | ${{ steps.meta.outputs.tar_size }} | ${{ steps.meta.outputs.tar_sha }} |"
+            echo "| 🪟 Windows x64 | course-pilot-windows-x64.zip | ${{ steps.meta.outputs.win_size }} | ${{ steps.meta.outputs.win_sha }} |"
+            echo ""
+            echo "### 🚀 Installation (Linux)"
+            echo "- **Debian/Ubuntu/Mint**: Download the `.deb` and install via `sudo apt install ./course-pilot-linux-x64.deb`."
+            echo "- **Arch/Others**: Download the `.tar.gz`, extract it, and run `course-pilot-launcher`. This script will automatically check and help install dependencies."
+            echo ""
+            echo "### ⚙️ System Requirements"
+            echo "- **Linux**: Ubuntu 20.04+ / Debian 11+ / Fedora 35+ / Arch Linux (GTK3/4 compatible WebKit)"
+            echo "- **Windows**: Windows 10 (1903+) / Windows 11"
+          } >> "$notes_file"
+        shell: bash
 
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v2
         with:
           files: |
             course-pilot-linux-x64.tar.gz
+            course-pilot-linux-x64.deb
             course-pilot-windows-x64.zip
           tag_name: ${{ github.ref_name }}
           name: Course Pilot ${{ github.ref_name }}
-          body: |
-            ## 🚀 Course Pilot ${{ github.ref_name }}
-
-            ### 📦 Downloads
-            | Platform | File | Size |
-            |----------|------|------|
-            | 🐧 Linux x64 | [`course-pilot-linux-x64.tar.gz`](https://github.com/${{ github.repository }}/releases/download/${{ github.ref_name }}/course-pilot-linux-x64.tar.gz) | ${{ steps.sizes.outputs.linux_size }} |
-            | 🪟 Windows x64 | [`course-pilot-windows-x64.zip`](https://github.com/${{ github.repository }}/releases/download/${{ github.ref_name }}/course-pilot-windows-x64.zip) | ${{ steps.sizes.outputs.windows_size }} |
-
-            ### 🚀 Quick Install
-
-            **Linux:**
-            ```bash
-            wget https://github.com/${{ github.repository }}/releases/download/${{ github.ref_name }}/course-pilot-linux-x64.tar.gz
-            tar -xzf course-pilot-linux-x64.tar.gz
-            ./course_pilot
-            ```
-
-            **Windows:**
-            1. Download the ZIP file
-            2. Extract to your desired location (keep the `assets` folder alongside the executable)
-            3. Run `course_pilot.exe`
-
-            **⚠️ Important:** Keep the `assets` folder in the same directory as the executable for proper styling.
-
-            ### ⚙️ System Requirements
-            - **Linux**: Ubuntu 20.04+ / Debian 11+ / Fedora 35+ (with GTK3)
-            - **Windows**: Windows 10 (1903+) / Windows 11
-
-            ---
-
-            ### 📝 Changes
-            ${{ steps.changelog.outputs.changelog }}
-
-            *Built with ❤️ using Dioxus*
+          body_path: release_notes.md
           draft: false
           prerelease: ${{ contains(github.ref_name, 'alpha') || contains(github.ref_name, 'beta') || contains(github.ref_name, 'rc') }}
