@@ -39,7 +39,7 @@ Provide a concise, academic response."#,
         let response = self
             .client
             .interaction()
-            .with_model("gemini-1.5-flash")
+            .with_model("gemini-flash-latest")
             .with_text(&prompt)
             .create()
             .await
@@ -70,7 +70,7 @@ Reply ONLY with JSON array:
         let response = self
             .client
             .interaction()
-            .with_model("gemini-1.5-flash")
+            .with_model("gemini-flash-latest")
             .with_text(&prompt)
             .create()
             .await
@@ -117,7 +117,7 @@ Keep it concise and educational."#,
         let response = self
             .client
             .interaction()
-            .with_model("gemini-1.5-flash")
+            .with_model("gemini-flash-latest")
             .with_text(&prompt)
             .create()
             .await

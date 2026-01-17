@@ -5,7 +5,7 @@ use std::str::FromStr;
 
 use crate::application::ServiceFactory;
 use crate::application::use_cases::SubmitExamInput;
-use crate::domain::ports::MCQuestion;
+use crate::domain::ports::{ExamRepository, MCQuestion};
 use crate::domain::value_objects::ExamId;
 use crate::ui::Route;
 use crate::ui::hooks::{use_load_exam, use_load_video};
@@ -23,7 +23,7 @@ pub fn QuizView(exam_id: String) -> Element {
         Err(_) => return rsx! { div { class: "p-6 text-error", "Invalid Exam ID" } },
     };
 
-    let exam = use_load_exam(backend.clone(), &exam_id_vo);
+    let mut exam = use_load_exam(backend.clone(), &exam_id_vo);
     let video = use_load_video(
         backend.clone(),
         &exam.read().as_ref().map(|e| e.video_id().clone()).unwrap_or_default(),
@@ -207,19 +207,24 @@ pub fn QuizView(exam_id: String) -> Element {
                 // Submit!
                 let backend_inner = backend_for_submit.clone();
                 let exam_id_inner = exam_id_for_submit.clone();
+                is_submitting.set(true);
                 spawn(async move {
                     if let Some(ctx) = backend_inner.as_ref() {
                         if let Some(use_case) = ServiceFactory::take_exam(ctx) {
-                            is_submitting.set(true);
                             let input = SubmitExamInput {
                                 exam_id: exam_id_inner.clone(),
                                 answers: answers.read().clone(),
                             };
                             let _ = use_case.submit(input);
-                            is_submitting.set(false);
-                            // The use_effect in use_load_exam will trigger a re-render when the DB updates
+
+                            // Reload exam from DB to update UI with results
+                            if let Ok(Some(updated_exam)) = ctx.exam_repo.find_by_id(&exam_id_inner)
+                            {
+                                exam.set(Some(updated_exam));
+                            }
                         }
                     }
+                    is_submitting.set(false);
                 });
             }
         }

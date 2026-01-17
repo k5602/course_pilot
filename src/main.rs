@@ -5,6 +5,11 @@
 use course_pilot::ui::App;
 
 fn main() {
+    // Install rustls crypto provider (required for TLS)
+    rustls::crypto::ring::default_provider()
+        .install_default()
+        .expect("Failed to install rustls crypto provider");
+
     // Load environment from .env file if present
     dotenvy::dotenv().ok();
 

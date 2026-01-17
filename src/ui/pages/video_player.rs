@@ -98,7 +98,7 @@ pub fn VideoPlayer(course_id: String, video_id: String) -> Element {
 
     rsx! {
         div {
-            class: "p-6 h-full flex flex-col max-w-5xl mx-auto",
+            class: "p-6 min-h-full flex flex-col max-w-5xl mx-auto",
 
             // Header/Nav
             div { class: "flex justify-between items-center mb-6",

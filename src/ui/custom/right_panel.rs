@@ -2,7 +2,9 @@
 
 use dioxus::prelude::*;
 
+use crate::domain::value_objects::VideoId;
 use crate::ui::state::{AppState, ChatMessage, ChatRole, RightPanelTab};
+use std::str::FromStr;
 
 /// Right side panel with Notes and AI Chat tabs.
 #[component]
@@ -83,14 +85,75 @@ fn NotesEditor() -> Element {
 /// AI Chat companion view.
 #[component]
 fn AiChatView() -> Element {
-    let state = use_context::<AppState>();
+    let mut state = use_context::<AppState>();
     let messages = state.chat_history.read();
     let video_id = state.current_video_id.read().clone();
     let has_gemini = state.has_gemini();
 
     let mut input_value = use_signal(String::new);
-    let is_loading = use_signal(|| false);
-    let error_msg = use_signal(|| None::<String>);
+    let mut is_loading = use_signal(|| false);
+    let mut error_msg = use_signal(|| None::<String>);
+
+    let video_id_closure = video_id.clone();
+    // Closure captures Clone-able items (Signals, Option<String>), so it is Clone.
+    let on_send = move || {
+        let question = input_value.read().trim().to_string();
+        if question.is_empty() || *is_loading.read() {
+            return;
+        }
+
+        if let Some(vid_str) = video_id_closure.clone() {
+            // Parse VideoId (UUID)
+            let vid = match VideoId::from_str(&vid_str) {
+                Ok(id) => id,
+                Err(_) => {
+                    error_msg.set(Some("Invalid video ID format".to_string()));
+                    return;
+                },
+            };
+
+            // Add user message immediately
+            state
+                .chat_history
+                .write()
+                .push(ChatMessage { role: ChatRole::User, content: question.clone() });
+            input_value.set(String::new());
+            is_loading.set(true);
+            error_msg.set(None);
+
+            let service_context = state.backend.clone();
+
+            spawn(async move {
+                if let Some(ctx) = service_context {
+                    if let Some(use_case) = crate::application::ServiceFactory::ask_companion(&ctx)
+                    {
+                        let input = crate::application::use_cases::AskCompanionInput {
+                            video_id: vid,
+                            question,
+                        };
+
+                        match use_case.execute(input).await {
+                            Ok(response) => {
+                                state.chat_history.write().push(ChatMessage {
+                                    role: ChatRole::Assistant,
+                                    content: response,
+                                });
+                            },
+                            Err(e) => {
+                                error_msg.set(Some(format!("Error: {}", e)));
+                            },
+                        }
+                    } else {
+                        error_msg.set(Some("Chat service not available".to_string()));
+                    }
+                }
+                is_loading.set(false);
+            });
+        }
+    };
+
+    let mut on_send_click = on_send.clone();
+    let mut on_send_key = on_send.clone();
 
     rsx! {
         div {
@@ -146,10 +209,16 @@ fn AiChatView() -> Element {
                         value: "{input_value}",
                         disabled: video_id.is_none() || !has_gemini || *is_loading.read(),
                         oninput: move |e| input_value.set(e.value()),
+                        onkeydown: move |e| {
+                            if e.key() == Key::Enter {
+                                on_send_key();
+                            }
+                        },
                     }
                     button {
                         class: "btn btn-primary",
                         disabled: video_id.is_none() || !has_gemini || *is_loading.read() || input_value.read().trim().is_empty(),
+                        onclick: move |_| on_send_click(),
                         "Send"
                     }
                 }

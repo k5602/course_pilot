@@ -15,7 +15,7 @@ use crate::infrastructure::{
         DbPool, SqliteCourseRepository, SqliteExamRepository, SqliteModuleRepository,
         SqliteNoteRepository, SqliteSearchRepository, SqliteTagRepository, SqliteVideoRepository,
     },
-    youtube::YouTubeApiAdapter,
+    youtube::RustyYtdlAdapter,
 };
 
 /// Configuration for the application.
@@ -25,19 +25,13 @@ use crate::infrastructure::{
 pub struct AppConfig {
     /// Path to SQLite database file.
     pub database_url: String,
-    /// YouTube Data API v3 key (required for playlist import).
-    pub youtube_api_key: Option<String>,
-    /// Gemini API key (optional - for AI companion and exams).
+    /// Gemini API key (optional - for AI companion, exams, and summaries).
     pub gemini_api_key: Option<String>,
 }
 
 impl Default for AppConfig {
     fn default() -> Self {
-        Self {
-            database_url: "course_pilot.db".to_string(),
-            youtube_api_key: None,
-            gemini_api_key: None,
-        }
+        Self { database_url: "course_pilot.db".to_string(), gemini_api_key: None }
     }
 }
 
@@ -48,7 +42,6 @@ impl AppConfig {
         Self {
             database_url: std::env::var("DATABASE_URL")
                 .unwrap_or_else(|_| "course_pilot.db".to_string()),
-            youtube_api_key: std::env::var("YOUTUBE_API_KEY").ok().filter(|s| !s.is_empty()),
             gemini_api_key: std::env::var("GEMINI_API_KEY").ok().filter(|s| !s.is_empty()),
         }
     }
@@ -68,11 +61,6 @@ pub struct AppConfigBuilder {
 impl AppConfigBuilder {
     pub fn database_url(mut self, url: impl Into<String>) -> Self {
         self.config.database_url = url.into();
-        self
-    }
-
-    pub fn youtube_api_key(mut self, key: impl Into<String>) -> Self {
-        self.config.youtube_api_key = Some(key.into());
         self
     }
 
@@ -101,7 +89,7 @@ pub struct AppContext {
     pub search_repo: Arc<SqliteSearchRepository>,
 
     // Infrastructure adapters
-    pub youtube: Option<Arc<YouTubeApiAdapter>>,
+    pub youtube: Arc<RustyYtdlAdapter>, // Always available (no API key needed)
     pub llm: Option<Arc<GeminiAdapter>>,
     pub keystore: Arc<NativeKeystore>,
 
@@ -129,19 +117,16 @@ impl AppContext {
         // Create keystore
         let keystore = Arc::new(NativeKeystore::new());
 
-        // Get API keys from config or keystore
-        let youtube_api_key = config
-            .youtube_api_key
-            .clone()
-            .or_else(|| keystore.retrieve("youtube_api_key").ok().flatten());
+        // YouTube adapter (always available - no API key needed)
+        let youtube = Arc::new(RustyYtdlAdapter::new());
 
+        // Get Gemini API key from config or keystore
         let gemini_api_key = config
             .gemini_api_key
             .clone()
             .or_else(|| keystore.retrieve("gemini_api_key").ok().flatten());
 
-        // Create optional adapters based on API key availability
-        let youtube = youtube_api_key.map(|key| Arc::new(YouTubeApiAdapter::new(key)));
+        // Create LLM adapter if key is available
         let llm = gemini_api_key.map(|key| Arc::new(GeminiAdapter::new(key)));
 
         Ok(Self {
@@ -160,9 +145,9 @@ impl AppContext {
         })
     }
 
-    /// Checks if YouTube integration is available.
+    /// YouTube is always available (no API key needed).
     pub fn has_youtube(&self) -> bool {
-        self.youtube.is_some()
+        true
     }
 
     /// Checks if the LLM is available.
@@ -170,21 +155,20 @@ impl AppContext {
         self.llm.is_some()
     }
 
-    /// Stores a YouTube API key in the secure keystore.
-    pub fn set_youtube_api_key(&mut self, key: &str) -> Result<(), AppContextError> {
-        self.keystore
-            .store("youtube_api_key", key)
-            .map_err(|e| AppContextError::Keystore(e.to_string()))?;
-        self.youtube = Some(Arc::new(YouTubeApiAdapter::new(key.to_string())));
-        Ok(())
-    }
-
-    /// Stores a Gemini API key in the secure keystore.
+    /// Stores a Gemini API key in the secure keystore and reloads the adapter.
     pub fn set_gemini_api_key(&mut self, key: &str) -> Result<(), AppContextError> {
         self.keystore
             .store("gemini_api_key", key)
             .map_err(|e| AppContextError::Keystore(e.to_string()))?;
         self.llm = Some(Arc::new(GeminiAdapter::new(key.to_string())));
+        Ok(())
+    }
+
+    /// Reloads the LLM adapter from the keystore (for dynamic key updates).
+    pub fn reload_llm(&mut self) -> Result<(), AppContextError> {
+        if let Ok(Some(key)) = self.keystore.retrieve("gemini_api_key") {
+            self.llm = Some(Arc::new(GeminiAdapter::new(key)));
+        }
         Ok(())
     }
 
@@ -223,25 +207,21 @@ pub struct ServiceFactory;
 
 impl ServiceFactory {
     /// Creates the playlist ingestion use case.
-    /// Returns None if YouTube is not configured.
+    /// Always available since YouTube adapter doesn't need API key.
     pub fn ingest_playlist(
         ctx: &AppContext,
-    ) -> Option<
-        IngestPlaylistUseCase<
-            YouTubeApiAdapter,
-            SqliteCourseRepository,
-            SqliteModuleRepository,
-            SqliteVideoRepository,
-        >,
+    ) -> IngestPlaylistUseCase<
+        RustyYtdlAdapter,
+        SqliteCourseRepository,
+        SqliteModuleRepository,
+        SqliteVideoRepository,
     > {
-        let youtube = ctx.youtube.as_ref()?.clone();
-
-        Some(IngestPlaylistUseCase::new(
-            youtube,
+        IngestPlaylistUseCase::new(
+            ctx.youtube.clone(),
             ctx.course_repo.clone(),
             ctx.module_repo.clone(),
             ctx.video_repo.clone(),
-        ))
+        )
     }
 
     /// Creates the session planning use case.

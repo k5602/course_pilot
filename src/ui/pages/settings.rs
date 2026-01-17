@@ -10,7 +10,6 @@ use crate::ui::state::AppState;
 pub fn Settings() -> Element {
     let state = use_context::<AppState>();
 
-    let mut youtube_key = use_signal(String::new);
     let mut gemini_key = use_signal(String::new);
     let mut save_status = use_signal(|| None::<(bool, String)>);
 
@@ -21,10 +20,7 @@ pub fn Settings() -> Element {
     // Load current values on mount
     use_effect(move || {
         if let Some(ref ctx) = backend_load {
-            // Show masked indicator if keys exist
-            if ctx.has_youtube() {
-                youtube_key.set("••••••••••••••••".to_string());
-            }
+            // Show masked indicator if key exists
             if ctx.has_llm() {
                 gemini_key.set("••••••••••••••••".to_string());
             }
@@ -32,21 +28,12 @@ pub fn Settings() -> Element {
     });
 
     let handle_save = move |_| {
-        let yt_key = youtube_key.read().clone();
         let gem_key = gemini_key.read().clone();
 
         // Only save if not masked placeholder
         if let Some(ref ctx) = backend_save {
             let mut success = true;
             let mut errors = Vec::new();
-
-            // Save YouTube key
-            if !yt_key.is_empty() && !yt_key.starts_with("••") {
-                if let Err(e) = ctx.keystore.store("youtube_api_key", &yt_key) {
-                    success = false;
-                    errors.push(format!("YouTube key: {}", e));
-                }
-            }
 
             // Save Gemini key
             if !gem_key.is_empty() && !gem_key.starts_with("••") {
@@ -57,7 +44,10 @@ pub fn Settings() -> Element {
             }
 
             if success {
-                save_status.set(Some((true, "Settings saved successfully!".to_string())));
+                save_status.set(Some((
+                    true,
+                    "Settings saved! Restart the app for changes to take effect.".to_string(),
+                )));
             } else {
                 save_status.set(Some((false, errors.join(", "))));
             }
@@ -88,42 +78,9 @@ pub fn Settings() -> Element {
                 div {
                     class: "space-y-4",
 
-                    // YouTube API Key
-                    div {
-                        label { class: "label", "YouTube API Key" }
-                        div {
-                            class: "flex gap-2",
-                            input {
-                                class: "input input-bordered flex-1",
-                                r#type: "password",
-                                placeholder: "Enter your YouTube Data API v3 key",
-                                value: "{youtube_key}",
-                                oninput: move |e| youtube_key.set(e.value()),
-                                onfocus: move |_| {
-                                    if youtube_key.read().starts_with("••") {
-                                        youtube_key.set(String::new());
-                                    }
-                                },
-                            }
-                            if state.has_youtube() {
-                                span { class: "badge badge-success self-center", "Active" }
-                            }
-                        }
-                        p {
-                            class: "text-sm text-base-content/60 mt-1",
-                            "Required for playlist import. "
-                            a {
-                                href: "https://console.cloud.google.com/apis/credentials",
-                                class: "link link-primary",
-                                target: "_blank",
-                                "Get from Google Cloud Console →"
-                            }
-                        }
-                    }
-
                     // Gemini API Key
                     div {
-                        label { class: "label", "Gemini API Key (Optional)" }
+                        label { class: "label", "Gemini API Key" }
                         div {
                             class: "flex gap-2",
                             input {
@@ -144,7 +101,7 @@ pub fn Settings() -> Element {
                         }
                         p {
                             class: "text-sm text-base-content/60 mt-1",
-                            "Enables AI Companion and quiz generation. "
+                            "Required for AI Companion, quiz generation, and video summaries. "
                             a {
                                 href: "https://aistudio.google.com/apikey",
                                 class: "link link-primary",
@@ -153,6 +110,17 @@ pub fn Settings() -> Element {
                             }
                         }
                     }
+                }
+            }
+
+            // Info section
+            section {
+                class: "mb-8 p-4 bg-base-200 rounded-lg",
+                h3 { class: "font-semibold mb-2", "ℹ️ About YouTube Import" }
+                p {
+                    class: "text-sm text-base-content/70",
+                    "YouTube playlist import works automatically without any API key. "
+                    "Simply paste a playlist URL and Course Pilot will fetch the video data."
                 }
             }
 
