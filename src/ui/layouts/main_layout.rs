@@ -9,7 +9,7 @@ use crate::ui::state::AppState;
 /// Main application layout with three panels.
 #[component]
 pub fn MainLayout() -> Element {
-    let _state = use_context::<AppState>();
+    let state = use_context::<AppState>();
 
     rsx! {
         div {
@@ -25,7 +25,9 @@ pub fn MainLayout() -> Element {
             }
 
             // Right: Notes + AI Chat panel
-            RightPanel {}
+            if *state.right_panel_visible.read() {
+                RightPanel {}
+            }
         }
     }
 }

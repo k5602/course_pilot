@@ -5,10 +5,11 @@ use std::str::FromStr;
 
 use crate::application::ServiceFactory;
 use crate::application::use_cases::SubmitExamInput;
-use crate::domain::ports::{ExamRepository, MCQuestion};
+use crate::domain::ports::{ExamRepository, MCQuestion, ModuleRepository};
 use crate::domain::value_objects::ExamId;
 use crate::ui::Route;
-use crate::ui::hooks::{use_load_exam, use_load_video};
+use crate::ui::custom::{ErrorAlert, Spinner};
+use crate::ui::hooks::{use_load_exam_state, use_load_video};
 use crate::ui::state::AppState;
 
 /// Quiz with multiple choice questions.
@@ -18,12 +19,20 @@ pub fn QuizView(exam_id: String) -> Element {
     let backend = state.backend.clone();
     let nav = use_navigator();
 
+    {
+        let mut state = state.clone();
+        use_effect(move || {
+            state.right_panel_visible.set(false);
+            state.current_video_id.set(None);
+        });
+    }
+
     let exam_id_vo = match ExamId::from_str(&exam_id) {
         Ok(id) => id,
         Err(_) => return rsx! { div { class: "p-6 text-error", "Invalid Exam ID" } },
     };
 
-    let mut exam = use_load_exam(backend.clone(), &exam_id_vo);
+    let (mut exam, exam_state) = use_load_exam_state(backend.clone(), &exam_id_vo);
     let video = use_load_video(
         backend.clone(),
         &exam.read().as_ref().map(|e| e.video_id().clone()).unwrap_or_default(),
@@ -35,6 +44,25 @@ pub fn QuizView(exam_id: String) -> Element {
     let mut answers = use_signal(Vec::<usize>::new);
     let mut is_submitting = use_signal(|| false);
     let mut show_review = use_signal(|| false);
+    let course_id_for_video = use_signal(|| None::<String>);
+
+    {
+        let backend = backend.clone();
+        let mut course_id_for_video = course_id_for_video;
+        use_effect(move || {
+            course_id_for_video.set(None);
+            let Some(ctx) = backend.as_ref() else {
+                return;
+            };
+            let video_ref = video.read();
+            let Some(video) = video_ref.as_ref() else {
+                return;
+            };
+            if let Ok(Some(module)) = ctx.module_repo.find_by_id(video.module_id()) {
+                course_id_for_video.set(Some(module.course_id().as_uuid().to_string()));
+            }
+        });
+    }
 
     // Sync answers from database if already taken
     use_effect(move || {
@@ -48,6 +76,22 @@ pub fn QuizView(exam_id: String) -> Element {
             }
         }
     });
+
+    if *exam_state.is_loading.read() && exam.read().is_none() {
+        return rsx! {
+            div { class: "p-6",
+                Spinner { message: Some("Loading exam...".to_string()) }
+            }
+        };
+    }
+
+    if let Some(ref err) = *exam_state.error.read() {
+        return rsx! {
+            div { class: "p-6",
+                ErrorAlert { message: err.clone(), on_dismiss: None }
+            }
+        };
+    }
 
     let exam_data = exam.read();
     let exam_ref = match exam_data.as_ref() {
@@ -88,17 +132,20 @@ pub fn QuizView(exam_id: String) -> Element {
                             "Review Questions"
                         }
                         if !passed {
-                            button {
-                                class: "btn btn-ghost btn-lg",
-                                onclick: move |_| {
-                                    if let Some(v) = video.read().as_ref() {
-                                        nav.push(Route::VideoPlayer {
-                                            course_id: "unknown".to_string(),
-                                            video_id: v.id().as_uuid().to_string()
-                                        });
-                                    }
-                                },
-                                "Watch Video Again"
+                            if let Some(course_id) = course_id_for_video.read().clone() {
+                                button {
+                                    class: "btn btn-ghost btn-lg",
+                                    onclick: move |_| {
+                                        let course_id = course_id.clone();
+                                        if let Some(v) = video.read().as_ref() {
+                                            nav.push(Route::VideoPlayer {
+                                                course_id,
+                                                video_id: v.id().as_uuid().to_string()
+                                            });
+                                        }
+                                    },
+                                    "Watch Video Again"
+                                }
                             }
                         }
                     }

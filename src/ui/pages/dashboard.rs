@@ -7,8 +7,10 @@ use crate::domain::ports::{TagRepository, VideoRepository};
 use crate::domain::value_objects::TagId;
 use crate::ui::Route;
 use crate::ui::actions::{ImportResult, import_playlist};
-use crate::ui::custom::{CourseCard, ImportPlaylistDialog, TagFilterChip};
-use crate::ui::hooks::{use_load_courses, use_load_modules, use_load_tags};
+use crate::ui::custom::{
+    CardSkeleton, CourseCard, ErrorAlert, ImportPlaylistDialog, TagFilterChip,
+};
+use crate::ui::hooks::{use_load_courses_state, use_load_modules, use_load_tags};
 use crate::ui::state::AppState;
 
 /// Dashboard showing all courses and overall progress.
@@ -16,8 +18,16 @@ use crate::ui::state::AppState;
 pub fn Dashboard() -> Element {
     let state = use_context::<AppState>();
 
+    {
+        let mut state = state.clone();
+        use_effect(move || {
+            state.right_panel_visible.set(false);
+            state.current_video_id.set(None);
+        });
+    }
+
     // Load courses and tags from backend
-    let mut courses = use_load_courses(state.backend.clone());
+    let (mut courses, courses_state) = use_load_courses_state(state.backend.clone());
     let all_tags = use_load_tags(state.backend.clone());
 
     // Search and filter state
@@ -109,12 +119,17 @@ pub fn Dashboard() -> Element {
             }
 
             // Import status message
-            if let Some(ref status) = *import_status.read() {
-                div {
-                    class: if status.starts_with("✓") { "alert alert-success mb-4" } else if status.starts_with("✗") { "alert alert-error mb-4" } else { "alert alert-info mb-4" },
-                    "{status}"
-                }
-            }
+                        if let Some(ref status) = *import_status.read() {
+                            div {
+                                class: if status.starts_with("✓") { "alert alert-success mb-4" } else if status.starts_with("✗") { "alert alert-error mb-4" } else { "alert alert-info mb-4" },
+                                "{status}"
+                            }
+                        }
+
+                        // Loading/error state for courses
+                        if let Some(ref err) = *courses_state.error.read() {
+                            ErrorAlert { message: err.clone(), on_dismiss: None }
+                        }
 
             // Search bar
             div {
@@ -206,45 +221,55 @@ pub fn Dashboard() -> Element {
             }
 
             // Course grid
-            if filtered_courses.is_empty() {
-                if courses.read().is_empty() {
-                    div {
-                        class: "text-center py-12 bg-base-200 rounded-lg",
-                        p { class: "text-xl mb-2", "No courses yet" }
-                        p { class: "text-base-content/60", "Import a YouTube playlist to get started" }
-                        div {
-                            class: "flex justify-center gap-4 mt-4",
-                            button {
-                                class: "btn btn-primary",
-                                onclick: move |_| import_open.set(true),
-                                disabled: !state.has_youtube(),
-                                "Import Playlist"
+                        if *courses_state.is_loading.read() && courses.read().is_empty() {
+                            div {
+                                class: "grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4",
+                                CardSkeleton {}
+                                CardSkeleton {}
+                                CardSkeleton {}
+                                CardSkeleton {}
+                                CardSkeleton {}
+                                CardSkeleton {}
                             }
-                            Link {
-                                to: Route::Settings {},
-                                class: "btn btn-outline",
-                                "Configure API Keys"
+                        } else if filtered_courses.is_empty() {
+                            if courses.read().is_empty() {
+                                div {
+                                    class: "text-center py-12 bg-base-200 rounded-lg",
+                                    p { class: "text-xl mb-2", "No courses yet" }
+                                    p { class: "text-base-content/60", "Import a YouTube playlist to get started" }
+                                    div {
+                                        class: "flex justify-center gap-4 mt-4",
+                                        button {
+                                            class: "btn btn-primary",
+                                            onclick: move |_| import_open.set(true),
+                                            disabled: !state.has_youtube(),
+                                            "Import Playlist"
+                                        }
+                                        Link {
+                                            to: Route::Settings {},
+                                            class: "btn btn-outline",
+                                            "Configure API Keys"
+                                        }
+                                    }
+                                }
+                            } else {
+                                div {
+                                    class: "text-center py-12 bg-base-200 rounded-lg",
+                                    p { class: "text-xl mb-2", "No matching courses" }
+                                    p { class: "text-base-content/60", "Try adjusting your search or filters" }
+                                }
+                            }
+                        } else {
+                            div {
+                                class: "grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4",
+                                for course in filtered_courses.iter() {
+                                    CourseCardWithStats {
+                                        key: "{course.id().as_uuid()}",
+                                        course: course.clone(),
+                                    }
+                                }
                             }
                         }
-                    }
-                } else {
-                    div {
-                        class: "text-center py-12 bg-base-200 rounded-lg",
-                        p { class: "text-xl mb-2", "No matching courses" }
-                        p { class: "text-base-content/60", "Try adjusting your search or filters" }
-                    }
-                }
-            } else {
-                div {
-                    class: "grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4",
-                    for course in filtered_courses.iter() {
-                        CourseCardWithStats {
-                            key: "{course.id().as_uuid()}",
-                            course: course.clone(),
-                        }
-                    }
-                }
-            }
         }
 
         // Import dialog

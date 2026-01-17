@@ -5,15 +5,24 @@ use dioxus::prelude::*;
 use crate::domain::entities::Course;
 use crate::domain::ports::VideoRepository;
 use crate::ui::Route;
-use crate::ui::custom::CourseCard;
-use crate::ui::hooks::{use_load_courses, use_load_modules};
+use crate::ui::custom::{CardSkeleton, CourseCard, ErrorAlert};
+use crate::ui::hooks::{use_load_courses_state, use_load_modules};
 use crate::ui::state::AppState;
 
 /// List of all imported courses.
 #[component]
 pub fn CourseList() -> Element {
     let state = use_context::<AppState>();
-    let courses = use_load_courses(state.backend.clone());
+
+    {
+        let mut state = state.clone();
+        use_effect(move || {
+            state.right_panel_visible.set(false);
+            state.current_video_id.set(None);
+        });
+    }
+
+    let (courses, courses_state) = use_load_courses_state(state.backend.clone());
 
     rsx! {
         div {
@@ -21,7 +30,21 @@ pub fn CourseList() -> Element {
 
             h1 { class: "text-2xl font-bold mb-6", "Courses" }
 
-            if courses.read().is_empty() {
+            if let Some(ref err) = *courses_state.error.read() {
+                ErrorAlert { message: err.clone(), on_dismiss: None }
+            }
+
+            if *courses_state.is_loading.read() && courses.read().is_empty() {
+                div {
+                    class: "grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4",
+                    CardSkeleton {}
+                    CardSkeleton {}
+                    CardSkeleton {}
+                    CardSkeleton {}
+                    CardSkeleton {}
+                    CardSkeleton {}
+                }
+            } else if courses.read().is_empty() {
                 div {
                     class: "text-center py-12 bg-base-200 rounded-lg",
                     p { class: "text-xl mb-2", "No courses yet" }

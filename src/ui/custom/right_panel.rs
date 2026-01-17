@@ -6,6 +6,8 @@ use crate::ui::custom::{MarkdownRenderer, TagBadge};
 use crate::ui::state::{AppState, ChatMessage, ChatRole, RightPanelTab};
 use dioxus::prelude::*;
 use std::str::FromStr;
+use std::time::Duration;
+use tokio::time::sleep;
 
 /// Right side panel with Notes and AI Chat tabs.
 #[component]
@@ -67,6 +69,9 @@ fn NotesEditor() -> Element {
     let course_tags = use_signal(Vec::<crate::domain::entities::Tag>::new);
     let load_error = use_signal(|| None::<String>);
     let is_loading = use_signal(|| false);
+    let save_status = use_signal(|| None::<String>);
+    let save_seq = use_signal(|| 0u64);
+    let is_saving = use_signal(|| false);
 
     {
         let state = state.clone();
@@ -75,10 +80,16 @@ fn NotesEditor() -> Element {
         let mut course_tags = course_tags;
         let mut load_error = load_error;
         let mut is_loading = is_loading;
+        let mut save_status = save_status;
+        let mut save_seq = save_seq;
+        let mut is_saving = is_saving;
         use_effect(move || {
             load_error.set(None);
             course_tags.set(Vec::new());
             note_text.set(String::new());
+            save_status.set(None);
+            save_seq.set(0);
+            is_saving.set(false);
 
             let Some(id) = video_id.clone() else {
                 return;
@@ -123,7 +134,10 @@ fn NotesEditor() -> Element {
         let video_id = video_id.clone();
         let mut note_text = note_text;
         let mut load_error = load_error;
-        let mut is_loading = is_loading;
+        let mut save_status = save_status;
+        let mut save_seq = save_seq;
+        let mut is_saving = is_saving;
+
         move |e: Event<FormData>| {
             let text = e.value();
             note_text.set(text.clone());
@@ -145,11 +159,22 @@ fn NotesEditor() -> Element {
                 return;
             };
 
-            is_loading.set(true);
+            let current_seq = *save_seq.read() + 1;
+            save_seq.set(current_seq);
+            save_status.set(None);
+            is_saving.set(true);
+
             let mut course_tags = course_tags;
             let mut load_error = load_error;
-            let mut is_loading = is_loading;
+            let mut save_status = save_status;
+            let mut is_saving = is_saving;
+            let save_seq_check = save_seq;
             spawn(async move {
+                sleep(Duration::from_millis(500)).await;
+                if *save_seq_check.read() != current_seq {
+                    return;
+                }
+
                 let use_case = crate::application::ServiceFactory::notes(&ctx);
 
                 if text.trim().is_empty() {
@@ -157,20 +182,22 @@ fn NotesEditor() -> Element {
                         load_error.set(Some(format!("Failed to delete note: {}", e)));
                     } else {
                         course_tags.set(Vec::new());
+                        save_status.set(Some("Cleared".to_string()));
                     }
-                    is_loading.set(false);
+                    is_saving.set(false);
                     return;
                 }
 
                 match use_case.save_note(SaveNoteInput { video_id: vid, content: text }) {
                     Ok(note_view) => {
                         course_tags.set(note_view.course_tags);
+                        save_status.set(Some("Saved".to_string()));
                     },
                     Err(e) => {
                         load_error.set(Some(format!("Failed to save note: {}", e)));
                     },
                 }
-                is_loading.set(false);
+                is_saving.set(false);
             });
         }
     };
@@ -188,8 +215,15 @@ fn NotesEditor() -> Element {
                             }
                         }
                     }
-                    if *is_loading.read() {
-                        span { class: "text-xs text-base-content/60", "Loading..." }
+                    div { class: "flex items-center gap-2",
+                        if *is_loading.read() {
+                            span { class: "text-xs text-base-content/60", "Loading..." }
+                        }
+                        if *is_saving.read() {
+                            span { class: "text-xs text-base-content/60", "Saving..." }
+                        } else if let Some(ref status) = *save_status.read() {
+                            span { class: "text-xs text-base-content/60", "{status}" }
+                        }
                     }
                 }
 

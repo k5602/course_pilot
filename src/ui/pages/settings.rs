@@ -10,6 +10,14 @@ use crate::ui::state::AppState;
 pub fn Settings() -> Element {
     let state = use_context::<AppState>();
 
+    {
+        let mut state = state.clone();
+        use_effect(move || {
+            state.right_panel_visible.set(false);
+            state.current_video_id.set(None);
+        });
+    }
+
     let mut gemini_key = use_signal(String::new);
     let mut save_status = use_signal(|| None::<(bool, String)>);
 

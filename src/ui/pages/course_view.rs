@@ -7,8 +7,10 @@ use crate::application::{ServiceFactory, use_cases::PlanSessionInput};
 use crate::domain::ports::{CourseRepository, VideoRepository};
 use crate::domain::value_objects::{CourseId, SessionPlan};
 use crate::ui::Route;
-use crate::ui::custom::VideoItem;
-use crate::ui::hooks::{use_load_course, use_load_modules};
+use crate::ui::custom::{ErrorAlert, PageSkeleton, VideoItem};
+use crate::ui::hooks::{
+    use_load_course_state, use_load_modules_state, use_load_state, use_load_videos_by_course_state,
+};
 use crate::ui::state::AppState;
 
 /// Detailed course view with modules accordion.
@@ -17,35 +19,31 @@ pub fn CourseView(course_id: String) -> Element {
     let state = use_context::<AppState>();
     let nav = use_navigator();
 
+    {
+        let mut state = state.clone();
+        use_effect(move || {
+            state.right_panel_visible.set(false);
+            state.current_video_id.set(None);
+        });
+    }
+
     // Parse course ID
     let course_id_parsed = CourseId::from_str(&course_id);
 
     // Load course and modules
-    let course = match &course_id_parsed {
-        Ok(id) => use_load_course(state.backend.clone(), id),
-        Err(_) => use_signal(|| None),
+    let (course, course_state) = match &course_id_parsed {
+        Ok(id) => use_load_course_state(state.backend.clone(), id),
+        Err(_) => (use_signal(|| None), use_load_state()),
     };
 
-    let modules = match &course_id_parsed {
-        Ok(id) => use_load_modules(state.backend.clone(), id),
-        Err(_) => use_signal(Vec::new),
+    let (modules, modules_state) = match &course_id_parsed {
+        Ok(id) => use_load_modules_state(state.backend.clone(), id),
+        Err(_) => (use_signal(Vec::new), use_load_state()),
     };
 
-    let all_videos = match &course_id_parsed {
-        Ok(id) => {
-            let mut videos = use_signal(Vec::new);
-            let id = id.clone();
-            let backend = state.backend.clone();
-            use_effect(move || {
-                if let Some(ref ctx) = backend {
-                    if let Ok(loaded) = ctx.video_repo.find_by_course(&id) {
-                        videos.set(loaded);
-                    }
-                }
-            });
-            videos
-        },
-        Err(_) => use_signal(Vec::new),
+    let (all_videos, videos_state) = match &course_id_parsed {
+        Ok(id) => use_load_videos_by_course_state(state.backend.clone(), id),
+        Err(_) => (use_signal(Vec::new), use_load_state()),
     };
 
     let total_videos = all_videos.read().len();
@@ -55,6 +53,15 @@ pub fn CourseView(course_id: String) -> Element {
     } else {
         0.0
     };
+
+    if *course_state.is_loading.read() && course.read().is_none() {
+        return rsx! {
+            div {
+                class: "p-6",
+                PageSkeleton {}
+            }
+        };
+    }
 
     // State for modals
     let mut show_delete_modal = use_signal(|| false);
@@ -106,6 +113,16 @@ pub fn CourseView(course_id: String) -> Element {
     rsx! {
         div {
             class: "p-6",
+
+            if let Some(ref err) = *course_state.error.read() {
+                ErrorAlert { message: err.clone(), on_dismiss: None }
+            }
+            if let Some(ref err) = *modules_state.error.read() {
+                ErrorAlert { message: err.clone(), on_dismiss: None }
+            }
+            if let Some(ref err) = *videos_state.error.read() {
+                ErrorAlert { message: err.clone(), on_dismiss: None }
+            }
 
             // Back button and actions row
             div {

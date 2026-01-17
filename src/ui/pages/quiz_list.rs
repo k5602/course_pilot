@@ -4,14 +4,24 @@ use dioxus::prelude::*;
 
 use crate::domain::entities::Exam;
 use crate::ui::Route;
-use crate::ui::hooks::{use_load_all_exams, use_load_video};
+use crate::ui::custom::{ErrorAlert, Spinner};
+use crate::ui::hooks::{use_load_all_exams_state, use_load_video};
 use crate::ui::state::AppState;
 
 /// List of pending and completed quizzes.
 #[component]
 pub fn QuizList() -> Element {
     let state = use_context::<AppState>();
-    let exams = use_load_all_exams(state.backend.clone());
+
+    {
+        let mut state = state.clone();
+        use_effect(move || {
+            state.right_panel_visible.set(false);
+            state.current_video_id.set(None);
+        });
+    }
+
+    let (exams, exams_state) = use_load_all_exams_state(state.backend.clone());
 
     rsx! {
         div {
@@ -22,7 +32,13 @@ pub fn QuizList() -> Element {
                 span { class: "badge badge-primary", "{exams.read().len()} Total" }
             }
 
-            if exams.read().is_empty() {
+            if let Some(ref err) = *exams_state.error.read() {
+                ErrorAlert { message: err.clone(), on_dismiss: None }
+            }
+
+            if *exams_state.is_loading.read() && exams.read().is_empty() {
+                Spinner { message: Some("Loading quizzes...".to_string()) }
+            } else if exams.read().is_empty() {
                 div { class: "text-center py-20 bg-base-200 rounded-3xl border-2 border-dashed border-base-300",
                     div { class: "text-6xl mb-4", "📝" }
                     h2 { class: "text-xl font-semibold mb-2", "No quizzes yet" }

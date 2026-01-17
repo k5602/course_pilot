@@ -41,6 +41,7 @@ pub struct AppState {
     // UI State
     pub sidebar_collapsed: Signal<bool>,
     pub right_panel_tab: Signal<RightPanelTab>,
+    pub right_panel_visible: Signal<bool>,
     pub chat_history: Signal<Vec<ChatMessage>>,
     pub notes: Signal<HashMap<String, String>>,
     pub current_video_id: Signal<Option<String>>,
@@ -60,6 +61,7 @@ impl AppState {
             backend: None,
             sidebar_collapsed: Signal::new(false),
             right_panel_tab: Signal::new(RightPanelTab::default()),
+            right_panel_visible: Signal::new(false),
             chat_history: Signal::new(Vec::new()),
             notes: Signal::new(HashMap::new()),
             current_video_id: Signal::new(None),

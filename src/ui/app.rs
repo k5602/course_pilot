@@ -18,21 +18,20 @@ pub fn App() -> Element {
         let config = AppConfig::from_env();
 
         // Try to create backend context
-        let state = match AppContext::new(config) {
+
+        match AppContext::new(config) {
             Ok(ctx) => AppState::with_backend(Arc::new(ctx)),
             Err(e) => {
                 log::error!("Failed to initialize backend: {}", e);
                 AppState::new()
             },
-        };
-
-        state
+        }
     });
 
     let relay = use_signal(|| None::<EmbedRelayServer>);
 
     {
-        let mut app_state = app_state.clone();
+        let mut app_state = app_state;
         let mut relay = relay;
         use_effect(move || {
             if relay.read().is_some() {
