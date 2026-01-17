@@ -109,7 +109,7 @@ jobs:
         run: |
           export PKG_CONFIG_PATH=/usr/lib/pkgconfig:/usr/lib/x86_64-linux-gnu/pkgconfig:/usr/share/pkgconfig
           dx build --release --platform desktop
-          dx bundle --release --platform desktop
+          dx bundle --release --platform desktop --package-types deb
         shell: bash
 
       - name: Build (Windows)
