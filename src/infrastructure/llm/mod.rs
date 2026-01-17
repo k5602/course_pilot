@@ -2,7 +2,9 @@
 
 use genai_rs::Client;
 
-use crate::domain::ports::{CompanionAI, CompanionContext, ExaminerAI, LLMError, MCQuestion};
+use crate::domain::ports::{
+    CompanionAI, CompanionContext, ExaminerAI, LLMError, MCQuestion, SummarizerAI,
+};
 
 /// Gemini API adapter for AI features.
 pub struct GeminiAdapter {
@@ -84,5 +86,43 @@ Reply ONLY with JSON array:
 
         serde_json::from_str(json_text)
             .map_err(|e| LLMError::InvalidResponse(format!("JSON parse error: {}", e)))
+    }
+}
+
+impl SummarizerAI for GeminiAdapter {
+    async fn summarize_transcript(
+        &self,
+        transcript: &str,
+        video_title: &str,
+    ) -> Result<String, LLMError> {
+        // Truncate long transcripts to ~10k chars to stay within token limits
+        let truncated = if transcript.len() > 10000 { &transcript[..10000] } else { transcript };
+
+        let prompt = format!(
+            r#"Summarize this video transcript into key learning points.
+
+Video: "{}"
+Transcript:
+{}
+
+Provide a structured summary with:
+1. Main Topic (1 sentence)
+2. Key Points (3-5 bullet points)
+3. Key Terms (if any technical terms are introduced)
+
+Keep it concise and educational."#,
+            video_title, truncated
+        );
+
+        let response = self
+            .client
+            .interaction()
+            .with_model("gemini-1.5-flash")
+            .with_text(&prompt)
+            .create()
+            .await
+            .map_err(|e| LLMError::Api(e.to_string()))?;
+
+        Ok(response.text().unwrap_or("Unable to generate summary").to_string())
     }
 }

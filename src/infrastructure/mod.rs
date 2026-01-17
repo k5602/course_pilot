@@ -3,4 +3,5 @@
 pub mod keystore;
 pub mod llm;
 pub mod persistence;
+pub mod transcript;
 pub mod youtube;

@@ -174,3 +174,68 @@ pub fn use_load_videos_by_course(
 
     videos
 }
+
+/// Load all tags from the database.
+pub fn use_load_tags(
+    backend: Option<Arc<AppContext>>,
+) -> Signal<Vec<crate::domain::entities::Tag>> {
+    let mut tags = use_signal(Vec::new);
+
+    use_effect(move || {
+        if let Some(ref ctx) = backend {
+            use crate::domain::ports::TagRepository;
+            match ctx.tag_repo.find_all() {
+                Ok(loaded) => tags.set(loaded),
+                Err(e) => log::error!("Failed to load tags: {}", e),
+            }
+        }
+    });
+
+    tags
+}
+
+/// Load tags for a specific course.
+pub fn use_load_course_tags(
+    backend: Option<Arc<AppContext>>,
+    course_id: &CourseId,
+) -> Signal<Vec<crate::domain::entities::Tag>> {
+    let mut tags = use_signal(Vec::new);
+    let course_id = course_id.clone();
+
+    use_effect(move || {
+        if let Some(ref ctx) = backend {
+            use crate::domain::ports::TagRepository;
+            match ctx.tag_repo.find_by_course(&course_id) {
+                Ok(loaded) => tags.set(loaded),
+                Err(e) => log::error!("Failed to load course tags: {}", e),
+            }
+        }
+    });
+
+    tags
+}
+
+/// Search across courses, videos, and notes.
+pub fn use_search(
+    backend: Option<Arc<AppContext>>,
+    query: String,
+) -> Signal<Vec<crate::domain::entities::SearchResult>> {
+    let mut results = use_signal(Vec::new);
+
+    use_effect(move || {
+        if query.trim().is_empty() {
+            results.set(Vec::new());
+            return;
+        }
+
+        if let Some(ref ctx) = backend {
+            use crate::domain::ports::SearchRepository;
+            match ctx.search_repo.search(&query, 20) {
+                Ok(loaded) => results.set(loaded),
+                Err(e) => log::error!("Search failed: {}", e),
+            }
+        }
+    });
+
+    results
+}

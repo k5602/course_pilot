@@ -49,3 +49,14 @@ pub trait ExaminerAI: Send + Sync {
         num_questions: u8,
     ) -> Result<Vec<MCQuestion>, LLMError>;
 }
+
+/// Port for video transcript summarization.
+#[allow(async_fn_in_trait)]
+pub trait SummarizerAI: Send + Sync {
+    /// Summarizes a video transcript into key points.
+    async fn summarize_transcript(
+        &self,
+        transcript: &str,
+        video_title: &str,
+    ) -> Result<String, LLMError>;
+}

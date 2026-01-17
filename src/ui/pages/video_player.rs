@@ -148,6 +148,12 @@ pub fn VideoPlayer(course_id: String, video_id: String) -> Element {
                 }
             }
 
+            // AI Summary Section
+            SummarySection {
+                youtube_id: v.youtube_id().as_str().to_string(),
+                video_title: v.title().to_string(),
+            }
+
             // Navigation Footer
             div { class: "mt-auto pt-12 flex justify-between border-t border-base-300",
                 // Previous video
@@ -207,6 +213,174 @@ pub fn VideoPlayer(course_id: String, video_id: String) -> Element {
                         div { class: "w-10 h-10 rounded-full bg-base-300 flex items-center justify-center",
                             "✓"
                         }
+                    }
+                }
+            }
+        }
+    }
+}
+
+/// Summary generation state
+#[derive(Clone, PartialEq)]
+enum SummaryState {
+    Empty,
+    Loading(String),
+    Ready(String),
+    Error(String),
+}
+
+/// AI Summary section with transcript fetching and summarization
+#[component]
+fn SummarySection(youtube_id: String, video_title: String) -> Element {
+    let state = use_context::<AppState>();
+    let mut summary_state = use_signal(|| SummaryState::Empty);
+    let mut expanded = use_signal(|| false);
+
+    let backend = state.backend.clone();
+    let youtube_id_clone = youtube_id.clone();
+    let video_title_clone = video_title.clone();
+
+    let generate_summary = move |_| {
+        let backend = backend.clone();
+        let youtube_id = youtube_id_clone.clone();
+        let video_title = video_title_clone.clone();
+
+        spawn(async move {
+            summary_state.set(SummaryState::Loading("Fetching transcript...".to_string()));
+
+            // Step 1: Fetch transcript
+            let transcript_adapter =
+                match crate::infrastructure::transcript::TranscriptAdapter::new() {
+                    Ok(adapter) => adapter,
+                    Err(e) => {
+                        summary_state.set(SummaryState::Error(format!("Failed to init: {}", e)));
+                        return;
+                    },
+                };
+
+            let transcript = match transcript_adapter.fetch_transcript(&youtube_id).await {
+                Ok(t) => t,
+                Err(e) => {
+                    summary_state.set(SummaryState::Error(format!("No transcript: {}", e)));
+                    return;
+                },
+            };
+
+            summary_state.set(SummaryState::Loading("Generating summary...".to_string()));
+
+            // Step 2: Generate summary with LLM
+            if let Some(ref ctx) = backend {
+                if let Some(ref llm) = ctx.llm {
+                    use crate::domain::ports::SummarizerAI;
+                    match llm.summarize_transcript(&transcript, &video_title).await {
+                        Ok(summary) => {
+                            summary_state.set(SummaryState::Ready(summary));
+                        },
+                        Err(e) => {
+                            summary_state
+                                .set(SummaryState::Error(format!("Summary failed: {}", e)));
+                        },
+                    }
+                } else {
+                    summary_state.set(SummaryState::Error("Gemini API not configured".to_string()));
+                }
+            } else {
+                summary_state.set(SummaryState::Error("Backend not available".to_string()));
+            }
+        });
+    };
+
+    rsx! {
+        div {
+            class: "mt-8 bg-base-200 rounded-2xl overflow-hidden",
+
+            // Header (clickable to expand)
+            button {
+                class: "w-full p-4 flex items-center justify-between hover:bg-base-300 transition-colors",
+                onclick: move |_| {
+                    let current = *expanded.read();
+                    expanded.set(!current);
+                },
+
+                div {
+                    class: "flex items-center gap-3",
+                    span { class: "text-xl", "✨" }
+                    span { class: "font-bold", "AI Summary" }
+                    match &*summary_state.read() {
+                        SummaryState::Ready(_) => rsx! {
+                            span { class: "badge badge-success badge-sm", "Ready" }
+                        },
+                        SummaryState::Loading(_) => rsx! {
+                            span { class: "badge badge-warning badge-sm", "Loading" }
+                        },
+                        SummaryState::Error(_) => rsx! {
+                            span { class: "badge badge-error badge-sm", "Error" }
+                        },
+                        SummaryState::Empty => rsx! {},
+                    }
+                }
+
+                span {
+                    class: "transition-transform",
+                    style: if *expanded.read() { "transform: rotate(180deg)" } else { "" },
+                    "▼"
+                }
+            }
+
+            // Content (expanded)
+            if *expanded.read() {
+                div {
+                    class: "p-4 pt-0",
+
+                    match &*summary_state.read() {
+                        SummaryState::Empty => rsx! {
+                            div {
+                                class: "text-center py-8",
+                                p { class: "text-base-content/60 mb-4", "Generate an AI summary from the video transcript" }
+                                button {
+                                    class: "btn btn-primary",
+                                    onclick: generate_summary,
+                                    disabled: !state.has_gemini(),
+                                    "✨ Generate Summary"
+                                }
+                                if !state.has_gemini() {
+                                    p { class: "text-sm text-warning mt-2", "Configure Gemini API key in Settings" }
+                                }
+                            }
+                        },
+                        SummaryState::Loading(msg) => rsx! {
+                            div {
+                                class: "flex flex-col items-center py-8",
+                                div { class: "loading loading-spinner loading-lg text-primary" }
+                                p { class: "text-base-content/60 mt-4", "{msg}" }
+                            }
+                        },
+                        SummaryState::Ready(summary) => rsx! {
+                            div {
+                                class: "prose prose-sm max-w-none",
+                                // Render summary as formatted text
+                                for line in summary.lines() {
+                                    if line.starts_with("# ") || line.starts_with("## ") {
+                                        h3 { class: "font-bold text-lg mt-4 mb-2", "{line.trim_start_matches('#').trim()}" }
+                                    } else if line.starts_with("- ") || line.starts_with("* ") {
+                                        li { class: "ml-4", "{line.trim_start_matches('-').trim_start_matches('*').trim()}" }
+                                    } else if !line.trim().is_empty() {
+                                        p { class: "mb-2", "{line}" }
+                                    }
+                                }
+                            }
+                        },
+                        SummaryState::Error(err) => rsx! {
+                            div {
+                                class: "text-center py-8",
+                                p { class: "text-error mb-4", "{err}" }
+                                button {
+                                    class: "btn btn-outline btn-primary",
+                                    onclick: generate_summary,
+                                    "Try Again"
+                                }
+                            }
+                        },
                     }
                 }
             }

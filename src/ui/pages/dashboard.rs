@@ -3,11 +3,12 @@
 use dioxus::prelude::*;
 
 use crate::domain::entities::Course;
-use crate::domain::ports::VideoRepository;
+use crate::domain::ports::{TagRepository, VideoRepository};
+use crate::domain::value_objects::TagId;
 use crate::ui::Route;
 use crate::ui::actions::{ImportResult, import_playlist};
-use crate::ui::custom::{CourseCard, ImportPlaylistDialog};
-use crate::ui::hooks::{use_load_courses, use_load_modules};
+use crate::ui::custom::{CourseCard, ImportPlaylistDialog, TagFilterChip};
+use crate::ui::hooks::{use_load_courses, use_load_modules, use_load_tags};
 use crate::ui::state::AppState;
 
 /// Dashboard showing all courses and overall progress.
@@ -15,8 +16,13 @@ use crate::ui::state::AppState;
 pub fn Dashboard() -> Element {
     let state = use_context::<AppState>();
 
-    // Load courses from backend
+    // Load courses and tags from backend
     let mut courses = use_load_courses(state.backend.clone());
+    let all_tags = use_load_tags(state.backend.clone());
+
+    // Search and filter state
+    let mut search_query = use_signal(String::new);
+    let mut selected_tags = use_signal(Vec::<TagId>::new);
 
     // Import dialog state
     let mut import_open = use_signal(|| false);
@@ -50,6 +56,42 @@ pub fn Dashboard() -> Element {
         });
     };
 
+    // Filter courses by search query and selected tags
+    let backend_filter = state.backend.clone();
+    let filtered_courses: Vec<Course> = courses
+        .read()
+        .iter()
+        .filter(|course| {
+            // Filter by search query
+            let query = search_query.read();
+            let matches_search = query.is_empty()
+                || course.name().to_lowercase().contains(&query.to_lowercase())
+                || course
+                    .description()
+                    .map(|d| d.to_lowercase().contains(&query.to_lowercase()))
+                    .unwrap_or(false);
+
+            // Filter by selected tags
+            let sel_tags = selected_tags.read();
+            let matches_tags = if sel_tags.is_empty() {
+                true
+            } else {
+                // Check if course has any of the selected tags
+                if let Some(ref ctx) = backend_filter {
+                    ctx.tag_repo
+                        .find_by_course(course.id())
+                        .map(|course_tags| course_tags.iter().any(|ct| sel_tags.contains(ct.id())))
+                        .unwrap_or(false)
+                } else {
+                    true
+                }
+            };
+
+            matches_search && matches_tags
+        })
+        .cloned()
+        .collect();
+
     rsx! {
         div {
             class: "p-6",
@@ -74,6 +116,78 @@ pub fn Dashboard() -> Element {
                 }
             }
 
+            // Search bar
+            div {
+                class: "mb-4",
+                div {
+                    class: "relative",
+                    span {
+                        class: "absolute left-3 top-1/2 -translate-y-1/2 text-base-content/40",
+                        "🔍"
+                    }
+                    input {
+                        class: "input input-bordered w-full pl-10",
+                        r#type: "text",
+                        placeholder: "Search courses...",
+                        value: "{search_query}",
+                        oninput: move |e| search_query.set(e.value()),
+                    }
+                }
+            }
+
+            // Tag filter
+            {
+                let tags_list = all_tags.read().clone();
+                let has_tags = !tags_list.is_empty();
+
+                if has_tags {
+                    rsx! {
+                        div {
+                            class: "flex flex-wrap gap-2 mb-4",
+
+                            // "All" button
+                            button {
+                                class: if selected_tags.read().is_empty() {
+                                    "px-3 py-1 rounded-full text-sm font-medium bg-primary text-primary-content"
+                                } else {
+                                    "px-3 py-1 rounded-full text-sm font-medium bg-base-200 text-base-content hover:bg-base-300"
+                                },
+                                onclick: move |_| selected_tags.set(Vec::new()),
+                                "All"
+                            }
+
+                            // Tag chips
+                            for tag in tags_list.iter() {
+                                {
+                                    let tag_id = tag.id().clone();
+                                    let tag_id_for_check = tag_id.clone();
+                                    let tag_id_for_toggle = tag_id.clone();
+                                    let is_active = selected_tags.read().contains(&tag_id_for_check);
+                                    rsx! {
+                                        TagFilterChip {
+                                            key: "{tag_id.as_uuid()}",
+                                            tag: tag.clone(),
+                                            active: is_active,
+                                            on_click: move |_| {
+                                                let mut tags = selected_tags.write();
+                                                if tags.contains(&tag_id_for_toggle) {
+                                                    let tid = tag_id_for_toggle.clone();
+                                                    tags.retain(|t| *t != tid);
+                                                } else {
+                                                    tags.push(tag_id_for_toggle.clone());
+                                                }
+                                            },
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                } else {
+                    rsx! {}
+                }
+            }
+
             // Status cards
             div {
                 class: "grid grid-cols-3 gap-4 mb-6",
@@ -92,30 +206,38 @@ pub fn Dashboard() -> Element {
             }
 
             // Course grid
-            if courses.read().is_empty() {
-                div {
-                    class: "text-center py-12 bg-base-200 rounded-lg",
-                    p { class: "text-xl mb-2", "No courses yet" }
-                    p { class: "text-base-content/60", "Import a YouTube playlist to get started" }
+            if filtered_courses.is_empty() {
+                if courses.read().is_empty() {
                     div {
-                        class: "flex justify-center gap-4 mt-4",
-                        button {
-                            class: "btn btn-primary",
-                            onclick: move |_| import_open.set(true),
-                            disabled: !state.has_youtube(),
-                            "Import Playlist"
+                        class: "text-center py-12 bg-base-200 rounded-lg",
+                        p { class: "text-xl mb-2", "No courses yet" }
+                        p { class: "text-base-content/60", "Import a YouTube playlist to get started" }
+                        div {
+                            class: "flex justify-center gap-4 mt-4",
+                            button {
+                                class: "btn btn-primary",
+                                onclick: move |_| import_open.set(true),
+                                disabled: !state.has_youtube(),
+                                "Import Playlist"
+                            }
+                            Link {
+                                to: Route::Settings {},
+                                class: "btn btn-outline",
+                                "Configure API Keys"
+                            }
                         }
-                        Link {
-                            to: Route::Settings {},
-                            class: "btn btn-outline",
-                            "Configure API Keys"
-                        }
+                    }
+                } else {
+                    div {
+                        class: "text-center py-12 bg-base-200 rounded-lg",
+                        p { class: "text-xl mb-2", "No matching courses" }
+                        p { class: "text-base-content/60", "Try adjusting your search or filters" }
                     }
                 }
             } else {
                 div {
                     class: "grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4",
-                    for course in courses.read().iter() {
+                    for course in filtered_courses.iter() {
                         CourseCardWithStats {
                             key: "{course.id().as_uuid()}",
                             course: course.clone(),
