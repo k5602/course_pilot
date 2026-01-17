@@ -155,11 +155,6 @@ impl AppContext {
         })
     }
 
-    /// YouTube is always available (no API key needed).
-    pub fn has_youtube(&self) -> bool {
-        true
-    }
-
     /// Checks if the LLM is available.
     pub fn has_llm(&self) -> bool {
         self.llm.is_some()

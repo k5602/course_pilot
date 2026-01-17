@@ -83,11 +83,6 @@ impl AppState {
         self.backend.is_some()
     }
 
-    /// Check if YouTube API is configured.
-    pub fn has_youtube(&self) -> bool {
-        self.backend.as_ref().map(|b| b.has_youtube()).unwrap_or(false)
-    }
-
     /// Check if Gemini API is configured.
     pub fn has_gemini(&self) -> bool {
         self.backend.as_ref().map(|b| b.has_llm()).unwrap_or(false)

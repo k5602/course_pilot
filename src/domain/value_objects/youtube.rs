@@ -1,5 +1,7 @@
 //! YouTube-related value objects.
 
+use rusty_ytdl::get_video_id;
+use rusty_ytdl::search::Playlist;
 use thiserror::Error;
 
 /// Error when parsing YouTube URLs or IDs.
@@ -25,17 +27,8 @@ impl PlaylistUrl {
     pub fn new(url: &str) -> Result<Self, YouTubeError> {
         if let Some(playlist_id) = Self::extract_playlist_id(url) {
             let video_id = Self::extract_video_id(url);
-            return Ok(Self { raw: url.to_string(), playlist_id, video_id });
-        }
-
-        if let Some(playlist_id) = Self::extract_playlist_id_from_raw(url) {
-            let raw = format!("https://www.youtube.com/playlist?list={}", playlist_id);
-            return Ok(Self { raw, playlist_id, video_id: None });
-        }
-
-        if let Some(video_id) = Self::extract_video_id_from_raw(url) {
-            let raw = format!("https://www.youtube.com/watch?v={}", video_id);
-            return Ok(Self { raw, playlist_id: video_id.clone(), video_id: Some(video_id) });
+            let raw = Playlist::get_playlist_url(url).unwrap_or_else(|| url.to_string());
+            return Ok(Self { raw, playlist_id, video_id });
         }
 
         if let Some(video_id) = Self::extract_video_id(url) {
@@ -46,50 +39,17 @@ impl PlaylistUrl {
         Err(YouTubeError::InvalidPlaylistUrl(url.to_string()))
     }
 
-    fn extract_playlist_id_from_raw(input: &str) -> Option<String> {
-        let trimmed = input.trim();
-        if trimmed.len() < 10 {
-            return None;
-        }
-        if trimmed.len() == 11 {
-            return None;
-        }
-        if trimmed.contains("http://")
-            || trimmed.contains("https://")
-            || trimmed.contains("list=")
-            || trimmed.contains("youtube")
-            || trimmed.contains("youtu.be")
-        {
-            return None;
-        }
-        if !trimmed.chars().all(|c| c.is_ascii_alphanumeric() || c == '-' || c == '_') {
-            return None;
-        }
-        Some(trimmed.to_string())
-    }
-
-    fn extract_video_id_from_raw(input: &str) -> Option<String> {
-        let trimmed = input.trim();
-        if trimmed.len() != 11 {
-            return None;
-        }
-        if trimmed.contains("http://")
-            || trimmed.contains("https://")
-            || trimmed.contains("list=")
-            || trimmed.contains("youtube")
-            || trimmed.contains("youtu.be")
-        {
-            return None;
-        }
-        if !trimmed.chars().all(|c| c.is_ascii_alphanumeric() || c == '-' || c == '_') {
-            return None;
-        }
-        Some(trimmed.to_string())
-    }
-
     fn extract_playlist_id(url: &str) -> Option<String> {
-        // Handle both youtube.com and youtu.be URLs
-        // Expected format: ?list=PLAYLIST_ID or &list=PLAYLIST_ID
+        // Try finding list= in the raw URL first (handles watch?v=...&list=...)
+        if let Some(id) = Self::parse_list_param(url) {
+            return Some(id);
+        }
+
+        // Fallback to checking what rusty_ytdl considers a playlist URL
+        Playlist::get_playlist_url(url).and_then(|p_url| Self::parse_list_param(&p_url))
+    }
+
+    fn parse_list_param(url: &str) -> Option<String> {
         if let Some(start) = url.find("list=") {
             let id_start = start + 5;
             let id_end = url[id_start..].find('&').map(|i| id_start + i).unwrap_or(url.len());
@@ -102,34 +62,7 @@ impl PlaylistUrl {
     }
 
     fn extract_video_id(url: &str) -> Option<String> {
-        if let Some(start) = url.find("v=") {
-            let id_start = start + 2;
-            let id_end = url[id_start..].find('&').map(|i| id_start + i).unwrap_or(url.len());
-            let id = &url[id_start..id_end];
-            if !id.is_empty() {
-                return Some(id.to_string());
-            }
-        }
-
-        if let Some(start) = url.find("youtu.be/") {
-            let id_start = start + "youtu.be/".len();
-            let id_end = url[id_start..].find('?').map(|i| id_start + i).unwrap_or(url.len());
-            let id = &url[id_start..id_end];
-            if !id.is_empty() {
-                return Some(id.to_string());
-            }
-        }
-
-        if let Some(start) = url.find("/embed/") {
-            let id_start = start + "/embed/".len();
-            let id_end = url[id_start..].find('?').map(|i| id_start + i).unwrap_or(url.len());
-            let id = &url[id_start..id_end];
-            if !id.is_empty() {
-                return Some(id.to_string());
-            }
-        }
-
-        None
+        get_video_id(url)
     }
 
     pub fn raw(&self) -> &str {

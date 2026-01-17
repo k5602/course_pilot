@@ -113,7 +113,6 @@ pub fn Dashboard() -> Element {
                 button {
                     class: "btn btn-primary",
                     onclick: move |_| import_open.set(true),
-                    disabled: !state.has_youtube(),
                     "+ Import Playlist"
                 }
             }
@@ -203,22 +202,7 @@ pub fn Dashboard() -> Element {
                 }
             }
 
-            // Status cards
-            div {
-                class: "grid grid-cols-3 gap-4 mb-6",
-                StatusCard {
-                    label: "YouTube API",
-                    status: state.has_youtube(),
-                }
-                StatusCard {
-                    label: "Gemini AI",
-                    status: state.has_gemini(),
-                }
-                StatusCard {
-                    label: "Backend",
-                    status: state.has_backend(),
-                }
-            }
+
 
             // Course grid
                         if *courses_state.is_loading.read() && courses.read().is_empty() {
@@ -242,7 +226,6 @@ pub fn Dashboard() -> Element {
                                         button {
                                             class: "btn btn-primary",
                                             onclick: move |_| import_open.set(true),
-                                            disabled: !state.has_youtube(),
                                             "Import Playlist"
                                         }
                                         Link {
@@ -322,19 +305,6 @@ fn CourseCardWithStats(course: Course) -> Element {
             name: course.name().to_string(),
             module_count,
             completed_modules,
-        }
-    }
-}
-
-#[component]
-fn StatusCard(label: &'static str, status: bool) -> Element {
-    let (icon, color) = if status { ("✓", "text-success") } else { ("✗", "text-error") };
-
-    rsx! {
-        div {
-            class: "bg-base-200 p-4 rounded-lg flex items-center gap-3",
-            span { class: "{color} text-xl", "{icon}" }
-            span { "{label}" }
         }
     }
 }

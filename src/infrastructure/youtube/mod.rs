@@ -1,18 +1,27 @@
 //! YouTube adapter.
 
+use std::env;
+
 use rusty_ytdl::Video;
-use rusty_ytdl::search::{Playlist, PlaylistSearchOptions};
+use rusty_ytdl::search::{Playlist, PlaylistSearchOptions, RequestOptions};
 
 use crate::domain::ports::{FetchError, PlaylistFetcher, RawVideoMetadata};
 use crate::domain::value_objects::PlaylistUrl;
 
 /// YouTube adapter for fetching playlist data.
-pub struct RustyYtdlAdapter;
+pub struct RustyYtdlAdapter {
+    cookies: Option<String>,
+}
 
 impl RustyYtdlAdapter {
-    /// Creates a new adapter (no configuration needed).
+    /// Creates a new adapter.
     pub fn new() -> Self {
-        Self
+        let cookies = env::var("YOUTUBE_COOKIES")
+            .ok()
+            .map(|value| value.trim().to_string())
+            .filter(|value| !value.is_empty());
+
+        Self { cookies }
     }
 }
 
@@ -26,8 +35,14 @@ impl PlaylistFetcher for RustyYtdlAdapter {
     async fn fetch_playlist(&self, url: &PlaylistUrl) -> Result<Vec<RawVideoMetadata>, FetchError> {
         let playlist_url = url.raw();
 
-        // Configure to fetch all videos.
-        let options = PlaylistSearchOptions { limit: u64::MAX, ..Default::default() };
+        // Configure to fetch all videos in one pass when possible.
+        let mut options =
+            PlaylistSearchOptions { limit: 500, fetch_all: true, ..Default::default() };
+
+        if let Some(ref cookie) = self.cookies {
+            options.request_options =
+                Some(RequestOptions { cookies: Some(cookie.clone()), ..Default::default() });
+        }
 
         // Fetch playlist (fallback to single video on failure).
         let mut playlist: Playlist = match Playlist::get(playlist_url, Some(&options)).await {
@@ -40,12 +55,8 @@ impl PlaylistFetcher for RustyYtdlAdapter {
             },
         };
 
-        // Fetch any remaining videos if playlist is large.
-        while let Ok(more_videos) = playlist.next(Some(100)).await {
-            if more_videos.is_empty() {
-                break;
-            }
-        }
+        // Fetch all videos if the initial request did not include them.
+        playlist.fetch(None).await;
 
         if playlist.videos.is_empty() {
             if url.video_id().is_some() {

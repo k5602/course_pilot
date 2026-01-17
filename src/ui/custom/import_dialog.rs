@@ -16,14 +16,8 @@ pub fn ImportPlaylistDialog(open: Signal<bool>, on_import: EventHandler<String>)
 
     let handle_import = move |_| {
         let url = url_input.read().clone();
-        if url.is_empty() {
-            error_msg.set(Some("Please enter a playlist URL".to_string()));
-            return;
-        }
-
-        // Validate URL format
-        if !url.contains("youtube.com") && !url.contains("youtu.be") {
-            error_msg.set(Some("Invalid YouTube URL".to_string()));
+        if url.trim().is_empty() {
+            error_msg.set(Some("Please enter a playlist or video URL".to_string()));
             return;
         }
 
@@ -62,7 +56,7 @@ pub fn ImportPlaylistDialog(open: Signal<bool>, on_import: EventHandler<String>)
                     DialogDescription {
                         p {
                             class: "text-base-content/70 mb-4",
-                            "Enter a YouTube playlist URL to import as a course"
+                            "Enter a YouTube playlist URL or video URL/ID to import as a course"
                         }
                     }
 
@@ -72,7 +66,7 @@ pub fn ImportPlaylistDialog(open: Signal<bool>, on_import: EventHandler<String>)
                         input {
                             class: "input input-bordered w-full",
                             r#type: "url",
-                            placeholder: "https://www.youtube.com/playlist?list=...",
+                            placeholder: "https://www.youtube.com/playlist?list=... or https://youtu.be/ID",
                             value: "{url_input}",
                             oninput: move |e| url_input.set(e.value()),
                             disabled: *is_loading.read(),
