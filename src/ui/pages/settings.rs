@@ -2,6 +2,8 @@
 
 use dioxus::prelude::*;
 
+use crate::application::ServiceFactory;
+use crate::application::use_cases::UpdatePreferencesInput;
 use crate::domain::ports::SecretStore;
 use crate::ui::state::AppState;
 
@@ -18,12 +20,18 @@ pub fn Settings() -> Element {
         });
     }
 
+    let mut active_tab = use_signal(|| "integrations".to_string());
+
     let mut gemini_key = use_signal(String::new);
+    let mut ml_boundary_enabled = use_signal(|| false);
+    let mut cognitive_limit = use_signal(|| 45u32);
+
     let mut save_status = use_signal(|| None::<(bool, String)>);
 
     // Clone backend for closures
     let backend_load = state.backend.clone();
     let backend_save = state.backend.clone();
+    let backend_prefs = state.backend.clone();
 
     // Load current values on mount
     use_effect(move || {
@@ -32,10 +40,21 @@ pub fn Settings() -> Element {
             if ctx.has_llm() {
                 gemini_key.set("••••••••••••••••".to_string());
             }
+
+            let use_case = ServiceFactory::preferences(ctx);
+            match use_case.load() {
+                Ok(prefs) => {
+                    ml_boundary_enabled.set(prefs.ml_boundary_enabled());
+                    cognitive_limit.set(prefs.cognitive_limit_minutes());
+                },
+                Err(e) => {
+                    save_status.set(Some((false, format!("Failed to load preferences: {}", e))));
+                },
+            }
         }
     });
 
-    let handle_save = move |_| {
+    let handle_save_integrations = move |_| {
         let gem_key = gemini_key.read().clone();
 
         // Only save if not masked placeholder
@@ -54,7 +73,7 @@ pub fn Settings() -> Element {
             if success {
                 save_status.set(Some((
                     true,
-                    "Settings saved! Restart the app for changes to take effect.".to_string(),
+                    "Integrations saved! Restart the app for changes to take effect.".to_string(),
                 )));
             } else {
                 save_status.set(Some((false, errors.join(", "))));
@@ -64,11 +83,51 @@ pub fn Settings() -> Element {
         }
     };
 
+    let handle_save_preferences = move |_| {
+        if let Some(ref ctx) = backend_prefs {
+            let use_case = ServiceFactory::preferences(ctx);
+            let input = UpdatePreferencesInput {
+                ml_boundary_enabled: *ml_boundary_enabled.read(),
+                cognitive_limit_minutes: *cognitive_limit.read(),
+            };
+
+            match use_case.update(input) {
+                Ok(_) => {
+                    save_status.set(Some((true, "Preferences saved.".to_string())));
+                },
+                Err(e) => {
+                    save_status.set(Some((false, format!("Failed to save preferences: {}", e))));
+                },
+            }
+        } else {
+            save_status.set(Some((false, "Backend not available".to_string())));
+        }
+    };
+
     rsx! {
         div {
-            class: "p-6 max-w-2xl",
+            class: "p-6 max-w-3xl",
 
             h1 { class: "text-2xl font-bold mb-6", "Settings" }
+
+            div {
+                class: "tabs tabs-boxed mb-6",
+                button {
+                    class: if *active_tab.read() == "integrations" { "tab tab-active" } else { "tab" },
+                    onclick: move |_| active_tab.set("integrations".to_string()),
+                    "Integrations"
+                }
+                button {
+                    class: if *active_tab.read() == "preferences" { "tab tab-active" } else { "tab" },
+                    onclick: move |_| active_tab.set("preferences".to_string()),
+                    "Preferences"
+                }
+                button {
+                    class: if *active_tab.read() == "about" { "tab tab-active" } else { "tab" },
+                    onclick: move |_| active_tab.set("about".to_string()),
+                    "About"
+                }
+            }
 
             // Save status alert
             if let Some((is_success, ref msg)) = *save_status.read() {
@@ -78,65 +137,120 @@ pub fn Settings() -> Element {
                 }
             }
 
-            // API Keys section
-            section {
-                class: "mb-8",
-                h2 { class: "text-lg font-semibold mb-4", "API Keys" }
+            if *active_tab.read() == "integrations" {
+                section {
+                    class: "mb-8",
+                    h2 { class: "text-lg font-semibold mb-4", "API Keys" }
 
-                div {
-                    class: "space-y-4",
-
-                    // Gemini API Key
                     div {
-                        label { class: "label", "Gemini API Key" }
+                        class: "space-y-4",
+
+                        // Gemini API Key
                         div {
-                            class: "flex gap-2",
-                            input {
-                                class: "input input-bordered flex-1",
-                                r#type: "password",
-                                placeholder: "Enter your Gemini API key",
-                                value: "{gemini_key}",
-                                oninput: move |e| gemini_key.set(e.value()),
-                                onfocus: move |_| {
-                                    if gemini_key.read().starts_with("••") {
-                                        gemini_key.set(String::new());
-                                    }
-                                },
+                            label { class: "label", "Gemini API Key" }
+                            div {
+                                class: "flex gap-2",
+                                input {
+                                    class: "input input-bordered flex-1",
+                                    r#type: "password",
+                                    placeholder: "Enter your Gemini API key",
+                                    value: "{gemini_key}",
+                                    oninput: move |e| gemini_key.set(e.value()),
+                                    onfocus: move |_| {
+                                        if gemini_key.read().starts_with("••") {
+                                            gemini_key.set(String::new());
+                                        }
+                                    },
+                                }
+                                if state.has_gemini() {
+                                    span { class: "badge badge-success self-center", "Active" }
+                                }
                             }
-                            if state.has_gemini() {
-                                span { class: "badge badge-success self-center", "Active" }
-                            }
-                        }
-                        p {
-                            class: "text-sm text-base-content/60 mt-1",
-                            "Required for AI Companion, quiz generation, and video summaries. "
-                            a {
-                                href: "https://aistudio.google.com/apikey",
-                                class: "link link-primary",
-                                target: "_blank",
-                                "Get from AI Studio →"
+                            p {
+                                class: "text-sm text-base-content/60 mt-1",
+                                "Required for AI Companion, quiz generation, and video summaries. "
+                                a {
+                                    href: "https://aistudio.google.com/apikey",
+                                    class: "link link-primary",
+                                    target: "_blank",
+                                    "Get from AI Studio →"
+                                }
                             }
                         }
                     }
-                }
-            }
 
-            // Info section
-            section {
-                class: "mb-8 p-4 bg-base-200 rounded-lg",
-                h3 { class: "font-semibold mb-2", "ℹ️ About YouTube Import" }
-                p {
-                    class: "text-sm text-base-content/70",
-                    "YouTube playlist import works automatically without any API key. "
-                    "Simply paste a playlist URL and Course Pilot will fetch the video data."
+                    button {
+                        class: "btn btn-primary mt-6",
+                        onclick: handle_save_integrations,
+                        "Save Integrations"
+                    }
                 }
-            }
+            } else if *active_tab.read() == "preferences" {
+                section {
+                    class: "mb-8",
+                    h2 { class: "text-lg font-semibold mb-4", "Preferences" }
 
-            // Save button
-            button {
-                class: "btn btn-primary",
-                onclick: handle_save,
-                "Save Settings"
+                    div {
+                        class: "space-y-6",
+
+                        // Cognitive limit
+                        div {
+                            label { class: "label", "Daily study time: {cognitive_limit} minutes" }
+                            input {
+                                r#type: "range",
+                                class: "range range-primary w-full",
+                                min: "15",
+                                max: "120",
+                                step: "5",
+                                value: "{cognitive_limit}",
+                                oninput: move |e| {
+                                    if let Ok(val) = e.value().parse::<u32>() {
+                                        cognitive_limit.set(val);
+                                    }
+                                }
+                            }
+                            p {
+                                class: "text-sm text-base-content/60 mt-1",
+                                "Used to plan study sessions across modules."
+                            }
+                        }
+
+                        // ML boundaries (reserved)
+                        div {
+                            class: "flex items-center justify-between bg-base-200 rounded-lg p-4",
+                            div {
+                                h3 { class: "font-semibold", "ML Boundary Hints" }
+                                p {
+                                    class: "text-sm text-base-content/60",
+                                    "Enable experimental machine-learning boundaries for session planning."
+                                }
+                            }
+                            input {
+                                class: "toggle toggle-primary",
+                                r#type: "checkbox",
+                                checked: *ml_boundary_enabled.read(),
+                                onchange: move |e| {
+                                    ml_boundary_enabled.set(e.value() == "on");
+                                },
+                            }
+                        }
+                    }
+
+                    button {
+                        class: "btn btn-primary mt-6",
+                        onclick: handle_save_preferences,
+                        "Save Preferences"
+                    }
+                }
+            } else {
+                section {
+                    class: "mb-8 space-y-4",
+                    h2 { class: "text-lg font-semibold", "About" }
+                    p { class: "text-sm text-base-content/70", "Course Pilot helps you transform YouTube playlists into structured study plans." }
+                    p { class: "text-sm text-base-content/70", "Window title: Course Pilot" }
+                    p { class: "text-sm text-base-content/70", "Version: {env!(\"CARGO_PKG_VERSION\")}" }
+                    p { class: "text-sm text-base-content/70","Author: Made with love by Khaled" }
+                }
             }
         }
     }

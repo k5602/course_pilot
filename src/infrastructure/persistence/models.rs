@@ -140,6 +140,15 @@ pub struct UserPreferencesRow {
     pub cognitive_limit_minutes: i32,
 }
 
+/// Insertable model for user preferences.
+#[derive(Insertable)]
+#[diesel(table_name = user_preferences)]
+pub struct NewUserPreferences<'a> {
+    pub id: &'a str,
+    pub ml_boundary_enabled: i32,
+    pub cognitive_limit_minutes: i32,
+}
+
 /// Changeset for updating user preferences.
 #[derive(AsChangeset)]
 #[diesel(table_name = user_preferences)]

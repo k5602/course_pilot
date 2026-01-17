@@ -1,5 +1,6 @@
 //! Custom Components
 
+pub mod analytics;
 pub mod course_card;
 pub mod import_dialog;
 pub mod loading;
@@ -10,6 +11,7 @@ pub mod tag_badge;
 pub mod video_item;
 pub mod youtube_player;
 
+pub use analytics::AnalyticsOverview;
 pub use course_card::CourseCard;
 pub use import_dialog::ImportPlaylistDialog;
 pub use loading::{

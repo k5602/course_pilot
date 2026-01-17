@@ -79,20 +79,17 @@ dx build --release
 
 ## ⚙️ Configuration
 
-| Variable | Required | Default | Description |
-|----------|----------|---------|-------------|
-| `DATABASE_URL` | No | `course_pilot.db` | SQLite database path |
-| `YOUTUBE_API_KEY` | Yes | - | YouTube Data API v3 key |
-| `GEMINI_API_KEY` | No | - | Gemini API key for AI features |
+| Variable          | Required | Default           | Description                               |
+| ----------------- | -------- | ----------------- | ----------------------------------------- |
+| `DATABASE_URL`    | No       | `course_pilot.db` | SQLite database path                      |
+| `YOUTUBE_API_KEY` | No       | -                 | Optional YouTube Data API v3 key (unused) |
+| `GEMINI_API_KEY`  | No       | -                 | Gemini API key for AI features            |
 
 ## 🔑 API Keys
 
-### YouTube API Key (Required)
+### YouTube API Key (Optional)
 
-1. Go to [Google Cloud Console](https://console.cloud.google.com)
-2. Create a project or select existing
-3. Enable **YouTube Data API v3**
-4. Create an API key under Credentials
+Course Pilot uses API-free playlist import by default. A YouTube API key is not required for normal use.
 
 ### Gemini API Key (Optional)
 

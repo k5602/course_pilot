@@ -4,8 +4,8 @@ use std::sync::Arc;
 
 use dioxus::prelude::*;
 
-use crate::application::AppContext;
-use crate::domain::entities::{Course, Exam, Module, Video};
+use crate::application::{AppContext, ServiceFactory};
+use crate::domain::entities::{AppAnalytics, Course, Exam, Module, Video};
 use crate::domain::ports::{CourseRepository, ExamRepository, ModuleRepository, VideoRepository};
 use crate::domain::value_objects::{CourseId, ExamId, ModuleId, VideoId};
 
@@ -19,6 +19,36 @@ pub struct LoadState {
 /// Initialize loading and error signals for a hook.
 pub fn use_load_state() -> LoadState {
     LoadState { is_loading: use_signal(|| false), error: use_signal(|| None) }
+}
+
+/// Load dashboard analytics with loading and error state.
+pub fn use_load_dashboard_analytics(
+    backend: Option<Arc<AppContext>>,
+) -> (Signal<Option<AppAnalytics>>, LoadState) {
+    let mut analytics = use_signal(|| None);
+    let load_state = use_load_state();
+    let mut is_loading = load_state.is_loading;
+    let mut error = load_state.error;
+
+    use_effect(move || {
+        is_loading.set(true);
+        error.set(None);
+
+        match backend.as_ref() {
+            Some(ctx) => {
+                let use_case = ServiceFactory::dashboard(ctx);
+                match use_case.execute() {
+                    Ok(snapshot) => analytics.set(Some(snapshot)),
+                    Err(e) => error.set(Some(format!("Failed to load analytics: {}", e))),
+                }
+            },
+            None => error.set(Some("Backend not available".to_string())),
+        }
+
+        is_loading.set(false);
+    });
+
+    (analytics, load_state)
 }
 
 /// Load all courses from the database.

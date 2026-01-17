@@ -8,9 +8,12 @@ use crate::domain::value_objects::TagId;
 use crate::ui::Route;
 use crate::ui::actions::{ImportResult, import_playlist};
 use crate::ui::custom::{
-    CardSkeleton, CourseCard, ErrorAlert, ImportPlaylistDialog, TagFilterChip,
+    AnalyticsOverview, CardSkeleton, CourseCard, ErrorAlert, ImportPlaylistDialog, Spinner,
+    TagBadge, TagFilterChip,
 };
-use crate::ui::hooks::{use_load_courses_state, use_load_modules, use_load_tags};
+use crate::ui::hooks::{
+    use_load_courses_state, use_load_dashboard_analytics, use_load_modules, use_load_tags,
+};
 use crate::ui::state::AppState;
 
 /// Dashboard showing all courses and overall progress.
@@ -26,9 +29,13 @@ pub fn Dashboard() -> Element {
         });
     }
 
-    // Load courses and tags from backend
+    // Load courses, tags, and analytics from backend
     let (mut courses, courses_state) = use_load_courses_state(state.backend.clone());
     let all_tags = use_load_tags(state.backend.clone());
+    let (analytics, analytics_state) = use_load_dashboard_analytics(state.backend.clone());
+
+    // Tabs
+    let mut active_tab = use_signal(|| "overview".to_string());
 
     // Search and filter state
     let mut search_query = use_signal(String::new);
@@ -117,142 +124,222 @@ pub fn Dashboard() -> Element {
                 }
             }
 
-            // Import status message
-                        if let Some(ref status) = *import_status.read() {
-                            div {
-                                class: if status.starts_with("✓") { "alert alert-success mb-4" } else if status.starts_with("✗") { "alert alert-error mb-4" } else { "alert alert-info mb-4" },
-                                "{status}"
-                            }
-                        }
-
-                        // Loading/error state for courses
-                        if let Some(ref err) = *courses_state.error.read() {
-                            ErrorAlert { message: err.clone(), on_dismiss: None }
-                        }
-
-            // Search bar
+            // Tabs
             div {
-                class: "mb-4",
-                div {
-                    class: "relative",
-                    span {
-                        class: "absolute left-3 top-1/2 -translate-y-1/2 text-base-content/40",
-                        "🔍"
-                    }
-                    input {
-                        class: "input input-bordered w-full pl-10",
-                        r#type: "text",
-                        placeholder: "Search courses...",
-                        value: "{search_query}",
-                        oninput: move |e| search_query.set(e.value()),
-                    }
+                class: "tabs tabs-boxed mb-6",
+                button {
+                    class: if *active_tab.read() == "overview" { "tab tab-active" } else { "tab" },
+                    onclick: move |_| active_tab.set("overview".to_string()),
+                    "Overview"
+                }
+                button {
+                    class: if *active_tab.read() == "courses" { "tab tab-active" } else { "tab" },
+                    onclick: move |_| active_tab.set("courses".to_string()),
+                    "Courses"
+                }
+                button {
+                    class: if *active_tab.read() == "tags" { "tab tab-active" } else { "tab" },
+                    onclick: move |_| active_tab.set("tags".to_string()),
+                    "Tags"
                 }
             }
 
-            // Tag filter
-            {
-                let tags_list = all_tags.read().clone();
-                let has_tags = !tags_list.is_empty();
+            // Import status message
+            if let Some(ref status) = *import_status.read() {
+                div {
+                    class: if status.starts_with("✓") { "alert alert-success mb-4" } else if status.starts_with("✗") { "alert alert-error mb-4" } else { "alert alert-info mb-4" },
+                    "{status}"
+                }
+            }
 
-                if has_tags {
-                    rsx! {
-                        div {
-                            class: "flex flex-wrap gap-2 mb-4",
+            if *active_tab.read() == "overview" {
+                if let Some(ref err) = *analytics_state.error.read() {
+                    ErrorAlert { message: err.clone(), on_dismiss: None }
+                }
 
-                            // "All" button
-                            button {
-                                class: if selected_tags.read().is_empty() {
-                                    "px-3 py-1 rounded-full text-sm font-medium bg-primary text-primary-content"
-                                } else {
-                                    "px-3 py-1 rounded-full text-sm font-medium bg-base-200 text-base-content hover:bg-base-300"
-                                },
-                                onclick: move |_| selected_tags.set(Vec::new()),
-                                "All"
-                            }
+                if *analytics_state.is_loading.read() && analytics.read().is_none() {
+                    div { class: "py-8", Spinner { message: Some("Loading analytics...".to_string()) } }
+                } else if let Some(snapshot) = analytics.read().clone() {
+                    AnalyticsOverview { analytics: snapshot }
+                }
 
-                            // Tag chips
-                            for tag in tags_list.iter() {
-                                {
-                                    let tag_id = tag.id().clone();
-                                    let tag_id_for_check = tag_id.clone();
-                                    let tag_id_for_toggle = tag_id.clone();
-                                    let is_active = selected_tags.read().contains(&tag_id_for_check);
-                                    rsx! {
-                                        TagFilterChip {
-                                            key: "{tag_id.as_uuid()}",
-                                            tag: tag.clone(),
-                                            active: is_active,
-                                            on_click: move |_| {
-                                                let mut tags = selected_tags.write();
-                                                if tags.contains(&tag_id_for_toggle) {
-                                                    let tid = tag_id_for_toggle.clone();
-                                                    tags.retain(|t| *t != tid);
-                                                } else {
-                                                    tags.push(tag_id_for_toggle.clone());
-                                                }
-                                            },
+                if courses.read().is_empty() {
+                    div {
+                        class: "text-center py-10 bg-base-200 rounded-lg mt-6",
+                        p { class: "text-lg mb-2", "No courses yet" }
+                        p { class: "text-base-content/60", "Import a YouTube playlist to get started" }
+                    }
+                } else {
+                    {
+                        let mut recent_courses = courses.read().clone();
+                        recent_courses.sort_by_key(|course| std::cmp::Reverse(course.created_at()));
+                        rsx! {
+                            div {
+                                class: "mt-6",
+                                h2 { class: "text-lg font-semibold mb-4", "Recent Courses" }
+                                div {
+                                    class: "grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4",
+                                    for course in recent_courses.iter().take(3) {
+                                        CourseCardWithStats {
+                                            key: "{course.id().as_uuid()}",
+                                            course: course.clone(),
                                         }
                                     }
                                 }
                             }
+                        }
+                    }
+                }
+            } else if *active_tab.read() == "courses" {
+                // Loading/error state for courses
+                if let Some(ref err) = *courses_state.error.read() {
+                    ErrorAlert { message: err.clone(), on_dismiss: None }
+                }
+
+                // Search bar
+                div {
+                    class: "mb-4",
+                    div {
+                        class: "relative",
+                        span {
+                            class: "absolute left-3 top-1/2 -translate-y-1/2 text-base-content/40",
+                            "🔍"
+                        }
+                        input {
+                            class: "input input-bordered w-full pl-10",
+                            r#type: "text",
+                            placeholder: "Search courses...",
+                            value: "{search_query}",
+                            oninput: move |e| search_query.set(e.value()),
+                        }
+                    }
+                }
+
+                // Tag filter
+                {
+                    let tags_list = all_tags.read().clone();
+                    let has_tags = !tags_list.is_empty();
+
+                    if has_tags {
+                        rsx! {
+                            div {
+                                class: "flex flex-wrap gap-2 mb-4",
+
+                                // "All" button
+                                button {
+                                    class: if selected_tags.read().is_empty() {
+                                        "px-3 py-1 rounded-full text-sm font-medium bg-primary text-primary-content"
+                                    } else {
+                                        "px-3 py-1 rounded-full text-sm font-medium bg-base-200 text-base-content hover:bg-base-300"
+                                    },
+                                    onclick: move |_| selected_tags.set(Vec::new()),
+                                    "All"
+                                }
+
+                                // Tag chips
+                                for tag in tags_list.iter() {
+                                    {
+                                        let tag_id = tag.id().clone();
+                                        let tag_id_for_check = tag_id.clone();
+                                        let tag_id_for_toggle = tag_id.clone();
+                                        let is_active = selected_tags.read().contains(&tag_id_for_check);
+                                        rsx! {
+                                            TagFilterChip {
+                                                key: "{tag_id.as_uuid()}",
+                                                tag: tag.clone(),
+                                                active: is_active,
+                                                on_click: move |_| {
+                                                    let mut tags = selected_tags.write();
+                                                    if tags.contains(&tag_id_for_toggle) {
+                                                        let tid = tag_id_for_toggle.clone();
+                                                        tags.retain(|t| *t != tid);
+                                                    } else {
+                                                        tags.push(tag_id_for_toggle.clone());
+                                                    }
+                                                },
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    } else {
+                        rsx! {}
+                    }
+                }
+
+                // Course grid
+                if *courses_state.is_loading.read() && courses.read().is_empty() {
+                    div {
+                        class: "grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4",
+                        CardSkeleton {}
+                        CardSkeleton {}
+                        CardSkeleton {}
+                        CardSkeleton {}
+                        CardSkeleton {}
+                        CardSkeleton {}
+                    }
+                } else if filtered_courses.is_empty() {
+                    if courses.read().is_empty() {
+                        div {
+                            class: "text-center py-12 bg-base-200 rounded-lg",
+                            p { class: "text-xl mb-2", "No courses yet" }
+                            p { class: "text-base-content/60", "Import a YouTube playlist to get started" }
+                            div {
+                                class: "flex justify-center gap-4 mt-4",
+                                button {
+                                    class: "btn btn-primary",
+                                    onclick: move |_| import_open.set(true),
+                                    "Import Playlist"
+                                }
+                                Link {
+                                    to: Route::Settings {},
+                                    class: "btn btn-outline",
+                                    "Configure API Keys"
+                                }
+                            }
+                        }
+                    } else {
+                        div {
+                            class: "text-center py-12 bg-base-200 rounded-lg",
+                            p { class: "text-xl mb-2", "No matching courses" }
+                            p { class: "text-base-content/60", "Try adjusting your search or filters" }
                         }
                     }
                 } else {
-                    rsx! {}
+                    div {
+                        class: "grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4",
+                        for course in filtered_courses.iter() {
+                            CourseCardWithStats {
+                                key: "{course.id().as_uuid()}",
+                                course: course.clone(),
+                            }
+                        }
+                    }
                 }
-            }
-
-
-
-            // Course grid
-                        if *courses_state.is_loading.read() && courses.read().is_empty() {
+            } else {
+                {
+                    let tags_list = all_tags.read().clone();
+                    if tags_list.is_empty() {
+                        rsx! {
                             div {
-                                class: "grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4",
-                                CardSkeleton {}
-                                CardSkeleton {}
-                                CardSkeleton {}
-                                CardSkeleton {}
-                                CardSkeleton {}
-                                CardSkeleton {}
+                                class: "text-center py-12 bg-base-200 rounded-lg",
+                                p { class: "text-xl mb-2", "No tags yet" }
+                                p { class: "text-base-content/60", "Tags will appear after you label courses" }
                             }
-                        } else if filtered_courses.is_empty() {
-                            if courses.read().is_empty() {
-                                div {
-                                    class: "text-center py-12 bg-base-200 rounded-lg",
-                                    p { class: "text-xl mb-2", "No courses yet" }
-                                    p { class: "text-base-content/60", "Import a YouTube playlist to get started" }
-                                    div {
-                                        class: "flex justify-center gap-4 mt-4",
-                                        button {
-                                            class: "btn btn-primary",
-                                            onclick: move |_| import_open.set(true),
-                                            "Import Playlist"
-                                        }
-                                        Link {
-                                            to: Route::Settings {},
-                                            class: "btn btn-outline",
-                                            "Configure API Keys"
-                                        }
-                                    }
-                                }
-                            } else {
-                                div {
-                                    class: "text-center py-12 bg-base-200 rounded-lg",
-                                    p { class: "text-xl mb-2", "No matching courses" }
-                                    p { class: "text-base-content/60", "Try adjusting your search or filters" }
-                                }
-                            }
-                        } else {
+                        }
+                    } else {
+                        rsx! {
                             div {
-                                class: "grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4",
-                                for course in filtered_courses.iter() {
-                                    CourseCardWithStats {
-                                        key: "{course.id().as_uuid()}",
-                                        course: course.clone(),
-                                    }
+                                class: "flex flex-wrap gap-3",
+                                for tag in tags_list.iter() {
+                                    TagBadge { tag: tag.clone() }
                                 }
                             }
                         }
+                    }
+                }
+            }
         }
 
         // Import dialog

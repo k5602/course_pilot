@@ -93,6 +93,16 @@ pub trait TagRepository: Send + Sync {
     fn delete(&self, tag_id: &TagId) -> Result<(), RepositoryError>;
 }
 
+/// Repository for user preferences.
+pub trait UserPreferencesRepository: Send + Sync {
+    fn load(
+        &self,
+        id: &str,
+    ) -> Result<Option<crate::domain::entities::UserPreferences>, RepositoryError>;
+    fn save(&self, prefs: &crate::domain::entities::UserPreferences)
+    -> Result<(), RepositoryError>;
+}
+
 /// Repository for full-text search.
 pub trait SearchRepository: Send + Sync {
     /// Searches across courses, videos, and notes.

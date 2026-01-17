@@ -5,8 +5,8 @@
 use std::sync::Arc;
 
 use crate::application::use_cases::{
-    AskCompanionUseCase, IngestPlaylistUseCase, NotesUseCase, PlanSessionUseCase,
-    SummarizeVideoUseCase, TakeExamUseCase,
+    AskCompanionUseCase, IngestPlaylistUseCase, LoadDashboardUseCase, NotesUseCase,
+    PlanSessionUseCase, PreferencesUseCase, SummarizeVideoUseCase, TakeExamUseCase,
 };
 use crate::domain::ports::SecretStore;
 use crate::infrastructure::{
@@ -14,7 +14,8 @@ use crate::infrastructure::{
     llm::GeminiAdapter,
     persistence::{
         DbPool, SqliteCourseRepository, SqliteExamRepository, SqliteModuleRepository,
-        SqliteNoteRepository, SqliteSearchRepository, SqliteTagRepository, SqliteVideoRepository,
+        SqliteNoteRepository, SqliteSearchRepository, SqliteTagRepository,
+        SqliteUserPreferencesRepository, SqliteVideoRepository,
     },
     transcript::TranscriptAdapter,
     youtube::RustyYtdlAdapter,
@@ -89,6 +90,7 @@ pub struct AppContext {
     pub note_repo: Arc<SqliteNoteRepository>,
     pub tag_repo: Arc<SqliteTagRepository>,
     pub search_repo: Arc<SqliteSearchRepository>,
+    pub preferences_repo: Arc<SqliteUserPreferencesRepository>,
 
     // Infrastructure adapters
     pub youtube: Arc<RustyYtdlAdapter>, // Always available (no API key needed)
@@ -116,6 +118,7 @@ impl AppContext {
         let note_repo = Arc::new(SqliteNoteRepository::new(db_pool.clone()));
         let tag_repo = Arc::new(SqliteTagRepository::new(db_pool.clone()));
         let search_repo = Arc::new(SqliteSearchRepository::new(db_pool.clone()));
+        let preferences_repo = Arc::new(SqliteUserPreferencesRepository::new(db_pool.clone()));
 
         // Create keystore
         let keystore = Arc::new(NativeKeystore::new());
@@ -147,6 +150,7 @@ impl AppContext {
             note_repo,
             tag_repo,
             search_repo,
+            preferences_repo,
             youtube,
             transcript,
             llm,
@@ -175,26 +179,6 @@ impl AppContext {
             self.llm = Some(Arc::new(GeminiAdapter::new(key)));
         }
         Ok(())
-    }
-
-    /// Gets user preferences from the database.
-    pub fn get_preferences(&self) -> Result<u32, AppContextError> {
-        use crate::infrastructure::persistence::models::UserPreferencesRow;
-        use crate::schema::user_preferences;
-        use diesel::prelude::*;
-
-        let mut conn = self.db_pool.get().map_err(|e| AppContextError::Database(e.to_string()))?;
-
-        let result: Option<UserPreferencesRow> = user_preferences::table
-            .find("default")
-            .first(&mut conn)
-            .optional()
-            .map_err(|e| AppContextError::Database(e.to_string()))?;
-
-        match result {
-            Some(pref) => Ok(pref.cognitive_limit_minutes as u32),
-            None => Ok(45), // Default cognitive limit
-        }
     }
 }
 
@@ -276,6 +260,23 @@ impl ServiceFactory {
             ctx.tag_repo.clone(),
             ctx.search_repo.clone(),
         )
+    }
+
+    /// Creates the dashboard analytics use case.
+    pub fn dashboard(
+        ctx: &AppContext,
+    ) -> LoadDashboardUseCase<SqliteCourseRepository, SqliteModuleRepository, SqliteVideoRepository>
+    {
+        LoadDashboardUseCase::new(
+            ctx.course_repo.clone(),
+            ctx.module_repo.clone(),
+            ctx.video_repo.clone(),
+        )
+    }
+
+    /// Creates the preferences use case.
+    pub fn preferences(ctx: &AppContext) -> PreferencesUseCase<SqliteUserPreferencesRepository> {
+        PreferencesUseCase::new(ctx.preferences_repo.clone())
     }
 
     /// Creates the summarize video use case.

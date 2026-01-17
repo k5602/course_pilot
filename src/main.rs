@@ -3,7 +3,7 @@
 //! Transforms YouTube playlists into structured study plans.
 
 use course_pilot::ui::App;
-use dioxus_desktop::Config;
+use dioxus_desktop::{Config, WindowBuilder};
 
 fn main() {
     // Install rustls crypto provider (required for TLS)
@@ -24,6 +24,7 @@ fn main() {
     dioxus::LaunchBuilder::new()
         .with_cfg(
             Config::new()
+                .with_window(WindowBuilder::new().with_title("Course Pilot"))
                 .with_navigation_handler(|url| {
                     url.starts_with("http://127.0.0.1:")
                         || url.starts_with("http://localhost:")
