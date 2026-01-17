@@ -21,11 +21,17 @@ fi
 
 echo -e "Detected OS: ${GREEN}$OS${NC}"
 
+if ! sudo -n true 2>/dev/null; then
+    echo "Non-interactive sudo is required to install dependencies."
+    echo "Configure passwordless sudo for this user or run the install commands manually."
+    exit 1
+fi
+
 case $OS in
     ubuntu|debian|pop|mint|kali)
         echo -e "Installing dependencies via ${GREEN}apt${NC}..."
-        sudo apt-get update
-        sudo apt-get install -y \
+        sudo -n apt-get update
+        sudo -n apt-get install -y \
             build-essential \
             pkg-config \
             libssl-dev \
@@ -35,11 +41,14 @@ case $OS in
             libayatana-appindicator3-dev \
             librsvg2-dev \
             libxdo-dev \
+            gstreamer1.0-libav \
+            gstreamer1.0-plugins-base \
+            gstreamer1.0-plugins-good \
             cmake
         ;;
     arch|manjaro|endeavouros)
         echo -e "Installing dependencies via ${GREEN}pacman${NC}..."
-        sudo pacman -S --needed --noconfirm \
+        sudo -n pacman -S --needed --noconfirm \
             base-devel \
             pkgconf \
             openssl \
@@ -49,12 +58,16 @@ case $OS in
             libayatana-appindicator \
             librsvg \
             xdotool \
+            gstreamer \
+            gst-plugins-base \
+            gst-plugins-good \
+            gst-libav \
             cmake
         ;;
     fedora)
         echo -e "Installing dependencies via ${GREEN}dnf${NC}..."
-        sudo dnf groupinstall -y "Development Tools" "C Development Tools and Libraries"
-        sudo dnf install -y \
+        sudo -n dnf groupinstall -y "Development Tools" "C Development Tools and Libraries"
+        sudo -n dnf install -y \
             pkgconf-pkg-config \
             openssl-devel \
             gtk3-devel \
@@ -63,6 +76,9 @@ case $OS in
             libayatana-appindicator-devel \
             librsvg2-devel \
             libxdo-devel \
+            gstreamer1-libav \
+            gstreamer1-plugins-base \
+            gstreamer1-plugins-good \
             cmake
         ;;
     *)

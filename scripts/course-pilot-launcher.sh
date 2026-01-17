@@ -2,7 +2,7 @@
 
 # Course Pilot Launcher Script
 # This script checks for required system dependencies before launching the application.
-# Supported: Debian/Ubuntu-based and Arch-based distributions.
+# Supported: Debian/Ubuntu-based, Fedora, and Arch-based distributions.
 
 set -e
 
@@ -35,6 +35,12 @@ check_dependencies() {
         missing_deps=true
     fi
 
+    # Check for GStreamer (codec support for WebKit video playback)
+    if ! command -v gst-inspect-1.0 >/dev/null 2>&1; then
+        log_warn "GStreamer not found. It is required for video playback."
+        missing_deps=true
+    fi
+
     if [ "$missing_deps" = true ]; then
         log_info "Attempting to identify distribution and suggest install command..."
 
@@ -43,26 +49,64 @@ check_dependencies() {
             case $ID in
                 ubuntu|debian|pop|mint|kali)
                     log_info "Detected Debian-based system."
-                    log_info "Please run: sudo apt update && sudo apt install -y libwebkit2gtk-4.1-dev libgtk-3-dev libsqlite3-dev"
-                    read -p "Would you like to run this command now? (y/N) " confirm
-                    if [[ $confirm == [yY] ]]; then
-                        sudo apt update && sudo apt install -y libwebkit2gtk-4.1-dev libgtk-3-dev libsqlite3-dev
+                    if sudo -n true 2>/dev/null; then
+                        log_info "Installing dependencies non-interactively..."
+                        sudo -n apt update
+                        sudo -n apt install -y \
+                            libwebkit2gtk-4.1-0 \
+                            libgtk-3-0 \
+                            libsqlite3-0 \
+                            libayatana-appindicator3-1 \
+                            librsvg2-2 \
+                            libxdo3 \
+                            gstreamer1.0-libav \
+                            gstreamer1.0-plugins-base \
+                            gstreamer1.0-plugins-good
+                    else
+                        log_err "Non-interactive sudo is not available."
+                        log_info "Run: sudo apt update && sudo apt install -y libwebkit2gtk-4.1-0 libgtk-3-0 libsqlite3-0 libayatana-appindicator3-1 librsvg2-2 libxdo3 gstreamer1.0-libav gstreamer1.0-plugins-base gstreamer1.0-plugins-good"
+                        exit 1
                     fi
                     ;;
                 arch|manjaro|endeavouros)
                     log_info "Detected Arch-based system."
-                    log_info "Please run: sudo pacman -S --needed webkit2gtk-4.1 gtk3 sqlite"
-                    read -p "Would you like to run this command now? (y/N) " confirm
-                    if [[ $confirm == [yY] ]]; then
-                        sudo pacman -S --needed webkit2gtk-4.1 gtk3 sqlite
+                    if sudo -n true 2>/dev/null; then
+                        log_info "Installing dependencies non-interactively..."
+                        sudo -n pacman -S --needed --noconfirm \
+                            webkit2gtk-4.1 \
+                            gtk3 \
+                            sqlite \
+                            libayatana-appindicator \
+                            librsvg \
+                            xdotool \
+                            gstreamer \
+                            gst-plugins-base \
+                            gst-plugins-good \
+                            gst-libav
+                    else
+                        log_err "Non-interactive sudo is not available."
+                        log_info "Run: sudo pacman -S --needed webkit2gtk-4.1 gtk3 sqlite libayatana-appindicator librsvg xdotool gstreamer gst-plugins-base gst-plugins-good gst-libav"
+                        exit 1
                     fi
                     ;;
                 fedora)
                     log_info "Detected Fedora."
-                    log_info "Please run: sudo dnf install webkit2gtk4.1 gtk3-devel sqlite-devel"
-                    read -p "Would you like to run this command now? (y/N) " confirm
-                    if [[ $confirm == [yY] ]]; then
-                        sudo dnf install webkit2gtk4.1 gtk3-devel sqlite-devel
+                    if sudo -n true 2>/dev/null; then
+                        log_info "Installing dependencies non-interactively..."
+                        sudo -n dnf install -y \
+                            webkit2gtk4.1 \
+                            gtk3 \
+                            sqlite \
+                            libayatana-appindicator \
+                            librsvg2 \
+                            libxdo \
+                            gstreamer1-libav \
+                            gstreamer1-plugins-base \
+                            gstreamer1-plugins-good
+                    else
+                        log_err "Non-interactive sudo is not available."
+                        log_info "Run: sudo dnf install -y webkit2gtk4.1 gtk3 sqlite libayatana-appindicator librsvg2 libxdo gstreamer1-libav gstreamer1-plugins-base gstreamer1-plugins-good"
+                        exit 1
                     fi
                     ;;
                 *)

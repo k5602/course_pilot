@@ -14,5 +14,18 @@ icon = ["icons/icon.png"]
 [bundle.linux]
 strip = true
 
+[bundle.linux.deb]
+depends = [
+  "libwebkit2gtk-4.1-0",
+  "libgtk-3-0",
+  "libsqlite3-0",
+  "libayatana-appindicator3-1",
+  "librsvg2-2",
+  "libxdo3",
+  "gstreamer1.0-libav",
+  "gstreamer1.0-plugins-base",
+  "gstreamer1.0-plugins-good"
+]
+
 [web.resources]
 csp = "default-src 'self'; frame-src 'self' https://*.youtube.com https://www.youtube.com"
