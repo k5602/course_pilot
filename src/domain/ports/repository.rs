@@ -37,6 +37,12 @@ pub trait VideoRepository: Send + Sync {
     fn find_by_module(&self, module_id: &ModuleId) -> Result<Vec<Video>, RepositoryError>;
     fn find_by_course(&self, course_id: &CourseId) -> Result<Vec<Video>, RepositoryError>;
     fn update_completion(&self, id: &VideoId, completed: bool) -> Result<(), RepositoryError>;
+    fn update_transcript(
+        &self,
+        id: &VideoId,
+        transcript: Option<&str>,
+    ) -> Result<(), RepositoryError>;
+    fn update_summary(&self, id: &VideoId, summary: Option<&str>) -> Result<(), RepositoryError>;
     fn delete(&self, id: &VideoId) -> Result<(), RepositoryError>;
 }
 

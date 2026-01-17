@@ -34,33 +34,35 @@ pub fn YouTubePlayer(video_id: String) -> Element {
                 }
             }
 
+            if !show_fallback() {
+                button {
+                    class: "absolute bottom-4 right-4 btn btn-ghost btn-sm",
+                    onclick: move |_| show_fallback.set(true),
+                    "Having trouble?"
+                }
+            }
+
             // Fallback overlay with "Watch on YouTube" button
-            div {
-                class: "absolute inset-0 flex flex-col items-center justify-center bg-base-300/90",
-
-                // YouTube logo/icon placeholder
+            if show_fallback() {
                 div {
-                    class: "text-6xl mb-4",
-                    "▶"
-                }
+                    class: "absolute inset-0 flex flex-col items-center justify-center bg-base-300/90",
 
-                p {
-                    class: "text-lg mb-4 text-center px-4",
-                    "Video playback may not work in this app due to browser restrictions."
-                }
+                    // YouTube logo/icon placeholder
+                    div {
+                        class: "text-6xl mb-4",
+                        "▶"
+                    }
 
-                a {
-                    href: "{youtube_url}",
-                    target: "_blank",
-                    class: "btn btn-primary btn-lg gap-2",
-                    "🔗 Watch on YouTube"
-                }
+                    p {
+                        class: "text-lg mb-4 text-center px-4",
+                        "Video playback may not work in this app due to browser restrictions."
+                    }
 
-                if !show_fallback() {
-                    button {
-                        class: "btn btn-ghost btn-sm mt-4",
-                        onclick: move |_| show_fallback.set(true),
-                        "Having trouble? Click here"
+                    a {
+                        href: "{youtube_url}",
+                        target: "_blank",
+                        class: "btn btn-primary btn-lg gap-2",
+                        "🔗 Watch on YouTube"
                     }
                 }
             }

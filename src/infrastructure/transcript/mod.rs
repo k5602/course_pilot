@@ -1,5 +1,6 @@
 //! YouTube transcript fetcher using yt-transcript-rs.
 
+use crate::domain::ports::{TranscriptError as PortTranscriptError, TranscriptProvider};
 use yt_transcript_rs::YouTubeTranscriptApi;
 
 /// Error type for transcript operations.
@@ -36,6 +37,16 @@ impl TranscriptAdapter {
         let text = transcript.text();
 
         if text.is_empty() { Err(TranscriptError::NoCaptions) } else { Ok(text) }
+    }
+}
+
+#[allow(async_fn_in_trait)]
+impl TranscriptProvider for TranscriptAdapter {
+    async fn fetch_transcript(&self, video_id: &str) -> Result<String, PortTranscriptError> {
+        self.fetch_transcript(video_id).await.map_err(|e| match e {
+            TranscriptError::NoCaptions => PortTranscriptError::NotAvailable,
+            TranscriptError::FetchError(msg) => PortTranscriptError::Provider(msg),
+        })
     }
 }
 

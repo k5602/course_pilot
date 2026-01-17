@@ -1,7 +1,8 @@
 //! Right panel with Notes and AI Chat tabs
 
+use crate::application::use_cases::{DeleteNoteInput, LoadNoteInput, SaveNoteInput};
 use crate::domain::value_objects::VideoId;
-use crate::ui::custom::MarkdownRenderer;
+use crate::ui::custom::{MarkdownRenderer, TagBadge};
 use crate::ui::state::{AppState, ChatMessage, ChatRole, RightPanelTab};
 use dioxus::prelude::*;
 use std::str::FromStr;
@@ -62,31 +63,115 @@ fn TabButton(label: &'static str, active: bool, onclick: EventHandler<MouseEvent
 fn NotesEditor() -> Element {
     let state = use_context::<AppState>();
     let video_id = state.current_video_id.read().clone();
-    let mut note_text = use_signal(String::new);
+    let note_text = use_signal(String::new);
+    let course_tags = use_signal(Vec::<crate::domain::entities::Tag>::new);
+    let load_error = use_signal(|| None::<String>);
+    let is_loading = use_signal(|| false);
 
     {
-        let mut note_text = note_text;
-        let video_id = video_id.clone();
         let state = state.clone();
+        let video_id = video_id.clone();
+        let mut note_text = note_text;
+        let mut course_tags = course_tags;
+        let mut load_error = load_error;
+        let mut is_loading = is_loading;
         use_effect(move || {
-            if let Some(ref id) = video_id {
-                let content = state.notes.read().get(id).cloned().unwrap_or_default();
-                note_text.set(content);
-            } else {
-                note_text.set(String::new());
-            }
+            load_error.set(None);
+            course_tags.set(Vec::new());
+            note_text.set(String::new());
+
+            let Some(id) = video_id.clone() else {
+                return;
+            };
+            let vid = match VideoId::from_str(&id) {
+                Ok(v) => v,
+                Err(_) => {
+                    load_error.set(Some("Invalid video ID format".to_string()));
+                    return;
+                },
+            };
+
+            let Some(ctx) = state.backend.clone() else {
+                load_error.set(Some("Backend not available".to_string()));
+                return;
+            };
+
+            is_loading.set(true);
+            let mut note_text = note_text;
+            let mut course_tags = course_tags;
+            let mut load_error = load_error;
+            let mut is_loading = is_loading;
+            spawn(async move {
+                let use_case = crate::application::ServiceFactory::notes(&ctx);
+                match use_case.load_note(LoadNoteInput { video_id: vid }) {
+                    Ok(Some(note_view)) => {
+                        note_text.set(note_view.content);
+                        course_tags.set(note_view.course_tags);
+                    },
+                    Ok(None) => {},
+                    Err(e) => {
+                        load_error.set(Some(format!("Failed to load note: {}", e)));
+                    },
+                }
+                is_loading.set(false);
+            });
         });
     }
 
     let on_note_input = {
-        let mut state = state.clone();
+        let state = state.clone();
         let video_id = video_id.clone();
+        let mut note_text = note_text;
+        let mut load_error = load_error;
+        let mut is_loading = is_loading;
         move |e: Event<FormData>| {
             let text = e.value();
             note_text.set(text.clone());
-            if let Some(id) = video_id.clone() {
-                state.notes.write().insert(id, text);
-            }
+            load_error.set(None);
+
+            let Some(id) = video_id.clone() else {
+                return;
+            };
+            let vid = match VideoId::from_str(&id) {
+                Ok(v) => v,
+                Err(_) => {
+                    load_error.set(Some("Invalid video ID format".to_string()));
+                    return;
+                },
+            };
+
+            let Some(ctx) = state.backend.clone() else {
+                load_error.set(Some("Backend not available".to_string()));
+                return;
+            };
+
+            is_loading.set(true);
+            let mut course_tags = course_tags;
+            let mut load_error = load_error;
+            let mut is_loading = is_loading;
+            spawn(async move {
+                let use_case = crate::application::ServiceFactory::notes(&ctx);
+
+                if text.trim().is_empty() {
+                    if let Err(e) = use_case.delete_note(DeleteNoteInput { video_id: vid }) {
+                        load_error.set(Some(format!("Failed to delete note: {}", e)));
+                    } else {
+                        course_tags.set(Vec::new());
+                    }
+                    is_loading.set(false);
+                    return;
+                }
+
+                match use_case.save_note(SaveNoteInput { video_id: vid, content: text }) {
+                    Ok(note_view) => {
+                        course_tags.set(note_view.course_tags);
+                    },
+                    Err(e) => {
+                        load_error.set(Some(format!("Failed to save note: {}", e)));
+                    },
+                }
+                is_loading.set(false);
+            });
         }
     };
 
@@ -95,6 +180,23 @@ fn NotesEditor() -> Element {
             class: "h-full flex flex-col",
 
             if video_id.is_some() {
+                div { class: "flex items-center justify-between gap-2 mb-2",
+                    if !course_tags.read().is_empty() {
+                        div { class: "flex flex-wrap gap-2",
+                            for tag in course_tags.read().iter() {
+                                TagBadge { tag: tag.clone() }
+                            }
+                        }
+                    }
+                    if *is_loading.read() {
+                        span { class: "text-xs text-base-content/60", "Loading..." }
+                    }
+                }
+
+                if let Some(ref err) = *load_error.read() {
+                    div { class: "text-error text-xs mb-2", "{err}" }
+                }
+
                 textarea {
                     class: "textarea textarea-bordered resize-none",
                     placeholder: "Take notes on this video...",

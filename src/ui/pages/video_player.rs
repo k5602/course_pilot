@@ -151,8 +151,7 @@ pub fn VideoPlayer(course_id: String, video_id: String) -> Element {
 
             // AI Summary Section
             SummarySection {
-                youtube_id: v.youtube_id().as_str().to_string(),
-                video_title: v.title().to_string(),
+                video_id: v.id().as_uuid().to_string(),
             }
 
             // Navigation Footer
@@ -230,52 +229,41 @@ enum SummaryState {
     Error(String),
 }
 
-/// AI Summary section with transcript fetching and summarization
+/// AI Summary section with cached transcript + summary persistence
 #[component]
-fn SummarySection(youtube_id: String, video_title: String) -> Element {
+fn SummarySection(video_id: String) -> Element {
     let state = use_context::<AppState>();
     let mut summary_state = use_signal(|| SummaryState::Empty);
     let mut expanded = use_signal(|| false);
 
     let backend = state.backend.clone();
-    let youtube_id_clone = youtube_id.clone();
-    let video_title_clone = video_title.clone();
+    let video_id_clone = video_id.clone();
 
     let generate_summary = move |_| {
         let backend = backend.clone();
-        let youtube_id = youtube_id_clone.clone();
-        let video_title = video_title_clone.clone();
+        let video_id = video_id_clone.clone();
 
         spawn(async move {
-            summary_state.set(SummaryState::Loading("Fetching transcript...".to_string()));
+            summary_state.set(SummaryState::Loading("Generating summary...".to_string()));
 
-            // Step 1: Fetch transcript
-            let transcript_adapter =
-                match crate::infrastructure::transcript::TranscriptAdapter::new() {
-                    Ok(adapter) => adapter,
-                    Err(e) => {
-                        summary_state.set(SummaryState::Error(format!("Failed to init: {}", e)));
-                        return;
-                    },
-                };
-
-            let transcript = match transcript_adapter.fetch_transcript(&youtube_id).await {
-                Ok(t) => t,
-                Err(e) => {
-                    summary_state.set(SummaryState::Error(format!("No transcript: {}", e)));
+            let video_id_vo = match VideoId::from_str(&video_id) {
+                Ok(id) => id,
+                Err(_) => {
+                    summary_state.set(SummaryState::Error("Invalid Video ID".to_string()));
                     return;
                 },
             };
 
-            summary_state.set(SummaryState::Loading("Generating summary...".to_string()));
-
-            // Step 2: Generate summary with LLM
             if let Some(ref ctx) = backend {
-                if let Some(ref llm) = ctx.llm {
-                    use crate::domain::ports::SummarizerAI;
-                    match llm.summarize_transcript(&transcript, &video_title).await {
-                        Ok(summary) => {
-                            summary_state.set(SummaryState::Ready(summary));
+                if let Some(use_case) = crate::application::ServiceFactory::summarize_video(ctx) {
+                    let input = crate::application::use_cases::SummarizeVideoInput {
+                        video_id: video_id_vo,
+                        force_refresh: false,
+                    };
+
+                    match use_case.execute(input).await {
+                        Ok(result) => {
+                            summary_state.set(SummaryState::Ready(result.summary));
                         },
                         Err(e) => {
                             summary_state

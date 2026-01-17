@@ -5,7 +5,8 @@
 use std::sync::Arc;
 
 use crate::application::use_cases::{
-    AskCompanionUseCase, IngestPlaylistUseCase, PlanSessionUseCase, TakeExamUseCase,
+    AskCompanionUseCase, IngestPlaylistUseCase, NotesUseCase, PlanSessionUseCase,
+    SummarizeVideoUseCase, TakeExamUseCase,
 };
 use crate::domain::ports::SecretStore;
 use crate::infrastructure::{
@@ -15,6 +16,7 @@ use crate::infrastructure::{
         DbPool, SqliteCourseRepository, SqliteExamRepository, SqliteModuleRepository,
         SqliteNoteRepository, SqliteSearchRepository, SqliteTagRepository, SqliteVideoRepository,
     },
+    transcript::TranscriptAdapter,
     youtube::RustyYtdlAdapter,
 };
 
@@ -90,6 +92,7 @@ pub struct AppContext {
 
     // Infrastructure adapters
     pub youtube: Arc<RustyYtdlAdapter>, // Always available (no API key needed)
+    pub transcript: Arc<TranscriptAdapter>,
     pub llm: Option<Arc<GeminiAdapter>>,
     pub keystore: Arc<NativeKeystore>,
 
@@ -120,6 +123,12 @@ impl AppContext {
         // YouTube adapter (always available - no API key needed)
         let youtube = Arc::new(RustyYtdlAdapter::new());
 
+        // Transcript adapter (for summaries)
+        let transcript = Arc::new(
+            crate::infrastructure::transcript::TranscriptAdapter::new()
+                .map_err(|e| AppContextError::Transcript(e.to_string()))?,
+        );
+
         // Get Gemini API key from config or keystore
         let gemini_api_key = config
             .gemini_api_key
@@ -139,6 +148,7 @@ impl AppContext {
             tag_repo,
             search_repo,
             youtube,
+            transcript,
             llm,
             keystore,
             db_pool,
@@ -200,6 +210,8 @@ pub enum AppContextError {
     Database(String),
     #[error("Keystore error: {0}")]
     Keystore(String),
+    #[error("Transcript error: {0}")]
+    Transcript(String),
 }
 
 /// Service factory for creating use cases with injected dependencies.
@@ -248,6 +260,37 @@ impl ServiceFactory {
             ctx.module_repo.clone(),
             ctx.course_repo.clone(),
         ))
+    }
+
+    /// Creates the notes use case.
+    pub fn notes(
+        ctx: &AppContext,
+    ) -> NotesUseCase<
+        SqliteNoteRepository,
+        SqliteVideoRepository,
+        SqliteModuleRepository,
+        SqliteCourseRepository,
+        SqliteTagRepository,
+        SqliteSearchRepository,
+    > {
+        NotesUseCase::new(
+            ctx.note_repo.clone(),
+            ctx.video_repo.clone(),
+            ctx.module_repo.clone(),
+            ctx.course_repo.clone(),
+            ctx.tag_repo.clone(),
+            ctx.search_repo.clone(),
+        )
+    }
+
+    /// Creates the summarize video use case.
+    pub fn summarize_video(
+        ctx: &AppContext,
+    ) -> Option<SummarizeVideoUseCase<GeminiAdapter, TranscriptAdapter, SqliteVideoRepository>>
+    {
+        let llm = ctx.llm.as_ref()?.clone();
+
+        Some(SummarizeVideoUseCase::new(llm, ctx.transcript.clone(), ctx.video_repo.clone()))
     }
 
     /// Creates the exam use case.

@@ -4,6 +4,7 @@
 mod keystore;
 mod llm;
 mod repository;
+mod transcript;
 mod youtube;
 
 pub use keystore::{KeystoreError, SecretStore};
@@ -12,4 +13,5 @@ pub use repository::{
     CourseRepository, ExamRepository, ModuleRepository, NoteRepository, RepositoryError,
     SearchRepository, TagRepository, VideoRepository,
 };
+pub use transcript::{TranscriptError, TranscriptProvider};
 pub use youtube::{FetchError, PlaylistFetcher, RawVideoMetadata};

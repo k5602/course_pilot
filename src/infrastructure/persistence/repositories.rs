@@ -225,8 +225,8 @@ impl VideoRepository for SqliteVideoRepository {
             is_completed: video.is_completed(),
             sort_order: video.sort_order() as i32,
             description: video.description(),
-            transcript: None,
-            summary: None,
+            transcript: video.transcript(),
+            summary: video.summary(),
         };
 
         diesel::insert_into(videos::table)
@@ -290,6 +290,32 @@ impl VideoRepository for SqliteVideoRepository {
         Ok(())
     }
 
+    fn update_transcript(
+        &self,
+        id: &VideoId,
+        transcript: Option<&str>,
+    ) -> Result<(), RepositoryError> {
+        let mut conn = self.pool.get().map_err(|e| RepositoryError::Database(e.to_string()))?;
+
+        diesel::update(videos::table.find(id.as_uuid().to_string()))
+            .set(videos::transcript.eq(transcript))
+            .execute(&mut conn)
+            .map_err(|e| RepositoryError::Database(e.to_string()))?;
+
+        Ok(())
+    }
+
+    fn update_summary(&self, id: &VideoId, summary: Option<&str>) -> Result<(), RepositoryError> {
+        let mut conn = self.pool.get().map_err(|e| RepositoryError::Database(e.to_string()))?;
+
+        diesel::update(videos::table.find(id.as_uuid().to_string()))
+            .set(videos::summary.eq(summary))
+            .execute(&mut conn)
+            .map_err(|e| RepositoryError::Database(e.to_string()))?;
+
+        Ok(())
+    }
+
     fn delete(&self, id: &VideoId) -> Result<(), RepositoryError> {
         let mut conn = self.pool.get().map_err(|e| RepositoryError::Database(e.to_string()))?;
 
@@ -321,6 +347,8 @@ fn row_to_video(row: VideoRow) -> Result<Video, RepositoryError> {
         row.duration_secs as u32,
         row.sort_order as u32,
     );
+    video.update_transcript(row.transcript);
+    video.update_summary(row.summary);
     if row.is_completed {
         video.mark_completed();
     }
