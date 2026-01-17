@@ -8,6 +8,7 @@ edition = "2024"
 
 # Core UI framework
 dioxus = { version = "0.7", features = ["desktop", "router"] }
+dioxus-desktop = "0.7.3"
 
 # UI Components & Styling
 dioxus-free-icons = { version = "0.10", features = [
@@ -35,6 +36,7 @@ futures-util = "0.3"
 
 # Data Handling & Serialization
 diesel = { version = "2.3", features = ["sqlite", "r2d2"] }
+diesel_migrations = "2.3"
 libsqlite3-sys = { version = "0.35", features = ["bundled"] }
 uuid = { version = "1", features = ["v4", "serde"] }
 chrono = { version = "0.4", features = ["serde"] }
@@ -79,3 +81,7 @@ opt-level = "z"   # Optimize for size
 lto = true        # Enable Link Time Optimization
 codegen-units = 1 # Allow for maximum cross-module optimization
 panic = "abort"   # Remove unwinding code for smaller binaries
+
+[patch.crates-io]
+dioxus = { git = "https://github.com/k5602/dioxus", branch = "navigation_policy_hook", package = "dioxus" }
+dioxus-desktop = { git = "https://github.com/k5602/dioxus", branch = "navigation_policy_hook", package = "dioxus-desktop" }

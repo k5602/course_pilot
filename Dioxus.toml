@@ -8,6 +8,8 @@ enable_hotreload = true
 [bundle]
 identifier = "com.k5602.course_pilot"
 name = "Course Pilot"
-
+publisher = "Archer"
 [bundle.linux]
 strip = true
+[web.resources]
+csp = "default-src 'self'; frame-src 'self' https://*.youtube.com https://www.youtube.com"

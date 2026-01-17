@@ -44,6 +44,7 @@ pub struct AppState {
     pub chat_history: Signal<Vec<ChatMessage>>,
     pub notes: Signal<HashMap<String, String>>,
     pub current_video_id: Signal<Option<String>>,
+    pub youtube_embed_relay_url: Signal<Option<String>>,
 
     // Cached data from backend
     pub courses: Signal<Vec<Course>>,
@@ -62,6 +63,7 @@ impl AppState {
             chat_history: Signal::new(Vec::new()),
             notes: Signal::new(HashMap::new()),
             current_video_id: Signal::new(None),
+            youtube_embed_relay_url: Signal::new(None),
             courses: Signal::new(Vec::new()),
             current_course: Signal::new(None),
             current_modules: Signal::new(Vec::new()),

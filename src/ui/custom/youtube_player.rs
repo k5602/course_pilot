@@ -2,22 +2,28 @@
 
 use dioxus::prelude::*;
 
+use crate::ui::state::AppState;
+
 /// YouTube IFrame player with fallback for webkit2gtk.
 /// webkit2gtk has issues with referrer headers causing Error 153.
 /// We provide both an embed attempt and a fallback "Watch on YouTube" button.
 #[component]
 pub fn YouTubePlayer(video_id: String) -> Element {
     let mut show_fallback = use_signal(|| false);
+    let state = use_context::<AppState>();
     let video_id_clone = video_id.clone();
 
     // Direct YouTube watch URL for fallback
     let youtube_url = format!("https://www.youtube.com/watch?v={}", video_id);
 
     // Embed URL with all recommended parameters
-    let embed_url = format!(
-        "https://www.youtube-nocookie.com/embed/{}?rel=0&modestbranding=1&playsinline=1",
-        video_id_clone
-    );
+    let embed_url = match state.youtube_embed_relay_url.read().as_ref() {
+        Some(base_url) => format!("{}/embed?v={}", base_url, video_id_clone),
+        None => format!(
+            "https://www.youtube-nocookie.com/embed/{}?rel=0&modestbranding=1&playsinline=1",
+            video_id_clone
+        ),
+    };
 
     rsx! {
         div {

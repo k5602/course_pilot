@@ -5,6 +5,7 @@ use std::sync::Arc;
 use dioxus::prelude::*;
 
 use crate::application::{AppConfig, AppContext};
+use crate::infrastructure::embed_relay::EmbedRelayServer;
 use crate::ui::Route;
 use crate::ui::state::AppState;
 
@@ -17,14 +18,41 @@ pub fn App() -> Element {
         let config = AppConfig::from_env();
 
         // Try to create backend context
-        match AppContext::new(config) {
+        let state = match AppContext::new(config) {
             Ok(ctx) => AppState::with_backend(Arc::new(ctx)),
             Err(e) => {
                 log::error!("Failed to initialize backend: {}", e);
                 AppState::new()
             },
-        }
+        };
+
+        state
     });
+
+    let relay = use_signal(|| None::<EmbedRelayServer>);
+
+    {
+        let mut app_state = app_state.clone();
+        let mut relay = relay;
+        use_effect(move || {
+            if relay.read().is_some() {
+                return;
+            }
+
+            match EmbedRelayServer::start() {
+                Ok(server) => {
+                    app_state
+                        .write()
+                        .youtube_embed_relay_url
+                        .set(Some(server.base_url().to_string()));
+                    relay.set(Some(server));
+                },
+                Err(e) => {
+                    log::error!("Failed to start embed relay: {}", e);
+                },
+            }
+        });
+    }
 
     // Provide global state
     use_context_provider(move || app_state.read().clone());
