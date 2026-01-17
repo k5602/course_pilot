@@ -1,9 +1,9 @@
 //! Right panel with Notes and AI Chat tabs
 
-use dioxus::prelude::*;
-
 use crate::domain::value_objects::VideoId;
+use crate::ui::custom::MarkdownRenderer;
 use crate::ui::state::{AppState, ChatMessage, ChatRole, RightPanelTab};
+use dioxus::prelude::*;
 use std::str::FromStr;
 
 /// Right side panel with Notes and AI Chat tabs.
@@ -62,6 +62,33 @@ fn TabButton(label: &'static str, active: bool, onclick: EventHandler<MouseEvent
 fn NotesEditor() -> Element {
     let state = use_context::<AppState>();
     let video_id = state.current_video_id.read().clone();
+    let mut note_text = use_signal(String::new);
+
+    {
+        let mut note_text = note_text;
+        let video_id = video_id.clone();
+        let state = state.clone();
+        use_effect(move || {
+            if let Some(ref id) = video_id {
+                let content = state.notes.read().get(id).cloned().unwrap_or_default();
+                note_text.set(content);
+            } else {
+                note_text.set(String::new());
+            }
+        });
+    }
+
+    let on_note_input = {
+        let mut state = state.clone();
+        let video_id = video_id.clone();
+        move |e: Event<FormData>| {
+            let text = e.value();
+            note_text.set(text.clone());
+            if let Some(id) = video_id.clone() {
+                state.notes.write().insert(id, text);
+            }
+        }
+    };
 
     rsx! {
         div {
@@ -69,8 +96,20 @@ fn NotesEditor() -> Element {
 
             if video_id.is_some() {
                 textarea {
-                    class: "textarea textarea-bordered flex-1 resize-none",
+                    class: "textarea textarea-bordered resize-none",
                     placeholder: "Take notes on this video...",
+                    value: "{note_text.read()}",
+                    oninput: on_note_input,
+                }
+
+                div {
+                    class: "mt-3 flex-1 overflow-auto rounded-lg bg-base-100 p-3 prose prose-sm max-w-none",
+
+                    if note_text.read().trim().is_empty() {
+                        p { class: "text-base-content/50", "Markdown preview will appear here" }
+                    } else {
+                        MarkdownRenderer { src: note_text.read().clone() }
+                    }
                 }
             } else {
                 div {
@@ -244,8 +283,8 @@ fn ChatBubble(message: ChatMessage) -> Element {
         div {
             class: "flex {align}",
             div {
-                class: "max-w-[80%] px-4 py-2 rounded-lg {bg}",
-                "{message.content}"
+                class: "max-w-[80%] px-4 py-2 rounded-lg {bg} prose prose-sm max-w-none",
+                MarkdownRenderer { src: message.content }
             }
         }
     }

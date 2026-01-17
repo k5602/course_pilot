@@ -7,6 +7,7 @@ use crate::domain::ports::VideoRepository;
 use crate::domain::value_objects::{CourseId, VideoId};
 use crate::ui::Route;
 use crate::ui::actions::start_exam;
+use crate::ui::custom::MarkdownRenderer;
 use crate::ui::custom::YouTubePlayer;
 use crate::ui::hooks::{use_load_modules, use_load_video, use_load_videos_by_course};
 use crate::ui::state::AppState;
@@ -358,16 +359,7 @@ fn SummarySection(youtube_id: String, video_title: String) -> Element {
                         SummaryState::Ready(summary) => rsx! {
                             div {
                                 class: "prose prose-sm max-w-none",
-                                // Render summary as formatted text
-                                for line in summary.lines() {
-                                    if line.starts_with("# ") || line.starts_with("## ") {
-                                        h3 { class: "font-bold text-lg mt-4 mb-2", "{line.trim_start_matches('#').trim()}" }
-                                    } else if line.starts_with("- ") || line.starts_with("* ") {
-                                        li { class: "ml-4", "{line.trim_start_matches('-').trim_start_matches('*').trim()}" }
-                                    } else if !line.trim().is_empty() {
-                                        p { class: "mb-2", "{line}" }
-                                    }
-                                }
+                                MarkdownRenderer { src: summary.clone() }
                             }
                         },
                         SummaryState::Error(err) => rsx! {

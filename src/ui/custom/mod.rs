@@ -3,6 +3,7 @@
 pub mod course_card;
 pub mod import_dialog;
 pub mod loading;
+pub mod markdown;
 pub mod right_panel;
 pub mod sidebar;
 pub mod tag_badge;
@@ -14,6 +15,7 @@ pub use import_dialog::ImportPlaylistDialog;
 pub use loading::{
     CardSkeleton, ErrorAlert, InlineSpinner, PageSkeleton, Spinner, SuccessAlert, VideoItemSkeleton,
 };
+pub use markdown::MarkdownRenderer;
 pub use right_panel::RightPanel;
 pub use sidebar::Sidebar;
 pub use tag_badge::{TagBadge, TagFilterChip, TagInput};
