@@ -8,7 +8,7 @@ set -e
 
 APP_NAME="course_pilot"
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-BIN_PATH="$SCRIPT_DIR/$APP_NAME"
+BIN_PATH="$SCRIPT_DIR/bin/$APP_NAME"
 
 # Colors for output
 RED='\033[0;31m'
@@ -127,11 +127,15 @@ check_dependencies
 
 # 2. Check if binary exists
 if [ ! -f "$BIN_PATH" ]; then
-    # Fallback to looking in the current directory if script is moved
-    BIN_PATH="./$APP_NAME"
+    # Fallback to legacy layout (binary alongside script)
+    BIN_PATH="$SCRIPT_DIR/$APP_NAME"
     if [ ! -f "$BIN_PATH" ]; then
-        log_err "Binary '$APP_NAME' not found in $SCRIPT_DIR or current directory."
-        exit 1
+        # Fallback to looking in the current directory if script is moved
+        BIN_PATH="./$APP_NAME"
+        if [ ! -f "$BIN_PATH" ]; then
+            log_err "Binary '$APP_NAME' not found in $SCRIPT_DIR/bin, $SCRIPT_DIR, or current directory."
+            exit 1
+        fi
     fi
 fi
 

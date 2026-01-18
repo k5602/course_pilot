@@ -127,16 +127,19 @@ jobs:
         run: |
           mkdir -p release-artifacts
 
-          # 1. Prepare Binary (Search for the most likely release binary)
+          # 1. Prepare Binary (Linux bundle layout)
           BINARY_FILE=$(find target -name "${APP_NAME}" -type f -executable | grep -v "deps/" | grep "release" | head -1)
           if [ -z "$BINARY_FILE" ]; then
             echo "Error: Binary not found"
             exit 1
           fi
-          cp "$BINARY_FILE" ./release-artifacts/
+          mkdir -p ./release-artifacts/bin
+          mkdir -p ./release-artifacts/lib/${APP_NAME}
+          cp "$BINARY_FILE" ./release-artifacts/bin/${APP_NAME}
+          ln -s "./bin/${APP_NAME}" "./release-artifacts/${APP_NAME}"
 
-          # 2. Add Assets
-          cp -r ./assets ./release-artifacts/
+          # 2. Add Assets (Linux expects ../lib/{product}/assets)
+          cp -r ./assets "./release-artifacts/lib/${APP_NAME}/assets"
 
           # 3. Add Launcher Script
           if [ -f "./scripts/course-pilot-launcher.sh" ]; then
@@ -144,8 +147,8 @@ jobs:
             chmod +x ./release-artifacts/course-pilot-launcher
           fi
 
-          chmod +x "./release-artifacts/${APP_NAME}"
-          strip "./release-artifacts/${APP_NAME}" || true
+          chmod +x "./release-artifacts/bin/${APP_NAME}"
+          strip "./release-artifacts/bin/${APP_NAME}" || true
 
           # 4. Create Tarball
           tar -czf "${{ matrix.artifact }}" -C release-artifacts .
