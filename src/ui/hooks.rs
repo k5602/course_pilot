@@ -121,11 +121,23 @@ pub fn use_load_modules_state(
 ) -> (Signal<Vec<Module>>, LoadState) {
     let mut modules = use_signal(Vec::new);
     let course_id = course_id.clone();
+    let mut course_id_signal = use_signal(|| course_id.clone());
+    if *course_id_signal.read() != course_id {
+        course_id_signal.set(course_id.clone());
+    }
     let load_state = use_load_state();
     let mut is_loading = load_state.is_loading;
     let mut error = load_state.error;
+    let mut last_course_id = use_signal(|| course_id.clone());
+    if *last_course_id.read() != course_id {
+        last_course_id.set(course_id.clone());
+        modules.set(Vec::new());
+        error.set(None);
+        is_loading.set(true);
+    }
 
     use_effect(move || {
+        let course_id = course_id_signal.read().clone();
         is_loading.set(true);
         error.set(None);
 
@@ -239,11 +251,23 @@ pub fn use_load_video_state(
 ) -> (Signal<Option<Video>>, LoadState) {
     let mut video = use_signal(|| None);
     let video_id = video_id.clone();
+    let mut video_id_signal = use_signal(|| video_id.clone());
+    if *video_id_signal.read() != video_id {
+        video_id_signal.set(video_id.clone());
+    }
     let load_state = use_load_state();
     let mut is_loading = load_state.is_loading;
     let mut error = load_state.error;
+    let mut last_video_id = use_signal(|| video_id.clone());
+    if *last_video_id.read() != video_id {
+        last_video_id.set(video_id.clone());
+        video.set(None);
+        error.set(None);
+        is_loading.set(true);
+    }
 
     use_effect(move || {
+        let video_id = video_id_signal.read().clone();
         is_loading.set(true);
         error.set(None);
 
@@ -394,11 +418,23 @@ pub fn use_load_videos_by_course_state(
 ) -> (Signal<Vec<Video>>, LoadState) {
     let mut videos = use_signal(Vec::new);
     let course_id = course_id.clone();
+    let mut course_id_signal = use_signal(|| course_id.clone());
+    if *course_id_signal.read() != course_id {
+        course_id_signal.set(course_id.clone());
+    }
     let load_state = use_load_state();
     let mut is_loading = load_state.is_loading;
     let mut error = load_state.error;
+    let mut last_course_id = use_signal(|| course_id.clone());
+    if *last_course_id.read() != course_id {
+        last_course_id.set(course_id.clone());
+        videos.set(Vec::new());
+        error.set(None);
+        is_loading.set(true);
+    }
 
     use_effect(move || {
+        let course_id = course_id_signal.read().clone();
         is_loading.set(true);
         error.set(None);
 
