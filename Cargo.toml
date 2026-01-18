@@ -3,7 +3,7 @@
 name = "course_pilot"
 description = "Transform YouTube playlists into structured, intelligent study plans"
 authors = ["k5602"]
-version = "0.1.0"
+version = "0.1.1"
 edition = "2024"
 readme = "README.md"
 build = "build.rs"
@@ -64,7 +64,9 @@ rfd = "0.17"
 reqwest = { version = "0.13.1", features = ["json"] }
 
 # YouTube (API-free playlist fetching)
-rusty_ytdl = { git = "https://github.com/k5602/rusty_ytdl", branch = "qol", features = ["search"] }
+rusty_ytdl = { git = "https://github.com/k5602/rusty_ytdl", branch = "qol", features = [
+    "search",
+] }
 
 # LLM (Gemini)
 genai-rs = "0.6"
