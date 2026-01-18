@@ -1,11 +1,13 @@
 //! UI Actions - Async handlers for UI events
 
+use std::fs;
 use std::sync::Arc;
 
+use crate::application::use_cases::ExportCourseNotesInput;
 use crate::application::use_cases::GenerateExamInput;
 use crate::application::use_cases::IngestPlaylistInput;
 use crate::application::{AppContext, ServiceFactory};
-use crate::domain::ports::ExamRepository;
+use crate::domain::ports::{CourseRepository, ExamRepository};
 use crate::domain::value_objects::{CourseId, ExamId, VideoId};
 
 /// Result of playlist import action.
@@ -110,4 +112,61 @@ pub async fn ask_companion(
         Ok(response) => Ok(response),
         Err(e) => Err(e.to_string()),
     }
+}
+
+/// Export notes for a course as Markdown and save using a file dialog.
+pub async fn export_course_notes_with_dialog(
+    backend: Option<Arc<AppContext>>,
+    course_id: CourseId,
+) -> Result<String, String> {
+    let ctx = match backend {
+        Some(ctx) => ctx,
+        None => return Err("Backend not initialized".to_string()),
+    };
+
+    let use_case = ServiceFactory::export_course_notes(&ctx);
+    let markdown = use_case
+        .execute(ExportCourseNotesInput { course_id: course_id.clone() })
+        .map_err(|e| e.to_string())?;
+
+    let filename = default_course_filename(&ctx, &course_id);
+
+    let Some(path) =
+        rfd::FileDialog::new().add_filter("Markdown", &["md"]).set_file_name(&filename).save_file()
+    else {
+        return Err("Save cancelled".to_string());
+    };
+
+    fs::write(&path, markdown).map_err(|e| format!("Failed to save notes: {e}"))?;
+    Ok(path.display().to_string())
+}
+
+fn default_course_filename(ctx: &AppContext, course_id: &CourseId) -> String {
+    let base = ctx
+        .course_repo
+        .find_by_id(course_id)
+        .ok()
+        .flatten()
+        .map(|course| course.name().to_string())
+        .unwrap_or_else(|| "course-notes".to_string());
+
+    let sanitized = sanitize_filename(&base);
+
+    format!("{sanitized}.md")
+}
+
+fn sanitize_filename(input: &str) -> String {
+    let mut cleaned = String::new();
+    for ch in input.chars() {
+        if ch.is_ascii_alphanumeric() || ch == '-' || ch == '_' || ch == ' ' {
+            cleaned.push(ch);
+        }
+    }
+
+    let trimmed = cleaned.trim();
+    if trimmed.is_empty() {
+        return "course-notes".to_string();
+    }
+
+    trimmed.replace(' ', "_").to_lowercase()
 }

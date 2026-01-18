@@ -5,8 +5,8 @@
 use std::sync::Arc;
 
 use crate::application::use_cases::{
-    AskCompanionUseCase, IngestPlaylistUseCase, LoadDashboardUseCase, NotesUseCase,
-    PlanSessionUseCase, PreferencesUseCase, SummarizeVideoUseCase, TakeExamUseCase,
+    AskCompanionUseCase, ExportCourseNotesUseCase, IngestPlaylistUseCase, LoadDashboardUseCase,
+    NotesUseCase, PlanSessionUseCase, PreferencesUseCase, SummarizeVideoUseCase, TakeExamUseCase,
     UpdateCourseUseCase,
 };
 use crate::domain::ports::SecretStore;
@@ -264,6 +264,25 @@ impl ServiceFactory {
             ctx.course_repo.clone(),
             ctx.tag_repo.clone(),
             ctx.search_repo.clone(),
+        )
+    }
+
+    /// Creates the export notes use case.
+    pub fn export_course_notes(
+        ctx: &AppContext,
+    ) -> ExportCourseNotesUseCase<
+        SqliteCourseRepository,
+        SqliteModuleRepository,
+        SqliteVideoRepository,
+        SqliteNoteRepository,
+        SqliteTagRepository,
+    > {
+        ExportCourseNotesUseCase::new(
+            ctx.course_repo.clone(),
+            ctx.module_repo.clone(),
+            ctx.video_repo.clone(),
+            ctx.note_repo.clone(),
+            ctx.tag_repo.clone(),
         )
     }
 

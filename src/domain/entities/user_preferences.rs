@@ -7,6 +7,7 @@ pub struct UserPreferences {
     ml_boundary_enabled: bool,
     cognitive_limit_minutes: u32,
     right_panel_visible: bool,
+    onboarding_completed: bool,
 }
 
 impl UserPreferences {
@@ -16,8 +17,15 @@ impl UserPreferences {
         ml_boundary_enabled: bool,
         cognitive_limit_minutes: u32,
         right_panel_visible: bool,
+        onboarding_completed: bool,
     ) -> Self {
-        Self { id, ml_boundary_enabled, cognitive_limit_minutes, right_panel_visible }
+        Self {
+            id,
+            ml_boundary_enabled,
+            cognitive_limit_minutes,
+            right_panel_visible,
+            onboarding_completed,
+        }
     }
 
     /// Creates default preferences for the given user id.
@@ -27,6 +35,7 @@ impl UserPreferences {
             ml_boundary_enabled: false,
             cognitive_limit_minutes: 45,
             right_panel_visible: true,
+            onboarding_completed: false,
         }
     }
 
@@ -46,6 +55,10 @@ impl UserPreferences {
         self.right_panel_visible
     }
 
+    pub fn onboarding_completed(&self) -> bool {
+        self.onboarding_completed
+    }
+
     pub fn set_ml_boundary_enabled(&mut self, enabled: bool) {
         self.ml_boundary_enabled = enabled;
     }
@@ -56,5 +69,9 @@ impl UserPreferences {
 
     pub fn set_right_panel_visible(&mut self, visible: bool) {
         self.right_panel_visible = visible;
+    }
+
+    pub fn set_onboarding_completed(&mut self, completed: bool) {
+        self.onboarding_completed = completed;
     }
 }

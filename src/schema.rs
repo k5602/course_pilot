@@ -115,6 +115,7 @@ diesel::table! {
         ml_boundary_enabled -> Integer,
         cognitive_limit_minutes -> Integer,
         right_panel_visible -> Integer,
+        onboarding_completed -> Integer,
     }
 }
 

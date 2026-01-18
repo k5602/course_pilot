@@ -39,7 +39,8 @@ fn render_markdown_to_html(src: &str) -> String {
 #[component]
 pub fn MarkdownRenderer(props: MarkdownRendererProps) -> Element {
     let html = render_markdown_to_html(&props.src);
-    let class = props.class.clone().unwrap_or_else(|| "prose prose-sm max-w-none".to_string());
+    let class =
+        props.class.clone().unwrap_or_else(|| "prose prose-base leading-7 max-w-none".to_string());
 
     rsx! {
         div {

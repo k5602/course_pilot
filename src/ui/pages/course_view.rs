@@ -12,6 +12,7 @@ use crate::domain::entities::{Module, Tag, Video};
 use crate::domain::ports::{CourseRepository, TagRepository, VideoRepository};
 use crate::domain::value_objects::{CourseId, ModuleId, SessionPlan, TagId};
 use crate::ui::Route;
+use crate::ui::actions::export_course_notes_with_dialog;
 use crate::ui::custom::{ErrorAlert, PageSkeleton, TagBadge, TagInput, VideoItem};
 use crate::ui::hooks::{
     use_load_course_state, use_load_course_tags, use_load_modules_state, use_load_state,
@@ -80,6 +81,8 @@ pub fn CourseView(course_id: String) -> Element {
     let mut show_delete_modal = use_signal(|| false);
     let mut show_session_modal = use_signal(|| false);
     let mut is_deleting = use_signal(|| false);
+    let is_exporting = use_signal(|| false);
+    let export_status = use_signal(|| None::<(bool, String)>);
     let mut session_plans = use_signal(Vec::<SessionPlan>::new);
     let active_plan_day = use_signal(|| None::<u32>);
     let mut cognitive_limit = use_signal(|| 45u32);
@@ -154,6 +157,37 @@ pub fn CourseView(course_id: String) -> Element {
                     Err(e) => log::error!("Failed to plan sessions: {}", e),
                 }
             }
+        }
+    };
+
+    // Export notes handler
+    let backend_for_export = state.backend.clone();
+    let course_id_for_export = course_id_parsed.clone();
+    let mut export_status_for_export = export_status;
+    let is_exporting_for_export = is_exporting;
+    let on_export_notes = move |_| {
+        if let Ok(ref cid) = course_id_for_export {
+            let backend = backend_for_export.clone();
+            let course_id = cid.clone();
+            let mut export_status_for_export = export_status_for_export;
+            let mut is_exporting_for_export = is_exporting_for_export;
+            spawn(async move {
+                is_exporting_for_export.set(true);
+                match export_course_notes_with_dialog(backend, course_id).await {
+                    Ok(path) => {
+                        export_status_for_export
+                            .set(Some((true, format!("Notes exported to {}", path))));
+                    },
+                    Err(e) => {
+                        if e != "Save cancelled" {
+                            export_status_for_export.set(Some((false, e)));
+                        }
+                    },
+                }
+                is_exporting_for_export.set(false);
+            });
+        } else {
+            export_status_for_export.set(Some((false, "Invalid course ID".to_string())));
         }
     };
 
@@ -289,6 +323,13 @@ pub fn CourseView(course_id: String) -> Element {
                 ErrorAlert { message: err.clone(), on_dismiss: None }
             }
 
+            if let Some((is_success, ref msg)) = *export_status.read() {
+                div {
+                    class: if is_success { "alert alert-success mb-4" } else { "alert alert-error mb-4" },
+                    "{msg}"
+                }
+            }
+
             // Back button and actions row
             div {
                 class: "flex flex-wrap justify-between items-center mb-4 gap-3",
@@ -306,6 +347,16 @@ pub fn CourseView(course_id: String) -> Element {
                             show_session_modal.set(true);
                         },
                         "📅 Plan Study Sessions"
+                    }
+                    button {
+                        class: "btn btn-ghost btn-sm",
+                        onclick: on_export_notes,
+                        disabled: *is_exporting.read(),
+                        if *is_exporting.read() {
+                            span { class: "loading loading-spinner loading-sm" }
+                        } else {
+                            "📤 Export Notes"
+                        }
                     }
                     button {
                         class: if *boundary_edit_mode.read() { "btn btn-outline btn-sm" } else { "btn btn-ghost btn-sm" },

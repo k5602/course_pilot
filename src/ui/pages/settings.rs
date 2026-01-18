@@ -10,7 +10,7 @@ use crate::ui::state::AppState;
 /// Settings for API keys and app preferences.
 #[component]
 pub fn Settings() -> Element {
-    let state = use_context::<AppState>();
+    let mut state = use_context::<AppState>();
 
     {
         let mut state = state.clone();
@@ -48,6 +48,7 @@ pub fn Settings() -> Element {
                     ml_boundary_enabled.set(prefs.ml_boundary_enabled());
                     cognitive_limit.set(prefs.cognitive_limit_minutes());
                     right_panel_visible.set(prefs.right_panel_visible());
+                    state.onboarding_completed.set(prefs.onboarding_completed());
                 },
                 Err(e) => {
                     save_status.set(Some((false, format!("Failed to load preferences: {}", e))));
@@ -92,6 +93,7 @@ pub fn Settings() -> Element {
                 ml_boundary_enabled: *ml_boundary_enabled.read(),
                 cognitive_limit_minutes: *cognitive_limit.read(),
                 right_panel_visible: *right_panel_visible.read(),
+                onboarding_completed: *state.onboarding_completed.read(),
             };
 
             match use_case.update(input) {

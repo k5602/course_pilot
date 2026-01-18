@@ -29,7 +29,10 @@ pub fn VideoPlayer(course_id: String, video_id: String) -> Element {
             if let Some(ref ctx) = backend {
                 let use_case = ServiceFactory::preferences(ctx);
                 match use_case.load() {
-                    Ok(prefs) => state.right_panel_visible.set(prefs.right_panel_visible()),
+                    Ok(prefs) => {
+                        state.right_panel_visible.set(prefs.right_panel_visible());
+                        state.onboarding_completed.set(prefs.onboarding_completed());
+                    },
                     Err(e) => {
                         log::error!("Failed to load preferences: {}", e);
                         state.right_panel_visible.set(true);
@@ -177,6 +180,7 @@ pub fn VideoPlayer(course_id: String, video_id: String) -> Element {
                         ml_boundary_enabled: prefs.ml_boundary_enabled(),
                         cognitive_limit_minutes: prefs.cognitive_limit_minutes(),
                         right_panel_visible: new_value,
+                        onboarding_completed: *state.onboarding_completed.read(),
                     };
                     if let Err(e) = use_case.update(input) {
                         log::error!("Failed to persist right panel preference: {}", e);

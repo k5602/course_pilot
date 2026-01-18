@@ -3,7 +3,7 @@
 use dioxus::prelude::*;
 
 use crate::ui::Route;
- 
+
 /// A single video row with title, duration, and completion status.
 #[component]
 pub fn VideoItem(
