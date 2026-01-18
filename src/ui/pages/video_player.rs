@@ -3,6 +3,8 @@
 use dioxus::prelude::*;
 use std::str::FromStr;
 
+use crate::application::ServiceFactory;
+use crate::application::use_cases::UpdatePreferencesInput;
 use crate::domain::ports::VideoRepository;
 use crate::domain::value_objects::{CourseId, VideoId};
 use crate::ui::Route;
@@ -22,8 +24,23 @@ pub fn VideoPlayer(course_id: String, video_id: String) -> Element {
 
     {
         let mut state = state.clone();
+        let backend = state.backend.clone();
         use_effect(move || {
-            state.right_panel_visible.set(true);
+            if let Some(ref ctx) = backend {
+                let use_case = ServiceFactory::preferences(ctx);
+                match use_case.load() {
+                    Ok(prefs) => {
+                        state.right_panel_visible.set(prefs.right_panel_visible());
+                        state.onboarding_completed.set(prefs.onboarding_completed());
+                    },
+                    Err(e) => {
+                        log::error!("Failed to load preferences: {}", e);
+                        state.right_panel_visible.set(true);
+                    },
+                }
+            } else {
+                state.right_panel_visible.set(true);
+            }
         });
     }
 
@@ -46,8 +63,13 @@ pub fn VideoPlayer(course_id: String, video_id: String) -> Element {
 
     // Track current video in global state for AI companion context
     let video_id_for_state = video_id.clone();
+    let course_id_for_state = course_id.clone();
     use_effect(move || {
         state.current_video_id.set(Some(video_id_for_state.clone()));
+        state
+            .last_video_by_course
+            .write()
+            .insert(course_id_for_state.clone(), video_id_for_state.clone());
     });
 
     // Extract video data reactively
@@ -94,7 +116,7 @@ pub fn VideoPlayer(course_id: String, video_id: String) -> Element {
     let backend_for_quiz = backend.clone();
     let video_id_for_complete = v.id().clone();
     let video_id_for_quiz = v.id().clone();
-    let is_completed = v.is_completed();
+    let is_completed_now = video.read().as_ref().map(|v| v.is_completed()).unwrap_or(false);
     let action_status = use_signal(|| None::<(bool, String)>);
 
     // Handlers
@@ -102,7 +124,9 @@ pub fn VideoPlayer(course_id: String, video_id: String) -> Element {
     let mut video_for_complete = video;
     let on_mark_complete = move |_| {
         if let Some(ctx) = backend_for_complete.as_ref() {
-            let new_status = !is_completed;
+            let current_completed =
+                video_for_complete.read().as_ref().map(|v| v.is_completed()).unwrap_or(false);
+            let new_status = !current_completed;
             if let Err(e) = ctx.video_repo.update_completion(&video_id_for_complete, new_status) {
                 log::error!("Failed to update completion: {}", e);
                 action_status_complete
@@ -138,6 +162,37 @@ pub fn VideoPlayer(course_id: String, video_id: String) -> Element {
         });
     };
 
+    let on_toggle_panel = {
+        let mut state = state.clone();
+        let backend_for_toggle = state.backend.clone();
+        move |_| {
+            let new_value = !*state.right_panel_visible.read();
+            state.right_panel_visible.set(new_value);
+
+            let Some(ref ctx) = backend_for_toggle else {
+                return;
+            };
+
+            let use_case = ServiceFactory::preferences(ctx);
+            match use_case.load() {
+                Ok(prefs) => {
+                    let input = UpdatePreferencesInput {
+                        ml_boundary_enabled: prefs.ml_boundary_enabled(),
+                        cognitive_limit_minutes: prefs.cognitive_limit_minutes(),
+                        right_panel_visible: new_value,
+                        onboarding_completed: *state.onboarding_completed.read(),
+                    };
+                    if let Err(e) = use_case.update(input) {
+                        log::error!("Failed to persist right panel preference: {}", e);
+                    }
+                },
+                Err(e) => {
+                    log::error!("Failed to load preferences for right panel: {}", e);
+                },
+            }
+        }
+    };
+
     rsx! {
         div {
             class: "p-6 min-h-full flex flex-col max-w-5xl mx-auto",
@@ -161,16 +216,24 @@ pub fn VideoPlayer(course_id: String, video_id: String) -> Element {
             }
 
             // Header/Nav
-            div { class: "flex justify-between items-center mb-6",
+            div { class: "flex flex-wrap justify-between items-center mb-6 gap-2",
                 Link {
                     to: Route::CourseView { course_id: course_id.clone() },
                     class: "btn btn-ghost btn-sm gap-2",
                     "← Back to Course"
                 }
-                div { class: "flex items-center gap-2 text-sm font-medium opacity-60",
-                    span { "{module_title}" }
-                    span { "•" }
-                    span { "{v.duration_secs() / 60} min" }
+                div { class: "flex items-center gap-3",
+                    button {
+                        class: "btn btn-ghost btn-sm",
+                        onclick: on_toggle_panel,
+                        title: "Toggle notes & AI panel",
+                        if *state.right_panel_visible.read() { "Hide Panel" } else { "Show Panel" }
+                    }
+                    div { class: "flex items-center gap-2 text-sm font-medium opacity-60",
+                        span { "{module_title}" }
+                        span { "•" }
+                        span { "{v.duration_secs() / 60} min" }
+                    }
                 }
             }
 
@@ -184,7 +247,7 @@ pub fn VideoPlayer(course_id: String, video_id: String) -> Element {
                 div { class: "flex-1",
                     h1 { class: "text-3xl font-bold mb-2", "{v.title()}" }
                     p { class: "text-base-content/60",
-                        if v.is_completed() {
+                        if is_completed_now {
                             span { class: "text-success font-medium flex items-center gap-1",
                                 "✓ Completed"
                             }
@@ -196,13 +259,15 @@ pub fn VideoPlayer(course_id: String, video_id: String) -> Element {
 
                 div { class: "flex flex-wrap gap-3",
                     button {
-                        class: if v.is_completed() { "btn btn-success" } else { "btn btn-outline btn-success" },
+                        class: if is_completed_now { "btn btn-success" } else { "btn btn-outline btn-success" },
                         onclick: on_mark_complete,
-                        if v.is_completed() { "✓ Completed" } else { "Mark Complete" }
+                        if is_completed_now { "✓ Completed" } else { "Mark Complete" }
                     }
                     button {
                         class: "btn btn-primary gap-2",
                         onclick: on_take_quiz,
+                        disabled: !state.has_gemini(),
+                        title: if state.has_gemini() { "" } else { "Configure Gemini API key in Settings" },
                         "📝 Take Quiz"
                     }
                 }

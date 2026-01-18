@@ -3,8 +3,7 @@
 use crate::domain::value_objects::{CourseId, ModuleId};
 
 /// A module represents a logical grouping of videos within a course.
-/// Modules are created by detecting topic boundaries using embeddings.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct Module {
     id: ModuleId,
     course_id: CourseId,

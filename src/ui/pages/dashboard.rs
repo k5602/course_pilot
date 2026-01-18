@@ -44,6 +44,7 @@ pub fn Dashboard() -> Element {
     // Import dialog state
     let mut import_open = use_signal(|| false);
     let mut import_status = use_signal(|| None::<String>);
+    let mut import_loading = use_signal(|| false);
 
     let backend = state.backend.clone();
 
@@ -51,6 +52,7 @@ pub fn Dashboard() -> Element {
         let backend = backend.clone();
 
         spawn(async move {
+            import_loading.set(true);
             import_status.set(Some("Importing...".to_string()));
 
             match import_playlist(backend.clone(), url, None).await {
@@ -70,6 +72,8 @@ pub fn Dashboard() -> Element {
                     import_status.set(Some(format!("✗ Error: {}", e)));
                 },
             }
+
+            import_loading.set(false);
         });
     };
 
@@ -346,6 +350,8 @@ pub fn Dashboard() -> Element {
         ImportPlaylistDialog {
             open: import_open,
             on_import: handle_import,
+            is_loading: import_loading,
+            status_msg: import_status,
         }
     }
 }

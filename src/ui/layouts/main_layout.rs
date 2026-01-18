@@ -3,7 +3,7 @@
 use dioxus::prelude::*;
 
 use crate::ui::Route;
-use crate::ui::custom::{RightPanel, Sidebar};
+use crate::ui::custom::{OnboardingTour, RightPanel, Sidebar};
 use crate::ui::state::AppState;
 
 /// Main application layout with three panels.
@@ -28,6 +28,8 @@ pub fn MainLayout() -> Element {
             if *state.right_panel_visible.read() {
                 RightPanel {}
             }
+
+            OnboardingTour {}
         }
     }
 }

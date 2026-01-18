@@ -10,7 +10,7 @@ use crate::ui::state::AppState;
 /// Settings for API keys and app preferences.
 #[component]
 pub fn Settings() -> Element {
-    let state = use_context::<AppState>();
+    let mut state = use_context::<AppState>();
 
     {
         let mut state = state.clone();
@@ -25,6 +25,7 @@ pub fn Settings() -> Element {
     let mut gemini_key = use_signal(String::new);
     let mut ml_boundary_enabled = use_signal(|| false);
     let mut cognitive_limit = use_signal(|| 45u32);
+    let mut right_panel_visible = use_signal(|| true);
 
     let mut save_status = use_signal(|| None::<(bool, String)>);
 
@@ -46,6 +47,8 @@ pub fn Settings() -> Element {
                 Ok(prefs) => {
                     ml_boundary_enabled.set(prefs.ml_boundary_enabled());
                     cognitive_limit.set(prefs.cognitive_limit_minutes());
+                    right_panel_visible.set(prefs.right_panel_visible());
+                    state.onboarding_completed.set(prefs.onboarding_completed());
                 },
                 Err(e) => {
                     save_status.set(Some((false, format!("Failed to load preferences: {}", e))));
@@ -89,6 +92,8 @@ pub fn Settings() -> Element {
             let input = UpdatePreferencesInput {
                 ml_boundary_enabled: *ml_boundary_enabled.read(),
                 cognitive_limit_minutes: *cognitive_limit.read(),
+                right_panel_visible: *right_panel_visible.read(),
+                onboarding_completed: *state.onboarding_completed.read(),
             };
 
             match use_case.update(input) {
@@ -231,6 +236,26 @@ pub fn Settings() -> Element {
                                 checked: *ml_boundary_enabled.read(),
                                 onchange: move |e| {
                                     ml_boundary_enabled.set(e.value() == "on");
+                                },
+                            }
+                        }
+
+                        // Right panel visibility
+                        div {
+                            class: "flex items-center justify-between bg-base-200 rounded-lg p-4",
+                            div {
+                                h3 { class: "font-semibold", "Right Panel" }
+                                p {
+                                    class: "text-sm text-base-content/60",
+                                    "Show the Notes & AI companion panel by default."
+                                }
+                            }
+                            input {
+                                class: "toggle toggle-primary",
+                                r#type: "checkbox",
+                                checked: *right_panel_visible.read(),
+                                onchange: move |e| {
+                                    right_panel_visible.set(e.value() == "on");
                                 },
                             }
                         }

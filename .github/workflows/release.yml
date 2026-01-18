@@ -30,10 +30,11 @@ jobs:
             platform: linux
             artifact: course-pilot-linux-x64.tar.gz
             binary: course_pilot
-          - os: windows-2022
-            platform: windows
-            artifact: course-pilot-windows-x64.zip
-            binary: course_pilot.exe
+          # Commented out Windows build - takes too long and causes release failures
+          # - os: windows-2022
+          #   platform: windows
+          #   artifact: course-pilot-windows-x64.zip
+          #   binary: course_pilot.exe
 
     steps:
       - name: Checkout
@@ -112,13 +113,14 @@ jobs:
           dx bundle --release --platform desktop --package-types deb
         shell: bash
 
-      - name: Build (Windows)
-        if: matrix.platform == 'windows'
-        run: |
-          dx build --release --platform desktop
-        env:
-          RUSTFLAGS: "-C target-feature=+crt-static"
-        shell: pwsh
+      # Commented out Windows build - takes too long
+      # - name: Build (Windows)
+      #   if: matrix.platform == 'windows'
+      #   run: |
+      #     dx build --release --platform desktop
+      #   env:
+      #     RUSTFLAGS: "-C target-feature=+crt-static"
+      #   shell: pwsh
 
       - name: Package (Linux)
         if: matrix.platform == 'linux'
@@ -159,20 +161,21 @@ jobs:
           fi
         shell: bash
 
-      - name: Package (Windows)
-        if: matrix.platform == 'windows'
-        run: |
-          New-Item -ItemType Directory -Force -Path release-artifacts | Out-Null
-          $exe = Get-ChildItem -Path ./target -Filter "${env:APP_NAME}.exe" -Recurse | Where-Object { $_.FullName -notmatch "deps" -and $_.FullName -match "release" } | Select-Object -First 1
-          if ($exe) {
-              Copy-Item $exe.FullName ./release-artifacts/
-          } else {
-              Write-Error "Binary not found"
-              exit 1
-          }
-          Copy-Item -Recurse ./assets ./release-artifacts/
-          Compress-Archive -Path ./release-artifacts/* -DestinationPath "${{ matrix.artifact }}"
-        shell: pwsh
+      # Commented out Windows packaging - takes too long
+      # - name: Package (Windows)
+      #   if: matrix.platform == 'windows'
+      #   run: |
+      #     New-Item -ItemType Directory -Force -Path release-artifacts | Out-Null
+      #     $exe = Get-ChildItem -Path ./target -Filter "${env:APP_NAME}.exe" -Recurse | Where-Object { $_.FullName -notmatch "deps" -and $_.FullName -match "release" } | Select-Object -First 1
+      #     if ($exe) {
+      #         Copy-Item $exe.FullName ./release-artifacts/
+      #     } else {
+      #         Write-Error "Binary not found"
+      #         exit 1
+      #     }
+      #     Copy-Item -Recurse ./assets ./release-artifacts/
+      #     Compress-Archive -Path ./release-artifacts/* -DestinationPath "${{ matrix.artifact }}"
+      #   shell: pwsh
 
       - name: Upload Linux Tarball
         if: matrix.platform == 'linux'
@@ -188,12 +191,13 @@ jobs:
           name: linux-deb
           path: course-pilot-linux-x64.deb
 
-      - name: Upload Windows artifact
-        if: matrix.platform == 'windows'
-        uses: actions/upload-artifact@v4
-        with:
-          name: windows-artifact
-          path: ${{ matrix.artifact }}
+      # Commented out Windows artifact upload - takes too long
+      # - name: Upload Windows artifact
+      #   if: matrix.platform == 'windows'
+      #   uses: actions/upload-artifact@v4
+      #   with:
+      #     name: windows-artifact
+      #     path: ${{ matrix.artifact }}
 
   release:
     name: Publish Release
@@ -215,10 +219,11 @@ jobs:
         with:
           name: linux-deb
 
-      - name: Download Windows artifact
-        uses: actions/download-artifact@v4
-        with:
-          name: windows-artifact
+      # Commented out Windows artifact download - Windows build disabled
+      # - name: Download Windows artifact
+      #   uses: actions/download-artifact@v4
+      #   with:
+      #     name: windows-artifact
 
       - name: Compute checksums and sizes
         id: meta
@@ -226,23 +231,18 @@ jobs:
           set -euo pipefail
           linux_tar="course-pilot-linux-x64.tar.gz"
           linux_deb="course-pilot-linux-x64.deb"
-          windows_zip="course-pilot-windows-x64.zip"
 
           tar_size=$(du -h "$linux_tar" | cut -f1)
           deb_size=$(du -h "$linux_deb" | cut -f1)
-          win_size=$(du -h "$windows_zip" | cut -f1)
 
           tar_sha=$(sha256sum "$linux_tar" | cut -d' ' -f1)
           deb_sha=$(sha256sum "$linux_deb" | cut -d' ' -f1)
-          win_sha=$(sha256sum "$windows_zip" | cut -d' ' -f1)
 
           {
             echo "tar_size=$tar_size"
             echo "deb_size=$deb_size"
-            echo "win_size=$win_size"
             echo "tar_sha=$tar_sha"
             echo "deb_sha=$deb_sha"
-            echo "win_sha=$win_sha"
           } >> "$GITHUB_OUTPUT"
         shell: bash
 
@@ -273,15 +273,17 @@ jobs:
             echo "|----------|------|------|--------|"
             echo "| 🐧 Linux (Debian/Ubuntu) | course-pilot-linux-x64.deb | ${{ steps.meta.outputs.deb_size }} | ${{ steps.meta.outputs.deb_sha }} |"
             echo "| 🐧 Linux (Generic/Arch) | course-pilot-linux-x64.tar.gz | ${{ steps.meta.outputs.tar_size }} | ${{ steps.meta.outputs.tar_sha }} |"
-            echo "| 🪟 Windows x64 | course-pilot-windows-x64.zip | ${{ steps.meta.outputs.win_size }} | ${{ steps.meta.outputs.win_sha }} |"
+            # Windows build temporarily disabled
+            # echo "| 🪟 Windows x64 | course-pilot-windows-x64.zip | ${{ steps.meta.outputs.win_size }} | ${{ steps.meta.outputs.win_sha }} |"
             echo ""
             echo "### 🚀 Installation (Linux)"
-            echo "- **Debian/Ubuntu/Mint**: Download the `.deb` and install via \`sudo apt install ./course-pilot-linux-x64.deb\`."
+            echo "- **Debian/Ubuntu/Mint**: Download the \`.deb\` and install via \`sudo apt install ./course-pilot-linux-x64.deb\`."
             echo "- **Arch/Others**: Download the \`.tar.gz\`, extract it, and run \`course-pilot-launcher\`. This script will automatically check and help install dependencies."
             echo ""
             echo "### ⚙️ System Requirements"
             echo "- **Linux**: Ubuntu 20.04+ / Debian 11+ / Fedora 35+ / Arch Linux (GTK3/4 compatible WebKit)"
-            echo "- **Windows**: Windows 10 (1903+) / Windows 11"
+            # Windows build temporarily disabled
+            # echo "- **Windows**: Windows 10 (1903+) / Windows 11"
           } >> "$notes_file"
         shell: bash
 
@@ -291,7 +293,8 @@ jobs:
           files: |
             course-pilot-linux-x64.tar.gz
             course-pilot-linux-x64.deb
-            course-pilot-windows-x64.zip
+            # Windows build temporarily disabled
+            # course-pilot-windows-x64.zip
           tag_name: ${{ github.ref_name }}
           name: Course Pilot ${{ github.ref_name }}
           body_path: release_notes.md

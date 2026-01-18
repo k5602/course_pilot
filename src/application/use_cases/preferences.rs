@@ -10,6 +10,8 @@ use crate::domain::ports::{RepositoryError, UserPreferencesRepository};
 pub struct UpdatePreferencesInput {
     pub ml_boundary_enabled: bool,
     pub cognitive_limit_minutes: u32,
+    pub right_panel_visible: bool,
+    pub onboarding_completed: bool,
 }
 
 /// Use case for loading and updating user preferences.
@@ -46,6 +48,8 @@ where
         let mut prefs = self.load()?;
         prefs.set_ml_boundary_enabled(input.ml_boundary_enabled);
         prefs.set_cognitive_limit_minutes(input.cognitive_limit_minutes);
+        prefs.set_right_panel_visible(input.right_panel_visible);
+        prefs.set_onboarding_completed(input.onboarding_completed);
         self.prefs_repo.save(&prefs)?;
         Ok(prefs)
     }

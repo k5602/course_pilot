@@ -21,18 +21,42 @@ impl GeminiAdapter {
 
 impl CompanionAI for GeminiAdapter {
     async fn ask(&self, question: &str, context: &CompanionContext) -> Result<String, LLMError> {
+        let truncate = |value: &str, limit: usize| -> String {
+            let mut out: String = value.chars().take(limit).collect();
+            if value.chars().count() > limit {
+                out.push_str("… [truncated]");
+            }
+            out
+        };
+
+        let description =
+            truncate(context.video_description.as_deref().unwrap_or("Not available"), 1200);
+        let summary = truncate(context.summary.as_deref().unwrap_or("Not available"), 1200);
+        let notes = truncate(context.notes.as_deref().unwrap_or("Not available"), 1200);
+
         let prompt = format!(
             r#"You are a learning companion for course "{}".
 Video: "{}" (Module: "{}")
+
+Video description:
+{}
+
+Summary:
+{}
+
+
+Notes:
 {}
 
 Student asks: {}
 
-Provide a concise, academic response."#,
+Provide a concise, academic response. If transcript or notes are unavailable, say so explicitly."#,
             context.course_name,
             context.video_title,
             context.module_title,
-            context.video_description.as_deref().unwrap_or(""),
+            description,
+            summary,
+            notes,
             question
         );
 

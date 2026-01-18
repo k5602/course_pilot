@@ -1,6 +1,7 @@
 //! Right panel with Notes and AI Chat tabs
 
 use crate::application::use_cases::{DeleteNoteInput, LoadNoteInput, SaveNoteInput};
+use crate::domain::ports::VideoRepository;
 use crate::domain::value_objects::VideoId;
 use crate::ui::custom::{MarkdownRenderer, TagBadge};
 use crate::ui::state::{AppState, ChatMessage, ChatRole, RightPanelTab};
@@ -37,7 +38,7 @@ pub fn RightPanel() -> Element {
 
             // Tab content
             div {
-                class: "flex-1 overflow-auto p-4",
+                class: "flex-1 overflow-auto p-5",
                 match current_tab {
                     RightPanelTab::Notes => rsx! { NotesEditor {} },
                     RightPanelTab::AiChat => rsx! { AiChatView {} },
@@ -232,25 +233,28 @@ fn NotesEditor() -> Element {
                 }
 
                 textarea {
-                    class: "textarea textarea-bordered resize-none",
+                    class: "textarea textarea-bordered resize-none text-sm leading-6",
                     placeholder: "Take notes on this video...",
                     value: "{note_text.read()}",
                     oninput: on_note_input,
                 }
 
                 div {
-                    class: "mt-3 flex-1 overflow-auto rounded-lg bg-base-100 p-3 prose prose-sm max-w-none",
+                    class: "mt-4 flex-1 overflow-auto rounded-lg bg-base-100 p-4",
 
                     if note_text.read().trim().is_empty() {
-                        p { class: "text-base-content/50", "Markdown preview will appear here" }
+                        p { class: "text-base-content/50", "Markdown preview will appear once you add notes" }
                     } else {
-                        MarkdownRenderer { src: note_text.read().clone() }
+                        MarkdownRenderer {
+                            src: note_text.read().clone(),
+                            class: Some("prose prose-base leading-7 max-w-none".to_string()),
+                        }
                     }
                 }
             } else {
                 div {
                     class: "text-base-content/50 text-center mt-8",
-                    "Select a video to take notes"
+                    "Select a video to start notes. Your notes save automatically."
                 }
             }
         }
@@ -261,13 +265,60 @@ fn NotesEditor() -> Element {
 #[component]
 fn AiChatView() -> Element {
     let mut state = use_context::<AppState>();
-    let messages = state.chat_history.read();
     let video_id = state.current_video_id.read().clone();
+    let messages = {
+        let all = state.chat_history_by_video.read();
+        video_id.as_ref().and_then(|id| all.get(id)).cloned().unwrap_or_default()
+    };
     let has_gemini = state.has_gemini();
+    let has_transcript = use_signal(|| None::<bool>);
+
+    {
+        let video_id = video_id.clone();
+        let backend = state.backend.clone();
+        let mut has_transcript = has_transcript;
+        use_effect(move || {
+            has_transcript.set(None);
+
+            let Some(id) = video_id.clone() else {
+                return;
+            };
+            let vid = match VideoId::from_str(&id) {
+                Ok(v) => v,
+                Err(_) => return,
+            };
+            let Some(ctx) = backend.as_ref() else {
+                return;
+            };
+
+            match ctx.video_repo.find_by_id(&vid) {
+                Ok(Some(video)) => {
+                    let available =
+                        video.transcript().map(|t| !t.trim().is_empty()).unwrap_or(false);
+                    has_transcript.set(Some(available));
+                },
+                Ok(None) => has_transcript.set(Some(false)),
+                Err(_) => has_transcript.set(Some(false)),
+            }
+        });
+    }
 
     let mut input_value = use_signal(String::new);
     let mut is_loading = use_signal(|| false);
     let mut error_msg = use_signal(|| None::<String>);
+
+    {
+        let video_id = video_id.clone();
+        let mut input_value = input_value;
+        let mut is_loading = is_loading;
+        let mut error_msg = error_msg;
+        use_effect(move || {
+            let _ = video_id.clone();
+            input_value.set(String::new());
+            is_loading.set(false);
+            error_msg.set(None);
+        });
+    }
 
     let video_id_closure = video_id.clone();
     // Closure captures Clone-able items (Signals, Option<String>), so it is Clone.
@@ -288,10 +339,11 @@ fn AiChatView() -> Element {
             };
 
             // Add user message immediately
-            state
-                .chat_history
-                .write()
-                .push(ChatMessage { role: ChatRole::User, content: question.clone() });
+            {
+                let mut history = state.chat_history_by_video.write();
+                let entry = history.entry(vid_str.clone()).or_default();
+                entry.push(ChatMessage { role: ChatRole::User, content: question.clone() });
+            }
             input_value.set(String::new());
             is_loading.set(true);
             error_msg.set(None);
@@ -309,7 +361,9 @@ fn AiChatView() -> Element {
 
                         match use_case.execute(input).await {
                             Ok(response) => {
-                                state.chat_history.write().push(ChatMessage {
+                                let mut history = state.chat_history_by_video.write();
+                                let entry = history.entry(vid_str.clone()).or_default();
+                                entry.push(ChatMessage {
                                     role: ChatRole::Assistant,
                                     content: response,
                                 });
@@ -353,13 +407,25 @@ fn AiChatView() -> Element {
 
                 if messages.is_empty() && !*is_loading.read() {
                     div {
-                        class: "text-base-content/50 text-center mt-8",
+                        class: "text-base-content/50 text-center mt-8 space-y-2",
                         if video_id.is_none() {
                             "Select a video to ask questions"
                         } else if !has_gemini {
                             "Add a Gemini API key in Settings to enable AI Chat"
                         } else {
                             "Ask questions about the current video"
+                        }
+                        if video_id.is_some() && has_gemini && *has_transcript.read() == Some(false) {
+                            p {
+                                class: "text-xs text-warning",
+                                "Transcript not available yet. Generate a summary to fetch it."
+                            }
+                        }
+                        if video_id.is_some() && has_gemini {
+                            p {
+                                class: "text-xs text-base-content/60",
+                                "Answers improve when a transcript, summary, or notes are available."
+                            }
                         }
                     }
                 }
@@ -419,8 +485,11 @@ fn ChatBubble(message: ChatMessage) -> Element {
         div {
             class: "flex {align}",
             div {
-                class: "max-w-[80%] px-4 py-2 rounded-lg {bg} prose prose-sm max-w-none",
-                MarkdownRenderer { src: message.content }
+                class: "max-w-[80%] px-4 py-3 rounded-lg {bg}",
+                MarkdownRenderer {
+                    src: message.content,
+                    class: Some("prose prose-base leading-7 max-w-none".to_string()),
+                }
             }
         }
     }

@@ -6,7 +6,9 @@ use std::sync::Arc;
 
 use crate::domain::{
     entities::{Course, Module, Video},
-    ports::{CourseRepository, ModuleRepository, PlaylistFetcher, VideoRepository},
+    ports::{
+        CourseRepository, ModuleRepository, PlaylistFetcher, SearchRepository, VideoRepository,
+    },
     services::{BoundaryDetector, TitleSanitizer},
     value_objects::{CourseId, ModuleId, PlaylistUrl, VideoId, YouTubeVideoId},
 };
@@ -37,39 +39,44 @@ pub struct IngestPlaylistOutput {
 }
 
 /// Use case for ingesting a YouTube playlist into a structured course.
-pub struct IngestPlaylistUseCase<F, CR, MR, VR>
+pub struct IngestPlaylistUseCase<F, CR, MR, VR, SR>
 where
     F: PlaylistFetcher,
     CR: CourseRepository,
     MR: ModuleRepository,
     VR: VideoRepository,
+    SR: SearchRepository,
 {
     fetcher: Arc<F>,
     course_repo: Arc<CR>,
     module_repo: Arc<MR>,
     video_repo: Arc<VR>,
+    search_repo: Arc<SR>,
     sanitizer: TitleSanitizer,
     boundary_detector: BoundaryDetector,
 }
 
-impl<F, CR, MR, VR> IngestPlaylistUseCase<F, CR, MR, VR>
+impl<F, CR, MR, VR, SR> IngestPlaylistUseCase<F, CR, MR, VR, SR>
 where
     F: PlaylistFetcher,
     CR: CourseRepository,
     MR: ModuleRepository,
     VR: VideoRepository,
+    SR: SearchRepository,
 {
     pub fn new(
         fetcher: Arc<F>,
         course_repo: Arc<CR>,
         module_repo: Arc<MR>,
         video_repo: Arc<VR>,
+        search_repo: Arc<SR>,
     ) -> Self {
         Self {
             fetcher,
             course_repo,
             module_repo,
             video_repo,
+            search_repo,
             sanitizer: TitleSanitizer::new(),
             boundary_detector: BoundaryDetector::new(),
         }
@@ -116,6 +123,10 @@ where
         );
         self.course_repo.save(&course).map_err(|e| IngestError::PersistFailed(e.to_string()))?;
 
+        self.search_repo
+            .index_course(course.id(), course.name(), course.description())
+            .map_err(|e| IngestError::PersistFailed(e.to_string()))?;
+
         // 6. Create modules and videos
         let mut total_videos = 0;
         for (module_idx, video_indices) in module_groups.iter().enumerate() {
@@ -139,17 +150,28 @@ where
                 let youtube_id = YouTubeVideoId::new(&raw.youtube_id)
                     .map_err(|e| IngestError::PersistFailed(e.to_string()))?;
 
-                let video = Video::new(
+                let video = Video::with_description(
                     VideoId::new(),
                     module_id.clone(),
                     youtube_id,
                     sanitized_titles[video_idx].clone(),
+                    raw.description.clone(),
                     raw.duration_secs,
                     sort_order as u32,
                 );
                 self.video_repo
                     .save(&video)
                     .map_err(|e| IngestError::PersistFailed(e.to_string()))?;
+
+                self.search_repo
+                    .index_video(
+                        &video.id().as_uuid().to_string(),
+                        video.title(),
+                        raw.description.as_deref(),
+                        &course_id,
+                    )
+                    .map_err(|e| IngestError::PersistFailed(e.to_string()))?;
+
                 total_videos += 1;
             }
         }

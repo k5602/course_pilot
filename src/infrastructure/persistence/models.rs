@@ -138,6 +138,8 @@ pub struct UserPreferencesRow {
     pub id: String,
     pub ml_boundary_enabled: i32,
     pub cognitive_limit_minutes: i32,
+    pub right_panel_visible: i32,
+    pub onboarding_completed: i32,
 }
 
 /// Insertable model for user preferences.
@@ -147,6 +149,8 @@ pub struct NewUserPreferences<'a> {
     pub id: &'a str,
     pub ml_boundary_enabled: i32,
     pub cognitive_limit_minutes: i32,
+    pub right_panel_visible: i32,
+    pub onboarding_completed: i32,
 }
 
 /// Changeset for updating user preferences.
@@ -155,6 +159,8 @@ pub struct NewUserPreferences<'a> {
 pub struct UpdatePreferences {
     pub ml_boundary_enabled: Option<i32>,
     pub cognitive_limit_minutes: Option<i32>,
+    pub right_panel_visible: Option<i32>,
+    pub onboarding_completed: Option<i32>,
 }
 
 /// Diesel model for the tags table.

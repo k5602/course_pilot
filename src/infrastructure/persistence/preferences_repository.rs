@@ -41,6 +41,8 @@ impl UserPreferencesRepository for SqliteUserPreferencesRepository {
             id: prefs.id(),
             ml_boundary_enabled: bool_to_i32(prefs.ml_boundary_enabled()),
             cognitive_limit_minutes: prefs.cognitive_limit_minutes() as i32,
+            right_panel_visible: bool_to_i32(prefs.right_panel_visible()),
+            onboarding_completed: bool_to_i32(prefs.onboarding_completed()),
         };
 
         diesel::replace_into(user_preferences::table)
@@ -53,7 +55,13 @@ impl UserPreferencesRepository for SqliteUserPreferencesRepository {
 }
 
 fn row_to_preferences(row: UserPreferencesRow) -> UserPreferences {
-    UserPreferences::new(row.id, row.ml_boundary_enabled != 0, row.cognitive_limit_minutes as u32)
+    UserPreferences::new(
+        row.id,
+        row.ml_boundary_enabled != 0,
+        row.cognitive_limit_minutes as u32,
+        row.right_panel_visible != 0,
+        row.onboarding_completed != 0,
+    )
 }
 
 fn bool_to_i32(value: bool) -> i32 {
