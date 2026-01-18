@@ -43,9 +43,11 @@ pub struct AppState {
     pub right_panel_tab: Signal<RightPanelTab>,
     pub right_panel_visible: Signal<bool>,
     pub chat_history: Signal<Vec<ChatMessage>>,
+    pub chat_history_by_video: Signal<HashMap<String, Vec<ChatMessage>>>,
     pub notes: Signal<HashMap<String, String>>,
     pub current_video_id: Signal<Option<String>>,
     pub youtube_embed_relay_url: Signal<Option<String>>,
+    pub last_video_by_course: Signal<HashMap<String, String>>,
 
     // Cached data from backend
     pub courses: Signal<Vec<Course>>,
@@ -63,9 +65,11 @@ impl AppState {
             right_panel_tab: Signal::new(RightPanelTab::default()),
             right_panel_visible: Signal::new(false),
             chat_history: Signal::new(Vec::new()),
+            chat_history_by_video: Signal::new(HashMap::new()),
             notes: Signal::new(HashMap::new()),
             current_video_id: Signal::new(None),
             youtube_embed_relay_url: Signal::new(None),
+            last_video_by_course: Signal::new(HashMap::new()),
             courses: Signal::new(Vec::new()),
             current_course: Signal::new(None),
             current_modules: Signal::new(Vec::new()),

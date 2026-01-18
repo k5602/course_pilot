@@ -6,9 +6,13 @@ use crate::components::dialog::{DialogContent, DialogDescription, DialogRoot, Di
 
 /// Dialog for importing a YouTube playlist.
 #[component]
-pub fn ImportPlaylistDialog(open: Signal<bool>, on_import: EventHandler<String>) -> Element {
+pub fn ImportPlaylistDialog(
+    open: Signal<bool>,
+    on_import: EventHandler<String>,
+    is_loading: Signal<bool>,
+    status_msg: Signal<Option<String>>,
+) -> Element {
     let mut url_input = use_signal(String::new);
-    let mut is_loading = use_signal(|| false);
     let mut error_msg = use_signal(|| None::<String>);
 
     // Convert bool signal to Option<bool> for dialog
@@ -21,19 +25,18 @@ pub fn ImportPlaylistDialog(open: Signal<bool>, on_import: EventHandler<String>)
             return;
         }
 
-        is_loading.set(true);
         error_msg.set(None);
 
         // Trigger import via callback
         on_import.call(url);
 
-        // Close dialog and reset
-        open.set(false);
-        url_input.set(String::new());
-        is_loading.set(false);
+        // Status is managed by the parent
     };
 
     let handle_cancel = move |_| {
+        if *is_loading.read() {
+            return;
+        }
         open.set(false);
         url_input.set(String::new());
         error_msg.set(None);
@@ -43,7 +46,13 @@ pub fn ImportPlaylistDialog(open: Signal<bool>, on_import: EventHandler<String>)
         DialogRoot {
             open: open_option,
             is_modal: true,
-            on_open_change: move |is_open: bool| open.set(is_open),
+            on_open_change: move |is_open: bool| {
+                if *is_loading.read() {
+                    open.set(true);
+                } else {
+                    open.set(is_open);
+                }
+            },
 
             DialogContent {
                 div {
@@ -76,6 +85,22 @@ pub fn ImportPlaylistDialog(open: Signal<bool>, on_import: EventHandler<String>)
                         if let Some(ref err) = *error_msg.read() {
                             p { class: "text-error text-sm mt-1", "{err}" }
                         }
+
+                        // Status message
+                        if let Some(ref status) = *status_msg.read() {
+                            div {
+                                class: "mt-2 text-sm text-base-content/70 flex items-center gap-2",
+                                if *is_loading.read() {
+                                    span { class: "loading loading-spinner loading-xs" }
+                                }
+                                "{status}"
+                            }
+                            if *is_loading.read() {
+                                progress {
+                                    class: "progress progress-primary w-full mt-2",
+                                }
+                            }
+                        }
                     }
 
                     // Actions
@@ -86,7 +111,7 @@ pub fn ImportPlaylistDialog(open: Signal<bool>, on_import: EventHandler<String>)
                             class: "btn btn-ghost",
                             onclick: handle_cancel,
                             disabled: *is_loading.read(),
-                            "Cancel"
+                            "Close"
                         }
 
                         button {

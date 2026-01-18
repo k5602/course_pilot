@@ -120,6 +120,22 @@ impl CourseRepository for SqliteCourseRepository {
             .collect()
     }
 
+    fn update_metadata(
+        &self,
+        id: &CourseId,
+        name: &str,
+        description: Option<&str>,
+    ) -> Result<(), RepositoryError> {
+        let mut conn = self.pool.get().map_err(|e| RepositoryError::Database(e.to_string()))?;
+
+        diesel::update(courses::table.find(id.as_uuid().to_string()))
+            .set((courses::name.eq(name), courses::description.eq(description)))
+            .execute(&mut conn)
+            .map_err(|e| RepositoryError::Database(e.to_string()))?;
+
+        Ok(())
+    }
+
     fn delete(&self, id: &CourseId) -> Result<(), RepositoryError> {
         let mut conn = self.pool.get().map_err(|e| RepositoryError::Database(e.to_string()))?;
 
@@ -208,6 +224,17 @@ impl ModuleRepository for SqliteModuleRepository {
                 Ok(Module::new(module_id, cid, row.title, row.sort_order as u32))
             })
             .collect()
+    }
+
+    fn update_title(&self, id: &ModuleId, title: &str) -> Result<(), RepositoryError> {
+        let mut conn = self.pool.get().map_err(|e| RepositoryError::Database(e.to_string()))?;
+
+        diesel::update(modules::table.find(id.as_uuid().to_string()))
+            .set(modules::title.eq(title))
+            .execute(&mut conn)
+            .map_err(|e| RepositoryError::Database(e.to_string()))?;
+
+        Ok(())
     }
 
     fn delete(&self, id: &ModuleId) -> Result<(), RepositoryError> {
@@ -333,6 +360,26 @@ impl VideoRepository for SqliteVideoRepository {
 
         diesel::update(videos::table.find(id.as_uuid().to_string()))
             .set(videos::summary.eq(summary))
+            .execute(&mut conn)
+            .map_err(|e| RepositoryError::Database(e.to_string()))?;
+
+        Ok(())
+    }
+
+    fn update_module(
+        &self,
+        id: &VideoId,
+        module_id: &ModuleId,
+        sort_order: u32,
+    ) -> Result<(), RepositoryError> {
+        let mut conn = self.pool.get().map_err(|e| RepositoryError::Database(e.to_string()))?;
+        let sort_order = u32_to_i32(sort_order, "sort_order")?;
+
+        diesel::update(videos::table.find(id.as_uuid().to_string()))
+            .set((
+                videos::module_id.eq(module_id.as_uuid().to_string()),
+                videos::sort_order.eq(sort_order),
+            ))
             .execute(&mut conn)
             .map_err(|e| RepositoryError::Database(e.to_string()))?;
 

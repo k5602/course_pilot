@@ -46,8 +46,13 @@ pub fn VideoPlayer(course_id: String, video_id: String) -> Element {
 
     // Track current video in global state for AI companion context
     let video_id_for_state = video_id.clone();
+    let course_id_for_state = course_id.clone();
     use_effect(move || {
         state.current_video_id.set(Some(video_id_for_state.clone()));
+        state
+            .last_video_by_course
+            .write()
+            .insert(course_id_for_state.clone(), video_id_for_state.clone());
     });
 
     // Extract video data reactively
@@ -94,7 +99,7 @@ pub fn VideoPlayer(course_id: String, video_id: String) -> Element {
     let backend_for_quiz = backend.clone();
     let video_id_for_complete = v.id().clone();
     let video_id_for_quiz = v.id().clone();
-    let is_completed = v.is_completed();
+    let is_completed_now = video.read().as_ref().map(|v| v.is_completed()).unwrap_or(false);
     let action_status = use_signal(|| None::<(bool, String)>);
 
     // Handlers
@@ -102,7 +107,9 @@ pub fn VideoPlayer(course_id: String, video_id: String) -> Element {
     let mut video_for_complete = video;
     let on_mark_complete = move |_| {
         if let Some(ctx) = backend_for_complete.as_ref() {
-            let new_status = !is_completed;
+            let current_completed =
+                video_for_complete.read().as_ref().map(|v| v.is_completed()).unwrap_or(false);
+            let new_status = !current_completed;
             if let Err(e) = ctx.video_repo.update_completion(&video_id_for_complete, new_status) {
                 log::error!("Failed to update completion: {}", e);
                 action_status_complete
@@ -184,7 +191,7 @@ pub fn VideoPlayer(course_id: String, video_id: String) -> Element {
                 div { class: "flex-1",
                     h1 { class: "text-3xl font-bold mb-2", "{v.title()}" }
                     p { class: "text-base-content/60",
-                        if v.is_completed() {
+                        if is_completed_now {
                             span { class: "text-success font-medium flex items-center gap-1",
                                 "✓ Completed"
                             }
@@ -196,13 +203,15 @@ pub fn VideoPlayer(course_id: String, video_id: String) -> Element {
 
                 div { class: "flex flex-wrap gap-3",
                     button {
-                        class: if v.is_completed() { "btn btn-success" } else { "btn btn-outline btn-success" },
+                        class: if is_completed_now { "btn btn-success" } else { "btn btn-outline btn-success" },
                         onclick: on_mark_complete,
-                        if v.is_completed() { "✓ Completed" } else { "Mark Complete" }
+                        if is_completed_now { "✓ Completed" } else { "Mark Complete" }
                     }
                     button {
                         class: "btn btn-primary gap-2",
                         onclick: on_take_quiz,
+                        disabled: !state.has_gemini(),
+                        title: if state.has_gemini() { "" } else { "Configure Gemini API key in Settings" },
                         "📝 Take Quiz"
                     }
                 }

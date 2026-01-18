@@ -19,6 +19,12 @@ pub trait CourseRepository: Send + Sync {
     fn save(&self, course: &Course) -> Result<(), RepositoryError>;
     fn find_by_id(&self, id: &CourseId) -> Result<Option<Course>, RepositoryError>;
     fn find_all(&self) -> Result<Vec<Course>, RepositoryError>;
+    fn update_metadata(
+        &self,
+        id: &CourseId,
+        name: &str,
+        description: Option<&str>,
+    ) -> Result<(), RepositoryError>;
     fn delete(&self, id: &CourseId) -> Result<(), RepositoryError>;
 }
 
@@ -27,6 +33,7 @@ pub trait ModuleRepository: Send + Sync {
     fn save(&self, module: &Module) -> Result<(), RepositoryError>;
     fn find_by_id(&self, id: &ModuleId) -> Result<Option<Module>, RepositoryError>;
     fn find_by_course(&self, course_id: &CourseId) -> Result<Vec<Module>, RepositoryError>;
+    fn update_title(&self, id: &ModuleId, title: &str) -> Result<(), RepositoryError>;
     fn delete(&self, id: &ModuleId) -> Result<(), RepositoryError>;
 }
 
@@ -43,6 +50,12 @@ pub trait VideoRepository: Send + Sync {
         transcript: Option<&str>,
     ) -> Result<(), RepositoryError>;
     fn update_summary(&self, id: &VideoId, summary: Option<&str>) -> Result<(), RepositoryError>;
+    fn update_module(
+        &self,
+        id: &VideoId,
+        module_id: &ModuleId,
+        sort_order: u32,
+    ) -> Result<(), RepositoryError>;
     fn delete(&self, id: &VideoId) -> Result<(), RepositoryError>;
 }
 

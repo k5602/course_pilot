@@ -7,6 +7,7 @@ use std::sync::Arc;
 use crate::application::use_cases::{
     AskCompanionUseCase, IngestPlaylistUseCase, LoadDashboardUseCase, NotesUseCase,
     PlanSessionUseCase, PreferencesUseCase, SummarizeVideoUseCase, TakeExamUseCase,
+    UpdateCourseUseCase,
 };
 use crate::domain::ports::SecretStore;
 use crate::infrastructure::{
@@ -206,12 +207,14 @@ impl ServiceFactory {
         SqliteCourseRepository,
         SqliteModuleRepository,
         SqliteVideoRepository,
+        SqliteSearchRepository,
     > {
         IngestPlaylistUseCase::new(
             ctx.youtube.clone(),
             ctx.course_repo.clone(),
             ctx.module_repo.clone(),
             ctx.video_repo.clone(),
+            ctx.search_repo.clone(),
         )
     }
 
@@ -260,6 +263,27 @@ impl ServiceFactory {
             ctx.tag_repo.clone(),
             ctx.search_repo.clone(),
         )
+    }
+
+    /// Creates the update course use case.
+    pub fn update_course(
+        ctx: &AppContext,
+    ) -> UpdateCourseUseCase<SqliteCourseRepository, SqliteSearchRepository> {
+        UpdateCourseUseCase::new(ctx.course_repo.clone(), ctx.search_repo.clone())
+    }
+
+    /// Creates the update module title use case.
+    pub fn update_module_title(
+        ctx: &AppContext,
+    ) -> crate::application::use_cases::UpdateModuleTitleUseCase<SqliteModuleRepository> {
+        crate::application::use_cases::UpdateModuleTitleUseCase::new(ctx.module_repo.clone())
+    }
+
+    /// Creates the move video use case.
+    pub fn move_video_to_module(
+        ctx: &AppContext,
+    ) -> crate::application::use_cases::MoveVideoToModuleUseCase<SqliteVideoRepository> {
+        crate::application::use_cases::MoveVideoToModuleUseCase::new(ctx.video_repo.clone())
     }
 
     /// Creates the dashboard analytics use case.

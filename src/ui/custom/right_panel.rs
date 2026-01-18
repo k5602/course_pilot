@@ -261,13 +261,29 @@ fn NotesEditor() -> Element {
 #[component]
 fn AiChatView() -> Element {
     let mut state = use_context::<AppState>();
-    let messages = state.chat_history.read();
     let video_id = state.current_video_id.read().clone();
+    let messages = {
+        let all = state.chat_history_by_video.read();
+        video_id.as_ref().and_then(|id| all.get(id)).cloned().unwrap_or_default()
+    };
     let has_gemini = state.has_gemini();
 
     let mut input_value = use_signal(String::new);
     let mut is_loading = use_signal(|| false);
     let mut error_msg = use_signal(|| None::<String>);
+
+    {
+        let video_id = video_id.clone();
+        let mut input_value = input_value;
+        let mut is_loading = is_loading;
+        let mut error_msg = error_msg;
+        use_effect(move || {
+            let _ = video_id.clone();
+            input_value.set(String::new());
+            is_loading.set(false);
+            error_msg.set(None);
+        });
+    }
 
     let video_id_closure = video_id.clone();
     // Closure captures Clone-able items (Signals, Option<String>), so it is Clone.
@@ -288,10 +304,11 @@ fn AiChatView() -> Element {
             };
 
             // Add user message immediately
-            state
-                .chat_history
-                .write()
-                .push(ChatMessage { role: ChatRole::User, content: question.clone() });
+            {
+                let mut history = state.chat_history_by_video.write();
+                let entry = history.entry(vid_str.clone()).or_default();
+                entry.push(ChatMessage { role: ChatRole::User, content: question.clone() });
+            }
             input_value.set(String::new());
             is_loading.set(true);
             error_msg.set(None);
@@ -309,7 +326,9 @@ fn AiChatView() -> Element {
 
                         match use_case.execute(input).await {
                             Ok(response) => {
-                                state.chat_history.write().push(ChatMessage {
+                                let mut history = state.chat_history_by_video.write();
+                                let entry = history.entry(vid_str.clone()).or_default();
+                                entry.push(ChatMessage {
                                     role: ChatRole::Assistant,
                                     content: response,
                                 });
