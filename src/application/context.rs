@@ -232,6 +232,7 @@ impl ServiceFactory {
             SqliteVideoRepository,
             SqliteModuleRepository,
             SqliteCourseRepository,
+            SqliteNoteRepository,
         >,
     > {
         let llm = ctx.llm.as_ref()?.clone();
@@ -241,6 +242,7 @@ impl ServiceFactory {
             ctx.video_repo.clone(),
             ctx.module_repo.clone(),
             ctx.course_repo.clone(),
+            ctx.note_repo.clone(),
         ))
     }
 

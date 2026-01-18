@@ -20,6 +20,9 @@ pub struct CompanionContext {
     pub video_description: Option<String>,
     pub module_title: String,
     pub course_name: String,
+
+    pub summary: Option<String>,
+    pub notes: Option<String>,
 }
 
 /// Port for the Sidecar Companion (AI-B).

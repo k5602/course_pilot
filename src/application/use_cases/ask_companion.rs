@@ -5,7 +5,10 @@
 use std::sync::Arc;
 
 use crate::domain::{
-    ports::{CompanionAI, CompanionContext, CourseRepository, ModuleRepository, VideoRepository},
+    ports::{
+        CompanionAI, CompanionContext, CourseRepository, ModuleRepository, NoteRepository,
+        VideoRepository,
+    },
     value_objects::VideoId,
 };
 
@@ -31,33 +34,37 @@ pub struct AskCompanionInput {
 }
 
 /// Use case for asking questions to the AI companion.
-pub struct AskCompanionUseCase<AI, VR, MR, CR>
+pub struct AskCompanionUseCase<AI, VR, MR, CR, NR>
 where
     AI: CompanionAI,
     VR: VideoRepository,
     MR: ModuleRepository,
     CR: CourseRepository,
+    NR: NoteRepository,
 {
     companion: Arc<AI>,
     video_repo: Arc<VR>,
     module_repo: Arc<MR>,
     course_repo: Arc<CR>,
+    note_repo: Arc<NR>,
 }
 
-impl<AI, VR, MR, CR> AskCompanionUseCase<AI, VR, MR, CR>
+impl<AI, VR, MR, CR, NR> AskCompanionUseCase<AI, VR, MR, CR, NR>
 where
     AI: CompanionAI,
     VR: VideoRepository,
     MR: ModuleRepository,
     CR: CourseRepository,
+    NR: NoteRepository,
 {
     pub fn new(
         companion: Arc<AI>,
         video_repo: Arc<VR>,
         module_repo: Arc<MR>,
         course_repo: Arc<CR>,
+        note_repo: Arc<NR>,
     ) -> Self {
-        Self { companion, video_repo, module_repo, course_repo }
+        Self { companion, video_repo, module_repo, course_repo, note_repo }
     }
 
     /// Executes the Q&A request.
@@ -83,12 +90,20 @@ where
             .map_err(|e| CompanionError::Repository(e.to_string()))?
             .ok_or(CompanionError::CourseNotFound)?;
 
+        let notes = self
+            .note_repo
+            .find_by_video(&input.video_id)
+            .map_err(|e| CompanionError::Repository(e.to_string()))?
+            .map(|note| note.content().to_string());
+
         // Build context
         let context = CompanionContext {
             video_title: video.title().to_string(),
             video_description: video.description().map(|s| s.to_string()),
             module_title: module.title().to_string(),
             course_name: course.name().to_string(),
+            summary: video.summary().map(|s| s.to_string()),
+            notes,
         };
 
         // Ask the AI
