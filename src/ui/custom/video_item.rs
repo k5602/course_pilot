@@ -21,30 +21,20 @@ pub fn VideoItem(
         Link {
             to: Route::VideoPlayer {
                 course_id: course_id.clone(),
-                video_id: video_id.clone()
+                video_id: video_id.clone(),
             },
             class: "flex items-center gap-3 p-3 rounded-lg hover:bg-base-200 transition-colors",
 
             // Completion status
-            span {
-                class: "text-lg {status_class}",
-                "{status_icon}"
-            }
+            span { class: "text-lg {status_class}", "{status_icon}" }
 
             // Video info
-            div {
-                class: "flex-1 min-w-0",
-                p {
-                    class: "truncate font-medium",
-                    "{title}"
-                }
+            div { class: "flex-1 min-w-0",
+                p { class: "truncate font-medium", "{title}" }
             }
 
             // Duration
-            span {
-                class: "text-sm text-base-content/60",
-                "{duration_display}"
-            }
+            span { class: "text-sm text-base-content/60", "{duration_display}" }
         }
     }
 }

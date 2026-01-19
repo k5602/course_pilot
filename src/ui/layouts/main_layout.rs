@@ -12,17 +12,13 @@ pub fn MainLayout() -> Element {
     let state = use_context::<AppState>();
 
     rsx! {
-        div {
-            class: "flex h-screen bg-base-100",
+        div { class: "flex h-screen bg-base-100",
 
             // Left: Sidebar
             Sidebar {}
 
             // Center: Main content (router outlet)
-            main {
-                class: "flex-1 overflow-auto",
-                Outlet::<Route> {}
-            }
+            main { class: "flex-1 overflow-auto", Outlet::<Route> {} }
 
             // Right: Notes + AI Chat panel
             if *state.right_panel_visible.read() {

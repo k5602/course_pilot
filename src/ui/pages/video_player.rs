@@ -9,7 +9,9 @@ use crate::domain::ports::VideoRepository;
 use crate::domain::value_objects::{CourseId, VideoId};
 use crate::ui::Route;
 use crate::ui::actions::start_exam;
-use crate::ui::custom::{ErrorAlert, MarkdownRenderer, Spinner, SuccessAlert, YouTubePlayer};
+use crate::ui::custom::{
+    ErrorAlert, LocalVideoPlayer, MarkdownRenderer, Spinner, SuccessAlert, YouTubePlayer,
+};
 use crate::ui::hooks::{
     use_load_modules_state, use_load_video_state, use_load_videos_by_course_state,
 };
@@ -47,12 +49,20 @@ pub fn VideoPlayer(course_id: String, video_id: String) -> Element {
     // Parse IDs
     let course_id_vo = match CourseId::from_str(&course_id) {
         Ok(id) => id,
-        Err(_) => return rsx! { div { class: "p-6 text-error", "Invalid Course ID" } },
+        Err(_) => {
+            return rsx! {
+                div { class: "p-6 text-error", "Invalid Course ID" }
+            };
+        },
     };
 
     let video_id_vo = match VideoId::from_str(&video_id) {
         Ok(id) => id,
-        Err(_) => return rsx! { div { class: "p-6 text-error", "Invalid Video ID" } },
+        Err(_) => {
+            return rsx! {
+                div { class: "p-6 text-error", "Invalid Video ID" }
+            };
+        },
     };
 
     // Load data
@@ -79,15 +89,13 @@ pub fn VideoPlayer(course_id: String, video_id: String) -> Element {
         None => {
             if let Some(ref err) = *video_state.error.read() {
                 return rsx! {
-                    div {
-                        class: "p-6",
+                    div { class: "p-6",
                         ErrorAlert { message: err.clone(), on_dismiss: None }
                     }
                 };
             }
             return rsx! {
-                div {
-                    class: "p-6",
+                div { class: "p-6",
                     Spinner { message: Some("Loading video...".to_string()) }
                 }
             };
@@ -194,8 +202,7 @@ pub fn VideoPlayer(course_id: String, video_id: String) -> Element {
     };
 
     rsx! {
-        div {
-            class: "p-6 min-h-full flex flex-col max-w-5xl mx-auto",
+        div { class: "p-6 min-h-full flex flex-col max-w-5xl mx-auto",
 
             if let Some((is_success, ref msg)) = *action_status.read() {
                 if is_success {
@@ -218,7 +225,9 @@ pub fn VideoPlayer(course_id: String, video_id: String) -> Element {
             // Header/Nav
             div { class: "flex flex-wrap justify-between items-center mb-6 gap-2",
                 Link {
-                    to: Route::CourseView { course_id: course_id.clone() },
+                    to: Route::CourseView {
+                        course_id: course_id.clone(),
+                    },
                     class: "btn btn-ghost btn-sm gap-2",
                     "← Back to Course"
                 }
@@ -227,7 +236,11 @@ pub fn VideoPlayer(course_id: String, video_id: String) -> Element {
                         class: "btn btn-ghost btn-sm",
                         onclick: on_toggle_panel,
                         title: "Toggle notes & AI panel",
-                        if *state.right_panel_visible.read() { "Hide Panel" } else { "Show Panel" }
+                        if *state.right_panel_visible.read() {
+                            "Hide Panel"
+                        } else {
+                            "Show Panel"
+                        }
                     }
                     div { class: "flex items-center gap-2 text-sm font-medium opacity-60",
                         span { "{module_title}" }
@@ -239,7 +252,15 @@ pub fn VideoPlayer(course_id: String, video_id: String) -> Element {
 
             // Video player section
             div { class: "aspect-video w-full rounded-3xl overflow-hidden shadow-2xl bg-black border-4 border-base-300",
-                YouTubePlayer { video_id: v.youtube_id().as_str() }
+                if let Some(path) = v.local_path() {
+                    LocalVideoPlayer { path: path.to_string() }
+                } else if let Some(youtube_id) = v.youtube_id() {
+                    YouTubePlayer { video_id: youtube_id.as_str().to_string() }
+                } else {
+                    div { class: "flex items-center justify-center w-full h-full text-base-content/60",
+                        "Video source unavailable."
+                    }
+                }
             }
 
             // Info & Actions
@@ -261,7 +282,11 @@ pub fn VideoPlayer(course_id: String, video_id: String) -> Element {
                     button {
                         class: if is_completed_now { "btn btn-success" } else { "btn btn-outline btn-success" },
                         onclick: on_mark_complete,
-                        if is_completed_now { "✓ Completed" } else { "Mark Complete" }
+                        if is_completed_now {
+                            "✓ Completed"
+                        } else {
+                            "Mark Complete"
+                        }
                     }
                     button {
                         class: "btn btn-primary gap-2",
@@ -274,9 +299,7 @@ pub fn VideoPlayer(course_id: String, video_id: String) -> Element {
             }
 
             // AI Summary Section
-            SummarySection {
-                video_id: v.id().as_uuid().to_string(),
-            }
+            SummarySection { video_id: v.id().as_uuid().to_string() }
 
             // Navigation Footer
             div { class: "mt-auto pt-12 flex justify-between border-t border-base-300",
@@ -285,26 +308,32 @@ pub fn VideoPlayer(course_id: String, video_id: String) -> Element {
                     Link {
                         to: Route::VideoPlayer {
                             course_id: course_id.clone(),
-                            video_id: pv.id().as_uuid().to_string()
+                            video_id: pv.id().as_uuid().to_string(),
                         },
                         class: "group flex items-center gap-4 p-4 rounded-2xl hover:bg-base-200 transition-all",
                         div { class: "w-10 h-10 rounded-full bg-base-300 flex items-center justify-center group-hover:bg-primary group-hover:text-primary-content transition-colors",
                             "←"
                         }
                         div {
-                            p { class: "text-xs font-bold opacity-40 uppercase tracking-widest", "Previous" }
+                            p { class: "text-xs font-bold opacity-40 uppercase tracking-widest",
+                                "Previous"
+                            }
                             p { class: "font-medium truncate max-w-[200px]", "{pv.title()}" }
                         }
                     }
                 } else {
                     Link {
-                        to: Route::CourseView { course_id: course_id.clone() },
+                        to: Route::CourseView {
+                            course_id: course_id.clone(),
+                        },
                         class: "group flex items-center gap-4 p-4 rounded-2xl hover:bg-base-200 transition-all opacity-50",
                         div { class: "w-10 h-10 rounded-full bg-base-300 flex items-center justify-center",
                             "←"
                         }
                         div {
-                            p { class: "text-xs font-bold opacity-40 uppercase tracking-widest", "Previous" }
+                            p { class: "text-xs font-bold opacity-40 uppercase tracking-widest",
+                                "Previous"
+                            }
                             p { class: "font-medium", "Back to Course" }
                         }
                     }
@@ -315,11 +344,13 @@ pub fn VideoPlayer(course_id: String, video_id: String) -> Element {
                     Link {
                         to: Route::VideoPlayer {
                             course_id: course_id.clone(),
-                            video_id: nv.id().as_uuid().to_string()
+                            video_id: nv.id().as_uuid().to_string(),
                         },
                         class: "group flex items-center text-right gap-4 p-4 rounded-2xl hover:bg-base-200 transition-all",
                         div {
-                            p { class: "text-xs font-bold opacity-40 uppercase tracking-widest", "Next" }
+                            p { class: "text-xs font-bold opacity-40 uppercase tracking-widest",
+                                "Next"
+                            }
                             p { class: "font-medium truncate max-w-[200px]", "{nv.title()}" }
                         }
                         div { class: "w-10 h-10 rounded-full bg-base-300 flex items-center justify-center group-hover:bg-primary group-hover:text-primary-content transition-colors",
@@ -328,10 +359,14 @@ pub fn VideoPlayer(course_id: String, video_id: String) -> Element {
                     }
                 } else {
                     Link {
-                        to: Route::CourseView { course_id: course_id.clone() },
+                        to: Route::CourseView {
+                            course_id: course_id.clone(),
+                        },
                         class: "group flex items-center text-right gap-4 p-4 rounded-2xl hover:bg-base-200 transition-all opacity-50",
                         div {
-                            p { class: "text-xs font-bold opacity-40 uppercase tracking-widest", "Complete" }
+                            p { class: "text-xs font-bold opacity-40 uppercase tracking-widest",
+                                "Complete"
+                            }
                             p { class: "font-medium", "Back to Course" }
                         }
                         div { class: "w-10 h-10 rounded-full bg-base-300 flex items-center justify-center",
@@ -437,8 +472,7 @@ fn SummarySection(video_id: String) -> Element {
     };
 
     rsx! {
-        div {
-            class: "mt-8 bg-base-200 rounded-2xl overflow-hidden",
+        div { class: "mt-8 bg-base-200 rounded-2xl overflow-hidden",
 
             // Header (clickable to expand)
             button {
@@ -448,13 +482,18 @@ fn SummarySection(video_id: String) -> Element {
                     expanded.set(!current);
                 },
 
-                div {
-                    class: "flex items-center gap-3",
+                div { class: "flex items-center gap-3",
                     span { class: "text-xl", "✨" }
                     span { class: "font-bold", "AI Summary" }
                     match &*summary_state.read() {
                         SummaryState::Ready { cached, .. } => rsx! {
-                            span { class: "badge badge-success badge-sm", if *cached { "Cached" } else { "Ready" } }
+                            span { class: "badge badge-success badge-sm",
+                                if *cached {
+                                    "Cached"
+                                } else {
+                                    "Ready"
+                                }
+                            }
                         },
                         SummaryState::Loading(_) => rsx! {
                             span { class: "badge badge-warning badge-sm", "Loading" }
@@ -475,13 +514,11 @@ fn SummarySection(video_id: String) -> Element {
 
             // Content (expanded)
             if *expanded.read() {
-                div {
-                    class: "p-4 pt-0",
+                div { class: "p-4 pt-0",
 
                     match &*summary_state.read() {
                         SummaryState::Empty => rsx! {
-                            div {
-                                class: "text-center py-8",
+                            div { class: "text-center py-8",
                                 p { class: "text-base-content/60 mb-4", "Generate an AI summary from the video transcript" }
                                 button {
                                     class: "btn btn-primary",
@@ -495,20 +532,17 @@ fn SummarySection(video_id: String) -> Element {
                             }
                         },
                         SummaryState::Loading(msg) => rsx! {
-                            div {
-                                class: "flex flex-col items-center py-8",
+                            div { class: "flex flex-col items-center py-8",
                                 div { class: "loading loading-spinner loading-lg text-primary" }
                                 p { class: "text-base-content/60 mt-4", "{msg}" }
                             }
                         },
                         SummaryState::Ready { summary, cached } => rsx! {
-                            div {
-                                class: "space-y-4",
+                            div { class: "space-y-4",
                                 if *cached {
                                     p { class: "text-xs text-base-content/60", "Loaded from cache" }
                                 }
-                                div {
-                                    class: "prose prose-sm max-w-none",
+                                div { class: "prose prose-sm max-w-none",
                                     MarkdownRenderer { src: summary.clone() }
                                 }
                                 div { class: "flex justify-end",
@@ -521,8 +555,7 @@ fn SummarySection(video_id: String) -> Element {
                             }
                         },
                         SummaryState::Error(err) => rsx! {
-                            div {
-                                class: "text-center py-8",
+                            div { class: "text-center py-8",
                                 p { class: "text-error mb-4", "{err}" }
                                 button {
                                     class: "btn btn-outline btn-primary",

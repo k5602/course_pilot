@@ -28,27 +28,19 @@ pub fn Sidebar() -> Element {
     let width_class = if collapsed { "w-16" } else { "w-60" };
 
     rsx! {
-        aside {
-            class: "flex flex-col h-full bg-base-200 border-r border-base-300 transition-all duration-200 {width_class}",
+        aside { class: "flex flex-col h-full bg-base-200 border-r border-base-300 transition-all duration-200 {width_class}",
 
             // Header with toggle
-            div {
-                class: "flex items-center justify-between p-4 border-b border-base-300",
+            div { class: "flex items-center justify-between p-4 border-b border-base-300",
                 if !collapsed {
                     span { class: "font-bold text-lg", "Course Pilot" }
                 }
-                button {
-                    class: "btn btn-ghost btn-sm",
-                    onclick: toggle_sidebar,
-                    "☰"
-                }
+                button { class: "btn btn-ghost btn-sm", onclick: toggle_sidebar, "☰" }
             }
 
             if !collapsed {
-                div {
-                    class: "p-3 border-b border-base-300",
-                    div {
-                        class: "relative",
+                div { class: "p-3 border-b border-base-300",
+                    div { class: "relative",
                         input {
                             class: "input input-bordered w-full text-sm",
                             r#type: "text",
@@ -67,8 +59,7 @@ pub fn Sidebar() -> Element {
                                 }
                             } else {
                                 rsx! {
-                                    div {
-                                        class: "mt-3 space-y-2 max-h-56 overflow-auto",
+                                    div { class: "mt-3 space-y-2 max-h-56 overflow-auto",
                                         for result in results_list.iter() {
                                             {
                                                 let label = match result.entity_type {
@@ -77,20 +68,26 @@ pub fn Sidebar() -> Element {
                                                     SearchResultType::Note => "Note",
                                                 };
                                                 let to = match result.entity_type {
-                                                    SearchResultType::Course => Route::CourseView {
-                                                        course_id: result.entity_id.clone(),
-                                                    },
-                                                    SearchResultType::Video => Route::VideoPlayer {
-                                                        course_id: result.course_id.as_uuid().to_string(),
-                                                        video_id: result.entity_id.clone(),
-                                                    },
-                                                    SearchResultType::Note => Route::CourseView {
-                                                        course_id: result.course_id.as_uuid().to_string(),
-                                                    },
+                                                    SearchResultType::Course => {
+                                                        Route::CourseView {
+                                                            course_id: result.entity_id.clone(),
+                                                        }
+                                                    }
+                                                    SearchResultType::Video => {
+                                                        Route::VideoPlayer {
+                                                            course_id: result.course_id.as_uuid().to_string(),
+                                                            video_id: result.entity_id.clone(),
+                                                        }
+                                                    }
+                                                    SearchResultType::Note => {
+                                                        Route::CourseView {
+                                                            course_id: result.course_id.as_uuid().to_string(),
+                                                        }
+                                                    }
                                                 };
                                                 rsx! {
                                                     Link {
-                                                        to: to,
+                                                        to,
                                                         class: "block p-2 rounded-lg bg-base-100 hover:bg-base-300 transition-colors",
                                                         div { class: "text-xs text-base-content/50", "{label}" }
                                                         div { class: "text-sm font-medium truncate", "{result.title}" }
@@ -110,35 +107,42 @@ pub fn Sidebar() -> Element {
             }
 
             // Navigation links
-            nav {
-                class: "flex-1 p-2 space-y-1",
+            nav { class: "flex-1 p-2 space-y-1",
 
                 NavItem {
                     to: Route::Dashboard {},
-                    icon: rsx! { Icon { icon: MdDashboard, width: 20, height: 20 } },
+                    icon: rsx! {
+                        Icon { icon: MdDashboard, width: 20, height: 20 }
+                    },
                     label: "Dashboard",
-                    collapsed: collapsed,
+                    collapsed,
                 }
 
                 NavItem {
                     to: Route::CourseList {},
-                    icon: rsx! { Icon { icon: MdPlaylistPlay, width: 20, height: 20 } },
+                    icon: rsx! {
+                        Icon { icon: MdPlaylistPlay, width: 20, height: 20 }
+                    },
                     label: "Courses",
-                    collapsed: collapsed,
+                    collapsed,
                 }
 
                 NavItem {
                     to: Route::QuizList {},
-                    icon: rsx! { Icon { icon: MdAssignment, width: 20, height: 20 } },
+                    icon: rsx! {
+                        Icon { icon: MdAssignment, width: 20, height: 20 }
+                    },
                     label: "Quizzes",
-                    collapsed: collapsed,
+                    collapsed,
                 }
 
                 NavItem {
                     to: Route::Settings {},
-                    icon: rsx! { Icon { icon: MdSettings, width: 20, height: 20 } },
+                    icon: rsx! {
+                        Icon { icon: MdSettings, width: 20, height: 20 }
+                    },
                     label: "Settings",
-                    collapsed: collapsed,
+                    collapsed,
                 }
             }
         }
@@ -149,7 +153,7 @@ pub fn Sidebar() -> Element {
 fn NavItem(to: Route, icon: Element, label: &'static str, collapsed: bool) -> Element {
     rsx! {
         Link {
-            to: to,
+            to,
             class: "flex items-center gap-3 px-3 py-2 rounded-lg hover:bg-base-300 transition-colors",
             {icon}
             if !collapsed {

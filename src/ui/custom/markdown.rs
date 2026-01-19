@@ -43,9 +43,6 @@ pub fn MarkdownRenderer(props: MarkdownRendererProps) -> Element {
         props.class.clone().unwrap_or_else(|| "prose prose-base leading-7 max-w-none".to_string());
 
     rsx! {
-        div {
-            class: "{class}",
-            dangerous_inner_html: "{html}",
-        }
+        div { class: "{class}", dangerous_inner_html: "{html}" }
     }
 }

@@ -23,19 +23,16 @@ pub fn CourseCard(
             to: Route::CourseView { course_id: id },
             class: "card bg-base-200 hover:bg-base-300 transition-colors cursor-pointer",
 
-            div {
-                class: "card-body",
+            div { class: "card-body",
 
                 h3 { class: "card-title text-lg", "{name}" }
 
-                p {
-                    class: "text-sm text-base-content/70",
+                p { class: "text-sm text-base-content/70",
                     "{completed_modules} / {module_count} modules"
                 }
 
                 // Progress bar
-                div {
-                    class: "w-full bg-base-300 rounded-full h-2 mt-2",
+                div { class: "w-full bg-base-300 rounded-full h-2 mt-2",
                     div {
                         class: "bg-primary h-2 rounded-full transition-all",
                         style: "width: {progress}%",

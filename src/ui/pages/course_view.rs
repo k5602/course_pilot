@@ -15,8 +15,8 @@ use crate::ui::Route;
 use crate::ui::actions::export_course_notes_with_dialog;
 use crate::ui::custom::{ErrorAlert, PageSkeleton, TagBadge, TagInput, VideoItem};
 use crate::ui::hooks::{
-    use_load_course_state, use_load_course_tags, use_load_modules_state, use_load_state,
-    use_load_tags, use_load_videos_by_course_state,
+    use_load_course_state, use_load_course_tags, use_load_modules_state, use_load_tags,
+    use_load_videos_by_course_state,
 };
 use crate::ui::state::AppState;
 
@@ -36,27 +36,18 @@ pub fn CourseView(course_id: String) -> Element {
 
     // Parse course ID
     let course_id_parsed = CourseId::from_str(&course_id);
+    let course_id_effective = course_id_parsed.clone().unwrap_or_else(|_| CourseId::new());
 
     // Load course and modules
-    let (course, course_state) = match &course_id_parsed {
-        Ok(id) => use_load_course_state(state.backend.clone(), id),
-        Err(_) => (use_signal(|| None), use_load_state()),
-    };
+    let (course, course_state) = use_load_course_state(state.backend.clone(), &course_id_effective);
 
-    let (modules, modules_state): (Signal<Vec<Module>>, _) = match &course_id_parsed {
-        Ok(id) => use_load_modules_state(state.backend.clone(), id),
-        Err(_) => (use_signal(Vec::new), use_load_state()),
-    };
+    let (modules, modules_state): (Signal<Vec<Module>>, _) =
+        use_load_modules_state(state.backend.clone(), &course_id_effective);
 
-    let (all_videos, videos_state): (Signal<Vec<Video>>, _) = match &course_id_parsed {
-        Ok(id) => use_load_videos_by_course_state(state.backend.clone(), id),
-        Err(_) => (use_signal(Vec::new), use_load_state()),
-    };
+    let (all_videos, videos_state): (Signal<Vec<Video>>, _) =
+        use_load_videos_by_course_state(state.backend.clone(), &course_id_effective);
 
-    let course_tags = match &course_id_parsed {
-        Ok(id) => use_load_course_tags(state.backend.clone(), id),
-        Err(_) => use_signal(Vec::new),
-    };
+    let course_tags = use_load_course_tags(state.backend.clone(), &course_id_effective);
 
     let all_tags = use_load_tags(state.backend.clone());
 
@@ -70,10 +61,7 @@ pub fn CourseView(course_id: String) -> Element {
 
     if *course_state.is_loading.read() && course.read().is_none() {
         return rsx! {
-            div {
-                class: "p-6",
-                PageSkeleton {}
-            }
+            div { class: "p-6", PageSkeleton {} }
         };
     }
 
@@ -310,8 +298,7 @@ pub fn CourseView(course_id: String) -> Element {
     let ordered_videos = all_videos.read().clone();
 
     rsx! {
-        div {
-            class: "p-6",
+        div { class: "p-6",
 
             if let Some(ref err) = *course_state.error.read() {
                 ErrorAlert { message: err.clone(), on_dismiss: None }
@@ -324,20 +311,14 @@ pub fn CourseView(course_id: String) -> Element {
             }
 
             if let Some((is_success, ref msg)) = *export_status.read() {
-                div {
-                    class: if is_success { "alert alert-success mb-4" } else { "alert alert-error mb-4" },
+                div { class: if is_success { "alert alert-success mb-4" } else { "alert alert-error mb-4" },
                     "{msg}"
                 }
             }
 
             // Back button and actions row
-            div {
-                class: "flex flex-wrap justify-between items-center mb-4 gap-3",
-                Link {
-                    to: Route::CourseList {},
-                    class: "btn btn-ghost btn-sm",
-                    "← Back to Courses"
-                }
+            div { class: "flex flex-wrap justify-between items-center mb-4 gap-3",
+                Link { to: Route::CourseList {}, class: "btn btn-ghost btn-sm", "← Back to Courses" }
 
                 div { class: "flex gap-2 flex-wrap",
                     button {
@@ -364,7 +345,11 @@ pub fn CourseView(course_id: String) -> Element {
                             let current = *boundary_edit_mode.read();
                             boundary_edit_mode.set(!current);
                         },
-                        if *boundary_edit_mode.read() { "✅ Editing Boundaries" } else { "✂️ Edit Boundaries" }
+                        if *boundary_edit_mode.read() {
+                            "✅ Editing Boundaries"
+                        } else {
+                            "✂️ Edit Boundaries"
+                        }
                     }
                     button {
                         class: "btn btn-ghost btn-sm text-error hover:bg-error/10",
@@ -376,12 +361,10 @@ pub fn CourseView(course_id: String) -> Element {
 
             // Course header
             if let Some(ref c) = *course.read() {
-                div {
-                    class: "mb-4",
+                div { class: "mb-4",
 
                     if *edit_mode.read() {
-                        div {
-                            class: "space-y-3",
+                        div { class: "space-y-3",
                             input {
                                 class: "input input-bordered w-full",
                                 r#type: "text",
@@ -430,8 +413,7 @@ pub fn CourseView(course_id: String) -> Element {
                     }
 
                     if let Some((is_success, ref msg)) = *edit_status.read() {
-                        div {
-                            class: if is_success { "alert alert-success mt-4" } else { "alert alert-error mt-4" },
+                        div { class: if is_success { "alert alert-success mt-4" } else { "alert alert-error mt-4" },
                             "{msg}"
                         }
                     }
@@ -459,7 +441,8 @@ pub fn CourseView(course_id: String) -> Element {
                                                     if let Ok(ref cid) = course_id_clone {
                                                         if let Some(ref ctx) = backend_clone {
                                                             if let Err(e) = ctx.tag_repo.remove_from_course(cid, &tag_id) {
-                                                                tag_status_clone.set(Some((false, format!("Failed to remove tag: {}", e))));
+                                                                tag_status_clone
+                                                                    .set(Some((false, format!("Failed to remove tag: {}", e))));
                                                                 return;
                                                             }
                                                             if let Ok(updated) = ctx.tag_repo.find_by_course(cid) {
@@ -498,8 +481,7 @@ pub fn CourseView(course_id: String) -> Element {
                         }
 
                         if let Some((is_success, ref msg)) = *tag_status.read() {
-                            div {
-                                class: if is_success { "text-xs text-success" } else { "text-xs text-error" },
+                            div { class: if is_success { "text-xs text-success" } else { "text-xs text-error" },
                                 "{msg}"
                             }
                         }
@@ -510,20 +492,14 @@ pub fn CourseView(course_id: String) -> Element {
             }
 
             // Progress bar
-            div {
-                class: "w-full max-w-md bg-base-300 rounded-full h-3 mb-6",
+            div { class: "w-full max-w-md bg-base-300 rounded-full h-3 mb-6",
                 div {
                     class: "bg-primary h-3 rounded-full transition-all",
                     style: "width: {progress}%",
                 }
             }
 
-            if let Some(last_video_id) = state
-                .last_video_by_course
-                .read()
-                .get(&course_id)
-                .cloned()
-            {
+            if let Some(last_video_id) = state.last_video_by_course.read().get(&course_id).cloned() {
                 div { class: "mb-6",
                     Link {
                         to: Route::VideoPlayer {
@@ -537,12 +513,10 @@ pub fn CourseView(course_id: String) -> Element {
             }
 
             // Modules accordion
-            div {
-                class: "space-y-4",
+            div { class: "space-y-4",
 
                 if modules.read().is_empty() {
-                    div {
-                        class: "text-center py-8 bg-base-200 rounded-lg",
+                    div { class: "text-center py-8 bg-base-200 rounded-lg",
                         p { class: "text-base-content/60", "No modules found" }
                     }
                 } else {
@@ -679,8 +653,7 @@ pub fn CourseView(course_id: String) -> Element {
                                     active_day.map(|day| p.day == day).unwrap_or(true)
                                 })
                             {
-                                div {
-                                    class: "bg-base-200 rounded-xl p-4 space-y-2",
+                                div { class: "bg-base-200 rounded-xl p-4 space-y-2",
                                     div { class: "flex justify-between items-center",
                                         span { class: "font-bold", "Day {plan.day}" }
                                         span { class: "text-sm text-base-content/60",
@@ -696,7 +669,9 @@ pub fn CourseView(course_id: String) -> Element {
                                             if let Some(video) = ordered_videos.get(*idx) {
                                                 li { class: "flex justify-between text-sm",
                                                     span { class: "truncate", "{video.title()}" }
-                                                    span { class: "text-base-content/60", "{format_duration(video.duration_secs())}" }
+                                                    span { class: "text-base-content/60",
+                                                        "{format_duration(video.duration_secs())}"
+                                                    }
                                                 }
                                             }
                                         }
@@ -780,11 +755,9 @@ fn ModuleAccordion(
     let module_for_loop = module.clone();
 
     rsx! {
-        div {
-            class: "collapse collapse-arrow bg-base-200",
+        div { class: "collapse collapse-arrow bg-base-200",
             input { r#type: "checkbox" }
-            div {
-                class: "collapse-title font-medium flex items-center justify-between gap-2",
+            div { class: "collapse-title font-medium flex items-center justify-between gap-2",
 
                 if *is_editing_title.read() {
                     div { class: "flex-1 flex items-center gap-2",
@@ -793,7 +766,11 @@ fn ModuleAccordion(
                             value: "{edit_title}",
                             oninput: move |e| edit_title.set(e.value()),
                         }
-                        button { class: "btn btn-primary btn-sm", onclick: on_save_title, "Save" }
+                        button {
+                            class: "btn btn-primary btn-sm",
+                            onclick: on_save_title,
+                            "Save"
+                        }
                         button {
                             class: "btn btn-ghost btn-sm",
                             onclick: move |_| {
@@ -806,8 +783,7 @@ fn ModuleAccordion(
                 } else {
                     div { class: "flex-1",
                         "{module.title()}"
-                        span {
-                            class: "text-sm text-base-content/60 ml-2",
+                        span { class: "text-sm text-base-content/60 ml-2",
                             "({videos.read().len()} videos)"
                         }
                     }
@@ -820,11 +796,9 @@ fn ModuleAccordion(
                     }
                 }
             }
-            div {
-                class: "collapse-content",
+            div { class: "collapse-content",
                 if let Some((is_success, ref msg)) = *edit_status.read() {
-                    div {
-                        class: if is_success { "text-xs text-success mb-2" } else { "text-xs text-error mb-2" },
+                    div { class: if is_success { "text-xs text-success mb-2" } else { "text-xs text-error mb-2" },
                         "{msg}"
                     }
                 }
@@ -842,70 +816,84 @@ fn ModuleAccordion(
                     div { class: "space-y-2",
                         {
                             let current_videos = videos.read().clone();
-                            current_videos.iter().map(|video| {
-                                let vid = video.id().clone();
-                                let vid_key = vid.as_uuid().to_string();
-                                let vid_key_for_oninput = vid_key.clone();
-                                let vid_key_for_onclick = vid_key.clone();
-                                let vid_for_onclick = vid.clone();
-                                let backend_for_move = state.backend.clone();
-                                let mut move_status_for_move = move_status;
-                                let mut move_targets_for_select = move_targets;
-                                let move_targets_for_click = move_targets;
-                                let module_id_for_filter = module_for_loop.id().clone();
-                                rsx! {
-                                    div { class: "flex items-center gap-3",
-                                        VideoItem {
-                                            course_id: course_id.clone(),
-                                            video_id: vid_key.clone(),
-                                            title: video.title().to_string(),
-                                            duration_secs: video.duration_secs(),
-                                            is_completed: video.is_completed(),
-                                        }
-                                        if boundary_edit_mode {
-                                            div { class: "flex items-center gap-2",
-                                                select {
-                                                    class: "select select-bordered select-sm",
-                                                    value: "{move_targets.read().get(&vid_key).cloned().unwrap_or_default()}",
-                                                    oninput: move |e| {
-                                                        let mut map = move_targets_for_select.write();
-                                                        map.insert(vid_key_for_oninput.clone(), e.value());
-                                                    },
-                                                    option { value: "", "Move to..." }
-                                                    for target in all_modules.iter() {
-                                                        if target.id() != &module_id_for_filter {
-                                                            option { value: "{target.id().as_uuid()}", "{target.title()}" }
+                            current_videos
+                                .iter()
+                                .map(|video| {
+                                    let vid = video.id().clone();
+                                    let vid_key = vid.as_uuid().to_string();
+                                    let vid_key_for_oninput = vid_key.clone();
+                                    let vid_key_for_onclick = vid_key.clone();
+                                    let vid_for_onclick = vid.clone();
+                                    let backend_for_move = state.backend.clone();
+                                    let mut move_status_for_move = move_status;
+                                    let mut move_targets_for_select = move_targets;
+                                    let move_targets_for_click = move_targets;
+                                    let module_id_for_filter = module_for_loop.id().clone();
+                                    rsx! {
+                                        div { class: "flex items-center gap-3",
+                                            VideoItem {
+                                                course_id: course_id.clone(),
+                                                video_id: vid_key.clone(),
+                                                title: video.title().to_string(),
+                                                duration_secs: video.duration_secs(),
+                                                is_completed: video.is_completed(),
+                                            }
+                                            if boundary_edit_mode {
+                                                div { class: "flex items-center gap-2",
+                                                    select {
+                                                        class: "select select-bordered select-sm",
+                                                        value: "{move_targets.read().get(&vid_key).cloned().unwrap_or_default()}",
+                                                        oninput: move |e| {
+                                                            let mut map = move_targets_for_select.write();
+                                                            map.insert(vid_key_for_oninput.clone(), e.value());
+                                                        },
+                                                        option { value: "", "Move to..." }
+                                                        for target in all_modules.iter() {
+                                                            if target.id() != &module_id_for_filter {
+                                                                option { value: "{target.id().as_uuid()}", "{target.title()}" }
+                                                            }
                                                         }
                                                     }
-                                                }
-                                                button {
-                                                    class: "btn btn-outline btn-sm",
-                                                    onclick: move |_| {
-                                                        if let Some(value) = move_targets_for_click.read().get(&vid_key_for_onclick).cloned() {
-                                                            if let Ok(target_id) = ModuleId::from_str(&value) {
-                                                                if let Some(ref ctx) = backend_for_move {
-                                                                    let use_case = ServiceFactory::move_video_to_module(ctx);
-                                                                    let input = MoveVideoInput { video_id: vid_for_onclick.clone(), target_module_id: target_id, sort_order: 0 };
-                                                                    match use_case.execute(input) {
-                                                                        Ok(_) => {
-                                                                            move_status_for_move.set(Some((true, "Video moved successfully.".to_string())));
-                                                                        },
-                                                                        Err(e) => {
-                                                                            log::error!("Failed to move video: {}", e);
-                                                                            move_status_for_move.set(Some((false, format!("Failed to move video: {}", e))));
-                                                                        },
+                                                    button {
+                                                        class: "btn btn-outline btn-sm",
+                                                        onclick: move |_| {
+                                                            if let Some(value) = move_targets_for_click
+                                                                .read()
+                                                                .get(&vid_key_for_onclick)
+                                                                .cloned()
+                                                            {
+                                                                if let Ok(target_id) = ModuleId::from_str(&value) {
+                                                                    if let Some(ref ctx) = backend_for_move {
+                                                                        let use_case = ServiceFactory::move_video_to_module(ctx);
+                                                                        let input = MoveVideoInput {
+                                                                            video_id: vid_for_onclick.clone(),
+                                                                            target_module_id: target_id,
+                                                                            sort_order: 0,
+                                                                        };
+                                                                        match use_case.execute(input) {
+                                                                            Ok(_) => {
+                                                                                move_status_for_move
+                                                                                    .set(Some((true, "Video moved successfully.".to_string())));
+                                                                            }
+                                                                            Err(e) => {
+                                                                                log::error!("Failed to move video: {}", e);
+                                                                                move_status_for_move
+                                                                                    .set(Some((false, format!("Failed to move video: {}", e))));
+                                                                            }
+                                                                        }
                                                                     }
                                                                 }
                                                             }
-                                                        }
-                                                    },
-                                                    "Move"
+                                                        },
+                                                        "Move"
+                                                    }
                                                 }
                                             }
                                         }
                                     }
-                                }
-                            }).collect::<Vec<_>>().into_iter()
+                                })
+                                .collect::<Vec<_>>()
+                                .into_iter()
                         }
                     }
                 }

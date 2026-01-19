@@ -92,9 +92,14 @@ where
         let transcript = match transcript {
             Some(t) if !t.trim().is_empty() => t,
             _ => {
+                let youtube_id = video.youtube_id().ok_or_else(|| {
+                    SummarizeVideoError::Transcript(
+                        "Transcript only available for YouTube videos".to_string(),
+                    )
+                })?;
                 let fetched = self
                     .transcript_provider
-                    .fetch_transcript(video.youtube_id().as_str())
+                    .fetch_transcript(youtube_id.as_str())
                     .await
                     .map_err(map_transcript_err)?;
 

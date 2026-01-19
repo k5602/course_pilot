@@ -6,7 +6,7 @@ use crate::domain::entities::Course;
 use crate::domain::ports::{TagRepository, VideoRepository};
 use crate::domain::value_objects::TagId;
 use crate::ui::Route;
-use crate::ui::actions::{ImportResult, import_playlist};
+use crate::ui::actions::{ImportResult, import_local_folder, import_playlist};
 use crate::ui::custom::{
     AnalyticsOverview, CardSkeleton, CourseCard, ErrorAlert, ImportPlaylistDialog, Spinner,
     TagBadge, TagFilterChip,
@@ -46,16 +46,46 @@ pub fn Dashboard() -> Element {
     let mut import_status = use_signal(|| None::<String>);
     let mut import_loading = use_signal(|| false);
 
-    let backend = state.backend.clone();
+    let backend_for_youtube = state.backend.clone();
+    let backend_for_local = state.backend.clone();
 
-    let handle_import = move |url: String| {
-        let backend = backend.clone();
+    let handle_import_youtube = move |url: String| {
+        let backend = backend_for_youtube.clone();
 
         spawn(async move {
             import_loading.set(true);
             import_status.set(Some("Importing...".to_string()));
 
             match import_playlist(backend.clone(), url, None).await {
+                ImportResult::Success { course_id: _, modules, videos } => {
+                    import_status
+                        .set(Some(format!("✓ Imported {} modules, {} videos", modules, videos)));
+
+                    // Reload courses
+                    if let Some(ref ctx) = backend {
+                        use crate::domain::ports::CourseRepository;
+                        if let Ok(loaded) = ctx.course_repo.find_all() {
+                            courses.set(loaded);
+                        }
+                    }
+                },
+                ImportResult::Error(e) => {
+                    import_status.set(Some(format!("✗ Error: {}", e)));
+                },
+            }
+
+            import_loading.set(false);
+        });
+    };
+
+    let handle_import_local = move |path: String| {
+        let backend = backend_for_local.clone();
+
+        spawn(async move {
+            import_loading.set(true);
+            import_status.set(Some("Importing...".to_string()));
+
+            match import_local_folder(backend.clone(), path, None).await {
                 ImportResult::Success { course_id: _, modules, videos } => {
                     import_status
                         .set(Some(format!("✓ Imported {} modules, {} videos", modules, videos)));
@@ -114,23 +144,20 @@ pub fn Dashboard() -> Element {
         .collect();
 
     rsx! {
-        div {
-            class: "p-6",
+        div { class: "p-6",
 
             // Header
-            div {
-                class: "flex items-center justify-between mb-6",
+            div { class: "flex items-center justify-between mb-6",
                 h1 { class: "text-2xl font-bold", "Dashboard" }
                 button {
                     class: "btn btn-primary",
                     onclick: move |_| import_open.set(true),
-                    "+ Import Playlist"
+                    "+ Import"
                 }
             }
 
             // Tabs
-            div {
-                class: "tabs tabs-boxed mb-6",
+            div { class: "tabs tabs-boxed mb-6",
                 button {
                     class: if *active_tab.read() == "overview" { "tab tab-active" } else { "tab" },
                     onclick: move |_| active_tab.set("overview".to_string()),
@@ -150,8 +177,7 @@ pub fn Dashboard() -> Element {
 
             // Import status message
             if let Some(ref status) = *import_status.read() {
-                div {
-                    class: if status.starts_with("✓") { "alert alert-success mb-4" } else if status.starts_with("✗") { "alert alert-error mb-4" } else { "alert alert-info mb-4" },
+                div { class: if status.starts_with("✓") { "alert alert-success mb-4" } else if status.starts_with("✗") { "alert alert-error mb-4" } else { "alert alert-info mb-4" },
                     "{status}"
                 }
             }
@@ -162,14 +188,15 @@ pub fn Dashboard() -> Element {
                 }
 
                 if *analytics_state.is_loading.read() && analytics.read().is_none() {
-                    div { class: "py-8", Spinner { message: Some("Loading analytics...".to_string()) } }
+                    div { class: "py-8",
+                        Spinner { message: Some("Loading analytics...".to_string()) }
+                    }
                 } else if let Some(snapshot) = analytics.read().clone() {
                     AnalyticsOverview { analytics: snapshot }
                 }
 
                 if courses.read().is_empty() {
-                    div {
-                        class: "text-center py-10 bg-base-200 rounded-lg mt-6",
+                    div { class: "text-center py-10 bg-base-200 rounded-lg mt-6",
                         p { class: "text-lg mb-2", "No courses yet" }
                         p { class: "text-base-content/60", "Import a YouTube playlist to get started" }
                     }
@@ -178,16 +205,11 @@ pub fn Dashboard() -> Element {
                         let mut recent_courses = courses.read().clone();
                         recent_courses.sort_by_key(|course| std::cmp::Reverse(course.created_at()));
                         rsx! {
-                            div {
-                                class: "mt-6",
+                            div { class: "mt-6",
                                 h2 { class: "text-lg font-semibold mb-4", "Recent Courses" }
-                                div {
-                                    class: "grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4",
+                                div { class: "grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4",
                                     for course in recent_courses.iter().take(3) {
-                                        CourseCardWithStats {
-                                            key: "{course.id().as_uuid()}",
-                                            course: course.clone(),
-                                        }
+                                        CourseCardWithStats { key: "{course.id().as_uuid()}", course: course.clone() }
                                     }
                                 }
                             }
@@ -201,12 +223,9 @@ pub fn Dashboard() -> Element {
                 }
 
                 // Search bar
-                div {
-                    class: "mb-4",
-                    div {
-                        class: "relative",
-                        span {
-                            class: "absolute left-3 top-1/2 -translate-y-1/2 text-base-content/40",
+                div { class: "mb-4",
+                    div { class: "relative",
+                        span { class: "absolute left-3 top-1/2 -translate-y-1/2 text-base-content/40",
                             "🔍"
                         }
                         input {
@@ -226,21 +245,23 @@ pub fn Dashboard() -> Element {
 
                     if has_tags {
                         rsx! {
-                            div {
-                                class: "flex flex-wrap gap-2 mb-4",
 
-                                // "All" button
+                // "All" button
+
+                // Tag chips
+
+
+
+
+
+                            div { class: "flex flex-wrap gap-2 mb-4",
+
                                 button {
-                                    class: if selected_tags.read().is_empty() {
-                                        "px-3 py-1 rounded-full text-sm font-medium bg-primary text-primary-content"
-                                    } else {
-                                        "px-3 py-1 rounded-full text-sm font-medium bg-base-200 text-base-content hover:bg-base-300"
-                                    },
+                                    class: if selected_tags.read().is_empty() { "px-3 py-1 rounded-full text-sm font-medium bg-primary text-primary-content" } else { "px-3 py-1 rounded-full text-sm font-medium bg-base-200 text-base-content hover:bg-base-300" },
                                     onclick: move |_| selected_tags.set(Vec::new()),
                                     "All"
                                 }
 
-                                // Tag chips
                                 for tag in tags_list.iter() {
                                     {
                                         let tag_id = tag.id().clone();
@@ -274,8 +295,7 @@ pub fn Dashboard() -> Element {
 
                 // Course grid
                 if *courses_state.is_loading.read() && courses.read().is_empty() {
-                    div {
-                        class: "grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4",
+                    div { class: "grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4",
                         CardSkeleton {}
                         CardSkeleton {}
                         CardSkeleton {}
@@ -285,12 +305,12 @@ pub fn Dashboard() -> Element {
                     }
                 } else if filtered_courses.is_empty() {
                     if courses.read().is_empty() {
-                        div {
-                            class: "text-center py-12 bg-base-200 rounded-lg",
+                        div { class: "text-center py-12 bg-base-200 rounded-lg",
                             p { class: "text-xl mb-2", "No courses yet" }
-                            p { class: "text-base-content/60", "Import a YouTube playlist to get started" }
-                            div {
-                                class: "flex justify-center gap-4 mt-4",
+                            p { class: "text-base-content/60",
+                                "Import a YouTube playlist to get started"
+                            }
+                            div { class: "flex justify-center gap-4 mt-4",
                                 button {
                                     class: "btn btn-primary",
                                     onclick: move |_| import_open.set(true),
@@ -304,15 +324,13 @@ pub fn Dashboard() -> Element {
                             }
                         }
                     } else {
-                        div {
-                            class: "text-center py-12 bg-base-200 rounded-lg",
+                        div { class: "text-center py-12 bg-base-200 rounded-lg",
                             p { class: "text-xl mb-2", "No matching courses" }
                             p { class: "text-base-content/60", "Try adjusting your search or filters" }
                         }
                     }
                 } else {
-                    div {
-                        class: "grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4",
+                    div { class: "grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4",
                         for course in filtered_courses.iter() {
                             CourseCardWithStats {
                                 key: "{course.id().as_uuid()}",
@@ -326,16 +344,14 @@ pub fn Dashboard() -> Element {
                     let tags_list = all_tags.read().clone();
                     if tags_list.is_empty() {
                         rsx! {
-                            div {
-                                class: "text-center py-12 bg-base-200 rounded-lg",
+                            div { class: "text-center py-12 bg-base-200 rounded-lg",
                                 p { class: "text-xl mb-2", "No tags yet" }
                                 p { class: "text-base-content/60", "Tags will appear after you label courses" }
                             }
                         }
                     } else {
                         rsx! {
-                            div {
-                                class: "flex flex-wrap gap-3",
+                            div { class: "flex flex-wrap gap-3",
                                 for tag in tags_list.iter() {
                                     TagBadge { tag: tag.clone() }
                                 }
@@ -349,7 +365,8 @@ pub fn Dashboard() -> Element {
         // Import dialog
         ImportPlaylistDialog {
             open: import_open,
-            on_import: handle_import,
+            on_import_youtube: handle_import_youtube,
+            on_import_local: handle_import_local,
             is_loading: import_loading,
             status_msg: import_status,
         }

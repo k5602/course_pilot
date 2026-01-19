@@ -17,12 +17,10 @@ pub fn RightPanel() -> Element {
     let current_tab = *state.right_panel_tab.read();
 
     rsx! {
-        aside {
-            class: "w-80 h-full bg-base-200 border-l border-base-300 flex flex-col",
+        aside { class: "w-80 h-full bg-base-200 border-l border-base-300 flex flex-col",
 
             // Tab headers
-            div {
-                class: "flex border-b border-base-300",
+            div { class: "flex border-b border-base-300",
 
                 TabButton {
                     label: "Notes",
@@ -37,11 +35,14 @@ pub fn RightPanel() -> Element {
             }
 
             // Tab content
-            div {
-                class: "flex-1 overflow-auto p-5",
+            div { class: "flex-1 overflow-auto p-5",
                 match current_tab {
-                    RightPanelTab::Notes => rsx! { NotesEditor {} },
-                    RightPanelTab::AiChat => rsx! { AiChatView {} },
+                    RightPanelTab::Notes => rsx! {
+                        NotesEditor {}
+                    },
+                    RightPanelTab::AiChat => rsx! {
+                        AiChatView {}
+                    },
                 }
             }
         }
@@ -204,8 +205,7 @@ fn NotesEditor() -> Element {
     };
 
     rsx! {
-        div {
-            class: "h-full flex flex-col",
+        div { class: "h-full flex flex-col",
 
             if video_id.is_some() {
                 div { class: "flex items-center justify-between gap-2 mb-2",
@@ -239,11 +239,12 @@ fn NotesEditor() -> Element {
                     oninput: on_note_input,
                 }
 
-                div {
-                    class: "mt-4 flex-1 overflow-auto rounded-lg bg-base-100 p-4",
+                div { class: "mt-4 flex-1 overflow-auto rounded-lg bg-base-100 p-4",
 
                     if note_text.read().trim().is_empty() {
-                        p { class: "text-base-content/50", "Markdown preview will appear once you add notes" }
+                        p { class: "text-base-content/50",
+                            "Markdown preview will appear once you add notes"
+                        }
                     } else {
                         MarkdownRenderer {
                             src: note_text.read().clone(),
@@ -252,8 +253,7 @@ fn NotesEditor() -> Element {
                     }
                 }
             } else {
-                div {
-                    class: "text-base-content/50 text-center mt-8",
+                div { class: "text-base-content/50 text-center mt-8",
                     "Select a video to start notes. Your notes save automatically."
                 }
             }
@@ -385,29 +385,24 @@ fn AiChatView() -> Element {
     let mut on_send_key = on_send.clone();
 
     rsx! {
-        div {
-            class: "h-full flex flex-col",
+        div { class: "h-full flex flex-col",
 
             // Chat messages
-            div {
-                class: "flex-1 overflow-auto space-y-3",
+            div { class: "flex-1 overflow-auto space-y-3",
                 for msg in messages.iter() {
                     ChatBubble { message: msg.clone() }
                 }
 
                 if *is_loading.read() {
-                    div {
-                        class: "flex justify-start",
-                        div {
-                            class: "max-w-[80%] px-4 py-2 rounded-lg bg-base-300",
+                    div { class: "flex justify-start",
+                        div { class: "max-w-[80%] px-4 py-2 rounded-lg bg-base-300",
                             span { class: "loading loading-dots loading-sm" }
                         }
                     }
                 }
 
                 if messages.is_empty() && !*is_loading.read() {
-                    div {
-                        class: "text-base-content/50 text-center mt-8 space-y-2",
+                    div { class: "text-base-content/50 text-center mt-8 space-y-2",
                         if video_id.is_none() {
                             "Select a video to ask questions"
                         } else if !has_gemini {
@@ -416,14 +411,12 @@ fn AiChatView() -> Element {
                             "Ask questions about the current video"
                         }
                         if video_id.is_some() && has_gemini && *has_transcript.read() == Some(false) {
-                            p {
-                                class: "text-xs text-warning",
+                            p { class: "text-xs text-warning",
                                 "Transcript not available yet. Generate a summary to fetch it."
                             }
                         }
                         if video_id.is_some() && has_gemini {
-                            p {
-                                class: "text-xs text-base-content/60",
+                            p { class: "text-xs text-base-content/60",
                                 "Answers improve when a transcript, summary, or notes are available."
                             }
                         }
@@ -433,17 +426,12 @@ fn AiChatView() -> Element {
 
             // Error message
             if let Some(ref err) = *error_msg.read() {
-                div {
-                    class: "text-error text-sm mb-2",
-                    "{err}"
-                }
+                div { class: "text-error text-sm mb-2", "{err}" }
             }
 
             // Input area
-            div {
-                class: "pt-4 border-t border-base-300",
-                div {
-                    class: "flex gap-2",
+            div { class: "pt-4 border-t border-base-300",
+                div { class: "flex gap-2",
                     input {
                         class: "input input-bordered flex-1",
                         placeholder: if video_id.is_none() { "Select a video first..." } else if !has_gemini { "Configure Gemini API key..." } else { "Ask a question..." },
@@ -458,14 +446,14 @@ fn AiChatView() -> Element {
                     }
                     button {
                         class: "btn btn-primary",
-                        disabled: video_id.is_none() || !has_gemini || *is_loading.read() || input_value.read().trim().is_empty(),
+                        disabled: video_id.is_none() || !has_gemini || *is_loading.read()
+                            || input_value.read().trim().is_empty(),
                         onclick: move |_| on_send_click(),
                         "Send"
                     }
                 }
                 if !has_gemini {
-                    p {
-                        class: "text-xs text-warning mt-2",
+                    p { class: "text-xs text-warning mt-2",
                         "AI Chat requires a Gemini API key. Configure in Settings."
                     }
                 }
@@ -482,10 +470,8 @@ fn ChatBubble(message: ChatMessage) -> Element {
     };
 
     rsx! {
-        div {
-            class: "flex {align}",
-            div {
-                class: "max-w-[80%] px-4 py-3 rounded-lg {bg}",
+        div { class: "flex {align}",
+            div { class: "max-w-[80%] px-4 py-3 rounded-lg {bg}",
                 MarkdownRenderer {
                     src: message.content,
                     class: Some("prose prose-base leading-7 max-w-none".to_string()),

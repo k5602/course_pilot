@@ -3,6 +3,7 @@
 mod ask_companion;
 mod dashboard;
 mod export_course_notes;
+mod ingest_local;
 mod ingest_playlist;
 mod move_video_to_module;
 mod notes;
@@ -18,6 +19,7 @@ pub use dashboard::LoadDashboardUseCase;
 pub use export_course_notes::{
     ExportCourseNotesError, ExportCourseNotesInput, ExportCourseNotesUseCase,
 };
+pub use ingest_local::{IngestLocalInput, IngestLocalOutput, IngestLocalUseCase};
 pub use ingest_playlist::{IngestPlaylistInput, IngestPlaylistOutput, IngestPlaylistUseCase};
 pub use move_video_to_module::{MoveVideoError, MoveVideoInput, MoveVideoToModuleUseCase};
 pub use notes::{

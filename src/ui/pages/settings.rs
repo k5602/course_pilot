@@ -110,13 +110,11 @@ pub fn Settings() -> Element {
     };
 
     rsx! {
-        div {
-            class: "p-6 max-w-3xl",
+        div { class: "p-6 max-w-3xl",
 
             h1 { class: "text-2xl font-bold mb-6", "Settings" }
 
-            div {
-                class: "tabs tabs-boxed mb-6",
+            div { class: "tabs tabs-boxed mb-6",
                 button {
                     class: if *active_tab.read() == "integrations" { "tab tab-active" } else { "tab" },
                     onclick: move |_| active_tab.set("integrations".to_string()),
@@ -136,25 +134,21 @@ pub fn Settings() -> Element {
 
             // Save status alert
             if let Some((is_success, ref msg)) = *save_status.read() {
-                div {
-                    class: if is_success { "alert alert-success mb-6" } else { "alert alert-error mb-6" },
+                div { class: if is_success { "alert alert-success mb-6" } else { "alert alert-error mb-6" },
                     "{msg}"
                 }
             }
 
             if *active_tab.read() == "integrations" {
-                section {
-                    class: "mb-8",
+                section { class: "mb-8",
                     h2 { class: "text-lg font-semibold mb-4", "API Keys" }
 
-                    div {
-                        class: "space-y-4",
+                    div { class: "space-y-4",
 
                         // Gemini API Key
                         div {
                             label { class: "label", "Gemini API Key" }
-                            div {
-                                class: "flex gap-2",
+                            div { class: "flex gap-2",
                                 input {
                                     class: "input input-bordered flex-1",
                                     r#type: "password",
@@ -168,11 +162,12 @@ pub fn Settings() -> Element {
                                     },
                                 }
                                 if state.has_gemini() {
-                                    span { class: "badge badge-success self-center", "Active" }
+                                    span { class: "badge badge-success self-center",
+                                        "Active"
+                                    }
                                 }
                             }
-                            p {
-                                class: "text-sm text-base-content/60 mt-1",
+                            p { class: "text-sm text-base-content/60 mt-1",
                                 "Required for AI Companion, quiz generation, and video summaries. "
                                 a {
                                     href: "https://aistudio.google.com/apikey",
@@ -191,12 +186,10 @@ pub fn Settings() -> Element {
                     }
                 }
             } else if *active_tab.read() == "preferences" {
-                section {
-                    class: "mb-8",
+                section { class: "mb-8",
                     h2 { class: "text-lg font-semibold mb-4", "Preferences" }
 
-                    div {
-                        class: "space-y-6",
+                    div { class: "space-y-6",
 
                         // Cognitive limit
                         div {
@@ -212,21 +205,18 @@ pub fn Settings() -> Element {
                                     if let Ok(val) = e.value().parse::<u32>() {
                                         cognitive_limit.set(val);
                                     }
-                                }
+                                },
                             }
-                            p {
-                                class: "text-sm text-base-content/60 mt-1",
+                            p { class: "text-sm text-base-content/60 mt-1",
                                 "Used to plan study sessions across modules."
                             }
                         }
 
                         // ML boundaries (reserved)
-                        div {
-                            class: "flex items-center justify-between bg-base-200 rounded-lg p-4",
+                        div { class: "flex items-center justify-between bg-base-200 rounded-lg p-4",
                             div {
                                 h3 { class: "font-semibold", "ML Boundary Hints" }
-                                p {
-                                    class: "text-sm text-base-content/60",
+                                p { class: "text-sm text-base-content/60",
                                     "Enable experimental machine-learning boundaries for session planning."
                                 }
                             }
@@ -241,12 +231,10 @@ pub fn Settings() -> Element {
                         }
 
                         // Right panel visibility
-                        div {
-                            class: "flex items-center justify-between bg-base-200 rounded-lg p-4",
+                        div { class: "flex items-center justify-between bg-base-200 rounded-lg p-4",
                             div {
                                 h3 { class: "font-semibold", "Right Panel" }
-                                p {
-                                    class: "text-sm text-base-content/60",
+                                p { class: "text-sm text-base-content/60",
                                     "Show the Notes & AI companion panel by default."
                                 }
                             }
@@ -268,13 +256,16 @@ pub fn Settings() -> Element {
                     }
                 }
             } else {
-                section {
-                    class: "mb-8 space-y-4",
+                section { class: "mb-8 space-y-4",
                     h2 { class: "text-lg font-semibold", "About" }
-                    p { class: "text-sm text-base-content/70", "Course Pilot helps you transform YouTube playlists into structured study plans." }
+                    p { class: "text-sm text-base-content/70",
+                        "Course Pilot helps you transform YouTube playlists into structured study plans."
+                    }
                     p { class: "text-sm text-base-content/70", "Window title: Course Pilot" }
-                    p { class: "text-sm text-base-content/70", "Version: {env!(\"CARGO_PKG_VERSION\")}" }
-                    p { class: "text-sm text-base-content/70","Author: Made with love by Khaled" }
+                    p { class: "text-sm text-base-content/70",
+                        "Version: {env!(\"CARGO_PKG_VERSION\")}"
+                    }
+                    p { class: "text-sm text-base-content/70", "Author: Made with love by Khaled" }
                 }
             }
         }

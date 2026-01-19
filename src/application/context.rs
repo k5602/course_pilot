@@ -5,14 +5,15 @@
 use std::sync::Arc;
 
 use crate::application::use_cases::{
-    AskCompanionUseCase, ExportCourseNotesUseCase, IngestPlaylistUseCase, LoadDashboardUseCase,
-    NotesUseCase, PlanSessionUseCase, PreferencesUseCase, SummarizeVideoUseCase, TakeExamUseCase,
-    UpdateCourseUseCase,
+    AskCompanionUseCase, ExportCourseNotesUseCase, IngestLocalUseCase, IngestPlaylistUseCase,
+    LoadDashboardUseCase, NotesUseCase, PlanSessionUseCase, PreferencesUseCase,
+    SummarizeVideoUseCase, TakeExamUseCase, UpdateCourseUseCase,
 };
 use crate::domain::ports::SecretStore;
 use crate::infrastructure::{
     keystore::NativeKeystore,
     llm::GeminiAdapter,
+    local_media::LocalMediaScannerAdapter,
     persistence::{
         DbPool, SqliteCourseRepository, SqliteExamRepository, SqliteModuleRepository,
         SqliteNoteRepository, SqliteSearchRepository, SqliteTagRepository,
@@ -94,6 +95,7 @@ pub struct AppContext {
     pub preferences_repo: Arc<SqliteUserPreferencesRepository>,
 
     // Infrastructure adapters
+    pub local_media: Arc<LocalMediaScannerAdapter>,
     pub youtube: Arc<RustyYtdlAdapter>, // Always available (no API key needed)
     pub transcript: Arc<TranscriptAdapter>,
     pub llm: Option<Arc<GeminiAdapter>>,
@@ -124,6 +126,9 @@ impl AppContext {
         // Create keystore
         let keystore = Arc::new(NativeKeystore::new());
 
+        // Local media scanner (filesystem)
+        let local_media = Arc::new(LocalMediaScannerAdapter::new());
+
         // YouTube adapter (always available - no API key needed)
         let youtube = Arc::new(RustyYtdlAdapter::new());
 
@@ -152,6 +157,7 @@ impl AppContext {
             tag_repo,
             search_repo,
             preferences_repo,
+            local_media,
             youtube,
             transcript,
             llm,
@@ -211,6 +217,25 @@ impl ServiceFactory {
     > {
         IngestPlaylistUseCase::new(
             ctx.youtube.clone(),
+            ctx.course_repo.clone(),
+            ctx.module_repo.clone(),
+            ctx.video_repo.clone(),
+            ctx.search_repo.clone(),
+        )
+    }
+
+    /// Creates the local library ingestion use case.
+    pub fn ingest_local(
+        ctx: &AppContext,
+    ) -> IngestLocalUseCase<
+        LocalMediaScannerAdapter,
+        SqliteCourseRepository,
+        SqliteModuleRepository,
+        SqliteVideoRepository,
+        SqliteSearchRepository,
+    > {
+        IngestLocalUseCase::new(
+            ctx.local_media.clone(),
             ctx.course_repo.clone(),
             ctx.module_repo.clone(),
             ctx.video_repo.clone(),

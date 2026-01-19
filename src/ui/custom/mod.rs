@@ -4,6 +4,7 @@ pub mod analytics;
 pub mod course_card;
 pub mod import_dialog;
 pub mod loading;
+pub mod local_video_player;
 pub mod markdown;
 pub mod onboarding;
 pub mod right_panel;
@@ -18,6 +19,7 @@ pub use import_dialog::ImportPlaylistDialog;
 pub use loading::{
     CardSkeleton, ErrorAlert, InlineSpinner, PageSkeleton, Spinner, SuccessAlert, VideoItemSkeleton,
 };
+pub use local_video_player::LocalVideoPlayer;
 pub use markdown::MarkdownRenderer;
 pub use onboarding::OnboardingTour;
 pub use right_panel::RightPanel;
