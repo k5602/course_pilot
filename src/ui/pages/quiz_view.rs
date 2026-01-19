@@ -29,7 +29,11 @@ pub fn QuizView(exam_id: String) -> Element {
 
     let exam_id_vo = match ExamId::from_str(&exam_id) {
         Ok(id) => id,
-        Err(_) => return rsx! { div { class: "p-6 text-error", "Invalid Exam ID" } },
+        Err(_) => {
+            return rsx! {
+                div { class: "p-6 text-error", "Invalid Exam ID" }
+            };
+        },
     };
 
     let (mut exam, exam_state) = use_load_exam_state(backend.clone(), &exam_id_vo);
@@ -96,7 +100,11 @@ pub fn QuizView(exam_id: String) -> Element {
     let exam_data = exam.read();
     let exam_ref = match exam_data.as_ref() {
         Some(e) => e,
-        None => return rsx! { div { class: "p-6 animate-pulse", "Loading exam..." } },
+        None => {
+            return rsx! {
+                div { class: "p-6 animate-pulse", "Loading exam..." }
+            };
+        },
     };
 
     let questions: Vec<MCQuestion> =
@@ -112,18 +120,22 @@ pub fn QuizView(exam_id: String) -> Element {
             div { class: "p-6 max-w-2xl mx-auto",
                 div { class: "bg-base-200 rounded-xl p-8 text-center shadow-lg",
                     h1 { class: "text-3xl font-bold mb-4", "Quiz Result" }
-                    div {
-                        class: if passed { "text-success text-6xl font-bold mb-4" } else { "text-error text-6xl font-bold mb-4" },
+                    div { class: if passed { "text-success text-6xl font-bold mb-4" } else { "text-error text-6xl font-bold mb-4" },
                         "{score:.0}%"
                     }
                     p { class: "text-xl mb-8 opacity-80",
-                        if passed { "Congratulations! You've mastered this video." }
-                        else { "Keep studying. You can retake the quiz after reviewing the content." }
+                        if passed {
+                            "Congratulations! You've mastered this video."
+                        } else {
+                            "Keep studying. You can retake the quiz after reviewing the content."
+                        }
                     }
                     div { class: "flex flex-col sm:flex-row justify-center gap-4",
                         button {
                             class: "btn btn-primary btn-lg",
-                            onclick: move |_| { nav.push(Route::Dashboard {}); },
+                            onclick: move |_| {
+                                nav.push(Route::Dashboard {});
+                            },
                             "Back to Dashboard"
                         }
                         button {
@@ -140,7 +152,7 @@ pub fn QuizView(exam_id: String) -> Element {
                                         if let Some(v) = video.read().as_ref() {
                                             nav.push(Route::VideoPlayer {
                                                 course_id,
-                                                video_id: v.id().as_uuid().to_string()
+                                                video_id: v.id().as_uuid().to_string(),
                                             });
                                         }
                                     },
@@ -159,7 +171,9 @@ pub fn QuizView(exam_id: String) -> Element {
         return rsx! {
             div { class: "p-6 max-w-3xl mx-auto",
                 div { class: "flex items-center justify-between mb-8",
-                    h1 { class: "text-2xl font-bold", "Review: {video.read().as_ref().map(|v| v.title()).unwrap_or(\"...\")}" }
+                    h1 { class: "text-2xl font-bold",
+                        "Review: {video.read().as_ref().map(|v| v.title()).unwrap_or(\"...\")}"
+                    }
                     button {
                         class: "btn btn-sm btn-ghost",
                         onclick: move |_| show_review.set(false),
@@ -168,7 +182,7 @@ pub fn QuizView(exam_id: String) -> Element {
                 }
 
                 div { class: "space-y-8",
-                    for (idx, q) in questions.iter().enumerate() {
+                    for (idx , q) in questions.iter().enumerate() {
                         {
                             let user_answer = answers.read().get(idx).cloned();
                             let is_correct = user_answer == Some(q.correct_index);
@@ -186,8 +200,10 @@ pub fn QuizView(exam_id: String) -> Element {
                                     class: "bg-base-200 rounded-2xl p-6 shadow-sm border-l-4 {border_class}",
                                     p { class: "text-lg font-bold mb-4", "{idx + 1}. {q.question}" }
 
+
+
                                     div { class: "space-y-2 mb-4",
-                                        for (opt_idx, opt) in q.options.iter().enumerate() {
+                                        for (opt_idx , opt) in q.options.iter().enumerate() {
                                             {
                                                 let is_this_correct = opt_idx == q.correct_index;
                                                 let is_user_choice = user_answer == Some(opt_idx);
@@ -195,13 +211,7 @@ pub fn QuizView(exam_id: String) -> Element {
                                                 rsx! {
                                                     div {
                                                         key: "{opt_idx}",
-                                                        class: if is_this_correct {
-                                                            "p-3 rounded-lg bg-success/10 text-success border border-success/20 flex items-center gap-2"
-                                                        } else if is_user_choice {
-                                                            "p-3 rounded-lg bg-error/10 text-error border border-error/20 flex items-center gap-2"
-                                                        } else {
-                                                            "p-3 rounded-lg bg-base-300/50 opacity-60 flex items-center gap-2"
-                                                        },
+                                                        class: if is_this_correct { "p-3 rounded-lg bg-success/10 text-success border border-success/20 flex items-center gap-2" } else if is_user_choice { "p-3 rounded-lg bg-error/10 text-error border border-error/20 flex items-center gap-2" } else { "p-3 rounded-lg bg-base-300/50 opacity-60 flex items-center gap-2" },
                                                         span { class: "font-mono text-xs w-4", "{opt_idx + 1}." }
                                                         span { "{opt}" }
                                                         if is_this_correct {
@@ -216,7 +226,9 @@ pub fn QuizView(exam_id: String) -> Element {
                                     }
 
                                     div { class: "mt-4 p-4 bg-base-100 rounded-xl border border-base-300",
-                                        p { class: "text-xs font-bold uppercase tracking-widest opacity-40 mb-1", "Explanation" }
+                                        p { class: "text-xs font-bold uppercase tracking-widest opacity-40 mb-1",
+                                            "Explanation"
+                                        }
                                         p { class: "text-sm", "{q.explanation}" }
                                     }
                                 }
@@ -228,7 +240,9 @@ pub fn QuizView(exam_id: String) -> Element {
                 div { class: "mt-12 text-center",
                     button {
                         class: "btn btn-primary",
-                        onclick: move |_| { nav.push(Route::Dashboard {}); },
+                        onclick: move |_| {
+                            nav.push(Route::Dashboard {});
+                        },
                         "Done Reviewing"
                     }
                 }
@@ -237,7 +251,9 @@ pub fn QuizView(exam_id: String) -> Element {
     }
 
     if questions.is_empty() {
-        return rsx! { div { class: "p-6 text-error", "This exam has no questions." } };
+        return rsx! {
+            div { class: "p-6 text-error", "This exam has no questions." }
+        };
     }
 
     let current_q = &questions[current_index()];
@@ -280,14 +296,16 @@ pub fn QuizView(exam_id: String) -> Element {
     rsx! {
         div { class: "p-6 max-w-2xl mx-auto",
             // Header
-            h1 { class: "text-2xl font-bold mb-2", "Exam: {video.read().as_ref().map(|v| v.title()).unwrap_or(\"...\")}" }
+            h1 { class: "text-2xl font-bold mb-2",
+                "Exam: {video.read().as_ref().map(|v| v.title()).unwrap_or(\"...\")}"
+            }
 
             // Progress
             div { class: "flex items-center gap-4 mb-8",
                 div { class: "flex-1 bg-base-300 rounded-full h-2.5 overflow-hidden",
                     div {
                         class: "bg-primary h-full transition-all duration-300",
-                        style: "width: {(current_index() as f32 / total_questions as f32) * 100.0}%"
+                        style: "width: {(current_index() as f32 / total_questions as f32) * 100.0}%",
                     }
                 }
                 span { class: "text-sm font-medium whitespace-nowrap",
@@ -300,23 +318,16 @@ pub fn QuizView(exam_id: String) -> Element {
                 p { class: "text-xl font-semibold mb-6", "{current_q.question}" }
 
                 div { class: "space-y-3",
-                    for (i, option) in current_q.options.iter().enumerate() {
+                    for (i , option) in current_q.options.iter().enumerate() {
                         button {
                             key: "{i}",
-                            class: if selected_option() == Some(i) {
-                                "w-full text-left p-5 rounded-xl border-2 border-primary bg-primary/5 font-medium transition-all"
-                            } else {
-                                "w-full text-left p-5 rounded-xl border-2 border-transparent bg-base-300 hover:bg-base-100 transition-all"
-                            },
+                            class: if selected_option() == Some(i) { "w-full text-left p-5 rounded-xl border-2 border-primary bg-primary/5 font-medium transition-all" } else { "w-full text-left p-5 rounded-xl border-2 border-transparent bg-base-300 hover:bg-base-100 transition-all" },
                             onclick: move |_| selected_option.set(Some(i)),
                             div { class: "flex items-center gap-4",
-                                span {
-                                    class: if selected_option() == Some(i) {
-                                        "w-6 h-6 rounded-full border-2 border-primary bg-primary flex items-center justify-center text-[10px] text-primary-content"
-                                    } else {
-                                        "w-6 h-6 rounded-full border-2 border-base-content/20 flex items-center justify-center"
-                                    },
-                                    if selected_option() == Some(i) { "✓" }
+                                span { class: if selected_option() == Some(i) { "w-6 h-6 rounded-full border-2 border-primary bg-primary flex items-center justify-center text-[10px] text-primary-content" } else { "w-6 h-6 rounded-full border-2 border-base-content/20 flex items-center justify-center" },
+                                    if selected_option() == Some(i) {
+                                        "✓"
+                                    }
                                 }
                                 "{option}"
                             }

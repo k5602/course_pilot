@@ -25,8 +25,7 @@ pub fn CourseList() -> Element {
     let (courses, courses_state) = use_load_courses_state(state.backend.clone());
 
     rsx! {
-        div {
-            class: "p-6",
+        div { class: "p-6",
 
             h1 { class: "text-2xl font-bold mb-6", "Courses" }
 
@@ -35,8 +34,7 @@ pub fn CourseList() -> Element {
             }
 
             if *courses_state.is_loading.read() && courses.read().is_empty() {
-                div {
-                    class: "grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4",
+                div { class: "grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4",
                     CardSkeleton {}
                     CardSkeleton {}
                     CardSkeleton {}
@@ -45,10 +43,11 @@ pub fn CourseList() -> Element {
                     CardSkeleton {}
                 }
             } else if courses.read().is_empty() {
-                div {
-                    class: "text-center py-12 bg-base-200 rounded-lg",
+                div { class: "text-center py-12 bg-base-200 rounded-lg",
                     p { class: "text-xl mb-2", "No courses yet" }
-                    p { class: "text-base-content/60", "Import a YouTube playlist from the Dashboard to get started" }
+                    p { class: "text-base-content/60",
+                        "Import a YouTube playlist from the Dashboard to get started"
+                    }
                     Link {
                         to: Route::Dashboard {},
                         class: "btn btn-primary mt-4",
@@ -56,8 +55,7 @@ pub fn CourseList() -> Element {
                     }
                 }
             } else {
-                div {
-                    class: "grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4",
+                div { class: "grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4",
                     for course in courses.read().iter() {
                         CourseCardWithStats {
                             key: "{course.id().as_uuid()}",

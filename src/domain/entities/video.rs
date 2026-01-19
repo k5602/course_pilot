@@ -1,13 +1,13 @@
 //! Video entity - A single video within a module.
 
-use crate::domain::value_objects::{ModuleId, VideoId, YouTubeVideoId};
+use crate::domain::value_objects::{ModuleId, VideoId, VideoSource, YouTubeVideoId};
 
 /// A video represents a single learning unit within a module.
 #[derive(Debug, Clone, PartialEq)]
 pub struct Video {
     id: VideoId,
     module_id: ModuleId,
-    youtube_id: YouTubeVideoId,
+    source: VideoSource,
     title: String,
     description: Option<String>,
     transcript: Option<String>,
@@ -22,7 +22,7 @@ impl Video {
     pub fn new(
         id: VideoId,
         module_id: ModuleId,
-        youtube_id: YouTubeVideoId,
+        source: VideoSource,
         title: String,
         duration_secs: u32,
         sort_order: u32,
@@ -30,7 +30,7 @@ impl Video {
         Self {
             id,
             module_id,
-            youtube_id,
+            source,
             title,
             description: None,
             transcript: None,
@@ -45,7 +45,7 @@ impl Video {
     pub fn with_description(
         id: VideoId,
         module_id: ModuleId,
-        youtube_id: YouTubeVideoId,
+        source: VideoSource,
         title: String,
         description: Option<String>,
         duration_secs: u32,
@@ -54,7 +54,7 @@ impl Video {
         Self {
             id,
             module_id,
-            youtube_id,
+            source,
             title,
             description,
             transcript: None,
@@ -73,8 +73,16 @@ impl Video {
         &self.module_id
     }
 
-    pub fn youtube_id(&self) -> &YouTubeVideoId {
-        &self.youtube_id
+    pub fn source(&self) -> &VideoSource {
+        &self.source
+    }
+
+    pub fn youtube_id(&self) -> Option<&YouTubeVideoId> {
+        self.source.youtube_id()
+    }
+
+    pub fn local_path(&self) -> Option<&str> {
+        self.source.local_path_str()
     }
 
     pub fn title(&self) -> &str {

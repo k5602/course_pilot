@@ -46,6 +46,8 @@ uuid = { version = "1", features = ["v4", "serde"] }
 chrono = { version = "0.4", features = ["serde"] }
 pulldown-cmark = "0.12"
 ammonia = "4.0"
+mp4 = "0.14.0"
+matroska = "0.30.0"
 
 # Error Handling & Logging
 anyhow = "1.0"
@@ -62,8 +64,9 @@ rfd = "0.17"
 
 # App-specific Logic
 reqwest = { version = "0.13.1", features = ["json"] }
+discord-rich-presence = "1.0.0"
 
-# YouTube (API-free playlist fetching)
+# YouTube
 rusty_ytdl = { git = "https://github.com/k5602/rusty_ytdl", branch = "qol", features = [
     "search",
 ] }

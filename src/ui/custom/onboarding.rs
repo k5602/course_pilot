@@ -99,10 +99,8 @@ pub fn OnboardingTour() -> Element {
     };
 
     rsx! {
-        div {
-            class: "fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm",
-            div {
-                class: "w-full max-w-lg rounded-2xl bg-base-100 p-6 shadow-2xl border border-base-300",
+        div { class: "fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm",
+            div { class: "w-full max-w-lg rounded-2xl bg-base-100 p-6 shadow-2xl border border-base-300",
                 div { class: "flex items-center justify-between mb-4",
                     h2 { class: "text-xl font-bold", "Welcome to Course Pilot" }
                     button {
@@ -113,7 +111,9 @@ pub fn OnboardingTour() -> Element {
                 }
 
                 div { class: "space-y-2",
-                    p { class: "text-xs uppercase tracking-widest text-base-content/50", "Step {step_index} of {total_steps}" }
+                    p { class: "text-xs uppercase tracking-widest text-base-content/50",
+                        "Step {step_index} of {total_steps}"
+                    }
                     h3 { class: "text-lg font-semibold", "{step.title}" }
                     p { class: "text-sm text-base-content/70 leading-relaxed", "{step.body}" }
                 }
@@ -140,7 +140,11 @@ pub fn OnboardingTour() -> Element {
                     button {
                         class: "btn btn-primary btn-sm",
                         onclick: move |_| on_next(),
-                        if is_last_step { "Finish" } else { "Next" }
+                        if is_last_step {
+                            "Finish"
+                        } else {
+                            "Next"
+                        }
                     }
                 }
             }

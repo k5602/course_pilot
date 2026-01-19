@@ -3,7 +3,7 @@
 use dioxus::prelude::*;
 
 use crate::ui::Route;
-use crate::ui::custom::{OnboardingTour, RightPanel, Sidebar};
+use crate::ui::custom::{OnboardingTour, PresenceSync, RightPanel, Sidebar};
 use crate::ui::state::AppState;
 
 /// Main application layout with three panels.
@@ -12,17 +12,15 @@ pub fn MainLayout() -> Element {
     let state = use_context::<AppState>();
 
     rsx! {
-        div {
-            class: "flex h-screen bg-base-100",
+        PresenceSync {}
+
+        div { class: "flex h-screen bg-base-100",
 
             // Left: Sidebar
             Sidebar {}
 
             // Center: Main content (router outlet)
-            main {
-                class: "flex-1 overflow-auto",
-                Outlet::<Route> {}
-            }
+            main { class: "flex-1 overflow-auto", Outlet::<Route> {} }
 
             // Right: Notes + AI Chat panel
             if *state.right_panel_visible.read() {

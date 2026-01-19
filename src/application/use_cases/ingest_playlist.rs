@@ -10,7 +10,7 @@ use crate::domain::{
         CourseRepository, ModuleRepository, PlaylistFetcher, SearchRepository, VideoRepository,
     },
     services::{BoundaryDetector, TitleSanitizer},
-    value_objects::{CourseId, ModuleId, PlaylistUrl, VideoId, YouTubeVideoId},
+    value_objects::{CourseId, ModuleId, PlaylistUrl, VideoId, VideoSource, YouTubeVideoId},
 };
 
 /// Error type for playlist ingestion.
@@ -149,11 +149,12 @@ where
                 let raw = &raw_videos[video_idx];
                 let youtube_id = YouTubeVideoId::new(&raw.youtube_id)
                     .map_err(|e| IngestError::PersistFailed(e.to_string()))?;
+                let source = VideoSource::youtube(youtube_id);
 
                 let video = Video::with_description(
                     VideoId::new(),
                     module_id.clone(),
-                    youtube_id,
+                    source,
                     sanitized_titles[video_idx].clone(),
                     raw.description.clone(),
                     raw.duration_secs,

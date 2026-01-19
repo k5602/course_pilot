@@ -56,7 +56,7 @@ diesel::table! {
         content -> Nullable<Binary>,
         course_id -> Nullable<Binary>,
         #[sql_name = "search_index"]
-        search_index_col -> Nullable<Binary>,
+        search_index_ -> Nullable<Binary>,
         rank -> Nullable<Binary>,
     }
 }
@@ -123,7 +123,7 @@ diesel::table! {
     videos (id) {
         id -> Text,
         module_id -> Text,
-        youtube_id -> Text,
+        youtube_id -> Nullable<Text>,
         title -> Text,
         duration_secs -> Integer,
         is_completed -> Bool,
@@ -131,6 +131,8 @@ diesel::table! {
         description -> Nullable<Text>,
         transcript -> Nullable<Text>,
         summary -> Nullable<Text>,
+        source_type -> Text,
+        source_ref -> Text,
     }
 }
 

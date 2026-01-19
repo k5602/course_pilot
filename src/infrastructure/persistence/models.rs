@@ -59,7 +59,7 @@ pub struct NewModule<'a> {
 pub struct VideoRow {
     pub id: String,
     pub module_id: String,
-    pub youtube_id: String,
+    pub youtube_id: Option<String>,
     pub title: String,
     pub duration_secs: i32,
     pub is_completed: bool,
@@ -67,6 +67,8 @@ pub struct VideoRow {
     pub description: Option<String>,
     pub transcript: Option<String>,
     pub summary: Option<String>,
+    pub source_type: String,
+    pub source_ref: String,
 }
 
 /// Insertable model for videos.
@@ -75,7 +77,7 @@ pub struct VideoRow {
 pub struct NewVideo<'a> {
     pub id: &'a str,
     pub module_id: &'a str,
-    pub youtube_id: &'a str,
+    pub youtube_id: Option<&'a str>,
     pub title: &'a str,
     pub duration_secs: i32,
     pub is_completed: bool,
@@ -83,6 +85,8 @@ pub struct NewVideo<'a> {
     pub description: Option<&'a str>,
     pub transcript: Option<&'a str>,
     pub summary: Option<&'a str>,
+    pub source_type: &'a str,
+    pub source_ref: &'a str,
 }
 
 /// Diesel model for the exams table.

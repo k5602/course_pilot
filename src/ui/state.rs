@@ -48,6 +48,7 @@ pub struct AppState {
     pub notes: Signal<HashMap<String, String>>,
     pub current_video_id: Signal<Option<String>>,
     pub youtube_embed_relay_url: Signal<Option<String>>,
+    pub local_media_relay_url: Signal<Option<String>>,
     pub last_video_by_course: Signal<HashMap<String, String>>,
 
     // Cached data from backend
@@ -71,6 +72,7 @@ impl AppState {
             notes: Signal::new(HashMap::new()),
             current_video_id: Signal::new(None),
             youtube_embed_relay_url: Signal::new(None),
+            local_media_relay_url: Signal::new(None),
             last_video_by_course: Signal::new(HashMap::new()),
             courses: Signal::new(Vec::new()),
             current_course: Signal::new(None),

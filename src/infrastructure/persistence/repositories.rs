@@ -17,7 +17,7 @@ use crate::domain::{
         CourseRepository, ExamRepository, ModuleRepository, NoteRepository, RepositoryError,
         VideoRepository,
     },
-    value_objects::{CourseId, ExamId, ModuleId, PlaylistUrl, VideoId, YouTubeVideoId},
+    value_objects::{CourseId, ExamId, ModuleId, PlaylistUrl, VideoId},
 };
 use crate::schema::{courses, exams, modules, notes, videos};
 
@@ -269,7 +269,12 @@ impl VideoRepository for SqliteVideoRepository {
         let new_video = NewVideo {
             id: &video.id().as_uuid().to_string(),
             module_id: &video.module_id().as_uuid().to_string(),
-            youtube_id: video.youtube_id().as_str(),
+            youtube_id: match video.source().source_type() {
+                "youtube" => Some(video.source().source_ref()),
+                _ => Some(""),
+            },
+            source_type: video.source().source_type(),
+            source_ref: video.source().source_ref(),
             title: video.title(),
             duration_secs,
             is_completed: video.is_completed(),
@@ -405,8 +410,17 @@ fn row_to_video(row: VideoRow) -> Result<Video, RepositoryError> {
         uuid::Uuid::parse_str(&row.module_id)
             .map_err(|e| RepositoryError::Database(e.to_string()))?,
     );
-    let youtube_id = YouTubeVideoId::new(&row.youtube_id)
-        .map_err(|e| RepositoryError::Database(e.to_string()))?;
+    let source = match row.source_type.as_str() {
+        "youtube" => {
+            let youtube_id = crate::domain::value_objects::YouTubeVideoId::new(&row.source_ref)
+                .map_err(|e| RepositoryError::Database(e.to_string()))?;
+            crate::domain::value_objects::VideoSource::youtube(youtube_id)
+        },
+        "local" => crate::domain::value_objects::VideoSource::LocalPath(row.source_ref.clone()),
+        other => {
+            return Err(RepositoryError::Database(format!("Invalid video source type: {other}")));
+        },
+    };
 
     let duration_secs = i32_to_u32(row.duration_secs, "duration_secs")?;
     let sort_order = i32_to_u32(row.sort_order, "sort_order")?;
@@ -414,7 +428,7 @@ fn row_to_video(row: VideoRow) -> Result<Video, RepositoryError> {
     let mut video = Video::with_description(
         video_id,
         module_id,
-        youtube_id,
+        source,
         row.title,
         row.description,
         duration_secs,

@@ -11,11 +11,9 @@ pub fn AnalyticsOverview(analytics: AppAnalytics) -> Element {
     let summary_coverage = analytics.summary_coverage_percent();
 
     rsx! {
-        div {
-            class: "space-y-6",
+        div { class: "space-y-6",
 
-            div {
-                class: "grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4",
+            div { class: "grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4",
                 StatCard {
                     title: "Courses",
                     value: analytics.total_courses().to_string(),
@@ -38,8 +36,7 @@ pub fn AnalyticsOverview(analytics: AppAnalytics) -> Element {
                 }
             }
 
-            div {
-                class: "grid grid-cols-1 md:grid-cols-2 gap-4",
+            div { class: "grid grid-cols-1 md:grid-cols-2 gap-4",
                 StatCard {
                     title: "Total Study Time",
                     value: format!("{} min", analytics.total_duration_minutes()),
@@ -52,8 +49,7 @@ pub fn AnalyticsOverview(analytics: AppAnalytics) -> Element {
                 }
             }
 
-            div {
-                class: "grid grid-cols-1 md:grid-cols-2 gap-4",
+            div { class: "grid grid-cols-1 md:grid-cols-2 gap-4",
                 StatCard {
                     title: "Summaries",
                     value: analytics.videos_with_summary().to_string(),
@@ -72,13 +68,10 @@ pub fn AnalyticsOverview(analytics: AppAnalytics) -> Element {
 #[component]
 fn StatCard(title: String, value: String, subtitle: Option<String>) -> Element {
     rsx! {
-        div {
-            class: "card bg-base-200 border border-base-300",
-            div {
-                class: "card-body p-4",
+        div { class: "card bg-base-200 border border-base-300",
+            div { class: "card-body p-4",
                 p { class: "text-sm text-base-content/70", "{title}" }
-                div {
-                    class: "flex items-end justify-between gap-2",
+                div { class: "flex items-end justify-between gap-2",
                     h3 { class: "text-2xl font-semibold", "{value}" }
                     if let Some(sub) = subtitle {
                         span { class: "text-xs text-base-content/60", "{sub}" }

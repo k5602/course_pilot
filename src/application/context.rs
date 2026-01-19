@@ -5,14 +5,16 @@
 use std::sync::Arc;
 
 use crate::application::use_cases::{
-    AskCompanionUseCase, ExportCourseNotesUseCase, IngestPlaylistUseCase, LoadDashboardUseCase,
-    NotesUseCase, PlanSessionUseCase, PreferencesUseCase, SummarizeVideoUseCase, TakeExamUseCase,
-    UpdateCourseUseCase,
+    AskCompanionUseCase, ExportCourseNotesUseCase, IngestLocalUseCase, IngestPlaylistUseCase,
+    LoadDashboardUseCase, NotesUseCase, PlanSessionUseCase, PreferencesUseCase,
+    SummarizeVideoUseCase, TakeExamUseCase, UpdateCourseUseCase,
 };
-use crate::domain::ports::SecretStore;
+use crate::domain::ports::{PresenceProvider, SecretStore};
 use crate::infrastructure::{
+    discord::DiscordPresenceAdapter,
     keystore::NativeKeystore,
     llm::GeminiAdapter,
+    local_media::LocalMediaScannerAdapter,
     persistence::{
         DbPool, SqliteCourseRepository, SqliteExamRepository, SqliteModuleRepository,
         SqliteNoteRepository, SqliteSearchRepository, SqliteTagRepository,
@@ -94,9 +96,11 @@ pub struct AppContext {
     pub preferences_repo: Arc<SqliteUserPreferencesRepository>,
 
     // Infrastructure adapters
+    pub local_media: Arc<LocalMediaScannerAdapter>,
     pub youtube: Arc<RustyYtdlAdapter>, // Always available (no API key needed)
     pub transcript: Arc<TranscriptAdapter>,
     pub llm: Option<Arc<GeminiAdapter>>,
+    pub presence: Arc<dyn PresenceProvider>,
     pub keystore: Arc<NativeKeystore>,
 
     // Database pool
@@ -124,8 +128,19 @@ impl AppContext {
         // Create keystore
         let keystore = Arc::new(NativeKeystore::new());
 
+        // Local media scanner (filesystem)
+        let local_media = Arc::new(LocalMediaScannerAdapter::new());
+
         // YouTube adapter (always available - no API key needed)
         let youtube = Arc::new(RustyYtdlAdapter::new());
+
+        // Presence provider (Discord)
+        let discord_id = keystore.retrieve("discord_client_id").ok().flatten();
+        let presence_adapter = DiscordPresenceAdapter::new();
+        if let Some(id) = discord_id {
+            presence_adapter.set_client_id(id);
+        }
+        let presence: Arc<dyn PresenceProvider> = Arc::new(presence_adapter);
 
         // Transcript adapter (for summaries)
         let transcript = Arc::new(
@@ -152,9 +167,11 @@ impl AppContext {
             tag_repo,
             search_repo,
             preferences_repo,
+            local_media,
             youtube,
             transcript,
             llm,
+            presence,
             keystore,
             db_pool,
         })
@@ -211,6 +228,25 @@ impl ServiceFactory {
     > {
         IngestPlaylistUseCase::new(
             ctx.youtube.clone(),
+            ctx.course_repo.clone(),
+            ctx.module_repo.clone(),
+            ctx.video_repo.clone(),
+            ctx.search_repo.clone(),
+        )
+    }
+
+    /// Creates the local library ingestion use case.
+    pub fn ingest_local(
+        ctx: &AppContext,
+    ) -> IngestLocalUseCase<
+        LocalMediaScannerAdapter,
+        SqliteCourseRepository,
+        SqliteModuleRepository,
+        SqliteVideoRepository,
+        SqliteSearchRepository,
+    > {
+        IngestLocalUseCase::new(
+            ctx.local_media.clone(),
             ctx.course_repo.clone(),
             ctx.module_repo.clone(),
             ctx.video_repo.clone(),

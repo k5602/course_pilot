@@ -5,6 +5,7 @@ use std::sync::Arc;
 
 use crate::application::use_cases::ExportCourseNotesInput;
 use crate::application::use_cases::GenerateExamInput;
+use crate::application::use_cases::IngestLocalInput;
 use crate::application::use_cases::IngestPlaylistInput;
 use crate::application::{AppContext, ServiceFactory};
 use crate::domain::ports::{CourseRepository, ExamRepository};
@@ -41,6 +42,31 @@ pub async fn import_playlist(
             videos: output.videos_count,
         },
         Err(e) => ImportResult::Error(format!("Failed to fetch playlist: {}", e)),
+    }
+}
+
+/// Import a local media folder (recursive).
+pub async fn import_local_folder(
+    backend: Option<Arc<AppContext>>,
+    root_path: String,
+    name: Option<String>,
+) -> ImportResult {
+    let ctx = match backend {
+        Some(ctx) => ctx,
+        None => return ImportResult::Error("Backend not initialized".to_string()),
+    };
+
+    let use_case = ServiceFactory::ingest_local(&ctx);
+
+    let input = IngestLocalInput { root_path, course_name: name };
+
+    match use_case.execute(input).await {
+        Ok(output) => ImportResult::Success {
+            course_id: output.course_id,
+            modules: output.modules_count,
+            videos: output.videos_count,
+        },
+        Err(e) => ImportResult::Error(format!("Failed to scan local media: {}", e)),
     }
 }
 

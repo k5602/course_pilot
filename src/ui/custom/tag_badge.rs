@@ -64,8 +64,7 @@ pub fn TagInput(on_create: EventHandler<String>) -> Element {
 
     rsx! {
         if *show_input.read() {
-            div {
-                class: "flex items-center gap-2",
+            div { class: "flex items-center gap-2",
                 input {
                     class: "input input-sm input-bordered w-32",
                     r#type: "text",

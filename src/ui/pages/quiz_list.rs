@@ -24,8 +24,7 @@ pub fn QuizList() -> Element {
     let (exams, exams_state) = use_load_all_exams_state(state.backend.clone());
 
     rsx! {
-        div {
-            class: "p-6 max-w-4xl mx-auto",
+        div { class: "p-6 max-w-4xl mx-auto",
 
             div { class: "flex justify-between items-center mb-8",
                 h1 { class: "text-3xl font-bold", "My Quizzes" }
@@ -47,13 +46,9 @@ pub fn QuizList() -> Element {
                     }
                 }
             } else {
-                div {
-                    class: "grid gap-4",
+                div { class: "grid gap-4",
                     for exam in exams.read().iter() {
-                        QuizItem {
-                            key: "{exam.id().as_uuid()}",
-                            exam: exam.clone()
-                        }
+                        QuizItem { key: "{exam.id().as_uuid()}", exam: exam.clone() }
                     }
                 }
             }
@@ -78,57 +73,74 @@ fn QuizItem(exam: Exam) -> Element {
 
     rsx! {
         Link {
-            to: Route::QuizView { exam_id: exam.id().as_uuid().to_string() },
+            to: Route::QuizView {
+                exam_id: exam.id().as_uuid().to_string(),
+            },
             class: "flex items-center gap-4 p-5 bg-base-200 rounded-2xl hover:bg-base-300 transition-all border border-transparent hover:border-primary/20 group",
 
             // Status Icon
             div {
                 class: match (is_taken, passed) {
-                    (true, true) => "w-12 h-12 rounded-xl bg-success/20 text-success flex items-center justify-center text-xl shadow-inner",
-                    (true, false) => "w-12 h-12 rounded-xl bg-error/20 text-error flex items-center justify-center text-xl shadow-inner",
-                    (false, _) => "w-12 h-12 rounded-xl bg-warning/20 text-warning flex items-center justify-center text-xl shadow-inner",
+                    (true, true) => {
+                        "w-12 h-12 rounded-xl bg-success/20 text-success flex items-center justify-center text-xl shadow-inner"
+                    }
+                    (true, false) => {
+                        "w-12 h-12 rounded-xl bg-error/20 text-error flex items-center justify-center text-xl shadow-inner"
+                    }
+                    (false, _) => {
+                        "w-12 h-12 rounded-xl bg-warning/20 text-warning flex items-center justify-center text-xl shadow-inner"
+                    }
                 },
                 if is_taken {
-                    if passed { "✓" } else { "✕" }
+                    if passed {
+                        "✓"
+                    } else {
+                        "✕"
+                    }
                 } else {
                     "?"
                 }
             }
 
             // Info
-            div {
-                class: "flex-1",
-                h3 { class: "font-bold text-lg group-hover:text-primary transition-colors", "{video_title}" }
+            div { class: "flex-1",
+                h3 { class: "font-bold text-lg group-hover:text-primary transition-colors",
+                    "{video_title}"
+                }
                 div { class: "flex items-center gap-3 mt-1",
                     if let Some(s) = score {
-                        span {
-                            class: if passed { "text-success text-sm font-medium" } else { "text-error text-sm font-medium" },
+                        span { class: if passed { "text-success text-sm font-medium" } else { "text-error text-sm font-medium" },
                             "Score: {s}%"
                         }
                     } else {
                         span { class: "text-sm text-base-content/50", "Not attempted" }
                     }
                     span { class: "text-xs text-base-content/30", "•" }
-                    span { class: "text-xs text-base-content/30", "Ref: {&exam.id().as_uuid().to_string()[..8]}" }
+                    span { class: "text-xs text-base-content/30",
+                        "Ref: {&exam.id().as_uuid().to_string()[..8]}"
+                    }
                 }
             }
 
             // Badge/Action
             div { class: "text-right flex flex-col items-end gap-2",
-                span {
-                    class: if is_taken {
-                        if passed { "badge badge-success badge-sm" } else { "badge badge-error badge-sm" }
-                    } else {
-                        "badge badge-warning badge-sm"
-                    },
+                span { class: if is_taken { if passed { "badge badge-success badge-sm" } else { "badge badge-error badge-sm" } } else { "badge badge-warning badge-sm" },
                     if is_taken {
-                        if passed { "PASSED" } else { "FAILED" }
+                        if passed {
+                            "PASSED"
+                        } else {
+                            "FAILED"
+                        }
                     } else {
                         "PENDING"
                     }
                 }
                 span { class: "text-xs opacity-0 group-hover:opacity-100 transition-opacity text-primary font-bold",
-                    if is_taken { "Review →" } else { "Take Quiz →" }
+                    if is_taken {
+                        "Review →"
+                    } else {
+                        "Take Quiz →"
+                    }
                 }
             }
         }

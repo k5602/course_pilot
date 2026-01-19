@@ -6,8 +6,12 @@ use dioxus::prelude::*;
 
 use crate::application::{AppContext, ServiceFactory};
 use crate::domain::entities::{AppAnalytics, Course, Exam, Module, Video};
-use crate::domain::ports::{CourseRepository, ExamRepository, ModuleRepository, VideoRepository};
+use crate::domain::ports::{
+    Activity, CourseRepository, ExamRepository, ModuleRepository, VideoRepository,
+};
 use crate::domain::value_objects::{CourseId, ExamId, ModuleId, VideoId};
+use crate::ui::routes::Route;
+use crate::ui::state::AppState;
 
 /// Load state for data hooks.
 #[derive(Clone)]
@@ -515,4 +519,57 @@ pub fn use_search(
     });
 
     results
+}
+
+/// Hook to synchronize the application state with Discord Rich Presence.
+/// Monitors route and state changes to update the user's status.
+pub fn use_presence_sync(backend: Option<Arc<AppContext>>) {
+    let route = use_route::<Route>();
+    let state = use_context::<AppState>();
+
+    use_effect(move || {
+        let backend = match backend.as_ref() {
+            Some(b) => b,
+            None => return,
+        };
+
+        let activity = match route {
+            Route::Dashboard {} => Activity::Dashboard,
+            Route::CourseList {} => Activity::BrowsingCourses,
+            Route::CourseView { .. } => Activity::BrowsingCourses,
+            Route::VideoPlayer { .. } => {
+                let course = state.current_course.read();
+                let video_id = state.current_video_id.read();
+                let videos = state.current_videos.read();
+
+                let video = video_id
+                    .as_ref()
+                    .and_then(|id| videos.iter().find(|v| v.id().to_string() == *id));
+
+                if let (Some(c), Some(v)) = (course.as_ref(), video) {
+                    Activity::Watching {
+                        course_title: c.name().to_string(),
+                        video_title: v.title().to_string(),
+                    }
+                } else {
+                    Activity::BrowsingCourses
+                }
+            },
+            Route::QuizList {} => Activity::BrowsingCourses,
+            Route::QuizView { .. } => {
+                let course = state.current_course.read();
+                if let Some(c) = course.as_ref() {
+                    Activity::TakingExam {
+                        course_title: c.name().to_string(),
+                        exam_title: "Active Quiz".to_string(),
+                    }
+                } else {
+                    Activity::BrowsingCourses
+                }
+            },
+            Route::Settings {} => Activity::Settings,
+        };
+
+        backend.presence.update_activity(activity);
+    });
 }
