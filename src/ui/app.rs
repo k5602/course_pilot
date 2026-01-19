@@ -8,6 +8,7 @@ use crate::application::{AppConfig, AppContext};
 use crate::infrastructure::embed_relay::EmbedRelayServer;
 use crate::infrastructure::media_relay::MediaRelayServer;
 use crate::ui::Route;
+
 use crate::ui::state::AppState;
 
 /// Root application component.

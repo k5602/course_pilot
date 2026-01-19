@@ -546,7 +546,7 @@ checksum = "d38f2da7a0a2c4ccf0065be06397cc26a81f4e528be095826eee9d4adbb8c60f"
 dependencies = [
  "byteorder",
  "fnv",
- "uuid",
+ "uuid 1.19.0",
 ]
 
 [[package]]
@@ -899,6 +899,7 @@ dependencies = [
  "dioxus-free-icons",
  "dioxus-primitives",
  "dirs",
+ "discord-rich-presence",
  "dotenvy",
  "env_logger",
  "futures",
@@ -923,7 +924,7 @@ dependencies = [
  "tokio-stream",
  "tokio-util",
  "tracing",
- "uuid",
+ "uuid 1.19.0",
  "walkdir",
  "yt-transcript-rs",
 ]
@@ -1672,6 +1673,21 @@ dependencies = [
  "option-ext",
  "redox_users",
  "windows-sys 0.61.2",
+]
+
+[[package]]
+name = "discord-rich-presence"
+version = "1.0.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "ead3c5edc7e048c317c6fc4a7e24aff0c7e4c136918e2ba38106a385b2cc53a5"
+dependencies = [
+ "log",
+ "serde",
+ "serde_derive",
+ "serde_json",
+ "serde_repr",
+ "thiserror 2.0.17",
+ "uuid 0.8.2",
 ]
 
 [[package]]
@@ -6377,6 +6393,15 @@ dependencies = [
  "proc-macro2",
  "quote",
  "syn 2.0.114",
+]
+
+[[package]]
+name = "uuid"
+version = "0.8.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "bc5cf98d8186244414c848017f0e2676b3fcb46807f6668a97dfe67359a3c4b7"
+dependencies = [
+ "getrandom 0.2.17",
 ]
 
 [[package]]

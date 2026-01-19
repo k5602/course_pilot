@@ -35,6 +35,12 @@ impl FromStr for CourseId {
     }
 }
 
+impl std::fmt::Display for CourseId {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}", self.0)
+    }
+}
+
 /// Unique identifier for a Module.
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct ModuleId(Uuid);
@@ -64,6 +70,12 @@ impl FromStr for ModuleId {
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         Uuid::parse_str(s).map(Self)
+    }
+}
+
+impl std::fmt::Display for ModuleId {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}", self.0)
     }
 }
 
@@ -99,6 +111,12 @@ impl FromStr for VideoId {
     }
 }
 
+impl std::fmt::Display for VideoId {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}", self.0)
+    }
+}
+
 /// Unique identifier for an Exam.
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct ExamId(Uuid);
@@ -128,5 +146,11 @@ impl FromStr for ExamId {
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         Uuid::parse_str(s).map(Self)
+    }
+}
+
+impl std::fmt::Display for ExamId {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}", self.0)
     }
 }

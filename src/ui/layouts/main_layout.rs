@@ -3,7 +3,7 @@
 use dioxus::prelude::*;
 
 use crate::ui::Route;
-use crate::ui::custom::{OnboardingTour, RightPanel, Sidebar};
+use crate::ui::custom::{OnboardingTour, PresenceSync, RightPanel, Sidebar};
 use crate::ui::state::AppState;
 
 /// Main application layout with three panels.
@@ -12,6 +12,8 @@ pub fn MainLayout() -> Element {
     let state = use_context::<AppState>();
 
     rsx! {
+        PresenceSync {}
+
         div { class: "flex h-screen bg-base-100",
 
             // Left: Sidebar

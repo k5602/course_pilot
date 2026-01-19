@@ -9,8 +9,9 @@ use crate::application::use_cases::{
     LoadDashboardUseCase, NotesUseCase, PlanSessionUseCase, PreferencesUseCase,
     SummarizeVideoUseCase, TakeExamUseCase, UpdateCourseUseCase,
 };
-use crate::domain::ports::SecretStore;
+use crate::domain::ports::{PresenceProvider, SecretStore};
 use crate::infrastructure::{
+    discord::DiscordPresenceAdapter,
     keystore::NativeKeystore,
     llm::GeminiAdapter,
     local_media::LocalMediaScannerAdapter,
@@ -99,6 +100,7 @@ pub struct AppContext {
     pub youtube: Arc<RustyYtdlAdapter>, // Always available (no API key needed)
     pub transcript: Arc<TranscriptAdapter>,
     pub llm: Option<Arc<GeminiAdapter>>,
+    pub presence: Arc<dyn PresenceProvider>,
     pub keystore: Arc<NativeKeystore>,
 
     // Database pool
@@ -132,6 +134,14 @@ impl AppContext {
         // YouTube adapter (always available - no API key needed)
         let youtube = Arc::new(RustyYtdlAdapter::new());
 
+        // Presence provider (Discord)
+        let discord_id = keystore.retrieve("discord_client_id").ok().flatten();
+        let presence_adapter = DiscordPresenceAdapter::new();
+        if let Some(id) = discord_id {
+            presence_adapter.set_client_id(id);
+        }
+        let presence: Arc<dyn PresenceProvider> = Arc::new(presence_adapter);
+
         // Transcript adapter (for summaries)
         let transcript = Arc::new(
             crate::infrastructure::transcript::TranscriptAdapter::new()
@@ -161,6 +171,7 @@ impl AppContext {
             youtube,
             transcript,
             llm,
+            presence,
             keystore,
             db_pool,
         })

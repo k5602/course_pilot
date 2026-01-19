@@ -64,6 +64,7 @@ rfd = "0.17"
 
 # App-specific Logic
 reqwest = { version = "0.13.1", features = ["json"] }
+discord-rich-presence = "1.0.0"
 
 # YouTube
 rusty_ytdl = { git = "https://github.com/k5602/rusty_ytdl", branch = "qol", features = [

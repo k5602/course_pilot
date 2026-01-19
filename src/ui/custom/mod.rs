@@ -7,6 +7,8 @@ pub mod loading;
 pub mod local_video_player;
 pub mod markdown;
 pub mod onboarding;
+pub mod presence_health;
+pub mod presence_sync;
 pub mod right_panel;
 pub mod sidebar;
 pub mod tag_badge;
@@ -22,6 +24,8 @@ pub use loading::{
 pub use local_video_player::LocalVideoPlayer;
 pub use markdown::MarkdownRenderer;
 pub use onboarding::OnboardingTour;
+pub use presence_health::PresenceHealth;
+pub use presence_sync::PresenceSync;
 pub use right_panel::RightPanel;
 pub use sidebar::Sidebar;
 pub use tag_badge::{TagBadge, TagFilterChip, TagInput};
