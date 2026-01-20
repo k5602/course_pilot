@@ -359,7 +359,8 @@ mod tests {
         let subtitle = PathBuf::from("/root/Lesson 01 - Intro [English] CC.srt");
         let other = PathBuf::from("/root/Unrelated.srt");
 
-        let assignments = match_subtitles_greedy(&[video.clone()], &[subtitle.clone(), other]);
+        let assignments =
+            match_subtitles_greedy(std::slice::from_ref(&video), &[subtitle.clone(), other]);
         assert_eq!(assignments.get(&video), Some(&subtitle));
     }
 
@@ -368,7 +369,7 @@ mod tests {
         let video = PathBuf::from("/root/Chapter 01 - Basics.mp4");
         let subtitle = PathBuf::from("/root/Completely Different Topic.srt");
 
-        let assignments = match_subtitles_greedy(&[video.clone()], &[subtitle]);
-        assert!(assignments.get(&video).is_none());
+        let assignments = match_subtitles_greedy(std::slice::from_ref(&video), &[subtitle]);
+        assert!(!assignments.contains_key(&video));
     }
 }

@@ -22,6 +22,7 @@ jobs:
   build:
     name: Build (${{ matrix.os }})
     runs-on: ${{ matrix.os }}
+    timeout-minutes: 60
     strategy:
       fail-fast: false
       matrix:
@@ -30,11 +31,10 @@ jobs:
             platform: linux
             artifact: course-pilot-linux-x64.tar.gz
             binary: course_pilot
-          # Commented out Windows build - takes too long and causes release failures
-          # - os: windows-2022
-          #   platform: windows
-          #   artifact: course-pilot-windows-x64.zip
-          #   binary: course_pilot.exe
+          - os: windows-2022
+            platform: windows
+            artifact: course-pilot-windows-x64.msi
+            binary: course_pilot.exe
 
     steps:
       - name: Checkout
@@ -102,44 +102,58 @@ jobs:
         shell: bash
 
       - name: Install Dioxus CLI
-        run: cargo install dioxus-cli --locked --force
+        run: |
+          if ! command -v dx >/dev/null 2>&1; then
+            cargo install dioxus-cli --locked
+          else
+            echo "Dioxus CLI already installed"
+          fi
         shell: bash
 
       - name: Build & Bundle (Linux)
         if: matrix.platform == 'linux'
         run: |
           export PKG_CONFIG_PATH=/usr/lib/pkgconfig:/usr/lib/x86_64-linux-gnu/pkgconfig:/usr/share/pkgconfig
-          dx build --release --platform desktop
-          dx bundle --release --platform desktop --package-types deb
+          dx bundle --release --platform desktop --package-types deb --package-types rpm
         shell: bash
 
-      # Commented out Windows build - takes too long
-      # - name: Build (Windows)
-      #   if: matrix.platform == 'windows'
-      #   run: |
-      #     dx build --release --platform desktop
-      #   env:
-      #     RUSTFLAGS: "-C target-feature=+crt-static"
-      #   shell: pwsh
+      - name: Bundle (Windows)
+        if: matrix.platform == 'windows'
+        run: |
+          dx bundle --release --platform desktop --package-types msi
+        shell: pwsh
 
       - name: Package (Linux)
         if: matrix.platform == 'linux'
         run: |
           mkdir -p release-artifacts
 
-          # 1. Prepare Binary (Linux bundle layout)
-          BINARY_FILE=$(find target -name "${APP_NAME}" -type f -executable | grep -v "deps/" | grep "release" | head -1)
-          if [ -z "$BINARY_FILE" ]; then
-            echo "Error: Binary not found"
+          # 1. Prepare Binary + Assets from Dioxus deb bundle staging output
+          DEB_BUNDLE_DIR="target/dx/${APP_NAME}/bundle/linux/bundle/deb"
+          DEB_DATA_DIR=$(find "$DEB_BUNDLE_DIR" -type d -path "*/data/usr" | head -1)
+          if [ -z "$DEB_DATA_DIR" ]; then
+            echo "Error: Dioxus deb data directory not found in: $DEB_BUNDLE_DIR"
             exit 1
           fi
+
+          BINARY_FILE="${DEB_DATA_DIR}/bin/${APP_NAME}"
+          ASSETS_DIR=$(find "${DEB_DATA_DIR}/lib" -type d -name assets | head -1)
+          if [ ! -f "$BINARY_FILE" ]; then
+            echo "Error: Bundled binary not found: $BINARY_FILE"
+            exit 1
+          fi
+          if [ -z "$ASSETS_DIR" ] || [ ! -d "$ASSETS_DIR" ]; then
+            echo "Error: Bundled assets not found under: ${DEB_DATA_DIR}/lib"
+            exit 1
+          fi
+
           mkdir -p ./release-artifacts/bin
           mkdir -p ./release-artifacts/lib/${APP_NAME}
           cp "$BINARY_FILE" ./release-artifacts/bin/${APP_NAME}
           ln -s "./bin/${APP_NAME}" "./release-artifacts/${APP_NAME}"
 
-          # 2. Add Assets (Linux expects ../lib/{product}/assets)
-          cp -r ./assets "./release-artifacts/lib/${APP_NAME}/assets"
+          # 2. Add Bundled Assets (hashed output + component CSS)
+          cp -r "$ASSETS_DIR" "./release-artifacts/lib/${APP_NAME}/assets"
 
           # 3. Add Launcher Script
           if [ -f "./scripts/course-pilot-launcher.sh" ]; then
@@ -162,23 +176,29 @@ jobs:
             echo "Warning: Debian package not found in target directory"
             exit 1
           fi
+
+          # 6. Extract .rpm (Search for any generated .rpm in the target directory)
+          RPM_PATH=$(find target -name "*.rpm" | head -1)
+          if [ -n "$RPM_PATH" ]; then
+            cp "$RPM_PATH" "course-pilot-linux-x64.rpm"
+            echo "Successfully found and copied RPM package: $RPM_PATH"
+          else
+            echo "Warning: RPM package not found in target directory"
+            exit 1
+          fi
         shell: bash
 
-      # Commented out Windows packaging - takes too long
-      # - name: Package (Windows)
-      #   if: matrix.platform == 'windows'
-      #   run: |
-      #     New-Item -ItemType Directory -Force -Path release-artifacts | Out-Null
-      #     $exe = Get-ChildItem -Path ./target -Filter "${env:APP_NAME}.exe" -Recurse | Where-Object { $_.FullName -notmatch "deps" -and $_.FullName -match "release" } | Select-Object -First 1
-      #     if ($exe) {
-      #         Copy-Item $exe.FullName ./release-artifacts/
-      #     } else {
-      #         Write-Error "Binary not found"
-      #         exit 1
-      #     }
-      #     Copy-Item -Recurse ./assets ./release-artifacts/
-      #     Compress-Archive -Path ./release-artifacts/* -DestinationPath "${{ matrix.artifact }}"
-      #   shell: pwsh
+      - name: Package (Windows)
+        if: matrix.platform == 'windows'
+        run: |
+          $msi = Get-ChildItem -Path ./target -Filter "*.msi" -Recurse | Select-Object -First 1
+          if ($msi) {
+              Copy-Item $msi.FullName ./course-pilot-windows-x64.msi
+          } else {
+              Write-Error "MSI not found"
+              exit 1
+          }
+        shell: pwsh
 
       - name: Upload Linux Tarball
         if: matrix.platform == 'linux'
@@ -194,13 +214,19 @@ jobs:
           name: linux-deb
           path: course-pilot-linux-x64.deb
 
-      # Commented out Windows artifact upload - takes too long
-      # - name: Upload Windows artifact
-      #   if: matrix.platform == 'windows'
-      #   uses: actions/upload-artifact@v4
-      #   with:
-      #     name: windows-artifact
-      #     path: ${{ matrix.artifact }}
+      - name: Upload Linux RPM Package
+        if: matrix.platform == 'linux'
+        uses: actions/upload-artifact@v4
+        with:
+          name: linux-rpm
+          path: course-pilot-linux-x64.rpm
+
+      - name: Upload Windows MSI
+        if: matrix.platform == 'windows'
+        uses: actions/upload-artifact@v4
+        with:
+          name: windows-msi
+          path: course-pilot-windows-x64.msi
 
   release:
     name: Publish Release
@@ -222,11 +248,15 @@ jobs:
         with:
           name: linux-deb
 
-      # Commented out Windows artifact download - Windows build disabled
-      # - name: Download Windows artifact
-      #   uses: actions/download-artifact@v4
-      #   with:
-      #     name: windows-artifact
+      - name: Download Linux RPM Package
+        uses: actions/download-artifact@v4
+        with:
+          name: linux-rpm
+
+      - name: Download Windows MSI
+        uses: actions/download-artifact@v4
+        with:
+          name: windows-msi
 
       - name: Compute checksums and sizes
         id: meta
@@ -234,18 +264,28 @@ jobs:
           set -euo pipefail
           linux_tar="course-pilot-linux-x64.tar.gz"
           linux_deb="course-pilot-linux-x64.deb"
+          linux_rpm="course-pilot-linux-x64.rpm"
+          win_msi="course-pilot-windows-x64.msi"
 
           tar_size=$(du -h "$linux_tar" | cut -f1)
           deb_size=$(du -h "$linux_deb" | cut -f1)
+          rpm_size=$(du -h "$linux_rpm" | cut -f1)
+          msi_size=$(du -h "$win_msi" | cut -f1)
 
           tar_sha=$(sha256sum "$linux_tar" | cut -d' ' -f1)
           deb_sha=$(sha256sum "$linux_deb" | cut -d' ' -f1)
+          rpm_sha=$(sha256sum "$linux_rpm" | cut -d' ' -f1)
+          msi_sha=$(sha256sum "$win_msi" | cut -d' ' -f1)
 
           {
             echo "tar_size=$tar_size"
             echo "deb_size=$deb_size"
+            echo "rpm_size=$rpm_size"
+            echo "msi_size=$msi_size"
             echo "tar_sha=$tar_sha"
             echo "deb_sha=$deb_sha"
+            echo "rpm_sha=$rpm_sha"
+            echo "msi_sha=$msi_sha"
           } >> "$GITHUB_OUTPUT"
         shell: bash
 
@@ -275,18 +315,21 @@ jobs:
             echo "| Platform | File | Size | SHA256 |"
             echo "|----------|------|------|--------|"
             echo "| 🐧 Linux (Debian/Ubuntu) | course-pilot-linux-x64.deb | ${{ steps.meta.outputs.deb_size }} | ${{ steps.meta.outputs.deb_sha }} |"
+            echo "| 🐧 Linux (RPM/Fedora) | course-pilot-linux-x64.rpm | ${{ steps.meta.outputs.rpm_size }} | ${{ steps.meta.outputs.rpm_sha }} |"
             echo "| 🐧 Linux (Generic/Arch) | course-pilot-linux-x64.tar.gz | ${{ steps.meta.outputs.tar_size }} | ${{ steps.meta.outputs.tar_sha }} |"
-            # Windows build temporarily disabled
-            # echo "| 🪟 Windows x64 | course-pilot-windows-x64.zip | ${{ steps.meta.outputs.win_size }} | ${{ steps.meta.outputs.win_sha }} |"
+            echo "| 🪟 Windows x64 | course-pilot-windows-x64.msi | ${{ steps.meta.outputs.msi_size }} | ${{ steps.meta.outputs.msi_sha }} |"
             echo ""
             echo "### 🚀 Installation (Linux)"
             echo "- **Debian/Ubuntu/Mint**: Download the \`.deb\` and install via \`sudo apt install ./course-pilot-linux-x64.deb\`."
+            echo "- **Fedora/RHEL**: Download the \`.rpm\` and install via \`sudo dnf install ./course-pilot-linux-x64.rpm\`."
             echo "- **Arch/Others**: Download the \`.tar.gz\`, extract it, and run \`course-pilot-launcher\`. This script will automatically check and help install dependencies."
+            echo ""
+            echo "### 🚀 Installation (Windows)"
+            echo "- **Windows 10/11**: Download the \`.msi\` and run the installer."
             echo ""
             echo "### ⚙️ System Requirements"
             echo "- **Linux**: Ubuntu 20.04+ / Debian 11+ / Fedora 35+ / Arch Linux (GTK3/4 compatible WebKit)"
-            # Windows build temporarily disabled
-            # echo "- **Windows**: Windows 10 (1903+) / Windows 11"
+            echo "- **Windows**: Windows 10 (1903+) / Windows 11"
           } >> "$notes_file"
         shell: bash
 
@@ -296,8 +339,8 @@ jobs:
           files: |
             course-pilot-linux-x64.tar.gz
             course-pilot-linux-x64.deb
-            # Windows build temporarily disabled
-            # course-pilot-windows-x64.zip
+            course-pilot-linux-x64.rpm
+            course-pilot-windows-x64.msi
           tag_name: ${{ github.ref_name }}
           name: Course Pilot ${{ github.ref_name }}
           body_path: release_notes.md
