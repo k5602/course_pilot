@@ -4,8 +4,9 @@ use std::fmt;
 use std::str::FromStr;
 
 /// Difficulty level for generated exams.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, serde::Serialize, serde::Deserialize)]
-#[derive(Default)]
+#[derive(
+    Debug, Clone, Copy, PartialEq, Eq, Hash, serde::Serialize, serde::Deserialize, Default,
+)]
 pub enum ExamDifficulty {
     Easy,
     #[default]
@@ -23,7 +24,6 @@ impl ExamDifficulty {
         }
     }
 }
-
 
 impl fmt::Display for ExamDifficulty {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
