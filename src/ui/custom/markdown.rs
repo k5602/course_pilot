@@ -61,9 +61,14 @@ pub fn MarkdownRenderer(props: MarkdownRendererProps) -> Element {
             spawn(async move {
                 let eval_script = format!(
                     r#"
-                    (function ensureKatexAndRender() {{
+                    (function renderWithRetry(attempts) {{
                         const el = document.getElementById("{id}");
-                        if (!el) return;
+                        if (!el) {{
+                            if (attempts > 0) {{
+                                setTimeout(function() {{ renderWithRetry(attempts - 1); }}, 100);
+                            }}
+                            return;
+                        }}
 
                         function render() {{
                             if (typeof renderMathInElement === "function") {{
@@ -79,7 +84,7 @@ pub fn MarkdownRenderer(props: MarkdownRendererProps) -> Element {
                             }}
                         }}
 
-                        if (typeof renderMathInElement !== "function") {{
+                        function ensureAssets() {{
                             const head = document.head || document.getElementsByTagName("head")[0];
 
                             if (!document.getElementById("katex-css")) {{
@@ -105,13 +110,19 @@ pub fn MarkdownRenderer(props: MarkdownRendererProps) -> Element {
                                 script.src = "https://cdn.jsdelivr.net/npm/katex@0.16.25/dist/contrib/auto-render.min.js";
                                 script.onload = render;
                                 head.appendChild(script);
-                            }} else {{
-                                setTimeout(render, 50);
                             }}
-                        }} else {{
-                            render();
                         }}
-                    }})();
+
+                        if (typeof renderMathInElement !== "function") {{
+                            ensureAssets();
+                            if (attempts > 0) {{
+                                setTimeout(function() {{ renderWithRetry(attempts - 1); }}, 150);
+                            }}
+                            return;
+                        }}
+
+                        render();
+                    }})(20);
                     "#,
                     id = element_id_str
                 );
