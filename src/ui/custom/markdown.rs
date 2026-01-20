@@ -1,8 +1,16 @@
 //! Safe Markdown renderer for Dioxus UI components.
 
+use std::sync::atomic::{AtomicUsize, Ordering};
+
 use ammonia::Builder;
 use dioxus::prelude::*;
 use pulldown_cmark::{Options, Parser, html};
+
+static MARKDOWN_RENDERER_ID: AtomicUsize = AtomicUsize::new(1);
+
+fn next_markdown_id() -> usize {
+    MARKDOWN_RENDERER_ID.fetch_add(1, Ordering::Relaxed)
+}
 
 /// Props for rendering Markdown safely.
 #[derive(Props, PartialEq, Clone)]
@@ -41,8 +49,83 @@ pub fn MarkdownRenderer(props: MarkdownRendererProps) -> Element {
     let html = render_markdown_to_html(&props.src);
     let class =
         props.class.clone().unwrap_or_else(|| "prose prose-base leading-7 max-w-none".to_string());
+    let element_id = use_signal(next_markdown_id);
+    let element_id_str = format!("markdown-render-{}", *element_id.read());
+    let src = props.src.clone();
+
+    {
+        let element_id_str = element_id_str.clone();
+        use_effect(move || {
+            let element_id_str = element_id_str.clone();
+            let _src = src.clone();
+            spawn(async move {
+                let eval_script = format!(
+                    r#"
+                    (function ensureKatexAndRender() {{
+                        const el = document.getElementById("{id}");
+                        if (!el) return;
+
+                        function render() {{
+                            if (typeof renderMathInElement === "function") {{
+                                renderMathInElement(el, {{
+                                    delimiters: [
+                                        {{left: "$$", right: "$$", display: true}},
+                                        {{left: "$", right: "$", display: false}},
+                                        {{left: "\\(", right: "\\)", display: false}},
+                                        {{left: "\\[", right: "\\]", display: true}}
+                                    ],
+                                    throwOnError: false
+                                }});
+                            }}
+                        }}
+
+                        if (typeof renderMathInElement !== "function") {{
+                            const head = document.head || document.getElementsByTagName("head")[0];
+
+                            if (!document.getElementById("katex-css")) {{
+                                const link = document.createElement("link");
+                                link.id = "katex-css";
+                                link.rel = "stylesheet";
+                                link.href = "https://cdn.jsdelivr.net/npm/katex@0.16.25/dist/katex.min.css";
+                                head.appendChild(link);
+                            }}
+
+                            if (!document.getElementById("katex-js")) {{
+                                const script = document.createElement("script");
+                                script.id = "katex-js";
+                                script.defer = true;
+                                script.src = "https://cdn.jsdelivr.net/npm/katex@0.16.25/dist/katex.min.js";
+                                head.appendChild(script);
+                            }}
+
+                            if (!document.getElementById("katex-auto-render")) {{
+                                const script = document.createElement("script");
+                                script.id = "katex-auto-render";
+                                script.defer = true;
+                                script.src = "https://cdn.jsdelivr.net/npm/katex@0.16.25/dist/contrib/auto-render.min.js";
+                                script.onload = render;
+                                head.appendChild(script);
+                            }} else {{
+                                setTimeout(render, 50);
+                            }}
+                        }} else {{
+                            render();
+                        }}
+                    }})();
+                    "#,
+                    id = element_id_str
+                );
+
+                let _ = document::eval(&eval_script).await;
+            });
+        });
+    }
 
     rsx! {
-        div { class: "{class}", dangerous_inner_html: "{html}" }
+        div {
+            id: "{element_id_str}",
+            class: "{class}",
+            dangerous_inner_html: "{html}",
+        }
     }
 }

@@ -6,9 +6,10 @@ use std::str::FromStr;
 use crate::application::ServiceFactory;
 use crate::application::use_cases::SubmitExamInput;
 use crate::domain::ports::{ExamRepository, MCQuestion, ModuleRepository, VideoRepository};
-use crate::domain::value_objects::ExamId;
+use crate::domain::value_objects::{ExamDifficulty, ExamId};
 use crate::ui::Route;
-use crate::ui::custom::{ErrorAlert, Spinner};
+use crate::ui::actions::start_exam;
+use crate::ui::custom::{ErrorAlert, MarkdownRenderer, Spinner};
 use crate::ui::hooks::{use_load_exam_state, use_load_video};
 use crate::ui::state::AppState;
 
@@ -115,6 +116,8 @@ pub fn QuizView(exam_id: String) -> Element {
     if exam_ref.is_taken() && !show_review() {
         let score = exam_ref.score().unwrap_or(0.0) * 100.0;
         let passed = exam_ref.passed().unwrap_or(false);
+        let exam_video_id = exam_ref.video_id().clone();
+        let retake_num_questions = total_questions.clamp(1, 20) as u8;
 
         return rsx! {
             div { class: "p-6 max-w-2xl mx-auto",
@@ -142,6 +145,35 @@ pub fn QuizView(exam_id: String) -> Element {
                             class: "btn btn-outline btn-lg",
                             onclick: move |_| show_review.set(true),
                             "Review Questions"
+                        }
+                        button {
+                            class: "btn btn-secondary btn-lg",
+                            onclick: move |_| {
+                                let backend_inner = backend.clone();
+                                let vid = exam_video_id.clone();
+                                let num_questions = retake_num_questions;
+                                spawn(async move {
+                                    match start_exam(
+                                            backend_inner,
+                                            vid,
+                                            num_questions,
+                                            ExamDifficulty::Medium,
+                                            true,
+                                        )
+                                        .await
+                                    {
+                                        Ok(exam_id) => {
+                                            nav.push(Route::QuizView {
+                                                exam_id: exam_id.as_uuid().to_string(),
+                                            });
+                                        }
+                                        Err(e) => {
+                                            log::error!("Failed to retake exam: {}", e);
+                                        }
+                                    }
+                                });
+                            },
+                            "Retake Quiz"
                         }
                         if !passed {
                             if let Some(course_id) = course_id_for_video.read().clone() {
@@ -198,7 +230,9 @@ pub fn QuizView(exam_id: String) -> Element {
                                 div {
                                     key: "{idx}",
                                     class: "bg-base-200 rounded-2xl p-6 shadow-sm border-l-4 {border_class}",
-                                    p { class: "text-lg font-bold mb-4", "{idx + 1}. {q.question}" }
+                                    div { class: "text-lg font-bold mb-4",
+                                        MarkdownRenderer { src: format!("{}. {}", idx + 1, q.question) }
+                                    }
 
 
 
@@ -213,7 +247,9 @@ pub fn QuizView(exam_id: String) -> Element {
                                                         key: "{opt_idx}",
                                                         class: if is_this_correct { "p-3 rounded-lg bg-success/10 text-success border border-success/20 flex items-center gap-2" } else if is_user_choice { "p-3 rounded-lg bg-error/10 text-error border border-error/20 flex items-center gap-2" } else { "p-3 rounded-lg bg-base-300/50 opacity-60 flex items-center gap-2" },
                                                         span { class: "font-mono text-xs w-4", "{opt_idx + 1}." }
-                                                        span { "{opt}" }
+                                                        div { class: "prose prose-sm max-w-none",
+                                                            MarkdownRenderer { src: opt.clone() }
+                                                        }
                                                         if is_this_correct {
                                                             span { class: "ml-auto text-xs font-bold", "CORRECT" }
                                                         } else if is_user_choice {
@@ -229,7 +265,9 @@ pub fn QuizView(exam_id: String) -> Element {
                                         p { class: "text-xs font-bold uppercase tracking-widest opacity-40 mb-1",
                                             "Explanation"
                                         }
-                                        p { class: "text-sm", "{q.explanation}" }
+                                        div { class: "prose prose-sm max-w-none",
+                                            MarkdownRenderer { src: q.explanation.clone() }
+                                        }
                                     }
                                 }
                             }
@@ -327,7 +365,9 @@ pub fn QuizView(exam_id: String) -> Element {
 
             // Question Card
             div { class: "bg-base-200 rounded-2xl p-6 mb-8 shadow-sm",
-                p { class: "text-xl font-semibold mb-6", "{current_q.question}" }
+                div { class: "text-xl font-semibold mb-6",
+                    MarkdownRenderer { src: current_q.question.clone() }
+                }
 
                 div { class: "space-y-3",
                     for (i , option) in current_q.options.iter().enumerate() {
@@ -341,7 +381,9 @@ pub fn QuizView(exam_id: String) -> Element {
                                         "✓"
                                     }
                                 }
-                                "{option}"
+                                div { class: "prose prose-sm max-w-none",
+                                    MarkdownRenderer { src: option.clone() }
+                                }
                             }
                         }
                     }

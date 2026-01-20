@@ -13,7 +13,7 @@ use crate::domain::{
         CourseRepository, LocalMediaScanner, ModuleRepository, RawLocalMediaMetadata,
         SearchRepository, VideoRepository,
     },
-    services::{SubtitleCleaner, TitleSanitizer},
+    services::{BoundaryDetector, SubtitleCleaner, TitleSanitizer},
     value_objects::{CourseId, ModuleId, PlaylistUrl, VideoId, VideoSource},
 };
 
@@ -110,6 +110,7 @@ where
 
         // 3. Group by directory
         let grouped = group_by_folder(root, &raw_media);
+        let grouped = split_root_group_if_needed(root, &grouped, &self.sanitizer);
 
         // 4. Create course (use synthetic playlist URL for persistence)
         let course_id = CourseId::new();
@@ -219,6 +220,64 @@ fn group_by_folder(
     grouped
 }
 
+fn split_root_group_if_needed(
+    root: &str,
+    grouped: &BTreeMap<String, Vec<RawLocalMediaMetadata>>,
+    sanitizer: &TitleSanitizer,
+) -> BTreeMap<String, Vec<RawLocalMediaMetadata>> {
+    if grouped.len() != 1 {
+        return grouped.clone();
+    }
+
+    let (folder, items) = match grouped.iter().next() {
+        Some(entry) => entry,
+        None => return BTreeMap::new(),
+    };
+
+    let root_path = Path::new(root);
+    let folder_path = Path::new(folder);
+    let canonical_root = fs::canonicalize(root_path).unwrap_or_else(|_| root_path.to_path_buf());
+    let canonical_folder =
+        fs::canonicalize(folder_path).unwrap_or_else(|_| folder_path.to_path_buf());
+
+    if canonical_folder != canonical_root {
+        return grouped.clone();
+    }
+
+    let detector = BoundaryDetector::new();
+    let groups = detector.group_into_modules(items.len());
+    if groups.len() <= 1 {
+        return grouped.clone();
+    }
+
+    let mut split = BTreeMap::new();
+    for (idx, indices) in groups.iter().enumerate() {
+        let title = indices
+            .first()
+            .and_then(|&i| items.get(i))
+            .map(|item| sanitizer.sanitize(&item.title))
+            .filter(|s| !s.trim().is_empty())
+            .unwrap_or_else(|| format!("Module {}", idx + 1));
+
+        let module_label = if title.starts_with("Module ") {
+            title
+        } else {
+            format!("Module {} - {}", idx + 1, title)
+        };
+
+        let key = format!("{root}/{module_label}");
+        let mut bucket = Vec::new();
+        for &i in indices {
+            if let Some(item) = items.get(i) {
+                bucket.push(item.clone());
+            }
+        }
+        split.insert(key, bucket);
+    }
+
+    split
+}
+
 fn module_title_for(root: &str, folder: &str, sanitizer: &TitleSanitizer) -> String {
     let root_path = Path::new(root);
     let folder_path = Path::new(folder);
@@ -236,7 +295,9 @@ fn module_title_for(root: &str, folder: &str, sanitizer: &TitleSanitizer) -> Str
 }
 
 fn grouped_len(root: &str, items: &[RawLocalMediaMetadata]) -> usize {
-    group_by_folder(root, items).len()
+    let grouped = group_by_folder(root, items);
+    let sanitizer = TitleSanitizer::new();
+    split_root_group_if_needed(root, &grouped, &sanitizer).len()
 }
 
 #[cfg(test)]

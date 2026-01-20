@@ -93,13 +93,14 @@ pub async fn import_subtitle_for_video(
 }
 
 /// Start an exam for a video.
-/// If an exam already exists, it returns the existing one.
+/// If `allow_retake` is false and an exam already exists, it returns the existing one.
 /// Otherwise, it generates a new one using AI.
 pub async fn start_exam(
     backend: Option<Arc<AppContext>>,
     video_id: VideoId,
     num_questions: u8,
     difficulty: ExamDifficulty,
+    allow_retake: bool,
 ) -> Result<ExamId, String> {
     let ctx = match backend {
         Some(ctx) => ctx,
@@ -113,9 +114,11 @@ pub async fn start_exam(
     }
 
     // Check if an exam already exists for this video to avoid re-generating
-    if let Ok(existing) = ctx.exam_repo.find_by_video(&video_id) {
-        if let Some(exam) = existing.first() {
-            return Ok(exam.id().clone());
+    if !allow_retake {
+        if let Ok(existing) = ctx.exam_repo.find_by_video(&video_id) {
+            if let Some(exam) = existing.first() {
+                return Ok(exam.id().clone());
+            }
         }
     }
 

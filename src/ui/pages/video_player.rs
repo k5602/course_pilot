@@ -183,7 +183,7 @@ pub fn VideoPlayer(course_id: String, video_id: String) -> Element {
         let num_questions = *quiz_num_questions.read();
         let difficulty = *quiz_difficulty.read();
         spawn(async move {
-            match start_exam(backend_inner, vid, num_questions, difficulty).await {
+            match start_exam(backend_inner, vid, num_questions, difficulty, false).await {
                 Ok(exam_id) => {
                     nav.push(Route::QuizView { exam_id: exam_id.as_uuid().to_string() });
                 },
@@ -364,13 +364,7 @@ pub fn VideoPlayer(course_id: String, video_id: String) -> Element {
                         class: "btn btn-primary gap-2",
                         onclick: on_take_quiz,
                         disabled: quiz_disabled,
-                        title: if !state.has_gemini() {
-                            "Configure Gemini API key in Settings"
-                        } else if *is_local_video.read() && !*has_transcript.read() {
-                            "Local videos need subtitles to enable quizzes"
-                        } else {
-                            ""
-                        },
+                        title: if !state.has_gemini() { "Configure Gemini API key in Settings" } else if *is_local_video.read() && !*has_transcript.read() { "Local videos need subtitles to enable quizzes" } else { "" },
                         "📝 Take Quiz"
                     }
                 }
@@ -387,7 +381,7 @@ pub fn VideoPlayer(course_id: String, video_id: String) -> Element {
                 video_id: v.id().as_uuid().to_string(),
                 is_local: is_local_video,
                 has_transcript,
-                on_transcript_update: on_transcript_update,
+                on_transcript_update,
             }
 
             // Navigation Footer
@@ -673,9 +667,7 @@ fn SummarySection(
                                         p { class: "text-xs text-base-content/60 mt-2", "{status}" }
                                     }
                                 } else {
-                                    p { class: "text-base-content/60 mb-4",
-                                        "Generate an AI summary from the video transcript"
-                                    }
+                                    p { class: "text-base-content/60 mb-4", "Generate an AI summary from the video transcript" }
                                 }
                                 button {
                                     class: "btn btn-primary",

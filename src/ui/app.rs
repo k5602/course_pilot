@@ -92,6 +92,20 @@ pub fn App() -> Element {
             href: asset!("/assets/dx-components-theme.css"),
         }
 
+        // KaTeX for math rendering
+        document::Link {
+            rel: "stylesheet",
+            href: "https://cdn.jsdelivr.net/npm/katex@0.16.25/dist/katex.min.css",
+        }
+        script {
+            src: "https://cdn.jsdelivr.net/npm/katex@0.16.25/dist/katex.min.js",
+            defer: true,
+        }
+        script {
+            src: "https://cdn.jsdelivr.net/npm/katex@0.16.25/dist/contrib/auto-render.min.js",
+            defer: true,
+        }
+
         Router::<Route> {}
     }
 }
