@@ -3,13 +3,14 @@
 use std::fs;
 use std::sync::Arc;
 
+use crate::application::use_cases::AttachTranscriptInput;
 use crate::application::use_cases::ExportCourseNotesInput;
 use crate::application::use_cases::GenerateExamInput;
 use crate::application::use_cases::IngestLocalInput;
 use crate::application::use_cases::IngestPlaylistInput;
 use crate::application::{AppContext, ServiceFactory};
 use crate::domain::ports::{CourseRepository, ExamRepository};
-use crate::domain::value_objects::{CourseId, ExamId, VideoId};
+use crate::domain::value_objects::{CourseId, ExamDifficulty, ExamId, VideoId};
 
 /// Result of playlist import action.
 #[derive(Clone, Debug)]
@@ -70,12 +71,35 @@ pub async fn import_local_folder(
     }
 }
 
+/// Attach a subtitle or transcript file to a video.
+pub async fn import_subtitle_for_video(
+    backend: Option<Arc<AppContext>>,
+    video_id: VideoId,
+    subtitle_path: String,
+) -> Result<usize, String> {
+    let ctx = match backend {
+        Some(ctx) => ctx,
+        None => return Err("Backend not initialized".to_string()),
+    };
+
+    let raw = fs::read_to_string(&subtitle_path)
+        .map_err(|e| format!("Failed to read subtitle file: {e}"))?;
+
+    let use_case = ServiceFactory::attach_transcript(&ctx);
+    let input = AttachTranscriptInput { video_id, transcript_text: raw };
+
+    let output = use_case.execute(input).map_err(|e| e.to_string())?;
+    Ok(output.cleaned_length)
+}
+
 /// Start an exam for a video.
 /// If an exam already exists, it returns the existing one.
 /// Otherwise, it generates a new one using AI.
 pub async fn start_exam(
     backend: Option<Arc<AppContext>>,
     video_id: VideoId,
+    num_questions: u8,
+    difficulty: ExamDifficulty,
 ) -> Result<ExamId, String> {
     let ctx = match backend {
         Some(ctx) => ctx,
@@ -102,7 +126,7 @@ pub async fn start_exam(
     };
 
     // Execute the use case
-    let input = GenerateExamInput { video_id, num_questions: 5 };
+    let input = GenerateExamInput { video_id, num_questions, difficulty };
 
     match use_case.generate(input).await {
         Ok(output) => Ok(output.exam_id),

@@ -11,7 +11,9 @@ mod youtube;
 
 pub use keystore::{KeystoreError, SecretStore};
 pub use llm::{CompanionAI, CompanionContext, ExaminerAI, LLMError, MCQuestion, SummarizerAI};
-pub use local_media::{LocalMediaError, LocalMediaScanner, RawLocalMediaMetadata};
+pub use local_media::{
+    LocalMediaError, LocalMediaScanner, RawLocalMediaMetadata, RawSubtitleMetadata,
+};
 pub use presence::{Activity, PresenceProvider};
 pub use repository::{
     CourseRepository, ExamRepository, ModuleRepository, NoteRepository, RepositoryError,

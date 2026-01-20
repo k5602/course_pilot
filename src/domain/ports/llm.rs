@@ -1,5 +1,7 @@
 //! LLM ports for AI features.
 
+use crate::domain::value_objects::ExamDifficulty;
+
 /// Error type for LLM operations.
 #[derive(Debug, thiserror::Error)]
 pub enum LLMError {
@@ -23,6 +25,8 @@ pub struct CompanionContext {
 
     pub summary: Option<String>,
     pub notes: Option<String>,
+    /// Extra user-provided context for local videos without transcripts.
+    pub local_context: Option<String>,
 }
 
 /// Port for the Sidecar Companion (AI-B).
@@ -50,6 +54,7 @@ pub trait ExaminerAI: Send + Sync {
         video_title: &str,
         video_description: Option<&str>,
         num_questions: u8,
+        difficulty: ExamDifficulty,
     ) -> Result<Vec<MCQuestion>, LLMError>;
 }
 

@@ -5,7 +5,7 @@ use std::str::FromStr;
 
 use crate::application::ServiceFactory;
 use crate::application::use_cases::SubmitExamInput;
-use crate::domain::ports::{ExamRepository, MCQuestion, ModuleRepository};
+use crate::domain::ports::{ExamRepository, MCQuestion, ModuleRepository, VideoRepository};
 use crate::domain::value_objects::ExamId;
 use crate::ui::Route;
 use crate::ui::custom::{ErrorAlert, Spinner};
@@ -241,6 +241,18 @@ pub fn QuizView(exam_id: String) -> Element {
                     button {
                         class: "btn btn-primary",
                         onclick: move |_| {
+                            if let Some(ctx) = backend.as_ref() {
+                                if let Some(v) = video.read().as_ref() {
+                                    let _ = ctx.video_repo.update_completion(v.id(), true);
+                                    if let Ok(Some(module)) = ctx.module_repo.find_by_id(v.module_id()) {
+                                        nav.push(Route::VideoPlayer {
+                                            course_id: module.course_id().as_uuid().to_string(),
+                                            video_id: v.id().as_uuid().to_string(),
+                                        });
+                                        return;
+                                    }
+                                }
+                            }
                             nav.push(Route::Dashboard {});
                         },
                         "Done Reviewing"

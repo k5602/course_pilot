@@ -1,11 +1,19 @@
 //! Local media scanner port.
 
+/// Raw subtitle metadata from filesystem scan.
+#[derive(Debug, Clone)]
+pub struct RawSubtitleMetadata {
+    pub path: String,
+}
+
 /// Raw local media metadata from filesystem scan.
 #[derive(Debug, Clone)]
 pub struct RawLocalMediaMetadata {
     pub path: String,
     pub title: String,
     pub duration_secs: u32,
+    /// Candidate subtitle files matching the video.
+    pub subtitles: Vec<RawSubtitleMetadata>,
 }
 
 /// Error type for local media scanning.

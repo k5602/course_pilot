@@ -1,6 +1,7 @@
 //! Use Cases - Application-level orchestration of domain logic.
 
 mod ask_companion;
+mod attach_transcript;
 mod dashboard;
 mod export_course_notes;
 mod ingest_local;
@@ -15,6 +16,9 @@ mod update_course;
 mod update_module_title;
 
 pub use ask_companion::{AskCompanionInput, AskCompanionUseCase};
+pub use attach_transcript::{
+    AttachTranscriptError, AttachTranscriptInput, AttachTranscriptOutput, AttachTranscriptUseCase,
+};
 pub use dashboard::LoadDashboardUseCase;
 pub use export_course_notes::{
     ExportCourseNotesError, ExportCourseNotesInput, ExportCourseNotesUseCase,

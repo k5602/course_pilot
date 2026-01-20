@@ -5,6 +5,7 @@ use genai_rs::Client;
 use crate::domain::ports::{
     CompanionAI, CompanionContext, ExaminerAI, LLMError, MCQuestion, SummarizerAI,
 };
+use crate::domain::value_objects::ExamDifficulty;
 
 /// Gemini API adapter for AI features.
 pub struct GeminiAdapter {
@@ -33,30 +34,29 @@ impl CompanionAI for GeminiAdapter {
             truncate(context.video_description.as_deref().unwrap_or("Not available"), 1200);
         let summary = truncate(context.summary.as_deref().unwrap_or("Not available"), 1200);
         let notes = truncate(context.notes.as_deref().unwrap_or("Not available"), 1200);
+        let local_context =
+            truncate(context.local_context.as_deref().unwrap_or("Not provided"), 1200);
 
         let prompt = format!(
             r#"You are a learning companion for course "{}".
 Video: "{}" (Module: "{}")
 
-Video description:
-{}
+Available context:
+- Description: {}
+- Summary: {}
+- Notes: {}
+- User context: {}
 
-Summary:
-{}
+Student question: {}
 
-
-Notes:
-{}
-
-Student asks: {}
-
-Provide a concise, academic response. If transcript or notes are unavailable, say so explicitly."#,
+Answer with clear, concise, academic guidance. If the transcript or context is missing, say what is missing and ask a focused follow-up question."#,
             context.course_name,
             context.video_title,
             context.module_title,
             description,
             summary,
             notes,
+            local_context,
             question
         );
 
@@ -79,16 +79,24 @@ impl ExaminerAI for GeminiAdapter {
         video_title: &str,
         video_description: Option<&str>,
         num_questions: u8,
+        difficulty: ExamDifficulty,
     ) -> Result<Vec<MCQuestion>, LLMError> {
+        let description = video_description.unwrap_or("");
+        let difficulty = difficulty.as_str();
         let prompt = format!(
-            r#"Generate {} MCQs for: "{}"
-{}
+            r#"Generate {num_questions} multiple-choice questions.
 
-Reply ONLY with JSON array:
-[{{"question": "...", "options": ["A", "B", "C", "D"], "correct_index": 0, "explanation": "..."}}]"#,
-            num_questions,
-            video_title,
-            video_description.unwrap_or("")
+Title: "{video_title}"
+Difficulty: {difficulty}
+Description: {description}
+
+Return ONLY a JSON array with this schema:
+[{{"question":"...","options":["A","B","C","D"],"correct_index":0,"explanation":"..."}}]
+
+Rules:
+- 4 options per question
+- correct_index must be 0..3
+- No Markdown or extra text."#,
         );
 
         let response = self
@@ -123,19 +131,18 @@ impl SummarizerAI for GeminiAdapter {
         let truncated = if transcript.len() > 10000 { &transcript[..10000] } else { transcript };
 
         let prompt = format!(
-            r#"Summarize this video transcript into key learning points.
+            r#"Summarize this transcript into learning notes.
 
-Video: "{}"
+Video: "{video_title}"
 Transcript:
-{}
+{truncated}
 
-Provide a structured summary with:
+Output format:
 1. Main Topic (1 sentence)
 2. Key Points (3-5 bullet points)
-3. Key Terms (if any technical terms are introduced)
+3. Key Terms (bulleted list, or "None")
 
-Keep it concise and educational."#,
-            video_title, truncated
+Use only information present in the transcript. Keep it concise and educational."#,
         );
 
         let response = self

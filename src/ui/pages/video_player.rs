@@ -6,9 +6,9 @@ use std::str::FromStr;
 use crate::application::ServiceFactory;
 use crate::application::use_cases::UpdatePreferencesInput;
 use crate::domain::ports::VideoRepository;
-use crate::domain::value_objects::{CourseId, VideoId};
+use crate::domain::value_objects::{CourseId, ExamDifficulty, VideoId};
 use crate::ui::Route;
-use crate::ui::actions::start_exam;
+use crate::ui::actions::{import_subtitle_for_video, start_exam};
 use crate::ui::custom::{
     ErrorAlert, LocalVideoPlayer, MarkdownRenderer, Spinner, SuccessAlert, YouTubePlayer,
 };
@@ -125,6 +125,29 @@ pub fn VideoPlayer(course_id: String, video_id: String) -> Element {
     let video_id_for_complete = v.id().clone();
     let video_id_for_quiz = v.id().clone();
     let is_completed_now = video.read().as_ref().map(|v| v.is_completed()).unwrap_or(false);
+    let is_local_video = use_signal(|| false);
+    let has_transcript = use_signal(|| false);
+    {
+        let mut is_local_video = is_local_video;
+        let mut has_transcript = has_transcript;
+        use_effect(move || {
+            let value = video.read();
+            let (local, transcript) = value
+                .as_ref()
+                .map(|video| {
+                    (
+                        video.local_path().is_some(),
+                        video.transcript().map(|t| !t.trim().is_empty()).unwrap_or(false),
+                    )
+                })
+                .unwrap_or((false, false));
+            is_local_video.set(local);
+            has_transcript.set(transcript);
+        });
+    }
+    let mut quiz_num_questions = use_signal(|| 5u8);
+    let mut quiz_difficulty = use_signal(|| ExamDifficulty::Medium);
+    let quiz_disabled = !state.has_gemini() || (*is_local_video.read() && !*has_transcript.read());
     let action_status = use_signal(|| None::<(bool, String)>);
 
     // Handlers
@@ -157,8 +180,10 @@ pub fn VideoPlayer(course_id: String, video_id: String) -> Element {
     let on_take_quiz = move |_| {
         let backend_inner = backend_for_quiz.clone();
         let vid = video_id_for_quiz.clone();
+        let num_questions = *quiz_num_questions.read();
+        let difficulty = *quiz_difficulty.read();
         spawn(async move {
-            match start_exam(backend_inner, vid).await {
+            match start_exam(backend_inner, vid, num_questions, difficulty).await {
                 Ok(exam_id) => {
                     nav.push(Route::QuizView { exam_id: exam_id.as_uuid().to_string() });
                 },
@@ -197,6 +222,19 @@ pub fn VideoPlayer(course_id: String, video_id: String) -> Element {
                 Err(e) => {
                     log::error!("Failed to load preferences for right panel: {}", e);
                 },
+            }
+        }
+    };
+
+    let on_transcript_update = {
+        let backend = backend.clone();
+        let video_id_for_refresh = v.id().clone();
+        let mut video_for_refresh = video;
+        move |_| {
+            if let Some(ctx) = backend.as_ref() {
+                if let Ok(Some(updated)) = ctx.video_repo.find_by_id(&video_id_for_refresh) {
+                    video_for_refresh.set(Some(updated));
+                }
             }
         }
     };
@@ -278,7 +316,7 @@ pub fn VideoPlayer(course_id: String, video_id: String) -> Element {
                     }
                 }
 
-                div { class: "flex flex-wrap gap-3",
+                div { class: "flex flex-wrap items-center gap-3",
                     button {
                         class: if is_completed_now { "btn btn-success" } else { "btn btn-outline btn-success" },
                         onclick: on_mark_complete,
@@ -288,18 +326,69 @@ pub fn VideoPlayer(course_id: String, video_id: String) -> Element {
                             "Mark Complete"
                         }
                     }
+
+                    div { class: "flex items-center gap-2",
+                        span { class: "text-xs uppercase tracking-wide opacity-60", "Questions" }
+                        input {
+                            class: "input input-bordered input-sm w-20",
+                            r#type: "number",
+                            min: "1",
+                            max: "20",
+                            value: "{quiz_num_questions}",
+                            disabled: quiz_disabled,
+                            oninput: move |e| {
+                                let parsed = e.value().trim().parse::<u8>().ok().unwrap_or(5);
+                                quiz_num_questions.set(parsed.clamp(1, 20));
+                            },
+                        }
+                    }
+
+                    div { class: "flex items-center gap-2",
+                        span { class: "text-xs uppercase tracking-wide opacity-60", "Difficulty" }
+                        select {
+                            class: "select select-bordered select-sm",
+                            value: "{quiz_difficulty.read().as_str()}",
+                            disabled: quiz_disabled,
+                            oninput: move |e| {
+                                let next = ExamDifficulty::from_str(&e.value())
+                                    .unwrap_or(ExamDifficulty::Medium);
+                                quiz_difficulty.set(next);
+                            },
+                            option { value: "easy", "Easy" }
+                            option { value: "medium", "Medium" }
+                            option { value: "hard", "Hard" }
+                        }
+                    }
+
                     button {
                         class: "btn btn-primary gap-2",
                         onclick: on_take_quiz,
-                        disabled: !state.has_gemini(),
-                        title: if state.has_gemini() { "" } else { "Configure Gemini API key in Settings" },
+                        disabled: quiz_disabled,
+                        title: if !state.has_gemini() {
+                            "Configure Gemini API key in Settings"
+                        } else if *is_local_video.read() && !*has_transcript.read() {
+                            "Local videos need subtitles to enable quizzes"
+                        } else {
+                            ""
+                        },
                         "📝 Take Quiz"
+                    }
+                }
+
+                if *is_local_video.read() && !*has_transcript.read() {
+                    p { class: "text-xs text-warning mt-2",
+                        "Local videos need subtitles (SRT/VTT) to enable summaries and quizzes."
                     }
                 }
             }
 
             // AI Summary Section
-            SummarySection { video_id: v.id().as_uuid().to_string() }
+            SummarySection {
+                video_id: v.id().as_uuid().to_string(),
+                is_local: is_local_video,
+                has_transcript,
+                on_transcript_update: on_transcript_update,
+            }
 
             // Navigation Footer
             div { class: "mt-auto pt-12 flex justify-between border-t border-base-300",
@@ -390,13 +479,61 @@ enum SummaryState {
 
 /// AI Summary section with cached transcript + summary persistence
 #[component]
-fn SummarySection(video_id: String) -> Element {
+fn SummarySection(
+    video_id: String,
+    is_local: Signal<bool>,
+    has_transcript: Signal<bool>,
+    on_transcript_update: EventHandler<()>,
+) -> Element {
     let state = use_context::<AppState>();
     let mut summary_state = use_signal(|| SummaryState::Empty);
     let mut expanded = use_signal(|| false);
+    let summary_disabled = !state.has_gemini() || (*is_local.read() && !*has_transcript.read());
 
     let backend = state.backend.clone();
     let video_id_clone = video_id.clone();
+    let attach_status = use_signal(|| None::<String>);
+
+    let on_attach_subtitle = {
+        let backend = state.backend.clone();
+        let video_id = video_id_clone.clone();
+        let on_transcript_update = on_transcript_update;
+        move |_| {
+            let Some(path) =
+                rfd::FileDialog::new().add_filter("Subtitles", &["srt", "vtt", "txt"]).pick_file()
+            else {
+                return;
+            };
+
+            let backend = backend.clone();
+            let video_id = video_id.clone();
+            let mut attach_status = attach_status;
+            let on_transcript_update = on_transcript_update;
+            spawn(async move {
+                let video_id_vo = match VideoId::from_str(&video_id) {
+                    Ok(id) => id,
+                    Err(_) => {
+                        attach_status.set(Some("Invalid video ID".to_string()));
+                        return;
+                    },
+                };
+
+                attach_status.set(Some("Importing subtitles...".to_string()));
+                match import_subtitle_for_video(backend, video_id_vo, path.display().to_string())
+                    .await
+                {
+                    Ok(len) => {
+                        attach_status
+                            .set(Some(format!("Subtitles attached ({} chars cleaned).", len)));
+                        on_transcript_update.call(());
+                    },
+                    Err(e) => {
+                        attach_status.set(Some(format!("Subtitle import failed: {e}")));
+                    },
+                }
+            });
+        }
+    };
 
     {
         let backend = backend.clone();
@@ -456,6 +593,7 @@ fn SummarySection(video_id: String) -> Element {
                                 summary: result.summary,
                                 cached: result.cached,
                             });
+                            on_transcript_update.call(());
                         },
                         Err(e) => {
                             summary_state
@@ -519,11 +657,30 @@ fn SummarySection(video_id: String) -> Element {
                     match &*summary_state.read() {
                         SummaryState::Empty => rsx! {
                             div { class: "text-center py-8",
-                                p { class: "text-base-content/60 mb-4", "Generate an AI summary from the video transcript" }
+                                if *is_local.read() && !*has_transcript.read() {
+                                    p { class: "text-base-content/60 mb-2",
+                                        "Local videos need a subtitle file (SRT/VTT) before summaries can be generated."
+                                    }
+                                    p { class: "text-xs text-warning mb-4",
+                                        "Attach subtitles to store a cleaned transcript for this video."
+                                    }
+                                    button {
+                                        class: "btn btn-outline btn-primary btn-sm",
+                                        onclick: on_attach_subtitle,
+                                        "Attach Subtitles"
+                                    }
+                                    if let Some(ref status) = *attach_status.read() {
+                                        p { class: "text-xs text-base-content/60 mt-2", "{status}" }
+                                    }
+                                } else {
+                                    p { class: "text-base-content/60 mb-4",
+                                        "Generate an AI summary from the video transcript"
+                                    }
+                                }
                                 button {
                                     class: "btn btn-primary",
                                     onclick: move |_| generate_summary(false),
-                                    disabled: !state.has_gemini(),
+                                    disabled: summary_disabled,
                                     "✨ Generate Summary"
                                 }
                                 if !state.has_gemini() {

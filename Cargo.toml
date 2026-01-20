@@ -23,6 +23,7 @@ dioxus-free-icons = { version = "0.10", features = [
     "material-design-icons-social",
 ] }
 dioxus-primitives = { git = "https://github.com/DioxusLabs/components", version = "0.0.1", default-features = false }
+dioxus-motion = { version = "0.3.3", features = ["desktop"],default-features = false }
 
 # Utilities
 serde = { version = "1.0", features = ["derive"] }
