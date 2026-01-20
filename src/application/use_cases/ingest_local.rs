@@ -3,6 +3,7 @@
 //! Orchestrates: Scan → Sanitize → Group → Persist
 
 use std::collections::BTreeMap;
+use std::fs;
 use std::path::Path;
 use std::sync::Arc;
 
@@ -12,7 +13,7 @@ use crate::domain::{
         CourseRepository, LocalMediaScanner, ModuleRepository, RawLocalMediaMetadata,
         SearchRepository, VideoRepository,
     },
-    services::TitleSanitizer,
+    services::{SubtitleCleaner, TitleSanitizer},
     value_objects::{CourseId, ModuleId, PlaylistUrl, VideoId, VideoSource},
 };
 
@@ -140,6 +141,7 @@ where
             .map_err(|e| IngestLocalError::PersistFailed(e.to_string()))?;
 
         // 5. Create modules and videos
+        let cleaner = SubtitleCleaner::new();
         let mut total_videos = 0;
         for (module_idx, (folder_path, items)) in grouped.into_iter().enumerate() {
             let module_id = ModuleId::new();
@@ -171,6 +173,17 @@ where
                 self.video_repo
                     .save(&video)
                     .map_err(|e| IngestLocalError::PersistFailed(e.to_string()))?;
+
+                if let Some(subtitle) = item.subtitles.first() {
+                    if let Ok(raw) = fs::read_to_string(&subtitle.path) {
+                        let cleaned = cleaner.clean(&raw);
+                        if !cleaned.trim().is_empty() {
+                            self.video_repo
+                                .update_transcript(video.id(), Some(&cleaned))
+                                .map_err(|e| IngestLocalError::PersistFailed(e.to_string()))?;
+                        }
+                    }
+                }
 
                 self.search_repo
                     .index_video(&video.id().as_uuid().to_string(), video.title(), None, &course_id)
@@ -238,21 +251,25 @@ mod tests {
                 path: "/root/video1.mp4".to_string(),
                 title: "video1".to_string(),
                 duration_secs: 10,
+                subtitles: Vec::new(),
             },
             RawLocalMediaMetadata {
                 path: "/root/folder1/video2.mp4".to_string(),
                 title: "video2".to_string(),
                 duration_secs: 20,
+                subtitles: Vec::new(),
             },
             RawLocalMediaMetadata {
                 path: "/root/folder1/video3.mp4".to_string(),
                 title: "video3".to_string(),
                 duration_secs: 30,
+                subtitles: Vec::new(),
             },
             RawLocalMediaMetadata {
                 path: "/root/folder2/sub/video4.mp4".to_string(),
                 title: "video4".to_string(),
                 duration_secs: 40,
+                subtitles: Vec::new(),
             },
         ];
 

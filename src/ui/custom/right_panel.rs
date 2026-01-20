@@ -272,13 +272,16 @@ fn AiChatView() -> Element {
     };
     let has_gemini = state.has_gemini();
     let has_transcript = use_signal(|| None::<bool>);
+    let is_local_video = use_signal(|| None::<bool>);
 
     {
         let video_id = video_id.clone();
         let backend = state.backend.clone();
         let mut has_transcript = has_transcript;
+        let mut is_local_video = is_local_video;
         use_effect(move || {
             has_transcript.set(None);
+            is_local_video.set(None);
 
             let Some(id) = video_id.clone() else {
                 return;
@@ -296,9 +299,16 @@ fn AiChatView() -> Element {
                     let available =
                         video.transcript().map(|t| !t.trim().is_empty()).unwrap_or(false);
                     has_transcript.set(Some(available));
+                    is_local_video.set(Some(video.local_path().is_some()));
                 },
-                Ok(None) => has_transcript.set(Some(false)),
-                Err(_) => has_transcript.set(Some(false)),
+                Ok(None) => {
+                    has_transcript.set(Some(false));
+                    is_local_video.set(Some(false));
+                },
+                Err(_) => {
+                    has_transcript.set(Some(false));
+                    is_local_video.set(Some(false));
+                },
             }
         });
     }
@@ -411,8 +421,14 @@ fn AiChatView() -> Element {
                             "Ask questions about the current video"
                         }
                         if video_id.is_some() && has_gemini && *has_transcript.read() == Some(false) {
-                            p { class: "text-xs text-warning",
-                                "Transcript not available yet. Generate a summary to fetch it."
+                            if *is_local_video.read() == Some(true) {
+                                p { class: "text-xs text-warning",
+                                    "Local videos need subtitles (SRT/VTT) or extra context for better answers."
+                                }
+                            } else {
+                                p { class: "text-xs text-warning",
+                                    "Transcript not available yet. Generate a summary to fetch it."
+                                }
                             }
                         }
                         if video_id.is_some() && has_gemini {
@@ -434,7 +450,7 @@ fn AiChatView() -> Element {
                 div { class: "flex gap-2",
                     input {
                         class: "input input-bordered flex-1",
-                        placeholder: if video_id.is_none() { "Select a video first..." } else if !has_gemini { "Configure Gemini API key..." } else { "Ask a question..." },
+                        placeholder: if video_id.is_none() { "Select a video first..." } else if !has_gemini { "Configure Gemini API key..." } else if *is_local_video.read() == Some(true) && *has_transcript.read() == Some(false) { "Add context about this local video..." } else { "Ask a question..." },
                         value: "{input_value}",
                         disabled: video_id.is_none() || !has_gemini || *is_loading.read(),
                         oninput: move |e| input_value.set(e.value()),
@@ -455,6 +471,13 @@ fn AiChatView() -> Element {
                 if !has_gemini {
                     p { class: "text-xs text-warning mt-2",
                         "AI Chat requires a Gemini API key. Configure in Settings."
+                    }
+                }
+                if video_id.is_some() && has_gemini && *has_transcript.read() == Some(false)
+                    && *is_local_video.read() == Some(true)
+                {
+                    p { class: "text-xs text-warning mt-2",
+                        "Tip: add a subtitle file or include a brief summary in your question."
                     }
                 }
             }

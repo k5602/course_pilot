@@ -94,7 +94,7 @@ where
             _ => {
                 let youtube_id = video.youtube_id().ok_or_else(|| {
                     SummarizeVideoError::Transcript(
-                        "Transcript only available for YouTube videos".to_string(),
+                        "Transcript unavailable for local videos. Add a subtitle file (SRT/VTT) to enable summaries.".to_string(),
                     )
                 })?;
                 let fetched = self

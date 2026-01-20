@@ -5,9 +5,9 @@
 use std::sync::Arc;
 
 use crate::application::use_cases::{
-    AskCompanionUseCase, ExportCourseNotesUseCase, IngestLocalUseCase, IngestPlaylistUseCase,
-    LoadDashboardUseCase, NotesUseCase, PlanSessionUseCase, PreferencesUseCase,
-    SummarizeVideoUseCase, TakeExamUseCase, UpdateCourseUseCase,
+    AskCompanionUseCase, AttachTranscriptUseCase, ExportCourseNotesUseCase, IngestLocalUseCase,
+    IngestPlaylistUseCase, LoadDashboardUseCase, NotesUseCase, PlanSessionUseCase,
+    PreferencesUseCase, SummarizeVideoUseCase, TakeExamUseCase, UpdateCourseUseCase,
 };
 use crate::domain::ports::{PresenceProvider, SecretStore};
 use crate::infrastructure::{
@@ -301,6 +301,11 @@ impl ServiceFactory {
             ctx.tag_repo.clone(),
             ctx.search_repo.clone(),
         )
+    }
+
+    /// Creates the transcript attachment use case.
+    pub fn attach_transcript(ctx: &AppContext) -> AttachTranscriptUseCase<SqliteVideoRepository> {
+        AttachTranscriptUseCase::new(ctx.video_repo.clone())
     }
 
     /// Creates the export notes use case.

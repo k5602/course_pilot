@@ -104,6 +104,7 @@ where
             course_name: course.name().to_string(),
             summary: video.summary().map(|s| s.to_string()),
             notes,
+            local_context: None,
         };
 
         // Ask the AI

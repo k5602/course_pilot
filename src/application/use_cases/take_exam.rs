@@ -7,7 +7,7 @@ use std::sync::Arc;
 use crate::domain::{
     entities::Exam,
     ports::{ExamRepository, ExaminerAI, MCQuestion, VideoRepository},
-    value_objects::{ExamId, VideoId},
+    value_objects::{ExamDifficulty, ExamId, VideoId},
 };
 
 /// Error type for exam operations.
@@ -27,6 +27,7 @@ pub enum ExamError {
 pub struct GenerateExamInput {
     pub video_id: VideoId,
     pub num_questions: u8,
+    pub difficulty: ExamDifficulty,
 }
 
 /// Output of exam generation.
@@ -86,7 +87,7 @@ where
         // Generate questions via AI
         let questions = self
             .examiner
-            .generate_mcq(video.title(), None, input.num_questions)
+            .generate_mcq(video.title(), video.description(), input.num_questions, input.difficulty)
             .await
             .map_err(|e| ExamError::AI(e.to_string()))?;
 
