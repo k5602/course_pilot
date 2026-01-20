@@ -101,10 +101,19 @@ jobs:
         run: npm run build:css
         shell: bash
 
+      - name: Cache Dioxus CLI
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/bin/dx
+            ~/.cargo/.crates.toml
+            ~/.cargo/.crates2.json
+          key: dioxus-cli-${{ runner.os }}-0.7.3
+
       - name: Install Dioxus CLI
         run: |
           if ! command -v dx >/dev/null 2>&1; then
-            cargo install dioxus-cli --locked
+            cargo install dioxus-cli --locked --version 0.7.3
           else
             echo "Dioxus CLI already installed"
           fi
@@ -147,13 +156,10 @@ jobs:
             exit 1
           fi
 
-          mkdir -p ./release-artifacts/bin
-          mkdir -p ./release-artifacts/lib/${APP_NAME}
-          cp "$BINARY_FILE" ./release-artifacts/bin/${APP_NAME}
-          ln -s "./bin/${APP_NAME}" "./release-artifacts/${APP_NAME}"
+          cp "$BINARY_FILE" ./release-artifacts/${APP_NAME}
 
           # 2. Add Bundled Assets (hashed output + component CSS)
-          cp -r "$ASSETS_DIR" "./release-artifacts/lib/${APP_NAME}/assets"
+          cp -r "$ASSETS_DIR" "./release-artifacts/assets"
 
           # 3. Add Launcher Script
           if [ -f "./scripts/course-pilot-launcher.sh" ]; then
@@ -161,8 +167,8 @@ jobs:
             chmod +x ./release-artifacts/course-pilot-launcher
           fi
 
-          chmod +x "./release-artifacts/bin/${APP_NAME}"
-          strip "./release-artifacts/bin/${APP_NAME}" || true
+          chmod +x "./release-artifacts/${APP_NAME}"
+          strip "./release-artifacts/${APP_NAME}" || true
 
           # 4. Create Tarball
           tar -czf "${{ matrix.artifact }}" -C release-artifacts .
