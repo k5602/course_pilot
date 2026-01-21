@@ -18,6 +18,7 @@ env:
   NODE_VERSION: "20"
   APP_NAME: course_pilot
   CARGO_INCREMENTAL: 0
+  CARGO_NET_GIT_FETCH_WITH_CLI: "true"
 
 jobs:
   build:
@@ -40,6 +41,11 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+
+      - name: Enable long paths (Windows)
+        if: matrix.platform == 'windows'
+        run: git config --system core.longpaths true
+        shell: pwsh
 
       - name: Setup Rust
         uses: dtolnay/rust-toolchain@stable
