@@ -41,6 +41,17 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Configure Cargo git CLI
+        run: |
+          mkdir -p .cargo
+          cat > .cargo/config.toml <<'EOF'
+          [net]
+          git-fetch-with-cli = true
+          EOF
+        shell: bash
 
       - name: Enable long paths (Windows)
         if: matrix.platform == 'windows'
