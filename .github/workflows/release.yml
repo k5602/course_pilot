@@ -58,6 +58,16 @@ jobs:
         run: git config --system core.longpaths true
         shell: pwsh
 
+      - name: Enable long paths in registry (Windows)
+        if: matrix.platform == 'windows'
+        run: |
+          Set-ItemProperty -Path 'HKLM:\System\CurrentControlSet\Control\FileSystem' -Name 'LongPathsEnabled' -Value 1
+        shell: pwsh
+
+      - name: Install NASM (Windows)
+        if: matrix.platform == 'windows'
+        uses: ilammy/setup-nasm@v1
+
       - name: Setup Rust
         uses: dtolnay/rust-toolchain@stable
         with:
@@ -147,7 +157,7 @@ jobs:
       - name: Bundle (Windows)
         if: matrix.platform == 'windows'
         run: |
-          dx bundle --release --platform desktop --package-types msi
+          dx bundle --release --platform desktop --package-types msi --verbose
         env:
           RUSTFLAGS: "-C link-arg=-fuse-ld=lld"
         shell: pwsh
