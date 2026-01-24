@@ -14,6 +14,20 @@ fn main() {
     println!("cargo:rerun-if-changed=package.json");
     println!("cargo:rerun-if-changed=package-lock.json");
 
+    // Ensure npm dependencies are installed
+    if !root.join("node_modules").exists() {
+        println!("cargo:warning=node_modules not found, running npm install...");
+        let install_status = Command::new("npm")
+            .arg("install")
+            .current_dir(root)
+            .status()
+            .expect("Failed to execute npm install (is Node.js installed?)");
+
+        if !install_status.success() {
+            panic!("npm install failed with status: {install_status}");
+        }
+    }
+
     // Run npm build:css to generate assets/tailwind.out.css
     let status = Command::new("npm")
         .arg("run")

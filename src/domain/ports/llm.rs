@@ -22,7 +22,6 @@ pub struct CompanionContext {
     pub video_description: Option<String>,
     pub module_title: String,
     pub course_name: String,
-
     pub summary: Option<String>,
     pub notes: Option<String>,
     /// Extra user-provided context for local videos without transcripts.
