@@ -33,10 +33,10 @@ jobs:
             platform: linux
             artifact: course-pilot-linux-x64.tar.gz
             binary: course_pilot
-          - os: windows-2022
-            platform: windows
-            artifact: course-pilot-windows-x64.msi
-            binary: course_pilot.exe
+          # - os: windows-2022
+          #   platform: windows
+          #   artifact: course-pilot-windows-x64.msi
+          #   binary: course_pilot.exe
 
     steps:
       - name: Checkout
@@ -289,10 +289,10 @@ jobs:
         with:
           name: linux-rpm
 
-      - name: Download Windows MSI
-        uses: actions/download-artifact@v4
-        with:
-          name: windows-msi
+      # - name: Download Windows MSI
+      #   uses: actions/download-artifact@v4
+      #   with:
+      #     name: windows-msi
 
       - name: Compute checksums and sizes
         id: meta
@@ -301,27 +301,27 @@ jobs:
           linux_tar="course-pilot-linux-x64.tar.gz"
           linux_deb="course-pilot-linux-x64.deb"
           linux_rpm="course-pilot-linux-x64.rpm"
-          win_msi="course-pilot-windows-x64.msi"
+          # win_msi="course-pilot-windows-x64.msi"
 
           tar_size=$(du -h "$linux_tar" | cut -f1)
           deb_size=$(du -h "$linux_deb" | cut -f1)
           rpm_size=$(du -h "$linux_rpm" | cut -f1)
-          msi_size=$(du -h "$win_msi" | cut -f1)
+          # msi_size=$(du -h "$win_msi" | cut -f1)
 
           tar_sha=$(sha256sum "$linux_tar" | cut -d' ' -f1)
           deb_sha=$(sha256sum "$linux_deb" | cut -d' ' -f1)
           rpm_sha=$(sha256sum "$linux_rpm" | cut -d' ' -f1)
-          msi_sha=$(sha256sum "$win_msi" | cut -d' ' -f1)
+          # msi_sha=$(sha256sum "$win_msi" | cut -d' ' -f1)
 
           {
             echo "tar_size=$tar_size"
             echo "deb_size=$deb_size"
             echo "rpm_size=$rpm_size"
-            echo "msi_size=$msi_size"
+            # echo "msi_size=$msi_size"
             echo "tar_sha=$tar_sha"
             echo "deb_sha=$deb_sha"
             echo "rpm_sha=$rpm_sha"
-            echo "msi_sha=$msi_sha"
+            # echo "msi_sha=$msi_sha"
           } >> "$GITHUB_OUTPUT"
         shell: bash
 
@@ -353,19 +353,19 @@ jobs:
             echo "| 🐧 Linux (Debian/Ubuntu) | course-pilot-linux-x64.deb | ${{ steps.meta.outputs.deb_size }} | ${{ steps.meta.outputs.deb_sha }} |"
             echo "| 🐧 Linux (RPM/Fedora) | course-pilot-linux-x64.rpm | ${{ steps.meta.outputs.rpm_size }} | ${{ steps.meta.outputs.rpm_sha }} |"
             echo "| 🐧 Linux (Generic/Arch) | course-pilot-linux-x64.tar.gz | ${{ steps.meta.outputs.tar_size }} | ${{ steps.meta.outputs.tar_sha }} |"
-            echo "| 🪟 Windows x64 | course-pilot-windows-x64.msi | ${{ steps.meta.outputs.msi_size }} | ${{ steps.meta.outputs.msi_sha }} |"
+            # echo "| 🪟 Windows x64 | course-pilot-windows-x64.msi | ${{ steps.meta.outputs.msi_size }} | ${{ steps.meta.outputs.msi_sha }} |"
             echo ""
             echo "### 🚀 Installation (Linux)"
             echo "- **Debian/Ubuntu/Mint**: Download the \`.deb\` and install via \`sudo apt install ./course-pilot-linux-x64.deb\`."
             echo "- **Fedora/RHEL**: Download the \`.rpm\` and install via \`sudo dnf install ./course-pilot-linux-x64.rpm\`."
             echo "- **Arch/Others**: Download the \`.tar.gz\`, extract it, and run \`course-pilot-launcher\`. This script will automatically check and help install dependencies."
-            echo ""
-            echo "### 🚀 Installation (Windows)"
-            echo "- **Windows 10/11**: Download the \`.msi\` and run the installer."
+            # echo ""
+            # echo "### 🚀 Installation (Windows)"
+            # echo "- **Windows 10/11**: Download the \`.msi\` and run the installer."
             echo ""
             echo "### ⚙️ System Requirements"
             echo "- **Linux**: Ubuntu 20.04+ / Debian 11+ / Fedora 35+ / Arch Linux (GTK3/4 compatible WebKit)"
-            echo "- **Windows**: Windows 10 (1903+) / Windows 11"
+            # echo "- **Windows**: Windows 10 (1903+) / Windows 11"
           } >> "$notes_file"
         shell: bash
 
@@ -376,7 +376,7 @@ jobs:
             course-pilot-linux-x64.tar.gz
             course-pilot-linux-x64.deb
             course-pilot-linux-x64.rpm
-            course-pilot-windows-x64.msi
+            # course-pilot-windows-x64.msi
           tag_name: ${{ github.ref_name }}
           name: Course Pilot ${{ github.ref_name }}
           body_path: release_notes.md
