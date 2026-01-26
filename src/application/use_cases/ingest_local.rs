@@ -13,7 +13,7 @@ use crate::domain::{
         CourseRepository, LocalMediaScanner, ModuleRepository, RawLocalMediaMetadata,
         SearchRepository, VideoRepository,
     },
-    services::{BoundaryDetector, SubtitleCleaner, TitleSanitizer},
+    services::{BoundaryDetector, SubtitleCleaner, TitleSanitizer, title_number_sequence},
     value_objects::{CourseId, ModuleId, PlaylistUrl, VideoId, VideoSource},
 };
 
@@ -217,6 +217,20 @@ fn group_by_folder(
         grouped.entry(folder).or_default().push(item.clone());
     }
 
+    for entries in grouped.values_mut() {
+        entries.sort_by(|a, b| {
+            let a_key = title_number_sequence(&a.title);
+            let b_key = title_number_sequence(&b.title);
+
+            match (a_key, b_key) {
+                (Some(a_seq), Some(b_seq)) => a_seq.cmp(&b_seq).then_with(|| a.title.cmp(&b.title)),
+                (Some(_), None) => std::cmp::Ordering::Less,
+                (None, Some(_)) => std::cmp::Ordering::Greater,
+                (None, None) => a.title.cmp(&b.title),
+            }
+        });
+    }
+
     grouped
 }
 
@@ -245,7 +259,8 @@ fn split_root_group_if_needed(
     }
 
     let detector = BoundaryDetector::new();
-    let groups = detector.group_into_modules(items.len());
+    let raw_titles: Vec<&str> = items.iter().map(|item| item.title.as_str()).collect();
+    let groups = detector.group_by_titles(&raw_titles);
     if groups.len() <= 1 {
         return grouped.clone();
     }

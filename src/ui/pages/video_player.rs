@@ -12,9 +12,7 @@ use crate::ui::actions::{import_subtitle_for_video, start_exam};
 use crate::ui::custom::{
     ErrorAlert, LocalVideoPlayer, MarkdownRenderer, Spinner, SuccessAlert, YouTubePlayer,
 };
-use crate::ui::hooks::{
-    use_load_modules_state, use_load_video_state, use_load_videos_by_course_state,
-};
+use crate::ui::hooks::{use_load_modules, use_load_video, use_load_videos_by_course};
 use crate::ui::state::AppState;
 
 /// Video player with controls and completion actions.
@@ -66,10 +64,12 @@ pub fn VideoPlayer(course_id: String, video_id: String) -> Element {
     };
 
     // Load data
-    let (video, video_state) = use_load_video_state(backend.clone(), &video_id_vo);
-    let (modules, modules_state) = use_load_modules_state(backend.clone(), &course_id_vo);
-    let (all_videos, videos_state) =
-        use_load_videos_by_course_state(backend.clone(), &course_id_vo);
+    let video = use_load_video(backend.clone(), &video_id_vo);
+    let video_state = video.state.clone();
+    let modules = use_load_modules(backend.clone(), &course_id_vo);
+    let modules_state = modules.state.clone();
+    let all_videos = use_load_videos_by_course(backend.clone(), &course_id_vo);
+    let videos_state = all_videos.state.clone();
 
     // Track current video in global state for AI companion context
     let video_id_for_state = video_id.clone();
@@ -83,7 +83,7 @@ pub fn VideoPlayer(course_id: String, video_id: String) -> Element {
     });
 
     // Extract video data reactively
-    let video_read = video.read();
+    let video_read = video.data.read();
     let v = match video_read.as_ref() {
         Some(v) => v.clone(),
         None => {
@@ -104,6 +104,7 @@ pub fn VideoPlayer(course_id: String, video_id: String) -> Element {
 
     // Find current module name
     let module_title = modules
+        .data
         .read()
         .iter()
         .find(|m| m.id() == v.module_id())
@@ -111,7 +112,7 @@ pub fn VideoPlayer(course_id: String, video_id: String) -> Element {
         .unwrap_or_else(|| "Module".to_string());
 
     // Compute prev/next videos
-    let videos_list = all_videos.read();
+    let videos_list = all_videos.data.read();
     let current_idx = videos_list.iter().position(|vid| vid.id() == v.id());
 
     let prev_video =
@@ -124,14 +125,14 @@ pub fn VideoPlayer(course_id: String, video_id: String) -> Element {
     let backend_for_quiz = backend.clone();
     let video_id_for_complete = v.id().clone();
     let video_id_for_quiz = v.id().clone();
-    let is_completed_now = video.read().as_ref().map(|v| v.is_completed()).unwrap_or(false);
+    let is_completed_now = video.data.read().as_ref().map(|v| v.is_completed()).unwrap_or(false);
     let is_local_video = use_signal(|| false);
     let has_transcript = use_signal(|| false);
     {
         let mut is_local_video = is_local_video;
         let mut has_transcript = has_transcript;
         use_effect(move || {
-            let value = video.read();
+            let value = video.data.read();
             let (local, transcript) = value
                 .as_ref()
                 .map(|video| {
@@ -152,11 +153,11 @@ pub fn VideoPlayer(course_id: String, video_id: String) -> Element {
 
     // Handlers
     let mut action_status_complete = action_status;
-    let mut video_for_complete = video;
+    let mut video_for_complete = video.clone();
     let on_mark_complete = move |_| {
         if let Some(ctx) = backend_for_complete.as_ref() {
             let current_completed =
-                video_for_complete.read().as_ref().map(|v| v.is_completed()).unwrap_or(false);
+                video_for_complete.data.read().as_ref().map(|v| v.is_completed()).unwrap_or(false);
             let new_status = !current_completed;
             if let Err(e) = ctx.video_repo.update_completion(&video_id_for_complete, new_status) {
                 log::error!("Failed to update completion: {}", e);
@@ -166,7 +167,7 @@ pub fn VideoPlayer(course_id: String, video_id: String) -> Element {
             }
 
             if let Ok(Some(updated)) = ctx.video_repo.find_by_id(&video_id_for_complete) {
-                video_for_complete.set(Some(updated));
+                video_for_complete.data.set(Some(updated));
             }
 
             let message = if new_status { "Marked as completed." } else { "Marked as incomplete." };
@@ -229,11 +230,11 @@ pub fn VideoPlayer(course_id: String, video_id: String) -> Element {
     let on_transcript_update = {
         let backend = backend.clone();
         let video_id_for_refresh = v.id().clone();
-        let mut video_for_refresh = video;
+        let mut video_for_refresh = video.clone();
         move |_| {
             if let Some(ctx) = backend.as_ref() {
                 if let Ok(Some(updated)) = ctx.video_repo.find_by_id(&video_id_for_refresh) {
-                    video_for_refresh.set(Some(updated));
+                    video_for_refresh.data.set(Some(updated));
                 }
             }
         }

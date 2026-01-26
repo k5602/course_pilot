@@ -51,7 +51,7 @@ pub fn Sidebar() -> Element {
                     }
 
                     {
-                        let results_list = results.read();
+                        let results_list = results.data.read();
                         if !search_query.read().is_empty() {
                             if results_list.is_empty() {
                                 rsx! {
