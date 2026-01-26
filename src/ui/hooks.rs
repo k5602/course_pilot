@@ -25,6 +25,33 @@ pub fn use_load_state() -> LoadState {
     LoadState { is_loading: use_signal(|| false), error: use_signal(|| None) }
 }
 
+fn backend_key(backend: &Option<Arc<AppContext>>) -> String {
+    backend
+        .as_ref()
+        .map(|ctx| format!("{:p}", Arc::as_ptr(ctx)))
+        .unwrap_or_else(|| "none".to_string())
+}
+
+fn use_keyed_effect<K>(key: K, mut effect: impl FnMut(K) + 'static)
+where
+    K: PartialEq + Clone + 'static,
+{
+    let mut last_key = use_signal(|| None::<K>);
+    let mut key_signal = use_signal(|| key.clone());
+    if *key_signal.read() != key {
+        key_signal.set(key.clone());
+    }
+
+    use_effect(move || {
+        let current = key_signal.read().clone();
+        let should_run = last_key.read().as_ref().map(|k| k != &current).unwrap_or(true);
+        if should_run {
+            last_key.set(Some(current.clone()));
+            effect(current);
+        }
+    });
+}
+
 /// Load dashboard analytics with loading and error state.
 pub fn use_load_dashboard_analytics(
     backend: Option<Arc<AppContext>>,
@@ -34,7 +61,8 @@ pub fn use_load_dashboard_analytics(
     let mut is_loading = load_state.is_loading;
     let mut error = load_state.error;
 
-    use_effect(move || {
+    let key = backend_key(&backend);
+    use_keyed_effect(key, move |_| {
         is_loading.set(true);
         error.set(None);
 
@@ -58,8 +86,9 @@ pub fn use_load_dashboard_analytics(
 /// Load all courses from the database.
 pub fn use_load_courses(backend: Option<Arc<AppContext>>) -> Signal<Vec<Course>> {
     let mut courses = use_signal(Vec::new);
+    let key = backend_key(&backend);
 
-    use_effect(move || {
+    use_keyed_effect(key, move |_| {
         if let Some(ref ctx) = backend {
             match ctx.course_repo.find_all() {
                 Ok(loaded) => courses.set(loaded),
@@ -80,7 +109,8 @@ pub fn use_load_courses_state(
     let mut is_loading = load_state.is_loading;
     let mut error = load_state.error;
 
-    use_effect(move || {
+    let key = backend_key(&backend);
+    use_keyed_effect(key, move |_| {
         is_loading.set(true);
         error.set(None);
 
@@ -105,8 +135,9 @@ pub fn use_load_modules(
 ) -> Signal<Vec<Module>> {
     let mut modules = use_signal(Vec::new);
     let course_id = course_id.clone();
+    let key = format!("{}|{}", backend_key(&backend), course_id.as_uuid());
 
-    use_effect(move || {
+    use_keyed_effect(key, move |_| {
         if let Some(ref ctx) = backend {
             match ctx.module_repo.find_by_course(&course_id) {
                 Ok(loaded) => modules.set(loaded),
@@ -125,23 +156,12 @@ pub fn use_load_modules_state(
 ) -> (Signal<Vec<Module>>, LoadState) {
     let mut modules = use_signal(Vec::new);
     let course_id = course_id.clone();
-    let mut course_id_signal = use_signal(|| course_id.clone());
-    if *course_id_signal.read() != course_id {
-        course_id_signal.set(course_id.clone());
-    }
     let load_state = use_load_state();
     let mut is_loading = load_state.is_loading;
     let mut error = load_state.error;
-    let mut last_course_id = use_signal(|| course_id.clone());
-    if *last_course_id.read() != course_id {
-        last_course_id.set(course_id.clone());
-        modules.set(Vec::new());
-        error.set(None);
-        is_loading.set(true);
-    }
 
-    use_effect(move || {
-        let course_id = course_id_signal.read().clone();
+    let key = format!("{}|{}", backend_key(&backend), course_id.as_uuid());
+    use_keyed_effect(key, move |_| {
         is_loading.set(true);
         error.set(None);
 
@@ -166,8 +186,9 @@ pub fn use_load_videos(
 ) -> Signal<Vec<Video>> {
     let mut videos = use_signal(Vec::new);
     let module_id = module_id.clone();
+    let key = format!("{}|{}", backend_key(&backend), module_id.as_uuid());
 
-    use_effect(move || {
+    use_keyed_effect(key, move |_| {
         if let Some(ref ctx) = backend {
             match ctx.video_repo.find_by_module(&module_id) {
                 Ok(loaded) => videos.set(loaded),
@@ -186,8 +207,9 @@ pub fn use_load_course(
 ) -> Signal<Option<Course>> {
     let mut course = use_signal(|| None);
     let course_id = course_id.clone();
+    let key = format!("{}|{}", backend_key(&backend), course_id.as_uuid());
 
-    use_effect(move || {
+    use_keyed_effect(key, move |_| {
         if let Some(ref ctx) = backend {
             match ctx.course_repo.find_by_id(&course_id) {
                 Ok(loaded) => course.set(loaded),
@@ -210,7 +232,8 @@ pub fn use_load_course_state(
     let mut is_loading = load_state.is_loading;
     let mut error = load_state.error;
 
-    use_effect(move || {
+    let key = format!("{}|{}", backend_key(&backend), course_id.as_uuid());
+    use_keyed_effect(key, move |_| {
         is_loading.set(true);
         error.set(None);
 
@@ -235,8 +258,9 @@ pub fn use_load_video(
 ) -> Signal<Option<Video>> {
     let mut video = use_signal(|| None);
     let video_id = video_id.clone();
+    let key = format!("{}|{}", backend_key(&backend), video_id.as_uuid());
 
-    use_effect(move || {
+    use_keyed_effect(key, move |_| {
         if let Some(ref ctx) = backend {
             match ctx.video_repo.find_by_id(&video_id) {
                 Ok(loaded) => video.set(loaded),
@@ -255,23 +279,12 @@ pub fn use_load_video_state(
 ) -> (Signal<Option<Video>>, LoadState) {
     let mut video = use_signal(|| None);
     let video_id = video_id.clone();
-    let mut video_id_signal = use_signal(|| video_id.clone());
-    if *video_id_signal.read() != video_id {
-        video_id_signal.set(video_id.clone());
-    }
     let load_state = use_load_state();
     let mut is_loading = load_state.is_loading;
     let mut error = load_state.error;
-    let mut last_video_id = use_signal(|| video_id.clone());
-    if *last_video_id.read() != video_id {
-        last_video_id.set(video_id.clone());
-        video.set(None);
-        error.set(None);
-        is_loading.set(true);
-    }
 
-    use_effect(move || {
-        let video_id = video_id_signal.read().clone();
+    let key = format!("{}|{}", backend_key(&backend), video_id.as_uuid());
+    use_keyed_effect(key, move |_| {
         is_loading.set(true);
         error.set(None);
 
@@ -293,8 +306,9 @@ pub fn use_load_video_state(
 pub fn use_load_exam(backend: Option<Arc<AppContext>>, exam_id: &ExamId) -> Signal<Option<Exam>> {
     let mut exam = use_signal(|| None);
     let exam_id = exam_id.clone();
+    let key = format!("{}|{}", backend_key(&backend), exam_id.as_uuid());
 
-    use_effect(move || {
+    use_keyed_effect(key, move |_| {
         if let Some(ref ctx) = backend {
             match ctx.exam_repo.find_by_id(&exam_id) {
                 Ok(loaded) => exam.set(loaded),
@@ -317,7 +331,8 @@ pub fn use_load_exam_state(
     let mut is_loading = load_state.is_loading;
     let mut error = load_state.error;
 
-    use_effect(move || {
+    let key = format!("{}|{}", backend_key(&backend), exam_id.as_uuid());
+    use_keyed_effect(key, move |_| {
         is_loading.set(true);
         error.set(None);
 
@@ -339,8 +354,9 @@ pub fn use_load_exam_state(
 pub fn use_load_exams(backend: Option<Arc<AppContext>>, video_id: &VideoId) -> Signal<Vec<Exam>> {
     let mut exams = use_signal(Vec::new);
     let video_id = video_id.clone();
+    let key = format!("{}|{}", backend_key(&backend), video_id.as_uuid());
 
-    use_effect(move || {
+    use_keyed_effect(key, move |_| {
         if let Some(ref ctx) = backend {
             match ctx.exam_repo.find_by_video(&video_id) {
                 Ok(loaded) => exams.set(loaded),
@@ -355,8 +371,9 @@ pub fn use_load_exams(backend: Option<Arc<AppContext>>, video_id: &VideoId) -> S
 /// Load all exams from the database.
 pub fn use_load_all_exams(backend: Option<Arc<AppContext>>) -> Signal<Vec<Exam>> {
     let mut exams = use_signal(Vec::new);
+    let key = backend_key(&backend);
 
-    use_effect(move || {
+    use_keyed_effect(key, move |_| {
         if let Some(ref ctx) = backend {
             match ctx.exam_repo.find_all() {
                 Ok(loaded) => exams.set(loaded),
@@ -377,7 +394,8 @@ pub fn use_load_all_exams_state(
     let mut is_loading = load_state.is_loading;
     let mut error = load_state.error;
 
-    use_effect(move || {
+    let key = backend_key(&backend);
+    use_keyed_effect(key, move |_| {
         is_loading.set(true);
         error.set(None);
 
@@ -402,8 +420,9 @@ pub fn use_load_videos_by_course(
 ) -> Signal<Vec<Video>> {
     let mut videos = use_signal(Vec::new);
     let course_id = course_id.clone();
+    let key = format!("{}|{}", backend_key(&backend), course_id.as_uuid());
 
-    use_effect(move || {
+    use_keyed_effect(key, move |_| {
         if let Some(ref ctx) = backend {
             match ctx.video_repo.find_by_course(&course_id) {
                 Ok(loaded) => videos.set(loaded),
@@ -422,23 +441,12 @@ pub fn use_load_videos_by_course_state(
 ) -> (Signal<Vec<Video>>, LoadState) {
     let mut videos = use_signal(Vec::new);
     let course_id = course_id.clone();
-    let mut course_id_signal = use_signal(|| course_id.clone());
-    if *course_id_signal.read() != course_id {
-        course_id_signal.set(course_id.clone());
-    }
     let load_state = use_load_state();
     let mut is_loading = load_state.is_loading;
     let mut error = load_state.error;
-    let mut last_course_id = use_signal(|| course_id.clone());
-    if *last_course_id.read() != course_id {
-        last_course_id.set(course_id.clone());
-        videos.set(Vec::new());
-        error.set(None);
-        is_loading.set(true);
-    }
 
-    use_effect(move || {
-        let course_id = course_id_signal.read().clone();
+    let key = format!("{}|{}", backend_key(&backend), course_id.as_uuid());
+    use_keyed_effect(key, move |_| {
         is_loading.set(true);
         error.set(None);
 
@@ -461,8 +469,9 @@ pub fn use_load_tags(
     backend: Option<Arc<AppContext>>,
 ) -> Signal<Vec<crate::domain::entities::Tag>> {
     let mut tags = use_signal(Vec::new);
+    let key = backend_key(&backend);
 
-    use_effect(move || {
+    use_keyed_effect(key, move |_| {
         if let Some(ref ctx) = backend {
             use crate::domain::ports::TagRepository;
             match ctx.tag_repo.find_all() {
@@ -482,8 +491,9 @@ pub fn use_load_course_tags(
 ) -> Signal<Vec<crate::domain::entities::Tag>> {
     let mut tags = use_signal(Vec::new);
     let course_id = course_id.clone();
+    let key = format!("{}|{}", backend_key(&backend), course_id.as_uuid());
 
-    use_effect(move || {
+    use_keyed_effect(key, move |_| {
         if let Some(ref ctx) = backend {
             use crate::domain::ports::TagRepository;
             match ctx.tag_repo.find_by_course(&course_id) {
@@ -502,8 +512,11 @@ pub fn use_search(
     query: String,
 ) -> Signal<Vec<crate::domain::entities::SearchResult>> {
     let mut results = use_signal(Vec::new);
+    let trimmed = query.trim().to_string();
+    let key = format!("{}|{}", backend_key(&backend), trimmed);
 
-    use_effect(move || {
+    use_keyed_effect(key, move |key| {
+        let query = key.split_once('|').map(|(_, q)| q.to_string()).unwrap_or_default();
         if query.trim().is_empty() {
             results.set(Vec::new());
             return;
@@ -527,7 +540,17 @@ pub fn use_presence_sync(backend: Option<Arc<AppContext>>) {
     let route = use_route::<Route>();
     let state = use_context::<AppState>();
 
-    use_effect(move || {
+    let course_id = state
+        .current_course
+        .read()
+        .as_ref()
+        .map(|c| c.id().as_uuid().to_string())
+        .unwrap_or_default();
+    let video_id = state.current_video_id.read().clone().unwrap_or_default();
+
+    let key = format!("{}|{:?}|{}|{}", backend_key(&backend), route, course_id, video_id);
+
+    use_keyed_effect(key, move |_| {
         let backend = match backend.as_ref() {
             Some(b) => b,
             None => return,
