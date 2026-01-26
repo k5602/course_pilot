@@ -87,11 +87,18 @@ keyring = { version = "3", features = ["windows-native"] }
 [target.'cfg(target_os = "linux")'.dependencies]
 keyring = { version = "3", features = ["linux-native"] }
 
+[profile.dev]
+debug = 1 # Reduce debug info to save disk space and prevent Bus Error on CI
+
+[profile.test]
+debug = 1 # Reduce debug info for tests as well
+
 [profile.release]
-opt-level = "z"   # Optimize for size
-lto = true        # Enable Link Time Optimization
-codegen-units = 1 # Allow for maximum cross-module optimization
-panic = "abort"   # Remove unwinding code for smaller binaries
+opt-level = "z"     # Optimize for size
+lto = "thin"        # Use Thin LTO to reduce memory/disk pressure during linking
+codegen-units = 16  # Increase units to parallelize and reduce resource usage
+panic = "abort"     # Remove unwinding code for smaller binaries
+strip = true        # Strip symbols to further reduce binary size
 
 [patch.crates-io]
 dioxus = { git = "https://github.com/k5602/dioxus", branch = "navigation_policy_hook", package = "dioxus" }

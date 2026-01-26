@@ -105,9 +105,10 @@ where
         // 3. Sanitize titles
         let sanitized_titles: Vec<String> =
             raw_videos.iter().map(|v| self.sanitizer.sanitize(&v.title)).collect();
+        let raw_titles: Vec<&str> = raw_videos.iter().map(|v| v.title.as_str()).collect();
 
-        // 4. Group videos into modules (simple batch grouping)
-        let module_groups = self.boundary_detector.group_into_modules(raw_videos.len());
+        // 4. Group videos into modules (title-aware with batch fallback)
+        let module_groups = self.boundary_detector.group_by_titles(&raw_titles);
 
         // 5. Create course
         let course_name = input

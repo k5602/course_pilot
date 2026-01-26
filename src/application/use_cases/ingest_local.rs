@@ -245,7 +245,8 @@ fn split_root_group_if_needed(
     }
 
     let detector = BoundaryDetector::new();
-    let groups = detector.group_into_modules(items.len());
+    let raw_titles: Vec<&str> = items.iter().map(|item| item.title.as_str()).collect();
+    let groups = detector.group_by_titles(&raw_titles);
     if groups.len() <= 1 {
         return grouped.clone();
     }

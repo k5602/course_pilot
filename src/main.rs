@@ -6,7 +6,7 @@ use course_pilot::ui::App;
 use dioxus_desktop::{Config, WindowBuilder};
 
 fn main() {
-    // Install rustls crypto provider (required for TLS)
+    // Install rustls crypto provider
     rustls::crypto::ring::default_provider()
         .install_default()
         .expect("Failed to install rustls crypto provider");
