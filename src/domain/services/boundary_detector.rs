@@ -123,6 +123,21 @@ fn boundary_key(title: &str) -> Option<BoundaryKey> {
     None
 }
 
+/// Extracts a dotted/compound numeric sequence for ordering purposes.
+/// Examples: "1.10.2 Topic" -> [1, 10, 2], "Module 2.3" -> [2, 3].
+pub fn title_number_sequence(title: &str) -> Option<Vec<u32>> {
+    let title_trimmed = title.trim();
+    if title_trimmed.is_empty() {
+        return None;
+    }
+
+    if let Some(nums) = parse_labeled_sequence(title_trimmed) {
+        return Some(nums);
+    }
+
+    parse_leading_sequence(title_trimmed)
+}
+
 fn parse_labeled_sequence(title: &str) -> Option<Vec<u32>> {
     let lower = title.to_lowercase();
     let labels = [

@@ -3,7 +3,7 @@
 use dioxus::prelude::*;
 
 use crate::domain::entities::Course;
-use crate::domain::ports::{TagRepository, VideoRepository};
+use crate::domain::ports::TagRepository;
 use crate::domain::value_objects::TagId;
 use crate::ui::Route;
 use crate::ui::actions::{ImportResult, import_local_folder, import_playlist};
@@ -12,7 +12,8 @@ use crate::ui::custom::{
     TagBadge, TagFilterChip,
 };
 use crate::ui::hooks::{
-    use_load_courses_state, use_load_dashboard_analytics, use_load_modules, use_load_tags,
+    use_load_courses, use_load_dashboard_analytics, use_load_modules, use_load_tags,
+    use_load_videos_by_course,
 };
 use crate::ui::state::AppState;
 
@@ -30,9 +31,13 @@ pub fn Dashboard() -> Element {
     }
 
     // Load courses, tags, and analytics from backend
-    let (mut courses, courses_state) = use_load_courses_state(state.backend.clone());
-    let all_tags = use_load_tags(state.backend.clone());
-    let (analytics, analytics_state) = use_load_dashboard_analytics(state.backend.clone());
+    let courses = use_load_courses(state.backend.clone());
+    let courses_state = courses.state.clone();
+    let mut courses = courses.data;
+    let all_tags = use_load_tags(state.backend.clone()).data;
+    let analytics = use_load_dashboard_analytics(state.backend.clone());
+    let analytics_state = analytics.state.clone();
+    let analytics = analytics.data;
 
     // Tabs
     let mut active_tab = use_signal(|| "overview".to_string());
@@ -379,21 +384,10 @@ fn CourseCardWithStats(course: Course) -> Element {
     let backend = state.backend.clone();
 
     let modules = use_load_modules(backend.clone(), course.id());
-    let mut all_videos = use_signal(Vec::new);
+    let videos = use_load_videos_by_course(backend.clone(), course.id());
 
-    let course_id = course.id().clone();
-    let backend_inner = backend.clone();
-
-    use_effect(move || {
-        if let Some(ref ctx) = backend_inner {
-            if let Ok(videos) = ctx.video_repo.find_by_course(&course_id) {
-                all_videos.set(videos);
-            }
-        }
-    });
-
-    let module_list = modules.read();
-    let video_list = all_videos.read();
+    let module_list = modules.data.read();
+    let video_list = videos.data.read();
 
     let module_count = module_list.len();
     let completed_modules = if video_list.is_empty() {

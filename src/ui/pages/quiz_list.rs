@@ -5,7 +5,7 @@ use dioxus::prelude::*;
 use crate::domain::entities::Exam;
 use crate::ui::Route;
 use crate::ui::custom::{ErrorAlert, Spinner};
-use crate::ui::hooks::{use_load_all_exams_state, use_load_video};
+use crate::ui::hooks::{use_load_all_exams, use_load_video};
 use crate::ui::state::AppState;
 
 /// List of pending and completed quizzes.
@@ -21,23 +21,24 @@ pub fn QuizList() -> Element {
         });
     }
 
-    let (exams, exams_state) = use_load_all_exams_state(state.backend.clone());
+    let exams = use_load_all_exams(state.backend.clone());
+    let exams_state = exams.state.clone();
 
     rsx! {
         div { class: "p-6 max-w-4xl mx-auto",
 
             div { class: "flex justify-between items-center mb-8",
                 h1 { class: "text-3xl font-bold", "My Quizzes" }
-                span { class: "badge badge-primary", "{exams.read().len()} Total" }
+                span { class: "badge badge-primary", "{exams.data.read().len()} Total" }
             }
 
             if let Some(ref err) = *exams_state.error.read() {
                 ErrorAlert { message: err.clone(), on_dismiss: None }
             }
 
-            if *exams_state.is_loading.read() && exams.read().is_empty() {
+            if *exams_state.is_loading.read() && exams.data.read().is_empty() {
                 Spinner { message: Some("Loading quizzes...".to_string()) }
-            } else if exams.read().is_empty() {
+            } else if exams.data.read().is_empty() {
                 div { class: "text-center py-20 bg-base-200 rounded-3xl border-2 border-dashed border-base-300",
                     div { class: "text-6xl mb-4", "📝" }
                     h2 { class: "text-xl font-semibold mb-2", "No quizzes yet" }
@@ -47,7 +48,7 @@ pub fn QuizList() -> Element {
                 }
             } else {
                 div { class: "grid gap-4",
-                    for exam in exams.read().iter() {
+                    for exam in exams.data.read().iter() {
                         QuizItem { key: "{exam.id().as_uuid()}", exam: exam.clone() }
                     }
                 }
@@ -62,7 +63,7 @@ fn QuizItem(exam: Exam) -> Element {
     let state = use_context::<AppState>();
     let video = use_load_video(state.backend.clone(), exam.video_id());
 
-    let video_title = match video.read().as_ref() {
+    let video_title = match video.data.read().as_ref() {
         Some(v) => v.title().to_string(),
         None => "Video #".to_string() + &exam.video_id().as_uuid().to_string()[..8],
     };

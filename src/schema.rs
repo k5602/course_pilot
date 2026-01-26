@@ -48,60 +48,6 @@ diesel::table! {
 }
 
 diesel::table! {
-    search_index (rowid) {
-        rowid -> Integer,
-        entity_type -> Nullable<Binary>,
-        entity_id -> Nullable<Binary>,
-        title -> Nullable<Binary>,
-        content -> Nullable<Binary>,
-        course_id -> Nullable<Binary>,
-        #[sql_name = "search_index"]
-        search_index_ -> Nullable<Binary>,
-        rank -> Nullable<Binary>,
-    }
-}
-
-diesel::table! {
-    search_index_config (k) {
-        k -> Binary,
-        v -> Nullable<Binary>,
-    }
-}
-
-diesel::table! {
-    search_index_content (id) {
-        id -> Nullable<Integer>,
-        c0 -> Nullable<Binary>,
-        c1 -> Nullable<Binary>,
-        c2 -> Nullable<Binary>,
-        c3 -> Nullable<Binary>,
-        c4 -> Nullable<Binary>,
-    }
-}
-
-diesel::table! {
-    search_index_data (id) {
-        id -> Nullable<Integer>,
-        block -> Nullable<Binary>,
-    }
-}
-
-diesel::table! {
-    search_index_docsize (id) {
-        id -> Nullable<Integer>,
-        sz -> Nullable<Binary>,
-    }
-}
-
-diesel::table! {
-    search_index_idx (segid, term) {
-        segid -> Binary,
-        term -> Binary,
-        pgno -> Nullable<Binary>,
-    }
-}
-
-diesel::table! {
     tags (id) {
         id -> Text,
         name -> Text,
@@ -149,12 +95,6 @@ diesel::allow_tables_to_appear_in_same_query!(
     exams,
     modules,
     notes,
-    search_index,
-    search_index_config,
-    search_index_content,
-    search_index_data,
-    search_index_docsize,
-    search_index_idx,
     tags,
     user_preferences,
     videos,

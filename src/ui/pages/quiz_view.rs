@@ -10,7 +10,7 @@ use crate::domain::value_objects::{ExamDifficulty, ExamId};
 use crate::ui::Route;
 use crate::ui::actions::start_exam;
 use crate::ui::custom::{ErrorAlert, MarkdownRenderer, Spinner};
-use crate::ui::hooks::{use_load_exam_state, use_load_video};
+use crate::ui::hooks::{use_load_exam, use_load_video};
 use crate::ui::state::AppState;
 
 /// Quiz with multiple choice questions.
@@ -37,10 +37,11 @@ pub fn QuizView(exam_id: String) -> Element {
         },
     };
 
-    let (mut exam, exam_state) = use_load_exam_state(backend.clone(), &exam_id_vo);
+    let mut exam = use_load_exam(backend.clone(), &exam_id_vo);
+    let exam_state = exam.state.clone();
     let video = use_load_video(
         backend.clone(),
-        &exam.read().as_ref().map(|e| e.video_id().clone()).unwrap_or_default(),
+        &exam.data.read().as_ref().map(|e| e.video_id().clone()).unwrap_or_default(),
     );
 
     // UI State
@@ -59,7 +60,7 @@ pub fn QuizView(exam_id: String) -> Element {
             let Some(ctx) = backend.as_ref() else {
                 return;
             };
-            let video_ref = video.read();
+            let video_ref = video.data.read();
             let Some(video) = video_ref.as_ref() else {
                 return;
             };
@@ -71,7 +72,7 @@ pub fn QuizView(exam_id: String) -> Element {
 
     // Sync answers from database if already taken
     use_effect(move || {
-        if let Some(e) = exam.read().as_ref() {
+        if let Some(e) = exam.data.read().as_ref() {
             if e.is_taken() && answers.read().is_empty() {
                 if let Some(json) = e.user_answers_json() {
                     if let Ok(loaded) = serde_json::from_str::<Vec<usize>>(json) {
@@ -82,7 +83,7 @@ pub fn QuizView(exam_id: String) -> Element {
         }
     });
 
-    if *exam_state.is_loading.read() && exam.read().is_none() {
+    if *exam_state.is_loading.read() && exam.data.read().is_none() {
         return rsx! {
             div { class: "p-6",
                 Spinner { message: Some("Loading exam...".to_string()) }
@@ -98,7 +99,7 @@ pub fn QuizView(exam_id: String) -> Element {
         };
     }
 
-    let exam_data = exam.read();
+    let exam_data = exam.data.read();
     let exam_ref = match exam_data.as_ref() {
         Some(e) => e,
         None => {
@@ -181,7 +182,7 @@ pub fn QuizView(exam_id: String) -> Element {
                                     class: "btn btn-ghost btn-lg",
                                     onclick: move |_| {
                                         let course_id = course_id.clone();
-                                        if let Some(v) = video.read().as_ref() {
+                                        if let Some(v) = video.data.read().as_ref() {
                                             nav.push(Route::VideoPlayer {
                                                 course_id,
                                                 video_id: v.id().as_uuid().to_string(),
@@ -204,7 +205,7 @@ pub fn QuizView(exam_id: String) -> Element {
             div { class: "p-6 max-w-3xl mx-auto",
                 div { class: "flex items-center justify-between mb-8",
                     h1 { class: "text-2xl font-bold",
-                        "Review: {video.read().as_ref().map(|v| v.title()).unwrap_or(\"...\")}"
+                        "Review: {video.data.read().as_ref().map(|v| v.title()).unwrap_or(\"...\")}"
                     }
                     button {
                         class: "btn btn-sm btn-ghost",
@@ -280,7 +281,7 @@ pub fn QuizView(exam_id: String) -> Element {
                         class: "btn btn-primary",
                         onclick: move |_| {
                             if let Some(ctx) = backend.as_ref() {
-                                if let Some(v) = video.read().as_ref() {
+                                if let Some(v) = video.data.read().as_ref() {
                                     let _ = ctx.video_repo.update_completion(v.id(), true);
                                     if let Ok(Some(module)) = ctx.module_repo.find_by_id(v.module_id()) {
                                         nav.push(Route::VideoPlayer {
@@ -333,7 +334,7 @@ pub fn QuizView(exam_id: String) -> Element {
                             // Reload exam from DB to update UI with results
                             if let Ok(Some(updated_exam)) = ctx.exam_repo.find_by_id(&exam_id_inner)
                             {
-                                exam.set(Some(updated_exam));
+                                exam.data.set(Some(updated_exam));
                             }
                         }
                     }
@@ -347,7 +348,7 @@ pub fn QuizView(exam_id: String) -> Element {
         div { class: "p-6 max-w-2xl mx-auto",
             // Header
             h1 { class: "text-2xl font-bold mb-2",
-                "Exam: {video.read().as_ref().map(|v| v.title()).unwrap_or(\"...\")}"
+                "Exam: {video.data.read().as_ref().map(|v| v.title()).unwrap_or(\"...\")}"
             }
 
             // Progress

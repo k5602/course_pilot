@@ -8,15 +8,15 @@ use crate::application::{
     ServiceFactory,
     use_cases::{MoveVideoInput, PlanSessionInput, UpdateCourseInput, UpdateModuleTitleInput},
 };
-use crate::domain::entities::{Module, Tag, Video};
+use crate::domain::entities::{Module, Tag};
 use crate::domain::ports::{CourseRepository, TagRepository, VideoRepository};
 use crate::domain::value_objects::{CourseId, ModuleId, SessionPlan, TagId};
 use crate::ui::Route;
 use crate::ui::actions::export_course_notes_with_dialog;
 use crate::ui::custom::{ErrorAlert, PageSkeleton, TagBadge, TagInput, VideoItem};
 use crate::ui::hooks::{
-    use_load_course_state, use_load_course_tags, use_load_modules_state, use_load_tags,
-    use_load_videos_by_course_state,
+    use_load_course, use_load_course_tags, use_load_modules, use_load_tags,
+    use_load_videos_by_course,
 };
 use crate::ui::state::AppState;
 
@@ -39,27 +39,28 @@ pub fn CourseView(course_id: String) -> Element {
     let course_id_effective = course_id_parsed.clone().unwrap_or_else(|_| CourseId::new());
 
     // Load course and modules
-    let (course, course_state) = use_load_course_state(state.backend.clone(), &course_id_effective);
+    let course = use_load_course(state.backend.clone(), &course_id_effective);
+    let course_state = course.state.clone();
 
-    let (modules, modules_state): (Signal<Vec<Module>>, _) =
-        use_load_modules_state(state.backend.clone(), &course_id_effective);
+    let modules = use_load_modules(state.backend.clone(), &course_id_effective);
+    let modules_state = modules.state.clone();
 
-    let (all_videos, videos_state): (Signal<Vec<Video>>, _) =
-        use_load_videos_by_course_state(state.backend.clone(), &course_id_effective);
+    let all_videos = use_load_videos_by_course(state.backend.clone(), &course_id_effective);
+    let videos_state = all_videos.state.clone();
 
     let course_tags = use_load_course_tags(state.backend.clone(), &course_id_effective);
 
     let all_tags = use_load_tags(state.backend.clone());
 
-    let total_videos = all_videos.read().len();
-    let completed_videos = all_videos.read().iter().filter(|v| v.is_completed()).count();
+    let total_videos = all_videos.data.read().len();
+    let completed_videos = all_videos.data.read().iter().filter(|v| v.is_completed()).count();
     let progress = if total_videos > 0 {
         (completed_videos as f32 / total_videos as f32) * 100.0
     } else {
         0.0
     };
 
-    if *course_state.is_loading.read() && course.read().is_none() {
+    if *course_state.is_loading.read() && course.data.read().is_none() {
         return rsx! {
             div { class: "p-6", PageSkeleton {} }
         };
@@ -97,7 +98,7 @@ pub fn CourseView(course_id: String) -> Element {
             if *edit_mode.read() {
                 return;
             }
-            if let Some(c) = course.read().as_ref() {
+            if let Some(c) = course.data.read().as_ref() {
                 edit_name.set(c.name().to_string());
                 edit_description.set(c.description().unwrap_or("").to_string());
             }
@@ -182,7 +183,7 @@ pub fn CourseView(course_id: String) -> Element {
     // Course update handler
     let backend_for_update = state.backend.clone();
     let course_id_for_update = course_id_parsed.clone();
-    let mut course_for_update = course;
+    let mut course_for_update = course.clone();
     let edit_name_for_update = edit_name;
     let edit_description_for_update = edit_description;
     let mut edit_status_for_update = edit_status;
@@ -210,7 +211,7 @@ pub fn CourseView(course_id: String) -> Element {
                     Ok(_) => {
                         edit_status_for_update.set(Some((true, "Course updated.".to_string())));
                         if let Ok(updated) = ctx.course_repo.find_by_id(cid) {
-                            course_for_update.set(updated);
+                            course_for_update.data.set(updated);
                         }
                         edit_mode_for_update.set(false);
                     },
@@ -226,8 +227,8 @@ pub fn CourseView(course_id: String) -> Element {
     // Tag management handlers
     let backend_for_create_tag = state.backend.clone();
     let course_id_for_create_tag = course_id_parsed.clone();
-    let mut course_tags_for_create = course_tags;
-    let mut all_tags_for_create = all_tags;
+    let mut course_tags_for_create = course_tags.clone();
+    let mut all_tags_for_create = all_tags.clone();
     let mut tag_status_for_create = tag_status;
     let on_create_tag = move |name: String| {
         let trimmed = name.trim().to_string();
@@ -250,10 +251,10 @@ pub fn CourseView(course_id: String) -> Element {
                     return;
                 }
                 if let Ok(updated) = ctx.tag_repo.find_by_course(cid) {
-                    course_tags_for_create.set(updated);
+                    course_tags_for_create.data.set(updated);
                 }
                 if let Ok(all) = ctx.tag_repo.find_all() {
-                    all_tags_for_create.set(all);
+                    all_tags_for_create.data.set(all);
                 }
                 tag_status_for_create.set(Some((true, "Tag added.".to_string())));
             }
@@ -262,7 +263,7 @@ pub fn CourseView(course_id: String) -> Element {
 
     let backend_for_attach_tag = state.backend.clone();
     let course_id_for_attach_tag = course_id_parsed.clone();
-    let mut course_tags_for_attach = course_tags;
+    let mut course_tags_for_attach = course_tags.clone();
     let mut tag_status_for_attach = tag_status;
     let mut selected_tag_for_attach = selected_tag_id;
     let on_attach_tag = move |_| {
@@ -287,7 +288,7 @@ pub fn CourseView(course_id: String) -> Element {
                     return;
                 }
                 if let Ok(updated) = ctx.tag_repo.find_by_course(cid) {
-                    course_tags_for_attach.set(updated);
+                    course_tags_for_attach.data.set(updated);
                 }
                 selected_tag_for_attach.set(String::new());
                 tag_status_for_attach.set(Some((true, "Tag added.".to_string())));
@@ -295,7 +296,7 @@ pub fn CourseView(course_id: String) -> Element {
         }
     };
 
-    let ordered_videos = all_videos.read().clone();
+    let ordered_videos = all_videos.data.read().clone();
 
     rsx! {
         div { class: "p-6",
@@ -360,7 +361,7 @@ pub fn CourseView(course_id: String) -> Element {
             }
 
             // Course header
-            if let Some(ref c) = *course.read() {
+            if let Some(ref c) = *course.data.read() {
                 div { class: "mb-4",
 
                     if *edit_mode.read() {
@@ -424,14 +425,14 @@ pub fn CourseView(course_id: String) -> Element {
                             TagInput { on_create: on_create_tag }
                         }
 
-                        if !course_tags.read().is_empty() {
+                        if !course_tags.data.read().is_empty() {
                             div { class: "flex flex-wrap gap-2",
-                                for tag in course_tags.read().iter() {
+                                for tag in course_tags.data.read().iter() {
                                     {
                                         let tag_id = tag.id().clone();
                                         let backend_clone = state.backend.clone();
                                         let course_id_clone = course_id_parsed.clone();
-                                        let mut course_tags_clone = course_tags;
+                                        let mut course_tags_clone = course_tags.clone();
                                         let mut tag_status_clone = tag_status;
                                         rsx! {
                                             TagBadge {
@@ -446,7 +447,7 @@ pub fn CourseView(course_id: String) -> Element {
                                                                 return;
                                                             }
                                                             if let Ok(updated) = ctx.tag_repo.find_by_course(cid) {
-                                                                course_tags_clone.set(updated);
+                                                                course_tags_clone.data.set(updated);
                                                             }
                                                             tag_status_clone.set(Some((true, "Tag removed.".to_string())));
                                                         }
@@ -467,8 +468,8 @@ pub fn CourseView(course_id: String) -> Element {
                                 value: "{selected_tag_id}",
                                 oninput: move |e| selected_tag_id.set(e.value()),
                                 option { value: "", "Select a tag to add" }
-                                for tag in all_tags.read().iter() {
-                                    if !course_tags.read().iter().any(|t| t.id() == tag.id()) {
+                                for tag in all_tags.data.read().iter() {
+                                    if !course_tags.data.read().iter().any(|t| t.id() == tag.id()) {
                                         option { value: "{tag.id().as_uuid()}", "{tag.name()}" }
                                     }
                                 }
@@ -515,16 +516,16 @@ pub fn CourseView(course_id: String) -> Element {
             // Modules accordion
             div { class: "space-y-4",
 
-                if modules.read().is_empty() {
+                if modules.data.read().is_empty() {
                     div { class: "text-center py-8 bg-base-200 rounded-lg",
                         p { class: "text-base-content/60", "No modules found" }
                     }
                 } else {
-                    for module in modules.read().iter() {
+                    for module in modules.data.read().iter() {
                         ModuleAccordion {
                             course_id: course_id.clone(),
                             module: module.clone(),
-                            all_modules: modules.read().clone(),
+                            all_modules: modules.data.read().clone(),
                             boundary_edit_mode: *boundary_edit_mode.read(),
                         }
                     }
