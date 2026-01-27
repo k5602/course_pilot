@@ -379,18 +379,26 @@ pub fn use_presence_sync(backend: Option<Arc<AppContext>>) {
             Route::CourseView { .. } => Activity::BrowsingCourses,
             Route::VideoPlayer { ref course_id, ref video_id } => {
                 let course = state.current_course.read();
+                let courses = state.courses.read();
                 let videos = state.current_videos.read();
 
                 let video = videos.iter().find(|v| v.id().to_string() == video_id.as_str());
 
-                if let (Some(c), Some(v)) = (course.as_ref(), video) {
+                let course_title = course.as_ref().map(|c| c.name().to_string()).or_else(|| {
+                    courses
+                        .iter()
+                        .find(|c| c.id().to_string() == course_id.as_str())
+                        .map(|c| c.name().to_string())
+                });
+
+                if let (Some(title), Some(v)) = (course_title.as_ref(), video) {
                     Activity::Watching {
-                        course_title: c.name().to_string(),
+                        course_title: title.to_string(),
                         video_title: v.title().to_string(),
                     }
-                } else if let Some(c) = course.as_ref() {
+                } else if let Some(title) = course_title.as_ref() {
                     Activity::Watching {
-                        course_title: c.name().to_string(),
+                        course_title: title.to_string(),
                         video_title: "Video".to_string(),
                     }
                 } else if !course_id.is_empty() {

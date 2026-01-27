@@ -34,11 +34,17 @@ pub struct AppConfig {
     pub database_url: String,
     /// Gemini API key (optional - for AI companion, exams, and summaries).
     pub gemini_api_key: Option<String>,
+    /// Discord Rich Presence client ID (optional).
+    pub discord_client_id: Option<String>,
 }
 
 impl Default for AppConfig {
     fn default() -> Self {
-        Self { database_url: "course_pilot.db".to_string(), gemini_api_key: None }
+        Self {
+            database_url: "course_pilot.db".to_string(),
+            gemini_api_key: None,
+            discord_client_id: None,
+        }
     }
 }
 
@@ -50,6 +56,7 @@ impl AppConfig {
             database_url: std::env::var("DATABASE_URL")
                 .unwrap_or_else(|_| "course_pilot.db".to_string()),
             gemini_api_key: std::env::var("GEMINI_API_KEY").ok().filter(|s| !s.is_empty()),
+            discord_client_id: std::env::var("DISCORD_CLIENT_ID").ok().filter(|s| !s.is_empty()),
         }
     }
 
@@ -73,6 +80,11 @@ impl AppConfigBuilder {
 
     pub fn gemini_api_key(mut self, key: impl Into<String>) -> Self {
         self.config.gemini_api_key = Some(key.into());
+        self
+    }
+
+    pub fn discord_client_id(mut self, client_id: impl Into<String>) -> Self {
+        self.config.discord_client_id = Some(client_id.into());
         self
     }
 
@@ -136,7 +148,14 @@ impl AppContext {
         let youtube = Arc::new(RustyYtdlAdapter::new());
 
         // Presence provider (Discord)
-        let presence_adapter = DiscordPresenceAdapter::new();
+        let discord_client_id = config
+            .discord_client_id
+            .clone()
+            .or_else(|| keystore.retrieve("discord_client_id").ok().flatten());
+        let presence_adapter = discord_client_id
+            .as_deref()
+            .map(DiscordPresenceAdapter::new_with_client_id)
+            .unwrap_or_else(DiscordPresenceAdapter::new);
         let presence: Arc<dyn PresenceProvider> = Arc::new(presence_adapter);
 
         // Transcript adapter (for summaries)

@@ -56,11 +56,16 @@ impl DiscordPresenceAdapter {
 
     /// Creates a new Discord Presence adapter and starts the background worker.
     pub fn new() -> Self {
+        Self::new_with_client_id(DEFAULT_CLIENT_ID)
+    }
+
+    /// Creates a new Discord Presence adapter with a specific client ID and starts the worker.
+    pub fn new_with_client_id(client_id: impl Into<String>) -> Self {
         let (tx, rx) = channel::<PresenceMsg>();
         let connected = Arc::new(AtomicBool::new(false));
         let connected_flag = connected.clone();
 
-        let client_id = DEFAULT_CLIENT_ID.to_string();
+        let client_id = client_id.into();
 
         thread::spawn(move || {
             presence_worker(rx, connected_flag, client_id);
