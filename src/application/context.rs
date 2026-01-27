@@ -155,7 +155,7 @@ impl AppContext {
         let presence_adapter = discord_client_id
             .as_deref()
             .map(DiscordPresenceAdapter::new_with_client_id)
-            .unwrap_or_else(DiscordPresenceAdapter::new);
+            .unwrap_or_default();
         let presence: Arc<dyn PresenceProvider> = Arc::new(presence_adapter);
 
         // Transcript adapter (for summaries)
