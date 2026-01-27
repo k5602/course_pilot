@@ -1,94 +1,82 @@
 # Course Pilot: AI Engineering Guide
 
-Follow these project-specific patterns and architectural constraints to maintain consistency and quality.
+**Course Pilot** is a cognitive-enhancement platform designed to transform unstructured Noisy video courses into personalized, AI-augmented educational experiences. It automates the creation of logical learning structures, generates study schedules based on cognitive load, and provides deep-learning tools like AI-generated exams, video summarization, and interactive companion chat wittout noise of adds and suggestion algorithms.
+
+The application is built as a high-performance Rust desktop suite using Dioxus 0.7, adhering to strict Hexagonal (Ports & Adapters) architecture and Domain-Driven Design (DDD) principles to ensure modularity, testability, and long-term maintainability.
 
 ## 🏗️ Core Architecture (DDD Hexagonal)
 
-We use a Strict Hexagonal Architecture to separate concerns:
+We maintain a clear separation between business logic and technical implementation:
 
-- **src/domain/**: Core business logic. No external dependencies.
-  - `entities/`: Rich domain models (Course, Module, Video, Note, Exam, Tag, AppAnalytics).
-  - `ports/`: Trait definitions for infrastructure adapters (Repositories, Fetchers).
-  - `value_objects/`: Immutable data containers (IDs implement `FromStr` trait).
-  - `services/`: Domain services (SessionPlanner, TitleSanitizer).
-- **src/application/**: Use cases and orchestration.
-  - `context.rs`: The DI container (`AppContext`). Holds all repositories in `Arc`.
-  - `use_cases/`: Task-specific logic (IngestPlaylist, PlanSession, AskCompanion, TakeExam).
-- **src/infrastructure/**: External implementations (adapters).
-  - `persistence/`: SQLite repositories using Diesel.
-  - `youtube/`: API-free fetching via `rusty_ytdl`.
-  - `transcript/`: YouTube transcript fetching via `yt-transcript-rs`.
-  - `llm/`: Gemini API integration via `genai-rs`.
-  - `keystore/`: Secure storage via `keyring`.
-- **src/ui/**: Dioxus 0.7 Desktop interface.
-- **src/components/**: Reusable, atomic UI components (Accordion, Button, Dialog, Input, Tabs).
+- **`src/domain/`**: The "Inner Circle". No external dependencies.
+  - `entities/`: Domain models (Course, Module, Video, Note, Exam, Tag).
+  - `ports/`: Trait definitions (Repository, LLM, Transcript, Presence).
+  - `value_objects/`: Immutable types (CourseId, VideoId) using the "Newtype" pattern.
+- **`src/application/`**: Orchestration layer.
+  - `context.rs`: The DI container (`AppContext`).
+  - `use_cases/`: Atomic business operations (e.g., `IngestPlaylistUseCase`, `SummarizeVideoUseCase`).
+- **`src/infrastructure/`**: The "Adapters". Implementation of ports using external crates.
+  - `persistence/`: Diesel-based SQLite repositories.
+  - `llm/`: Gemini API via `genai-rs`.
+  - `keystore/`: OS-native secure storage via `keyring`.
+  - `discord/`: Rich Presence synchronization.
+- **`src/ui/`**: Dioxus 0.7 Desktop interface.
 
-## 🧱 Dependency Injection (DI) Pattern
+## 🧱 Dependency Injection (DI) & Use Cases
 
-- **NEVER** instantiate repositories or adapters directly in UI components or use cases.
-- Use `AppContext` (wrapped in `Arc`) to access shared infrastructure.
-- Use `ServiceFactory` to build use cases with their required dependencies.
+- **ServiceFactory**: Always use `ServiceFactory` to instantiate use cases. It handles wiring dependencies from `AppContext`.
+- **AppContext**: Shared via `Arc`. Holds initialized repositories and adapters.
+- **Manual Wiring**: Infrastructure adapters are injected into Use Cases as `Arc<dyn Port>`.
 
 ```rust
-// In UI components:
-let state = use_context::<AppState>();
+// Pattern: Using a use case in an action
 let ctx = state.backend.as_ref()?;
 let use_case = ServiceFactory::plan_session(ctx);
+use_case.execute(input).await;
 ```
 
 ## ⚛️ UI Development (Dioxus 0.7)
 
-- **State Management**: Use `AppState` via `use_context`. Access backend via `state.backend`.
-- **Reactive State**: Use `Signal` for all reactive UI state.
-- **Data Fetching**: Use custom hooks in `src/ui/hooks.rs`. Many hooks return `(Signal<T>, LoadState)`.
-- **Async Actions**: Define in `src/ui/actions.rs` for mutations (e.g., `import_playlist`, `start_exam`).
-- **Custom Components**:
-  - `src/components/`: Base UI primitives (Button, Input, etc.).
-  - `src/ui/custom/`: App-specific logic components (CourseCard, VideoItem, YoutubePlayer, Sidebar).
-- **Styling**: Tailwind CSS + DaisyUI classes. Theme configuration in `theme_config.toml` and `assets/dx-components-theme.css`.
+### State Management
 
-### Loading & Error Handling
+- **`AppState`**: Global state accessed via `use_context::<AppState>()`.
+- **Signals**: Use `Signal<T>` for all reactive data. Favor `read()` and `set()` / `write()`.
 
-Use `LoadState` from `src/ui/hooks.rs` to track async operations:
+### Data Fetching (Unified Hook Pattern)
 
-- `is_loading: Signal<bool>`
-- `error: Signal<Option<String>>`
-- UI Feedback: Use components from `src/ui/custom/loading.rs` (`Spinner`, `CardSkeleton`, `ErrorAlert`).
+We use a standardized async loader pattern in `src/ui/hooks.rs`:
 
-## 💾 Persistence Pattern
+- **`use_async_loader`**: Handles background tasks using `tokio::task::spawn_blocking`.
+- **`LoadResult<T>`**: Returns `{ data: Signal<T>, state: LoadState }`.
+- **`LoadState`**: Provides `is_loading` and `error` signals for UI feedback.
+- **Keyed Effects**: Hooks are "keyed" to refresh when the backend or IDs change.
 
-- Map Diesel models in `infrastructure/persistence/models.rs` to Domain Entities in repositories.
-- Repository traits must reside in `domain/ports/repository.rs`.
-- Database migrations are in `migrations/`.
+```rust
+// Hook Usage Example
+let result = use_load_course(backend, &course_id);
+if *result.state.is_loading.read() { return rsx! { Spinner {} }; }
+```
 
-### Database Tables
+### Async Actions
 
-- `courses` - Metadata and source URL.
-- `modules` - Logical grouping of videos.
-- `videos` - YouTube ID, duration, completion status, transcript, and summary.
-- `notes` - Per-video Markdown notes.
-- `exams` - Generated quizzes with question/answer JSON and scores.
-- `tags` & `course_tags` - Taxonomy and association.
-- `user_preferences` - `ml_boundary_enabled` and `cognitive_limit_minutes`.
+Mutations (POST/PUT/DELETE equivalents) reside in `src/ui/actions.rs`. They are `async` functions that interact with use cases and return `Result` or custom enum results.
 
-## 🔄 Development Workflow
+## 💾 Persistence & Search
 
-- **Run Dev Server**: `dx serve`
-- **Build Release**: `dx build --release`
-- **Linting**: `cargo clippy --all-targets -- -D warnings`
-- **Formatting**: `cargo fmt`
-- **DB Rebuild**: `rm course_pilot.db && diesel migration run`
+- **Diesel Mapping**: Database models (`infrastructure/persistence/models.rs`) map to Domain Entities via `From`/`Into` or manual mapping in repositories.
+- **Search Indexing**: `SearchRepository` (FTS5) is updated transactionally alongside core entity changes in use cases.
+- **Transactions**: Use the `db_pool` in `AppContext` for atomic operations.
 
-## 🧩 Key Integration Points
+## 🧩 Strategic Integration Patterns
 
-- **YouTube Fetcher**: Uses `rusty_ytdl` (custom fork/branch). Can use `YOUTUBE_COOKIES` env var for restricted content.
-- **Transcripts**: Fetched via `yt-transcript-rs`.
-- **LLM**: Gemini API via `genai-rs`. Used for chat, summaries, and exam generation.
-- **Secrets**: Uses `keyring` for OS-native secure storage of API keys.
+- **Secret Management**: API keys (Gemini) must never be hardcoded. Use `AppContext::keystore` for secure OS-native storage.
+- **Presence Sync**: Use the `use_presence_sync` hook to automatically update Discord status based on current `Route` and `AppState`.
+- **Debouncing**: Use `use_debounced_value` for search inputs to prevent database/API thrashing.
+- **Rich Presence**: The `Activity` enum in domain defines valid presence states, mapped from UI routes.
 
 ## ⚡ Performance & Quality
 
-- Use `Arc` for sharing heavy objects (AppContext, Repositories).
-- IDs (CourseId, VideoId, etc.) are newtypes around UUID or String - always use `std::str::FromStr` to parse.
-- Handle `Option` and `Result` explicitly; avoid `unwrap()` in UI or Use Cases and better use this errors.
-- Favor functional patterns (Iterators) over imperative loops.
+- **Blocking Tasks**: Heavy computations or DB queries in UI hooks MUST use `spawn_blocking`.
+- **Error Handling**: Use `thiserror` for custom error types in application/infrastructure. Handle errors explicitly in UI actions to provide user feedback.
+- **Type Safety**: Newtype IDs (e.g., `CourseId(Uuid)`) prevent accidental ID swapping across different entity types.
+- **Functional Idioms**: Prefer `.map()`, `.and_then()`, and `.filter()` over manual `if let` nesting where readable.

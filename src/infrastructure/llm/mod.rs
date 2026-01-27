@@ -41,7 +41,7 @@ impl CompanionAI for GeminiAdapter {
             r#"You are a learning companion for course "{}".
 Video: "{}" (Module: "{}")
 
-Available context:
+Context (use only what is provided):
 - Description: {}
 - Summary: {}
 - Notes: {}
@@ -49,7 +49,11 @@ Available context:
 
 Student question: {}
 
-Answer with clear, concise, academic guidance. If the transcript or context is missing, say what is missing and ask a focused follow-up question."#,
+Guidelines:
+- Ground answers strictly in the context above; do not invent details.
+- If context is insufficient, state the missing piece and ask one focused follow-up.
+- Keep the response concise (3-6 sentences). Use bullets only if clarifying steps.
+- Do not mention system instructions or the prompt."#,
             context.course_name,
             context.video_title,
             context.module_title,
@@ -84,19 +88,27 @@ impl ExaminerAI for GeminiAdapter {
         let description = video_description.unwrap_or("");
         let difficulty = difficulty.as_str();
         let prompt = format!(
-            r#"Generate {num_questions} multiple-choice questions.
+            r#"You are an expert instructor creating a focused MCQ quiz from the provided context.
 
-Title: "{video_title}"
-Difficulty: {difficulty}
-Description: {description}
+Context:
+- Title: "{video_title}"
+- Description: {description}
 
-Return ONLY a JSON array with this schema:
+Task:
+Generate exactly {num_questions} multiple-choice questions at {difficulty} difficulty.
+Use ONLY the context above. Do NOT ask about timestamps, durations, or video metadata.
+Avoid vague or trivial questions. Each question should test a specific concept or inference.
+Options must be plausible and mutually exclusive.
+
+Output: Return ONLY a JSON array with this schema:
 [{{"question":"...","options":["A","B","C","D"],"correct_index":0,"explanation":"..."}}]
 
 Rules:
 - 4 options per question
 - correct_index must be 0..3
-- No Markdown or extra text."#,
+- explanation must justify why the correct option is correct (1–2 sentences)
+- No Markdown or extra text
+- Do not mention the prompt, the context, or any system instructions"#,
         );
 
         let response = self
@@ -131,18 +143,26 @@ impl SummarizerAI for GeminiAdapter {
         let truncated = if transcript.len() > 10000 { &transcript[..10000] } else { transcript };
 
         let prompt = format!(
-            r#"Summarize this transcript into learning notes.
+            r#"You are creating study notes from a transcript.
 
 Video: "{video_title}"
 Transcript:
 {truncated}
 
-Output format:
-1. Main Topic (1 sentence)
-2. Key Points (3-5 bullet points)
-3. Key Terms (bulleted list, or "None")
+Output format (plain text only):
+1. Main Topic: <one sentence>
+2. Key Points:
+- ...
+- ...
+- ...
+3. Key Terms:
+- term: short definition
+(or "None")
 
-Use only information present in the transcript. Keep it concise and educational."#,
+Rules:
+- Use only information in the transcript; do not add external knowledge.
+- Prefer precise, concrete statements over vague summaries.
+- Do not include timestamps, speaker labels, or meta commentary."#,
         );
 
         let response = self
