@@ -24,7 +24,6 @@ pub fn Settings() -> Element {
     let mut active_tab = use_signal(|| "integrations".to_string());
 
     let mut gemini_key = use_signal(String::new);
-    let mut discord_client_id = use_signal(String::new);
     let mut ml_boundary_enabled = use_signal(|| false);
     let mut cognitive_limit = use_signal(|| 45u32);
     let mut right_panel_visible = use_signal(|| true);
@@ -44,13 +43,6 @@ pub fn Settings() -> Element {
                 gemini_key.set("••••••••••••••••".to_string());
             }
 
-            // Load Discord Client ID
-            if let Ok(Some(id)) = ctx.keystore.retrieve("discord_client_id") {
-                discord_client_id.set(id);
-            } else {
-                discord_client_id.set("1346589201925341297".to_string());
-            }
-
             let use_case = ServiceFactory::preferences(ctx);
             match use_case.load() {
                 Ok(prefs) => {
@@ -68,7 +60,6 @@ pub fn Settings() -> Element {
 
     let handle_save_integrations = move |_| {
         let gem_key = gemini_key.read().clone();
-        let disc_id = discord_client_id.read().clone();
 
         // Only save if not masked placeholder
         if let Some(ref ctx) = backend_save {
@@ -83,19 +74,8 @@ pub fn Settings() -> Element {
                 }
             }
 
-            // Save Discord Client ID
-            if !disc_id.is_empty() {
-                if let Err(e) = ctx.keystore.store("discord_client_id", &disc_id) {
-                    success = false;
-                    errors.push(format!("Discord ID: {}", e));
-                }
-            }
-
             if success {
-                save_status.set(Some((
-                    true,
-                    "Integrations saved! Restart the app for changes to take effect.".to_string(),
-                )));
+                save_status.set(Some((true, "Integrations saved.".to_string())));
             } else {
                 save_status.set(Some((false, errors.join(", "))));
             }
@@ -202,19 +182,6 @@ pub fn Settings() -> Element {
                     h2 { class: "text-lg font-semibold mb-4", "Discord Rich Presence" }
 
                     div { class: "space-y-4",
-                        div {
-                            label { class: "label", "Discord Client ID" }
-                            input {
-                                class: "input input-bordered w-full",
-                                placeholder: "Enter Discord Application ID",
-                                value: "{discord_client_id}",
-                                oninput: move |e| discord_client_id.set(e.value()),
-                            }
-                            p { class: "text-sm text-base-content/60 mt-1",
-                                "Default: 1346589201925341297 (requires app restart to apply changes)"
-                            }
-                        }
-
                         div { class: "bg-base-200 rounded-lg p-4 flex items-center justify-between",
                             div {
                                 h3 { class: "font-semibold", "Connection Status" }

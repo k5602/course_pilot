@@ -343,13 +343,20 @@ pub fn use_presence_sync(backend: Option<Arc<AppContext>>) {
     let route = use_route::<Route>();
     let state = use_context::<AppState>();
 
-    let course_id = state
-        .current_course
-        .read()
-        .as_ref()
-        .map(|c| c.id().as_uuid().to_string())
-        .unwrap_or_default();
-    let video_id = state.current_video_id.read().clone().unwrap_or_default();
+    let (course_id, video_id) = match &route {
+        Route::VideoPlayer { course_id, video_id } => (course_id.clone(), video_id.clone()),
+        Route::CourseView { course_id } => (course_id.clone(), String::new()),
+        _ => {
+            let course_id = state
+                .current_course
+                .read()
+                .as_ref()
+                .map(|c| c.id().as_uuid().to_string())
+                .unwrap_or_default();
+            let video_id = state.current_video_id.read().clone().unwrap_or_default();
+            (course_id, video_id)
+        },
+    };
 
     let key = format!("{}|{:?}|{}|{}", backend_key(&backend), route, course_id, video_id);
 
@@ -359,23 +366,37 @@ pub fn use_presence_sync(backend: Option<Arc<AppContext>>) {
             None => return,
         };
 
+        log::debug!(
+            "Presence sync route={:?} course_id={} video_id={}",
+            route,
+            course_id,
+            video_id
+        );
+
         let activity = match route {
             Route::Dashboard {} => Activity::Dashboard,
             Route::CourseList {} => Activity::BrowsingCourses,
             Route::CourseView { .. } => Activity::BrowsingCourses,
-            Route::VideoPlayer { .. } => {
+            Route::VideoPlayer { ref course_id, ref video_id } => {
                 let course = state.current_course.read();
-                let video_id = state.current_video_id.read();
                 let videos = state.current_videos.read();
 
-                let video = video_id
-                    .as_ref()
-                    .and_then(|id| videos.iter().find(|v| v.id().to_string() == *id));
+                let video = videos.iter().find(|v| v.id().to_string() == video_id.as_str());
 
                 if let (Some(c), Some(v)) = (course.as_ref(), video) {
                     Activity::Watching {
                         course_title: c.name().to_string(),
                         video_title: v.title().to_string(),
+                    }
+                } else if let Some(c) = course.as_ref() {
+                    Activity::Watching {
+                        course_title: c.name().to_string(),
+                        video_title: "Video".to_string(),
+                    }
+                } else if !course_id.is_empty() {
+                    Activity::Watching {
+                        course_title: "Course".to_string(),
+                        video_title: "Video".to_string(),
                     }
                 } else {
                     Activity::BrowsingCourses
@@ -396,6 +417,9 @@ pub fn use_presence_sync(backend: Option<Arc<AppContext>>) {
             Route::Settings {} => Activity::Settings,
         };
 
-        backend.presence.update_activity(activity);
+        log::debug!("Presence sync activity decided: {:?}", activity);
+
+        let use_case = ServiceFactory::update_presence(backend);
+        use_case.execute(crate::application::use_cases::UpdatePresenceInput { activity });
     });
 }

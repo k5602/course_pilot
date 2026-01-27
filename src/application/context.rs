@@ -8,6 +8,7 @@ use crate::application::use_cases::{
     AskCompanionUseCase, AttachTranscriptUseCase, ExportCourseNotesUseCase, IngestLocalUseCase,
     IngestPlaylistUseCase, LoadDashboardUseCase, NotesUseCase, PlanSessionUseCase,
     PreferencesUseCase, SummarizeVideoUseCase, TakeExamUseCase, UpdateCourseUseCase,
+    UpdatePresenceUseCase,
 };
 use crate::domain::ports::{PresenceProvider, SecretStore};
 use crate::infrastructure::{
@@ -135,11 +136,7 @@ impl AppContext {
         let youtube = Arc::new(RustyYtdlAdapter::new());
 
         // Presence provider (Discord)
-        let discord_id = keystore.retrieve("discord_client_id").ok().flatten();
         let presence_adapter = DiscordPresenceAdapter::new();
-        if let Some(id) = discord_id {
-            presence_adapter.set_client_id(id);
-        }
         let presence: Arc<dyn PresenceProvider> = Arc::new(presence_adapter);
 
         // Transcript adapter (for summaries)
@@ -257,6 +254,11 @@ impl ServiceFactory {
     /// Creates the session planning use case.
     pub fn plan_session(ctx: &AppContext) -> PlanSessionUseCase<SqliteVideoRepository> {
         PlanSessionUseCase::new(ctx.video_repo.clone())
+    }
+
+    /// Creates the presence update use case.
+    pub fn update_presence(ctx: &AppContext) -> UpdatePresenceUseCase {
+        UpdatePresenceUseCase::new(ctx.presence.clone())
     }
 
     /// Creates the companion AI use case.

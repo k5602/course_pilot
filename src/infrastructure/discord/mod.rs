@@ -7,10 +7,13 @@
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{
     Arc,
-    mpsc::{Sender, channel},
+    mpsc::{Receiver, Sender, channel},
 };
 use std::thread;
-use std::time::{SystemTime, UNIX_EPOCH};
+use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
+
+use serde_json::{json, to_value};
+use uuid::Uuid;
 
 use discord_rich_presence::{DiscordIpc, DiscordIpcClient, activity};
 use log::{info, warn};
@@ -18,7 +21,12 @@ use log::{info, warn};
 use crate::domain::ports::{Activity, PresenceProvider};
 
 /// Default Client ID for Course Pilot.
-const DEFAULT_CLIENT_ID: &str = "1346589201925341297";
+const DEFAULT_CLIENT_ID: &str = "1465702852373647452";
+
+const UPDATE_INTERVAL: Duration = Duration::from_secs(2);
+const CONNECT_BACKOFF_MIN: Duration = Duration::from_secs(2);
+const CONNECT_BACKOFF_MAX: Duration = Duration::from_secs(60);
+const WORKER_TICK: Duration = Duration::from_millis(250);
 
 /// Messages sent to the background presence worker.
 enum PresenceMsg {
@@ -33,11 +41,13 @@ pub struct DiscordPresenceAdapter {
     tx: Sender<PresenceMsg>,
     connected: Arc<AtomicBool>,
 }
+
 impl Default for DiscordPresenceAdapter {
     fn default() -> Self {
         Self::new()
     }
 }
+
 impl DiscordPresenceAdapter {
     /// Updates the client ID used for Discord Rich Presence.
     pub fn set_client_id(&self, client_id: String) {
@@ -50,162 +60,272 @@ impl DiscordPresenceAdapter {
         let connected = Arc::new(AtomicBool::new(false));
         let connected_flag = connected.clone();
 
-        let client_id = std::env::var("DISCORD_CLIENT_ID")
-            .ok()
-            .filter(|s| !s.trim().is_empty())
-            .unwrap_or_else(|| DEFAULT_CLIENT_ID.to_string());
-
-        if client_id == DEFAULT_CLIENT_ID {
-            info!("Discord presence using default client id; set DISCORD_CLIENT_ID to override.");
-        } else {
-            info!("Discord presence using client id from DISCORD_CLIENT_ID.");
-        }
+        let client_id = DEFAULT_CLIENT_ID.to_string();
 
         thread::spawn(move || {
-            // Create the client directly.
-            // DiscordIpcClient::new returns the client struct directly.
-            let mut client_opt: Option<DiscordIpcClient> = Some(DiscordIpcClient::new(&client_id));
-
-            let mut connected = false;
-            let mut connection_attempts = 0u32;
-            let start_time =
-                SystemTime::now().duration_since(UNIX_EPOCH).unwrap_or_default().as_secs() as i64;
-
-            // Attempt proactive connection on startup
-            if let Some(ref mut c) = client_opt {
-                match c.connect() {
-                    Ok(_) => {
-                        connected = true;
-                        connected_flag.store(true, Ordering::SeqCst);
-                        info!("Connected to Discord IPC on startup");
-                    },
-                    Err(e) => {
-                        // Log at warn level for initial connection attempt
-                        warn!(
-                            "Initial Discord IPC connection failed: {}. Will retry on activity updates.",
-                            e
-                        );
-                    },
-                }
-            }
-
-            while let Ok(msg) = rx.recv() {
-                match msg {
-                    PresenceMsg::Shutdown => {
-                        connected_flag.store(false, Ordering::SeqCst);
-                        if let Some(mut c) = client_opt.take() {
-                            let _ = c.close();
-                        }
-                        break;
-                    },
-                    PresenceMsg::ChangeClientId(new_id) => {
-                        if let Some(mut c) = client_opt.take() {
-                            let _ = c.close();
-                        }
-                        connected = false;
-                        connected_flag.store(false, Ordering::SeqCst);
-                        client_opt = Some(DiscordIpcClient::new(&new_id));
-                        info!("Discord presence client ID changed to: {}", new_id);
-                    },
-                    PresenceMsg::Clear => {
-                        if let Some(ref mut c) = client_opt {
-                            if connected {
-                                let _ = c.clear_activity();
-                            }
-                        }
-                    },
-                    PresenceMsg::Update(activity_type) => {
-                        // Attempt connection if not connected
-                        if !connected {
-                            if let Some(ref mut c) = client_opt {
-                                connection_attempts += 1;
-                                match c.connect() {
-                                    Ok(_) => {
-                                        connected = true;
-                                        connected_flag.store(true, Ordering::SeqCst);
-                                        info!(
-                                            "Connected to Discord IPC after {} attempt(s)",
-                                            connection_attempts
-                                        );
-                                        connection_attempts = 0;
-                                    },
-                                    Err(e) => {
-                                        connected_flag.store(false, Ordering::SeqCst);
-                                        // Log first 3 attempts at warn level, then debug to avoid spam
-                                        if connection_attempts <= 3 {
-                                            warn!(
-                                                "Discord IPC connection attempt {} failed: {}",
-                                                connection_attempts, e
-                                            );
-                                        } else {
-                                            log::debug!(
-                                                "Discord IPC connection attempt {} failed: {}",
-                                                connection_attempts,
-                                                e
-                                            );
-                                        }
-                                    },
-                                }
-                            }
-                        }
-
-                        if let Some(ref mut c) = client_opt {
-                            if connected {
-                                // Buffers must live outside match for Activity to borrow them
-                                let mut details_buf: Option<String> = None;
-                                let mut state_buf: Option<String> = None;
-
-                                // Build activity without assets (assets require Discord Developer Portal setup)
-                                let mut discord_act = activity::Activity::new()
-                                    .timestamps(activity::Timestamps::new().start(start_time));
-
-                                match activity_type {
-                                    Activity::Idle => {
-                                        discord_act = discord_act.details("Idle");
-                                    },
-                                    Activity::Dashboard => {
-                                        discord_act = discord_act.details("In Dashboard");
-                                    },
-                                    Activity::BrowsingCourses => {
-                                        discord_act = discord_act.details("Browsing Courses");
-                                    },
-                                    Activity::Watching { course_title, video_title } => {
-                                        details_buf = Some(format!("Watching: {}", video_title));
-                                        state_buf = Some(format!("Course: {}", course_title));
-                                    },
-                                    Activity::TakingExam { course_title, exam_title } => {
-                                        details_buf = Some(format!("Taking Quiz: {}", exam_title));
-                                        state_buf = Some(format!("Course: {}", course_title));
-                                    },
-                                    Activity::Settings => {
-                                        discord_act = discord_act.details("Adjusting Settings");
-                                    },
-                                }
-
-                                // Apply dynamic details/state after match if set
-                                if let (Some(details), Some(state)) = (&details_buf, &state_buf) {
-                                    discord_act = discord_act.details(details).state(state);
-                                }
-
-                                match c.set_activity(discord_act) {
-                                    Ok(_) => {
-                                        log::debug!("Discord presence updated successfully");
-                                    },
-                                    Err(e) => {
-                                        warn!("Failed to update Discord presence: {}", e);
-                                        // Connection might be lost
-                                        connected = false;
-                                        connected_flag.store(false, Ordering::SeqCst);
-                                    },
-                                }
-                            }
-                        }
-                    },
-                }
-            }
+            presence_worker(rx, connected_flag, client_id);
         });
 
         Self { tx, connected }
+    }
+}
+
+fn presence_worker(rx: Receiver<PresenceMsg>, connected_flag: Arc<AtomicBool>, client_id: String) {
+    let mut state = WorkerState::new(client_id);
+
+    loop {
+        match rx.recv_timeout(WORKER_TICK) {
+            Ok(msg) => {
+                if state.handle_message(msg, &connected_flag) {
+                    break;
+                }
+            },
+            Err(std::sync::mpsc::RecvTimeoutError::Timeout) => {},
+            Err(std::sync::mpsc::RecvTimeoutError::Disconnected) => break,
+        }
+
+        state.tick(&connected_flag);
+    }
+}
+
+struct WorkerState {
+    client_id: String,
+    client: Option<DiscordIpcClient>,
+    connected: bool,
+    pending: Option<Activity>,
+    pending_clear: bool,
+    last_sent: Option<Activity>,
+    last_update: Option<Instant>,
+    next_connect_attempt: Instant,
+    backoff: Duration,
+    app_start: SystemTime,
+}
+
+impl WorkerState {
+    fn new(client_id: String) -> Self {
+        Self {
+            client_id,
+            client: None,
+            connected: false,
+            pending: None,
+            pending_clear: false,
+            last_sent: None,
+            last_update: None,
+            next_connect_attempt: Instant::now(),
+            backoff: CONNECT_BACKOFF_MIN,
+            app_start: SystemTime::now(),
+        }
+    }
+
+    fn handle_message(&mut self, msg: PresenceMsg, connected_flag: &Arc<AtomicBool>) -> bool {
+        match msg {
+            PresenceMsg::Shutdown => {
+                log::debug!("Presence worker received shutdown");
+                self.shutdown(connected_flag);
+                true
+            },
+            PresenceMsg::ChangeClientId(new_id) => {
+                log::debug!("Presence worker received client id change");
+                self.reconfigure_client(new_id, connected_flag);
+                false
+            },
+            PresenceMsg::Clear => {
+                log::debug!("Presence worker received clear request");
+                self.pending_clear = true;
+                self.pending = None;
+                false
+            },
+            PresenceMsg::Update(activity) => {
+                log::debug!("Presence worker received update: {:?}", activity);
+                if !self.connected || self.last_sent.as_ref() != Some(&activity) {
+                    self.pending = Some(activity);
+                }
+                false
+            },
+        }
+    }
+
+    fn tick(&mut self, connected_flag: &Arc<AtomicBool>) {
+        let should_connect = (self.pending.is_some() || self.pending_clear) && !self.connected;
+        if should_connect && Instant::now() >= self.next_connect_attempt {
+            self.try_connect(connected_flag);
+        }
+
+        if !self.connected {
+            return;
+        }
+
+        if self.pending_clear && self.can_send_update() {
+            if let Some(ref mut client) = self.client {
+                log::debug!("Sending clear activity to Discord");
+                if client.clear_activity().is_ok() {
+                    log::debug!("Cleared Discord activity");
+                    self.pending_clear = false;
+                    self.last_sent = None;
+                    self.last_update = Some(Instant::now());
+                } else {
+                    self.on_connection_error(connected_flag);
+                }
+            }
+            return;
+        }
+
+        if let Some(activity) = self.pending.take() {
+            if self.can_send_update() {
+                if let Some(ref mut client) = self.client {
+                    log::debug!("Sending Discord activity update: {:?}", activity);
+                    let (details, state) = match &activity {
+                        Activity::Idle => ("Idle".to_string(), "Course Pilot".to_string()),
+                        Activity::Dashboard => {
+                            ("In Dashboard".to_string(), "Course Pilot".to_string())
+                        },
+                        Activity::BrowsingCourses => {
+                            ("Browsing Courses".to_string(), "Course Pilot".to_string())
+                        },
+                        Activity::Watching { course_title, video_title } => (
+                            format!("Watching: {}", video_title),
+                            format!("Course: {}", course_title),
+                        ),
+                        Activity::TakingExam { course_title, exam_title } => (
+                            format!("Taking Quiz: {}", exam_title),
+                            format!("Course: {}", course_title),
+                        ),
+                        Activity::Settings => {
+                            ("Adjusting Settings".to_string(), "Course Pilot".to_string())
+                        },
+                    };
+
+                    let start_ts = self
+                        .app_start
+                        .duration_since(UNIX_EPOCH)
+                        .map(|d| d.as_secs() as i64)
+                        .unwrap_or_default();
+
+                    let discord_act = activity::Activity::new()
+                        .activity_type(activity::ActivityType::Playing)
+                        .details(details.as_str())
+                        .state(state.as_str())
+                        .timestamps(activity::Timestamps::new().start(start_ts));
+
+                    let activity_payload = match to_value(&discord_act) {
+                        Ok(value) => value,
+                        Err(e) => {
+                            warn!("Failed to serialize Discord activity: {}", e);
+                            self.pending = Some(activity);
+                            self.on_connection_error(connected_flag);
+                            return;
+                        },
+                    };
+
+                    let payload = json!({
+                        "cmd": "SET_ACTIVITY",
+                        "args": {
+                            "pid": std::process::id(),
+                            "activity": activity_payload
+                        },
+                        "nonce": Uuid::new_v4().to_string()
+                    });
+
+                    match client.send(payload, 1) {
+                        Ok(_) => {
+                            match client.recv() {
+                                Ok((opcode, payload)) => {
+                                    log::debug!(
+                                        "Discord IPC response opcode={} payload={}",
+                                        opcode,
+                                        payload
+                                    );
+                                },
+                                Err(e) => {
+                                    log::debug!("Discord IPC response unavailable: {}", e);
+                                },
+                            }
+                            self.last_sent = Some(activity);
+                            self.last_update = Some(Instant::now());
+                        },
+                        Err(e) => {
+                            warn!("Failed to update Discord presence: {}", e);
+                            self.pending = Some(activity);
+                            self.on_connection_error(connected_flag);
+                        },
+                    }
+                }
+            } else {
+                self.pending = Some(activity);
+            }
+        }
+    }
+
+    fn can_send_update(&self) -> bool {
+        self.last_update.map(|last| last.elapsed() >= UPDATE_INTERVAL).unwrap_or(true)
+    }
+
+    fn try_connect(&mut self, connected_flag: &Arc<AtomicBool>) {
+        if self.client.is_none() {
+            self.client = Some(DiscordIpcClient::new(&self.client_id));
+        }
+
+        if let Some(ref mut client) = self.client {
+            match client.connect() {
+                Ok(_) => {
+                    self.connected = true;
+                    connected_flag.store(true, Ordering::SeqCst);
+                    self.backoff = CONNECT_BACKOFF_MIN;
+                    self.last_update = None;
+                    if self.pending.is_none() && !self.pending_clear {
+                        if let Some(last) = self.last_sent.clone() {
+                            self.pending = Some(last);
+                        }
+                    }
+                    info!("Connected to Discord IPC");
+                },
+                Err(e) => {
+                    self.connected = false;
+                    connected_flag.store(false, Ordering::SeqCst);
+                    warn!("Discord IPC connection failed: {}", e);
+                    self.schedule_backoff();
+                },
+            }
+        }
+    }
+
+    fn schedule_backoff(&mut self) {
+        self.backoff = self.backoff.checked_mul(2).unwrap_or(CONNECT_BACKOFF_MAX);
+        if self.backoff > CONNECT_BACKOFF_MAX {
+            self.backoff = CONNECT_BACKOFF_MAX;
+        }
+        self.next_connect_attempt = Instant::now() + self.backoff;
+    }
+
+    fn on_connection_error(&mut self, connected_flag: &Arc<AtomicBool>) {
+        self.connected = false;
+        connected_flag.store(false, Ordering::SeqCst);
+        if let Some(mut client) = self.client.take() {
+            let _ = client.close();
+        }
+        if self.pending.is_none() {
+            if let Some(last) = self.last_sent.clone() {
+                self.pending = Some(last);
+            }
+        }
+        self.schedule_backoff();
+    }
+
+    fn reconfigure_client(&mut self, new_id: String, connected_flag: &Arc<AtomicBool>) {
+        self.shutdown(connected_flag);
+        self.client_id = new_id;
+        self.client = None;
+        self.connected = false;
+        self.next_connect_attempt = Instant::now();
+        self.backoff = CONNECT_BACKOFF_MIN;
+    }
+
+    fn shutdown(&mut self, connected_flag: &Arc<AtomicBool>) {
+        self.connected = false;
+        connected_flag.store(false, Ordering::SeqCst);
+        if let Some(mut client) = self.client.take() {
+            let _ = client.close();
+        }
     }
 }
 

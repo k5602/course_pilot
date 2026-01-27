@@ -14,6 +14,7 @@ mod summarize_video;
 mod take_exam;
 mod update_course;
 mod update_module_title;
+mod update_presence;
 
 pub use ask_companion::{AskCompanionInput, AskCompanionUseCase};
 pub use attach_transcript::{
@@ -41,3 +42,4 @@ pub use update_course::{
 pub use update_module_title::{
     UpdateModuleTitleError, UpdateModuleTitleInput, UpdateModuleTitleUseCase,
 };
+pub use update_presence::{UpdatePresenceInput, UpdatePresenceUseCase};
