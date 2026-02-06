@@ -4,7 +4,6 @@ use dioxus::prelude::*;
 use std::str::FromStr;
 
 use crate::application::ServiceFactory;
-use crate::application::use_cases::UpdatePreferencesInput;
 use crate::domain::ports::VideoRepository;
 use crate::domain::value_objects::{CourseId, ExamDifficulty, VideoId};
 use crate::ui::Route;
@@ -30,16 +29,20 @@ pub fn VideoPlayer(course_id: String, video_id: String) -> Element {
                 let use_case = ServiceFactory::preferences(ctx);
                 match use_case.load() {
                     Ok(prefs) => {
-                        state.right_panel_visible.set(prefs.right_panel_visible());
+                        state.right_panel_visible.set(true);
+                        let width = (prefs.right_panel_width() as f64).max(240.0);
+                        state.right_panel_width.set(width);
                         state.onboarding_completed.set(prefs.onboarding_completed());
                     },
                     Err(e) => {
                         log::error!("Failed to load preferences: {}", e);
                         state.right_panel_visible.set(true);
+                        state.right_panel_width.set(320.0);
                     },
                 }
             } else {
                 state.right_panel_visible.set(true);
+                state.right_panel_width.set(320.0);
             }
         });
     }
@@ -196,37 +199,6 @@ pub fn VideoPlayer(course_id: String, video_id: String) -> Element {
         });
     };
 
-    let on_toggle_panel = {
-        let mut state = state.clone();
-        let backend_for_toggle = state.backend.clone();
-        move |_| {
-            let new_value = !*state.right_panel_visible.read();
-            state.right_panel_visible.set(new_value);
-
-            let Some(ref ctx) = backend_for_toggle else {
-                return;
-            };
-
-            let use_case = ServiceFactory::preferences(ctx);
-            match use_case.load() {
-                Ok(prefs) => {
-                    let input = UpdatePreferencesInput {
-                        ml_boundary_enabled: prefs.ml_boundary_enabled(),
-                        cognitive_limit_minutes: prefs.cognitive_limit_minutes(),
-                        right_panel_visible: new_value,
-                        onboarding_completed: *state.onboarding_completed.read(),
-                    };
-                    if let Err(e) = use_case.update(input) {
-                        log::error!("Failed to persist right panel preference: {}", e);
-                    }
-                },
-                Err(e) => {
-                    log::error!("Failed to load preferences for right panel: {}", e);
-                },
-            }
-        }
-    };
-
     let on_transcript_update = {
         let backend = backend.clone();
         let video_id_for_refresh = v.id().clone();
@@ -270,22 +242,10 @@ pub fn VideoPlayer(course_id: String, video_id: String) -> Element {
                     class: "btn btn-ghost btn-sm gap-2",
                     "← Back to Course"
                 }
-                div { class: "flex items-center gap-3",
-                    button {
-                        class: "btn btn-ghost btn-sm",
-                        onclick: on_toggle_panel,
-                        title: "Toggle notes & AI panel",
-                        if *state.right_panel_visible.read() {
-                            "Hide Panel"
-                        } else {
-                            "Show Panel"
-                        }
-                    }
-                    div { class: "flex items-center gap-2 text-sm font-medium opacity-60",
-                        span { "{module_title}" }
-                        span { "•" }
-                        span { "{v.duration_secs() / 60} min" }
-                    }
+                div { class: "flex items-center gap-2 text-sm font-medium opacity-60",
+                    span { "{module_title}" }
+                    span { "•" }
+                    span { "{v.duration_secs() / 60} min" }
                 }
             }
 

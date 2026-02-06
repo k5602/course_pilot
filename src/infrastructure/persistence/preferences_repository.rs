@@ -42,6 +42,7 @@ impl UserPreferencesRepository for SqliteUserPreferencesRepository {
             ml_boundary_enabled: bool_to_i32(prefs.ml_boundary_enabled()),
             cognitive_limit_minutes: prefs.cognitive_limit_minutes() as i32,
             right_panel_visible: bool_to_i32(prefs.right_panel_visible()),
+            right_panel_width: prefs.right_panel_width() as i32,
             onboarding_completed: bool_to_i32(prefs.onboarding_completed()),
         };
 
@@ -60,6 +61,7 @@ fn row_to_preferences(row: UserPreferencesRow) -> UserPreferences {
         row.ml_boundary_enabled != 0,
         row.cognitive_limit_minutes as u32,
         row.right_panel_visible != 0,
+        row.right_panel_width as u32,
         row.onboarding_completed != 0,
     )
 }

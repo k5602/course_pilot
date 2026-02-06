@@ -69,6 +69,8 @@ pub struct VideoRow {
     pub summary: Option<String>,
     pub source_type: String,
     pub source_ref: String,
+    pub key_points: Option<String>,
+    pub key_terms: Option<String>,
 }
 
 /// Insertable model for videos.
@@ -87,6 +89,8 @@ pub struct NewVideo<'a> {
     pub summary: Option<&'a str>,
     pub source_type: &'a str,
     pub source_ref: &'a str,
+    pub key_points: Option<&'a str>,
+    pub key_terms: Option<&'a str>,
 }
 
 /// Diesel model for the exams table.
@@ -144,6 +148,7 @@ pub struct UserPreferencesRow {
     pub cognitive_limit_minutes: i32,
     pub right_panel_visible: i32,
     pub onboarding_completed: i32,
+    pub right_panel_width: i32,
 }
 
 /// Insertable model for user preferences.
@@ -154,6 +159,7 @@ pub struct NewUserPreferences<'a> {
     pub ml_boundary_enabled: i32,
     pub cognitive_limit_minutes: i32,
     pub right_panel_visible: i32,
+    pub right_panel_width: i32,
     pub onboarding_completed: i32,
 }
 
@@ -164,6 +170,7 @@ pub struct UpdatePreferences {
     pub ml_boundary_enabled: Option<i32>,
     pub cognitive_limit_minutes: Option<i32>,
     pub right_panel_visible: Option<i32>,
+    pub right_panel_width: Option<i32>,
     pub onboarding_completed: Option<i32>,
 }
 

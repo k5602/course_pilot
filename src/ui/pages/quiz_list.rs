@@ -16,7 +16,6 @@ pub fn QuizList() -> Element {
     {
         let mut state = state.clone();
         use_effect(move || {
-            state.right_panel_visible.set(false);
             state.current_video_id.set(None);
         });
     }

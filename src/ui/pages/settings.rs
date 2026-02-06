@@ -16,7 +16,6 @@ pub fn Settings() -> Element {
     {
         let mut state = state.clone();
         use_effect(move || {
-            state.right_panel_visible.set(false);
             state.current_video_id.set(None);
         });
     }
@@ -49,6 +48,7 @@ pub fn Settings() -> Element {
                     ml_boundary_enabled.set(prefs.ml_boundary_enabled());
                     cognitive_limit.set(prefs.cognitive_limit_minutes());
                     right_panel_visible.set(prefs.right_panel_visible());
+                    state.right_panel_width.set(prefs.right_panel_width() as f64);
                     state.onboarding_completed.set(prefs.onboarding_completed());
                 },
                 Err(e) => {
@@ -91,6 +91,7 @@ pub fn Settings() -> Element {
                 ml_boundary_enabled: *ml_boundary_enabled.read(),
                 cognitive_limit_minutes: *cognitive_limit.read(),
                 right_panel_visible: *right_panel_visible.read(),
+                right_panel_width: state.right_panel_width.read().round() as u32,
                 onboarding_completed: *state.onboarding_completed.read(),
             };
 
@@ -223,42 +224,6 @@ pub fn Settings() -> Element {
                             }
                             p { class: "text-sm text-base-content/60 mt-1",
                                 "Used to plan study sessions across modules."
-                            }
-                        }
-
-                        // ML boundaries (reserved)
-                        div { class: "flex items-center justify-between bg-base-200 rounded-lg p-4",
-                            div {
-                                h3 { class: "font-semibold", "ML Boundary Hints" }
-                                p { class: "text-sm text-base-content/60",
-                                    "Enable experimental machine-learning boundaries for session planning."
-                                }
-                            }
-                            input {
-                                class: "toggle toggle-primary",
-                                r#type: "checkbox",
-                                checked: *ml_boundary_enabled.read(),
-                                onchange: move |e| {
-                                    ml_boundary_enabled.set(e.value() == "on");
-                                },
-                            }
-                        }
-
-                        // Right panel visibility
-                        div { class: "flex items-center justify-between bg-base-200 rounded-lg p-4",
-                            div {
-                                h3 { class: "font-semibold", "Right Panel" }
-                                p { class: "text-sm text-base-content/60",
-                                    "Show the Notes & AI companion panel by default."
-                                }
-                            }
-                            input {
-                                class: "toggle toggle-primary",
-                                r#type: "checkbox",
-                                checked: *right_panel_visible.read(),
-                                onchange: move |e| {
-                                    right_panel_visible.set(e.value() == "on");
-                                },
                             }
                         }
                     }

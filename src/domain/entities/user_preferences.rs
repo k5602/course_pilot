@@ -7,6 +7,7 @@ pub struct UserPreferences {
     ml_boundary_enabled: bool,
     cognitive_limit_minutes: u32,
     right_panel_visible: bool,
+    right_panel_width: u32,
     onboarding_completed: bool,
 }
 
@@ -17,6 +18,7 @@ impl UserPreferences {
         ml_boundary_enabled: bool,
         cognitive_limit_minutes: u32,
         right_panel_visible: bool,
+        right_panel_width: u32,
         onboarding_completed: bool,
     ) -> Self {
         Self {
@@ -24,6 +26,7 @@ impl UserPreferences {
             ml_boundary_enabled,
             cognitive_limit_minutes,
             right_panel_visible,
+            right_panel_width,
             onboarding_completed,
         }
     }
@@ -35,6 +38,7 @@ impl UserPreferences {
             ml_boundary_enabled: false,
             cognitive_limit_minutes: 45,
             right_panel_visible: true,
+            right_panel_width: 320,
             onboarding_completed: false,
         }
     }
@@ -55,6 +59,10 @@ impl UserPreferences {
         self.right_panel_visible
     }
 
+    pub fn right_panel_width(&self) -> u32 {
+        self.right_panel_width
+    }
+
     pub fn onboarding_completed(&self) -> bool {
         self.onboarding_completed
     }
@@ -69,6 +77,10 @@ impl UserPreferences {
 
     pub fn set_right_panel_visible(&mut self, visible: bool) {
         self.right_panel_visible = visible;
+    }
+
+    pub fn set_right_panel_width(&mut self, width: u32) {
+        self.right_panel_width = width;
     }
 
     pub fn set_onboarding_completed(&mut self, completed: bool) {

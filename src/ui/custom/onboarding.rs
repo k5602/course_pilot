@@ -172,6 +172,7 @@ fn complete_onboarding(state: &mut AppState, error_msg: &mut Signal<Option<Strin
                 ml_boundary_enabled: prefs.ml_boundary_enabled(),
                 cognitive_limit_minutes: prefs.cognitive_limit_minutes(),
                 right_panel_visible: prefs.right_panel_visible(),
+                right_panel_width: prefs.right_panel_width(),
                 onboarding_completed: true,
             };
             if let Err(e) = use_case.update(input) {

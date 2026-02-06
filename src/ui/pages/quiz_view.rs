@@ -23,7 +23,6 @@ pub fn QuizView(exam_id: String) -> Element {
     {
         let mut state = state.clone();
         use_effect(move || {
-            state.right_panel_visible.set(false);
             state.current_video_id.set(None);
         });
     }
@@ -234,8 +233,6 @@ pub fn QuizView(exam_id: String) -> Element {
                                     div { class: "text-lg font-bold mb-4",
                                         MarkdownRenderer { src: format!("{}. {}", idx + 1, q.question) }
                                     }
-
-
 
                                     div { class: "space-y-2 mb-4",
                                         for (opt_idx , opt) in q.options.iter().enumerate() {

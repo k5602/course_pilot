@@ -228,6 +228,8 @@ impl VideoRepository for SqliteVideoRepository {
             summary: video.summary(),
             source_type,
             source_ref: &source_ref,
+            key_points: None,
+            key_terms: None,
         };
 
         diesel::insert_into(videos::table)

@@ -1,6 +1,9 @@
 //! Right panel with Notes and AI Chat tabs
 
-use crate::application::use_cases::{DeleteNoteInput, LoadNoteInput, SaveNoteInput};
+use crate::application::ServiceFactory;
+use crate::application::use_cases::{
+    DeleteNoteInput, LoadNoteInput, SaveNoteInput, UpdatePreferencesInput,
+};
 use crate::domain::ports::VideoRepository;
 use crate::domain::value_objects::VideoId;
 use crate::ui::custom::{MarkdownRenderer, TagBadge};
@@ -17,21 +20,34 @@ pub fn RightPanel() -> Element {
     let mut state = use_context::<AppState>();
     let current_tab = *state.right_panel_tab.read();
     let is_visible = *state.right_panel_visible.read();
-    let panel_width = use_motion(if is_visible { 320.0 } else { 0.0 });
-    let panel_opacity = use_motion(if is_visible { 1.0 } else { 0.0 });
-    let panel_offset = use_motion(if is_visible { 0.0 } else { 24.0 });
-    let border_class = if is_visible { "border-base-300" } else { "border-transparent" };
-    let pointer_events = if is_visible { "auto" } else { "none" };
+    let min_width = 240.0_f64;
+    let max_width = 560.0_f64;
+    let collapsed_width = 12.0_f64;
+    let collapse_threshold = 160.0_f64;
+    let stored_width = *state.right_panel_width.read();
+    let clamped_width = stored_width.clamp(min_width, max_width);
+    let target_width = if is_visible { clamped_width } else { collapsed_width };
+    let panel_width = use_motion(target_width as f32);
+    let content_opacity = use_motion(if is_visible { 1.0 } else { 0.0 });
+    let panel_offset = use_motion(0.0);
+    let border_class = "border-base-300";
+    let content_pointer_events = if is_visible { "auto" } else { "none" };
+    let is_resizing = use_signal(|| false);
+    let drag_start_x = use_signal(|| 0.0f64);
+    let drag_start_width = use_signal(|| 0.0f64);
 
     let state_for_effect = state.clone();
     let mut panel_width_for_effect = panel_width;
-    let mut panel_opacity_for_effect = panel_opacity;
+    let mut content_opacity_for_effect = content_opacity;
     let mut panel_offset_for_effect = panel_offset;
 
     use_effect(move || {
         let is_visible = *state_for_effect.right_panel_visible.read();
-        let (target_width, target_opacity, target_offset) =
-            if is_visible { (320.0, 1.0, 0.0) } else { (0.0, 0.0, 24.0) };
+        let (target_width, target_opacity, target_offset) = if is_visible {
+            (clamped_width as f32, 1.0, 0.0)
+        } else {
+            (collapsed_width as f32, 0.0, 0.0)
+        };
 
         let config = AnimationConfig::new(AnimationMode::Spring(Spring {
             stiffness: 120.0,
@@ -41,17 +57,125 @@ pub fn RightPanel() -> Element {
         }));
 
         panel_width_for_effect.animate_to(target_width, config.clone());
-        panel_opacity_for_effect.animate_to(target_opacity, config.clone());
+        content_opacity_for_effect.animate_to(target_opacity, config.clone());
         panel_offset_for_effect.animate_to(target_offset, config);
     });
 
+    let persist_preferences = {
+        let state = state.clone();
+        move || {
+            let Some(ref ctx) = state.backend else {
+                return;
+            };
+
+            let use_case = ServiceFactory::preferences(ctx);
+            match use_case.load() {
+                Ok(prefs) => {
+                    let input = UpdatePreferencesInput {
+                        ml_boundary_enabled: prefs.ml_boundary_enabled(),
+                        cognitive_limit_minutes: prefs.cognitive_limit_minutes(),
+                        right_panel_visible: *state.right_panel_visible.read(),
+                        right_panel_width: state.right_panel_width.read().round() as u32,
+                        onboarding_completed: *state.onboarding_completed.read(),
+                    };
+                    if let Err(e) = use_case.update(input) {
+                        log::error!("Failed to persist right panel preferences: {}", e);
+                    }
+                },
+                Err(e) => {
+                    log::error!("Failed to load preferences for right panel: {}", e);
+                },
+            }
+        }
+    };
+
+    let on_drag_start = {
+        let mut is_resizing = is_resizing;
+        let mut drag_start_x = drag_start_x;
+        let mut drag_start_width = drag_start_width;
+        let state = state.clone();
+        move |e: MouseEvent| {
+            let point = e.client_coordinates();
+            drag_start_x.set(point.x);
+            let base_width = if *state.right_panel_visible.read() {
+                *state.right_panel_width.read()
+            } else {
+                collapsed_width
+            };
+            drag_start_width.set(base_width);
+            is_resizing.set(true);
+        }
+    };
+
+    let on_drag_move = {
+        let mut state = state.clone();
+        move |e: MouseEvent| {
+            if !*is_resizing.read() {
+                return;
+            }
+
+            let point = e.client_coordinates();
+            let start_x = *drag_start_x.read();
+            let start_width = *drag_start_width.read();
+            let delta = start_x - point.x;
+            let proposed = start_width + delta;
+
+            if proposed < collapse_threshold {
+                state.right_panel_visible.set(false);
+                return;
+            }
+
+            let next_width = proposed.clamp(min_width, max_width);
+            state.right_panel_visible.set(true);
+            state.right_panel_width.set(next_width);
+        }
+    };
+
+    let on_drag_end = {
+        let mut is_resizing = is_resizing;
+        let persist_preferences = persist_preferences.clone();
+        move |_| {
+            if *is_resizing.read() {
+                is_resizing.set(false);
+                persist_preferences();
+            }
+        }
+    };
+
+    let on_drag_end_leave = {
+        let mut is_resizing = is_resizing;
+        let persist_preferences = persist_preferences.clone();
+        move |_| {
+            if *is_resizing.read() {
+                is_resizing.set(false);
+                persist_preferences();
+            }
+        }
+    };
+
     rsx! {
         aside {
-            class: "h-full bg-base-200 flex flex-col shrink-0 overflow-hidden border-l {border_class}",
-            style: "width: {panel_width.get_value()}px; opacity: {panel_opacity.get_value()}; transform: translateX({panel_offset.get_value()}px); pointer-events: {pointer_events};",
+            class: "relative h-full bg-base-200 flex flex-col shrink-0 overflow-hidden border-l {border_class}",
+            style: "width: {panel_width.get_value()}px; transform: translateX({panel_offset.get_value()}px);",
+
+            div {
+                class: "fixed inset-0 z-50 cursor-col-resize",
+                style: if *is_resizing.read() { "pointer-events: auto;" } else { "pointer-events: none;" },
+                onmousemove: on_drag_move,
+                onmouseup: on_drag_end,
+                onmouseleave: on_drag_end_leave,
+            }
+
+            div {
+                class: "absolute left-0 top-0 h-full w-3 cursor-col-resize",
+                onmousedown: on_drag_start,
+                div { class: "h-full w-px bg-base-300 opacity-80 transition-opacity" }
+            }
 
             // Tab headers
-            div { class: "flex border-b border-base-300",
+            div {
+                class: "flex border-b border-base-300",
+                style: "opacity: {content_opacity.get_value()}; pointer-events: {content_pointer_events};",
 
                 TabButton {
                     label: "Notes",
@@ -66,7 +190,9 @@ pub fn RightPanel() -> Element {
             }
 
             // Tab content
-            div { class: "flex-1 overflow-auto p-5",
+            div {
+                class: "flex-1 overflow-auto p-5",
+                style: "opacity: {content_opacity.get_value()}; pointer-events: {content_pointer_events};",
                 match current_tab {
                     RightPanelTab::Notes => rsx! {
                         NotesEditor {}

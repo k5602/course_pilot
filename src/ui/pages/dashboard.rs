@@ -25,7 +25,6 @@ pub fn Dashboard() -> Element {
     {
         let mut state = state.clone();
         use_effect(move || {
-            state.right_panel_visible.set(false);
             state.current_video_id.set(None);
         });
     }
@@ -251,13 +250,9 @@ pub fn Dashboard() -> Element {
                     if has_tags {
                         rsx! {
 
-                // "All" button
+                            // "All" button
 
-                // Tag chips
-
-
-
-
+                            // Tag chips
 
                             div { class: "flex flex-wrap gap-2 mb-4",
 
