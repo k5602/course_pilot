@@ -6,6 +6,7 @@ use crate::domain::value_objects::VideoId;
 use crate::ui::custom::{MarkdownRenderer, TagBadge};
 use crate::ui::state::{AppState, ChatMessage, ChatRole, RightPanelTab};
 use dioxus::prelude::*;
+use dioxus_motion::prelude::*;
 use std::str::FromStr;
 use std::time::Duration;
 use tokio::time::sleep;
@@ -15,9 +16,39 @@ use tokio::time::sleep;
 pub fn RightPanel() -> Element {
     let mut state = use_context::<AppState>();
     let current_tab = *state.right_panel_tab.read();
+    let is_visible = *state.right_panel_visible.read();
+    let panel_width = use_motion(if is_visible { 320.0 } else { 0.0 });
+    let panel_opacity = use_motion(if is_visible { 1.0 } else { 0.0 });
+    let panel_offset = use_motion(if is_visible { 0.0 } else { 24.0 });
+    let border_class = if is_visible { "border-base-300" } else { "border-transparent" };
+    let pointer_events = if is_visible { "auto" } else { "none" };
+
+    let state_for_effect = state.clone();
+    let mut panel_width_for_effect = panel_width;
+    let mut panel_opacity_for_effect = panel_opacity;
+    let mut panel_offset_for_effect = panel_offset;
+
+    use_effect(move || {
+        let is_visible = *state_for_effect.right_panel_visible.read();
+        let (target_width, target_opacity, target_offset) =
+            if is_visible { (320.0, 1.0, 0.0) } else { (0.0, 0.0, 24.0) };
+
+        let config = AnimationConfig::new(AnimationMode::Spring(Spring {
+            stiffness: 120.0,
+            damping: 14.0,
+            mass: 0.9,
+            velocity: 0.0,
+        }));
+
+        panel_width_for_effect.animate_to(target_width, config.clone());
+        panel_opacity_for_effect.animate_to(target_opacity, config.clone());
+        panel_offset_for_effect.animate_to(target_offset, config);
+    });
 
     rsx! {
-        aside { class: "w-80 h-full bg-base-200 border-l border-base-300 flex flex-col",
+        aside {
+            class: "h-full bg-base-200 flex flex-col shrink-0 overflow-hidden border-l {border_class}",
+            style: "width: {panel_width.get_value()}px; opacity: {panel_opacity.get_value()}; transform: translateX({panel_offset.get_value()}px); pointer-events: {pointer_events};",
 
             // Tab headers
             div { class: "flex border-b border-base-300",

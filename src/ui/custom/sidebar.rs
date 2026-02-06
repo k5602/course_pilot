@@ -4,6 +4,7 @@ use dioxus::prelude::*;
 use dioxus_free_icons::Icon;
 use dioxus_free_icons::icons::md_action_icons::{MdAssignment, MdDashboard, MdSettings};
 use dioxus_free_icons::icons::md_av_icons::MdPlaylistPlay;
+use dioxus_motion::prelude::*;
 
 use crate::domain::entities::SearchResultType;
 use crate::ui::Route;
@@ -151,13 +152,43 @@ pub fn Sidebar() -> Element {
 
 #[component]
 fn NavItem(to: Route, icon: Element, label: &'static str, collapsed: bool) -> Element {
+    let scale = use_motion(1.0f32);
+    let mut scale_for_enter = scale;
+    let mut scale_for_leave = scale;
+
+    let on_enter = move |_| {
+        let config = AnimationConfig::new(AnimationMode::Spring(Spring {
+            stiffness: 160.0,
+            damping: 18.0,
+            mass: 0.7,
+            velocity: 0.0,
+        }));
+        scale_for_enter.animate_to(1.03, config);
+    };
+
+    let on_leave = move |_| {
+        let config = AnimationConfig::new(AnimationMode::Spring(Spring {
+            stiffness: 180.0,
+            damping: 20.0,
+            mass: 0.7,
+            velocity: 0.0,
+        }));
+        scale_for_leave.animate_to(1.0, config);
+    };
+
     rsx! {
-        Link {
-            to,
-            class: "flex items-center gap-3 px-3 py-2 rounded-lg hover:bg-base-300 transition-colors",
-            {icon}
-            if !collapsed {
-                span { "{label}" }
+        div {
+            class: "rounded-lg",
+            style: "transform: scale({scale.get_value()}); will-change: transform;",
+            onmouseenter: on_enter,
+            onmouseleave: on_leave,
+            Link {
+                to,
+                class: "flex items-center gap-3 px-3 py-2 rounded-lg hover:bg-base-300 transition-colors",
+                {icon}
+                if !collapsed {
+                    span { "{label}" }
+                }
             }
         }
     }

@@ -23,7 +23,10 @@ dioxus-free-icons = { version = "0.10", features = [
     "material-design-icons-social",
 ] }
 dioxus-primitives = { git = "https://github.com/DioxusLabs/components", version = "0.0.1", default-features = false }
-dioxus-motion = { version = "0.3.3", features = ["desktop"],default-features = false }
+dioxus-motion = { version = "0.3.3", features = [
+    "desktop",
+    "transitions",
+], default-features = false }
 
 # Utilities
 serde = { version = "1.0", features = ["derive"] }
@@ -65,7 +68,7 @@ rfd = "0.17"
 
 # App-specific Logic
 reqwest = { version = "0.13.1", features = ["json"] }
-discord-rich-presence = "1.0.0"
+discord-rich-presence = "1.1.0"
 
 # YouTube
 rusty_ytdl = { git = "https://github.com/k5602/rusty_ytdl", branch = "qol", features = [
@@ -94,11 +97,11 @@ debug = 1 # Reduce debug info to save disk space and prevent Bus Error on CI
 debug = 1 # Reduce debug info for tests as well
 
 [profile.release]
-opt-level = "z"     # Optimize for size
-lto = "thin"        # Use Thin LTO to reduce memory/disk pressure during linking
-codegen-units = 16  # Increase units to parallelize and reduce resource usage
-panic = "abort"     # Remove unwinding code for smaller binaries
-strip = true        # Strip symbols to further reduce binary size
+opt-level = "z"    # Optimize for size
+lto = "thin"       # Use Thin LTO to reduce memory/disk pressure during linking
+codegen-units = 16 # Increase units to parallelize and reduce resource usage
+panic = "abort"    # Remove unwinding code for smaller binaries
+strip = true       # Strip symbols to further reduce binary size
 
 [patch.crates-io]
 dioxus = { git = "https://github.com/k5602/dioxus", branch = "navigation_policy_hook", package = "dioxus" }
