@@ -10,6 +10,7 @@ pub struct Course {
     source_url: PlaylistUrl,
     playlist_id: String,
     description: Option<String>,
+    source_hash: Option<String>,
     created_at: chrono::DateTime<chrono::Utc>,
 }
 
@@ -21,6 +22,7 @@ impl Course {
         source_url: PlaylistUrl,
         playlist_id: String,
         description: Option<String>,
+        source_hash: Option<String>,
     ) -> Self {
         Self::new_with_created_at(
             id,
@@ -28,6 +30,7 @@ impl Course {
             source_url,
             playlist_id,
             description,
+            source_hash,
             chrono::Utc::now(),
         )
     }
@@ -39,9 +42,10 @@ impl Course {
         source_url: PlaylistUrl,
         playlist_id: String,
         description: Option<String>,
+        source_hash: Option<String>,
         created_at: chrono::DateTime<chrono::Utc>,
     ) -> Self {
-        Self { id, name, source_url, playlist_id, description, created_at }
+        Self { id, name, source_url, playlist_id, description, source_hash, created_at }
     }
 
     pub fn id(&self) -> &CourseId {
@@ -62,6 +66,10 @@ impl Course {
 
     pub fn description(&self) -> Option<&str> {
         self.description.as_deref()
+    }
+
+    pub fn source_hash(&self) -> Option<&str> {
+        self.source_hash.as_deref()
     }
 
     pub fn created_at(&self) -> chrono::DateTime<chrono::Utc> {

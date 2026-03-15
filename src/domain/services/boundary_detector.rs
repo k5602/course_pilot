@@ -70,11 +70,12 @@ impl BoundaryDetector {
 
         for (idx, key) in keys.iter().enumerate() {
             if let Some(key) = key {
-                if let Some(active) = current_major {
-                    if key.major != active && !current_group.is_empty() {
-                        groups.push(current_group);
-                        current_group = Vec::new();
-                    }
+                if let Some(active) = current_major
+                    && key.major != active
+                    && !current_group.is_empty()
+                {
+                    groups.push(current_group);
+                    current_group = Vec::new();
                 }
                 current_major = Some(key.major);
             }
@@ -141,8 +142,8 @@ pub fn title_number_sequence(title: &str) -> Option<Vec<u32>> {
 fn parse_labeled_sequence(title: &str) -> Option<Vec<u32>> {
     let lower = title.to_lowercase();
     let labels = [
-        "module", "chapter", "section", "part", "lesson", "lecture", "unit", "week", "day",
-        "topic", "track", "stage",
+        "chapter", "class", "course", "day", "guide", "lecture", "lesson", "module", "part",
+        "section", "session", "stage", "topic", "track", "tutorial", "unit", "video", "week",
     ];
 
     for label in labels {
@@ -161,10 +162,10 @@ fn parse_labeled_sequence(title: &str) -> Option<Vec<u32>> {
                 }
             }
 
-            if let Some(nums) = parse_number_sequence(&lower, idx) {
-                if !nums.is_empty() {
-                    return Some(nums);
-                }
+            if let Some(nums) = parse_number_sequence(&lower, idx)
+                && !nums.is_empty()
+            {
+                return Some(nums);
             }
         }
     }
@@ -306,5 +307,69 @@ mod tests {
     fn parses_hybrid_separators() {
         assert_eq!(parse_number_sequence("1-5-1 Intro", 0), Some(vec![1, 5, 1]));
         assert_eq!(parse_number_sequence("1_5 Intro", 0), Some(vec![1, 5]));
+    }
+
+    #[test]
+    fn detects_class_pattern() {
+        let titles = vec!["Class 1 - Intro", "Class 1 - Setup", "Class 2 - Advanced"];
+        let detector = BoundaryDetector::new();
+        let groups = detector.group_by_titles(&titles);
+        assert_eq!(groups.len(), 2);
+        assert_eq!(groups[0], vec![0, 1]);
+        assert_eq!(groups[1], vec![2]);
+    }
+
+    #[test]
+    fn detects_session_pattern() {
+        let titles = vec!["Session 1: Basics", "Session 2: Intermediate", "Session 3: Advanced"];
+        let detector = BoundaryDetector::new();
+        let groups = detector.group_by_titles(&titles);
+        assert_eq!(groups.len(), 3);
+        assert_eq!(groups[0], vec![0]);
+        assert_eq!(groups[1], vec![1]);
+        assert_eq!(groups[2], vec![2]);
+    }
+
+    #[test]
+    fn detects_tutorial_pattern() {
+        let titles = vec!["Tutorial 1 - Getting Started", "Tutorial 2 - Core Concepts"];
+        let detector = BoundaryDetector::new();
+        let groups = detector.group_by_titles(&titles);
+        assert_eq!(groups.len(), 2);
+        assert_eq!(groups[0], vec![0]);
+        assert_eq!(groups[1], vec![1]);
+    }
+
+    #[test]
+    fn handles_mixed_patterns() {
+        let titles = vec![
+            "Week 1 - Introduction",
+            "Class 1.1 Setup",
+            "Class 1.2 Basics",
+            "Week 2 - Advanced",
+            "Class 2.1 Deep Dive",
+        ];
+        let detector = BoundaryDetector::new();
+        let groups = detector.group_by_titles(&titles);
+        assert_eq!(groups.len(), 2);
+        assert_eq!(groups[0], vec![0, 1, 2]);
+        assert_eq!(groups[1], vec![3, 4]);
+    }
+
+    #[test]
+    fn empty_titles_returns_empty() {
+        let detector = BoundaryDetector::new();
+        let titles: Vec<&str> = vec![];
+        let groups = detector.group_by_titles(&titles);
+        assert!(groups.is_empty());
+    }
+
+    #[test]
+    fn single_title_is_one_group() {
+        let detector = BoundaryDetector::new();
+        let titles = vec!["Class 1 - Only video"];
+        let groups = detector.group_by_titles(&titles);
+        assert_eq!(groups.len(), 1);
+        assert_eq!(groups[0], vec![0]);
     }
 }

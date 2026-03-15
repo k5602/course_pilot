@@ -59,10 +59,10 @@ impl SubtitleCleaner {
             }
 
             // Deduplicate consecutive identical lines
-            if let Some(prev) = prev_line.as_ref() {
-                if prev == &cleaned {
-                    continue;
-                }
+            if let Some(prev) = prev_line.as_ref()
+                && prev == &cleaned
+            {
+                continue;
             }
 
             prev_line = Some(cleaned.clone());

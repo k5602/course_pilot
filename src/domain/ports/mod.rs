@@ -10,7 +10,10 @@ mod transcript;
 mod youtube;
 
 pub use keystore::{KeystoreError, SecretStore};
-pub use llm::{CompanionAI, CompanionContext, ExaminerAI, LLMError, MCQuestion, SummarizerAI};
+pub use llm::{
+    CompanionAI, CompanionContext, ExaminerAI, LLMError, MCQuestion, ModuleTitleGenerator,
+    SummarizerAI,
+};
 pub use local_media::{
     LocalMediaError, LocalMediaScanner, RawLocalMediaMetadata, RawSubtitleMetadata,
 };

@@ -18,6 +18,7 @@ pub enum RepositoryError {
 pub trait CourseRepository: Send + Sync {
     fn save(&self, course: &Course) -> Result<(), RepositoryError>;
     fn find_by_id(&self, id: &CourseId) -> Result<Option<Course>, RepositoryError>;
+    fn find_by_source_hash(&self, hash: &str) -> Result<Option<Course>, RepositoryError>;
     fn find_all(&self) -> Result<Vec<Course>, RepositoryError>;
     fn update_metadata(
         &self,

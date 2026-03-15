@@ -1,5 +1,8 @@
 //! LLM ports for AI features.
 
+use std::future::Future;
+use std::pin::Pin;
+
 use crate::domain::value_objects::ExamDifficulty;
 
 /// Error type for LLM operations.
@@ -66,4 +69,16 @@ pub trait SummarizerAI: Send + Sync {
         transcript: &str,
         video_title: &str,
     ) -> Result<String, LLMError>;
+}
+
+/// Port for generating descriptive module titles from grouped video titles.
+pub trait ModuleTitleGenerator: Send + Sync {
+    /// Generates a concise module title from the video titles in that module.
+    /// Returns the title string, or an error if generation fails.
+    fn generate_module_title(
+        &self,
+        video_titles: &[String],
+        course_name: &str,
+        module_index: usize,
+    ) -> Pin<Box<dyn Future<Output = Result<String, LLMError>> + Send + '_>>;
 }
