@@ -14,6 +14,7 @@ diesel::table! {
         source_url -> Text,
         playlist_id -> Text,
         description -> Nullable<Text>,
+        source_hash -> Nullable<Text>,
         created_at -> Timestamp,
     }
 }
@@ -52,60 +53,6 @@ diesel::table! {
         id -> Text,
         name -> Text,
         color -> Text,
-    }
-}
-
-diesel::table! {
-    transcript_chunk_index (rowid) {
-        rowid -> Integer,
-        video_id -> Nullable<Binary>,
-        chunk_index -> Nullable<Binary>,
-        content -> Nullable<Binary>,
-        token_count -> Nullable<Binary>,
-        char_count -> Nullable<Binary>,
-        #[sql_name = "transcript_chunk_index"]
-        transcript_chunk_index_ -> Nullable<Binary>,
-        rank -> Nullable<Binary>,
-    }
-}
-
-diesel::table! {
-    transcript_chunk_index_config (k) {
-        k -> Binary,
-        v -> Nullable<Binary>,
-    }
-}
-
-diesel::table! {
-    transcript_chunk_index_content (id) {
-        id -> Nullable<Integer>,
-        c0 -> Nullable<Binary>,
-        c1 -> Nullable<Binary>,
-        c2 -> Nullable<Binary>,
-        c3 -> Nullable<Binary>,
-        c4 -> Nullable<Binary>,
-    }
-}
-
-diesel::table! {
-    transcript_chunk_index_data (id) {
-        id -> Nullable<Integer>,
-        block -> Nullable<Binary>,
-    }
-}
-
-diesel::table! {
-    transcript_chunk_index_docsize (id) {
-        id -> Nullable<Integer>,
-        sz -> Nullable<Binary>,
-    }
-}
-
-diesel::table! {
-    transcript_chunk_index_idx (segid, term) {
-        segid -> Binary,
-        term -> Binary,
-        pgno -> Nullable<Binary>,
     }
 }
 
@@ -153,12 +100,6 @@ diesel::allow_tables_to_appear_in_same_query!(
     modules,
     notes,
     tags,
-    transcript_chunk_index,
-    transcript_chunk_index_config,
-    transcript_chunk_index_content,
-    transcript_chunk_index_data,
-    transcript_chunk_index_docsize,
-    transcript_chunk_index_idx,
     user_preferences,
     videos,
 );

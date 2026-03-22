@@ -221,11 +221,11 @@ fn percent_decode(input: &str) -> String {
         if c == b'%' {
             let hi = chars.next();
             let lo = chars.next();
-            if let (Some(hi), Some(lo)) = (hi, lo) {
-                if let (Some(h), Some(l)) = (hex_val(hi), hex_val(lo)) {
-                    out.push((h * 16 + l) as char);
-                    continue;
-                }
+            if let (Some(hi), Some(lo)) = (hi, lo)
+                && let (Some(h), Some(l)) = (hex_val(hi), hex_val(lo))
+            {
+                out.push((h * 16 + l) as char);
+                continue;
             }
             out.push('%');
         } else if c == b'+' {

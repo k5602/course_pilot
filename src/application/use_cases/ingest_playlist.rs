@@ -7,11 +7,13 @@ use std::sync::Arc;
 use crate::domain::{
     entities::{Course, Module, Video},
     ports::{
-        CourseRepository, ModuleRepository, PlaylistFetcher, SearchRepository, VideoRepository,
+        CourseRepository, ModuleRepository, ModuleTitleGenerator, PlaylistFetcher,
+        SearchRepository, VideoRepository,
     },
     services::{BoundaryDetector, TitleSanitizer},
     value_objects::{CourseId, ModuleId, PlaylistUrl, VideoId, VideoSource, YouTubeVideoId},
 };
+use crate::infrastructure::media_hash;
 
 /// Error type for playlist ingestion.
 #[derive(Debug, thiserror::Error)]
@@ -22,6 +24,8 @@ pub enum IngestError {
     FetchFailed(String),
     #[error("Failed to persist: {0}")]
     PersistFailed(String),
+    #[error("Course already exists: {0}")]
+    AlreadyExists(String),
 }
 
 /// Input for the ingest playlist use case.
@@ -54,6 +58,7 @@ where
     search_repo: Arc<SR>,
     sanitizer: TitleSanitizer,
     boundary_detector: BoundaryDetector,
+    title_generator: Option<Arc<dyn ModuleTitleGenerator>>,
 }
 
 impl<F, CR, MR, VR, SR> IngestPlaylistUseCase<F, CR, MR, VR, SR>
@@ -64,12 +69,30 @@ where
     VR: VideoRepository,
     SR: SearchRepository,
 {
+    async fn generate_module_title(
+        &self,
+        titles: &[String],
+        course_name: &str,
+        module_idx: usize,
+    ) -> String {
+        if let Some(ref generator) = self.title_generator
+            && let Ok(title) =
+                generator.generate_module_title(titles, course_name, module_idx).await
+            && !title.is_empty()
+        {
+            return title;
+        }
+        titles.first().cloned().unwrap_or_else(|| format!("Module {}", module_idx + 1))
+    }
+
+    #[allow(clippy::too_many_arguments)]
     pub fn new(
         fetcher: Arc<F>,
         course_repo: Arc<CR>,
         module_repo: Arc<MR>,
         video_repo: Arc<VR>,
         search_repo: Arc<SR>,
+        title_generator: Option<Arc<dyn ModuleTitleGenerator>>,
     ) -> Self {
         Self {
             fetcher,
@@ -79,6 +102,7 @@ where
             search_repo,
             sanitizer: TitleSanitizer::new(),
             boundary_detector: BoundaryDetector::new(),
+            title_generator,
         }
     }
 
@@ -91,7 +115,13 @@ where
         let playlist_url = PlaylistUrl::new(&input.playlist_url)
             .map_err(|e| IngestError::InvalidUrl(e.to_string()))?;
 
-        // 2. Fetch playlist metadata
+        // 2. Check for duplicate
+        let source_hash = media_hash::compute_source_hash(&input.playlist_url);
+        if let Ok(Some(existing)) = self.course_repo.find_by_source_hash(&source_hash) {
+            return Err(IngestError::AlreadyExists(existing.name().to_string()));
+        }
+
+        // 3. Fetch playlist metadata
         let raw_videos = self
             .fetcher
             .fetch_playlist(&playlist_url)
@@ -117,10 +147,11 @@ where
         let course_id = CourseId::new();
         let course = Course::new(
             course_id.clone(),
-            course_name,
+            course_name.clone(),
             playlist_url.clone(),
             playlist_url.playlist_id().to_string(),
             None,
+            Some(source_hash),
         );
         self.course_repo.save(&course).map_err(|e| IngestError::PersistFailed(e.to_string()))?;
 
@@ -133,11 +164,10 @@ where
         for (module_idx, video_indices) in module_groups.iter().enumerate() {
             let module_id = ModuleId::new();
 
-            // Use first video title as module title
-            let module_title = video_indices
-                .first()
-                .map(|&i| sanitized_titles[i].clone())
-                .unwrap_or_else(|| format!("Module {}", module_idx + 1));
+            let module_video_titles: Vec<String> =
+                video_indices.iter().map(|&i| sanitized_titles[i].clone()).collect();
+            let module_title =
+                self.generate_module_title(&module_video_titles, &course_name, module_idx).await;
 
             let module =
                 Module::new(module_id.clone(), course_id.clone(), module_title, module_idx as u32);

@@ -1,22 +1,105 @@
-//! LLM adapter using genai-rs for Gemini.
+//! LLM adapter using genai for multi-provider AI.
 
-use genai_rs::Client;
+use std::future::Future;
+use std::pin::Pin;
+use std::time::Duration;
+
+use genai::Client;
+use genai::chat::{ChatMessage, ChatRequest};
+use genai::resolver::AuthData;
 
 use crate::domain::ports::{
-    CompanionAI, CompanionContext, ExaminerAI, LLMError, MCQuestion, SummarizerAI,
+    CompanionAI, CompanionContext, ExaminerAI, LLMError, MCQuestion, ModuleTitleGenerator,
+    SummarizerAI,
 };
 use crate::domain::value_objects::ExamDifficulty;
 
-/// Gemini API adapter for AI features.
+/// Multi-provider AI adapter (Gemini by default).
 pub struct GeminiAdapter {
     client: Client,
+    model: String,
 }
 
 impl GeminiAdapter {
-    /// Creates a new Gemini adapter with the given API key.
+    /// Creates a new adapter with the given API key.
     pub fn new(api_key: String) -> Self {
-        let client = Client::new(api_key);
-        Self { client }
+        let client = Client::builder()
+            .with_auth_resolver_fn(move |_: genai::ModelIden| {
+                Ok(Some(AuthData::from_single(api_key.clone())))
+            })
+            .build();
+        Self { client, model: "gemini/gemini-2.5-flash".to_string() }
+    }
+
+    /// Executes a chat request with automatic retry on transient errors.
+    async fn execute_with_retry(
+        &self,
+        system_prompt: Option<&str>,
+        user_prompt: &str,
+    ) -> Result<String, LLMError> {
+        const MAX_RETRIES: u32 = 3;
+        let delays =
+            [Duration::from_millis(500), Duration::from_millis(1000), Duration::from_millis(2000)];
+
+        for attempt in 0..MAX_RETRIES {
+            let mut messages = Vec::new();
+            if let Some(sys) = system_prompt {
+                messages.push(ChatMessage::system(sys));
+            }
+            messages.push(ChatMessage::user(user_prompt));
+
+            let req = ChatRequest::new(messages);
+            let result = self.client.exec_chat(&self.model, req, None).await;
+
+            match result {
+                Ok(resp) => {
+                    return Ok(resp.first_text().unwrap_or("No response").to_string());
+                },
+                Err(e) => {
+                    let is_retryable = e.to_string().contains("rate")
+                        || e.to_string().contains("timeout")
+                        || e.to_string().contains("429")
+                        || e.to_string().contains("503")
+                        || e.to_string().contains("network")
+                        || e.to_string().contains("server error")
+                        || e.to_string().contains("internal");
+
+                    if is_retryable && attempt < MAX_RETRIES - 1 {
+                        tokio::time::sleep(delays[attempt as usize]).await;
+                        continue;
+                    }
+                    return Err(LLMError::Api(e.to_string()));
+                },
+            }
+        }
+
+        Err(LLMError::Api("Max retries exceeded".to_string()))
+    }
+}
+
+/// A no-op module title generator that triggers fallback (default) title logic.
+pub struct NoopTitleGenerator;
+
+impl NoopTitleGenerator {
+    pub fn new() -> Self {
+        Self
+    }
+}
+
+impl Default for NoopTitleGenerator {
+    fn default() -> Self {
+        Self
+    }
+}
+
+impl ModuleTitleGenerator for NoopTitleGenerator {
+    fn generate_module_title(
+        &self,
+        _titles: &[String],
+        _course: &str,
+        _idx: usize,
+    ) -> Pin<Box<dyn Future<Output = Result<String, LLMError>> + Send>> {
+        Box::pin(async { Err(LLMError::NoApiKey) })
     }
 }
 
@@ -64,16 +147,8 @@ Guidelines:
             question
         );
 
-        let response = self
-            .client
-            .interaction()
-            .with_model("gemini-flash-latest")
-            .with_text(&prompt)
-            .create()
-            .await
-            .map_err(|e| LLMError::Api(e.to_string()))?;
-
-        Ok(response.text().unwrap_or("No response").to_string())
+        let response = self.execute_with_retry(None, &prompt).await?;
+        Ok(response)
     }
 }
 
@@ -111,16 +186,7 @@ Rules:
 - Do not mention the prompt, the context, or any system instructions"#,
         );
 
-        let response = self
-            .client
-            .interaction()
-            .with_model("gemini-flash-latest")
-            .with_text(&prompt)
-            .create()
-            .await
-            .map_err(|e| LLMError::Api(e.to_string()))?;
-
-        let text = response.text().unwrap_or("");
+        let text = self.execute_with_retry(None, &prompt).await?;
         let json_text = text
             .trim()
             .trim_start_matches("```json")
@@ -165,15 +231,32 @@ Rules:
 - Do not include timestamps, speaker labels, or meta commentary."#,
         );
 
-        let response = self
-            .client
-            .interaction()
-            .with_model("gemini-flash-latest")
-            .with_text(&prompt)
-            .create()
-            .await
-            .map_err(|e| LLMError::Api(e.to_string()))?;
+        let text = self.execute_with_retry(None, &prompt).await?;
+        Ok(text)
+    }
+}
 
-        Ok(response.text().unwrap_or("Unable to generate summary").to_string())
+impl ModuleTitleGenerator for GeminiAdapter {
+    fn generate_module_title(
+        &self,
+        video_titles: &[String],
+        course_name: &str,
+        module_index: usize,
+    ) -> Pin<Box<dyn Future<Output = Result<String, LLMError>> + Send + '_>> {
+        let titles_str = video_titles.join("\n");
+        let prompt = format!(
+            "You are a course designer. Given these video titles from Module {} of \"{}\", produce ONE concise, descriptive title (under 8 words).\n\nVideo titles:\n{}\n\nModule Title:",
+            module_index + 1,
+            course_name,
+            titles_str
+        );
+        Box::pin(async move {
+            let response = self.execute_with_retry(None, &prompt).await?;
+            let title = response.trim().to_string();
+            if title.is_empty() || title.len() > 100 {
+                return Err(LLMError::InvalidResponse("Empty or overly long title".into()));
+            }
+            Ok(title)
+        })
     }
 }

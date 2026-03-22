@@ -28,9 +28,11 @@ pub enum CompanionError {
 }
 
 /// Input for the ask companion use case.
+#[derive(Debug, Clone)]
 pub struct AskCompanionInput {
     pub video_id: VideoId,
     pub question: String,
+    pub local_context: Option<String>,
 }
 
 /// Use case for asking questions to the AI companion.
@@ -104,7 +106,7 @@ where
             course_name: course.name().to_string(),
             summary: video.summary().map(|s| s.to_string()),
             notes,
-            local_context: None,
+            local_context: input.local_context.clone(),
         };
 
         // Ask the AI

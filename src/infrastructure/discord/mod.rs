@@ -277,10 +277,11 @@ impl WorkerState {
                     connected_flag.store(true, Ordering::SeqCst);
                     self.backoff = CONNECT_BACKOFF_MIN;
                     self.last_update = None;
-                    if self.pending.is_none() && !self.pending_clear {
-                        if let Some(last) = self.last_sent.clone() {
-                            self.pending = Some(last);
-                        }
+                    if self.pending.is_none()
+                        && !self.pending_clear
+                        && let Some(last) = self.last_sent.clone()
+                    {
+                        self.pending = Some(last);
                     }
                     info!("Connected to Discord IPC");
                 },
@@ -308,10 +309,10 @@ impl WorkerState {
         if let Some(mut client) = self.client.take() {
             let _ = client.close();
         }
-        if self.pending.is_none() {
-            if let Some(last) = self.last_sent.clone() {
-                self.pending = Some(last);
-            }
+        if self.pending.is_none()
+            && let Some(last) = self.last_sent.clone()
+        {
+            self.pending = Some(last);
         }
         self.schedule_backoff();
     }

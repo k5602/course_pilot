@@ -15,6 +15,7 @@ pub struct CourseRow {
     pub source_url: String,
     pub playlist_id: String,
     pub description: Option<String>,
+    pub source_hash: Option<String>,
     pub created_at: String, // SQLite stores TIMESTAMP as TEXT
 }
 
@@ -27,6 +28,7 @@ pub struct NewCourse<'a> {
     pub source_url: &'a str,
     pub playlist_id: &'a str,
     pub description: Option<&'a str>,
+    pub source_hash: Option<&'a str>,
 }
 
 /// Diesel model for the modules table.

@@ -40,6 +40,7 @@ impl CourseRepository for SqliteCourseRepository {
             source_url: course.source_url().raw(),
             playlist_id: course.playlist_id(),
             description: course.description(),
+            source_hash: course.source_hash(),
         };
 
         diesel::insert_into(courses::table)
@@ -61,6 +62,21 @@ impl CourseRepository for SqliteCourseRepository {
 
         let row: Option<CourseRow> = courses::table
             .find(id.as_uuid().to_string())
+            .first(&mut conn)
+            .optional()
+            .map_err(|e| RepositoryError::Database(e.to_string()))?;
+
+        match row {
+            Some(r) => Ok(Some(row_to_course(r)?)),
+            None => Ok(None),
+        }
+    }
+
+    fn find_by_source_hash(&self, hash: &str) -> Result<Option<Course>, RepositoryError> {
+        let mut conn = self.pool.get().map_err(|e| RepositoryError::Database(e.to_string()))?;
+
+        let row: Option<CourseRow> = courses::table
+            .filter(courses::source_hash.eq(Some(hash)))
             .first(&mut conn)
             .optional()
             .map_err(|e| RepositoryError::Database(e.to_string()))?;
@@ -526,6 +542,7 @@ fn row_to_course(row: CourseRow) -> Result<Course, RepositoryError> {
         playlist_url,
         row.playlist_id,
         row.description,
+        row.source_hash,
         created_at,
     ))
 }

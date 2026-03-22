@@ -5,12 +5,12 @@
 use std::sync::Arc;
 
 use crate::application::use_cases::{
-    AskCompanionUseCase, AttachTranscriptUseCase, ExportCourseNotesUseCase, IngestLocalUseCase,
-    IngestPlaylistUseCase, LoadDashboardUseCase, NotesUseCase, PlanSessionUseCase,
-    PreferencesUseCase, SummarizeVideoUseCase, TakeExamUseCase, UpdateCourseUseCase,
-    UpdatePresenceUseCase,
+    AskCompanionUseCase, AttachTranscriptUseCase, CreateModuleUseCase, DeleteModuleUseCase,
+    ExportCourseNotesUseCase, IngestLocalUseCase, IngestPlaylistUseCase, LoadDashboardUseCase,
+    NotesUseCase, PlanSessionUseCase, PreferencesUseCase, ReorderVideoUseCase,
+    SummarizeVideoUseCase, TakeExamUseCase, UpdateCourseUseCase, UpdatePresenceUseCase,
 };
-use crate::domain::ports::{PresenceProvider, SecretStore};
+use crate::domain::ports::{ModuleTitleGenerator, PresenceProvider, SecretStore};
 use crate::infrastructure::{
     discord::DiscordPresenceAdapter,
     keystore::NativeKeystore,
@@ -145,7 +145,8 @@ impl AppContext {
         let local_media = Arc::new(LocalMediaScannerAdapter::new());
 
         // YouTube adapter (always available - no API key needed)
-        let youtube = Arc::new(RustyYtdlAdapter::new());
+        let cookie_path = keystore.retrieve("youtube_cookies").ok().flatten();
+        let youtube = Arc::new(RustyYtdlAdapter::with_cookies(cookie_path));
 
         // Presence provider (Discord)
         let discord_client_id = config
@@ -248,6 +249,7 @@ impl ServiceFactory {
             ctx.module_repo.clone(),
             ctx.video_repo.clone(),
             ctx.search_repo.clone(),
+            ctx.llm.clone().map(|a| a as Arc<dyn ModuleTitleGenerator>),
         )
     }
 
@@ -267,6 +269,7 @@ impl ServiceFactory {
             ctx.module_repo.clone(),
             ctx.video_repo.clone(),
             ctx.search_repo.clone(),
+            ctx.llm.clone().map(|a| a as Arc<dyn ModuleTitleGenerator>),
         )
     }
 
@@ -360,6 +363,23 @@ impl ServiceFactory {
         ctx: &AppContext,
     ) -> crate::application::use_cases::UpdateModuleTitleUseCase<SqliteModuleRepository> {
         crate::application::use_cases::UpdateModuleTitleUseCase::new(ctx.module_repo.clone())
+    }
+
+    /// Creates the create module use case.
+    pub fn create_module(ctx: &AppContext) -> CreateModuleUseCase<SqliteModuleRepository> {
+        CreateModuleUseCase::new(ctx.module_repo.clone())
+    }
+
+    /// Creates the delete module use case.
+    pub fn delete_module(
+        ctx: &AppContext,
+    ) -> DeleteModuleUseCase<SqliteModuleRepository, SqliteVideoRepository> {
+        DeleteModuleUseCase::new(ctx.module_repo.clone(), ctx.video_repo.clone())
+    }
+
+    /// Creates the reorder video use case.
+    pub fn reorder_video(ctx: &AppContext) -> ReorderVideoUseCase<SqliteVideoRepository> {
+        ReorderVideoUseCase::new(ctx.video_repo.clone())
     }
 
     /// Creates the move video use case.

@@ -10,12 +10,13 @@ use std::sync::Arc;
 use crate::domain::{
     entities::{Course, Module, Video},
     ports::{
-        CourseRepository, LocalMediaScanner, ModuleRepository, RawLocalMediaMetadata,
-        SearchRepository, VideoRepository,
+        CourseRepository, LocalMediaScanner, ModuleRepository, ModuleTitleGenerator,
+        RawLocalMediaMetadata, SearchRepository, VideoRepository,
     },
     services::{BoundaryDetector, SubtitleCleaner, TitleSanitizer, title_number_sequence},
     value_objects::{CourseId, ModuleId, PlaylistUrl, VideoId, VideoSource},
 };
+use crate::infrastructure::media_hash;
 
 /// Error type for local ingestion.
 #[derive(Debug, thiserror::Error)]
@@ -26,6 +27,8 @@ pub enum IngestLocalError {
     ScanFailed(String),
     #[error("Failed to persist: {0}")]
     PersistFailed(String),
+    #[error("Course already exists: {0}")]
+    AlreadyExists(String),
 }
 
 /// Input for the ingest local library use case.
@@ -57,6 +60,7 @@ where
     video_repo: Arc<VR>,
     search_repo: Arc<SR>,
     sanitizer: TitleSanitizer,
+    title_generator: Option<Arc<dyn ModuleTitleGenerator>>,
 }
 
 impl<S, CR, MR, VR, SR> IngestLocalUseCase<S, CR, MR, VR, SR>
@@ -67,12 +71,30 @@ where
     VR: VideoRepository,
     SR: SearchRepository,
 {
+    async fn generate_module_title(
+        &self,
+        titles: &[String],
+        course_name: &str,
+        module_idx: usize,
+    ) -> String {
+        if let Some(ref generator) = self.title_generator
+            && let Ok(title) =
+                generator.generate_module_title(titles, course_name, module_idx).await
+            && !title.is_empty()
+        {
+            return title;
+        }
+        titles.first().cloned().unwrap_or_else(|| format!("Module {}", module_idx + 1))
+    }
+
+    #[allow(clippy::too_many_arguments)]
     pub fn new(
         scanner: Arc<S>,
         course_repo: Arc<CR>,
         module_repo: Arc<MR>,
         video_repo: Arc<VR>,
         search_repo: Arc<SR>,
+        title_generator: Option<Arc<dyn ModuleTitleGenerator>>,
     ) -> Self {
         Self {
             scanner,
@@ -81,6 +103,7 @@ where
             video_repo,
             search_repo,
             sanitizer: TitleSanitizer::new(),
+            title_generator,
         }
     }
 
@@ -94,7 +117,13 @@ where
             return Err(IngestLocalError::InvalidRoot("root path is empty".to_string()));
         }
 
-        // 1. Scan local media
+        // 1. Check for duplicate
+        let source_hash = media_hash::compute_source_hash(root);
+        if let Ok(Some(existing)) = self.course_repo.find_by_source_hash(&source_hash) {
+            return Err(IngestLocalError::AlreadyExists(existing.name().to_string()));
+        }
+
+        // 2. Scan local media
         let mut raw_media = self
             .scanner
             .scan(root)
@@ -127,10 +156,11 @@ where
 
         let course = Course::new(
             course_id.clone(),
-            course_name,
+            course_name.clone(),
             playlist_url.clone(),
             playlist_url.playlist_id().to_string(),
             None,
+            Some(source_hash),
         );
 
         self.course_repo
@@ -144,9 +174,12 @@ where
         // 5. Create modules and videos
         let cleaner = SubtitleCleaner::new();
         let mut total_videos = 0;
-        for (module_idx, (folder_path, items)) in grouped.into_iter().enumerate() {
+        for (module_idx, (_folder_path, items)) in grouped.into_iter().enumerate() {
             let module_id = ModuleId::new();
-            let module_title = module_title_for(root, &folder_path, &self.sanitizer);
+            let module_video_titles: Vec<String> =
+                items.iter().map(|item| self.sanitizer.sanitize(&item.title)).collect();
+            let module_title =
+                self.generate_module_title(&module_video_titles, &course_name, module_idx).await;
 
             let module =
                 Module::new(module_id.clone(), course_id.clone(), module_title, module_idx as u32);
@@ -175,14 +208,14 @@ where
                     .save(&video)
                     .map_err(|e| IngestLocalError::PersistFailed(e.to_string()))?;
 
-                if let Some(subtitle) = item.subtitles.first() {
-                    if let Ok(raw) = fs::read_to_string(&subtitle.path) {
-                        let cleaned = cleaner.clean(&raw);
-                        if !cleaned.trim().is_empty() {
-                            self.video_repo
-                                .update_transcript(video.id(), Some(&cleaned))
-                                .map_err(|e| IngestLocalError::PersistFailed(e.to_string()))?;
-                        }
+                if let Some(subtitle) = item.subtitles.first()
+                    && let Ok(raw) = fs::read_to_string(&subtitle.path)
+                {
+                    let cleaned = cleaner.clean(&raw);
+                    if !cleaned.trim().is_empty() {
+                        self.video_repo
+                            .update_transcript(video.id(), Some(&cleaned))
+                            .map_err(|e| IngestLocalError::PersistFailed(e.to_string()))?;
                     }
                 }
 
@@ -293,6 +326,7 @@ fn split_root_group_if_needed(
     split
 }
 
+#[allow(dead_code)]
 fn module_title_for(root: &str, folder: &str, sanitizer: &TitleSanitizer) -> String {
     let root_path = Path::new(root);
     let folder_path = Path::new(folder);
