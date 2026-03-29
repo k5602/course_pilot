@@ -1,16 +1,12 @@
-//! UI Module - Dioxus Desktop Application
-//!
-//! Three-panel layout: Sidebar | Main Content | Right Panel
-
-pub mod actions;
 pub mod app;
-pub mod custom;
-pub mod hooks;
-pub mod layouts;
+pub mod css;
+pub mod dialogs;
+pub mod layout;
+pub mod navigation;
 pub mod pages;
-pub mod routes;
+pub mod right_panel;
+pub mod shortcuts;
 pub mod state;
+pub mod toast;
 
-pub use app::App;
-pub use routes::Route;
-pub use state::AppState;
+pub use app::CoursePilotApp;
