@@ -1,148 +1,143 @@
-//! Quiz list page - Shows all generated exams and their status.
+use std::rc::Rc;
 
-use dioxus::prelude::*;
+use adw::prelude::*;
 
-use crate::domain::entities::Exam;
-use crate::ui::Route;
-use crate::ui::custom::{ErrorAlert, Spinner};
-use crate::ui::hooks::{use_load_all_exams, use_load_video};
-use crate::ui::state::AppState;
+use crate::domain::ports::ExamRepository;
+use crate::ui::navigation::PAGE_QUIZ_VIEW;
+use crate::ui::state::SharedState;
 
-/// List of pending and completed quizzes.
-#[component]
-pub fn QuizList() -> Element {
-    let state = use_context::<AppState>();
-
-    {
-        let mut state = state.clone();
-        use_effect(move || {
-            state.current_video_id.set(None);
-        });
-    }
-
-    let exams = use_load_all_exams(state.backend.clone());
-    let exams_state = exams.state.clone();
-
-    rsx! {
-        div { class: "p-6 max-w-4xl mx-auto",
-
-            div { class: "flex justify-between items-center mb-8",
-                h1 { class: "text-3xl font-bold", "My Quizzes" }
-                span { class: "badge badge-primary", "{exams.data.read().len()} Total" }
-            }
-
-            if let Some(ref err) = *exams_state.error.read() {
-                ErrorAlert { message: err.clone(), on_dismiss: None }
-            }
-
-            if *exams_state.is_loading.read() && exams.data.read().is_empty() {
-                Spinner { message: Some("Loading quizzes...".to_string()) }
-            } else if exams.data.read().is_empty() {
-                div { class: "text-center py-20 bg-base-200 rounded-3xl border-2 border-dashed border-base-300",
-                    div { class: "text-6xl mb-4", "📝" }
-                    h2 { class: "text-xl font-semibold mb-2", "No quizzes yet" }
-                    p { class: "text-base-content/60 max-w-md mx-auto",
-                        "Quizzes are generated when you mark a video as mastered. Start learning to challenge yourself!"
-                    }
-                }
-            } else {
-                div { class: "grid gap-4",
-                    for exam in exams.data.read().iter() {
-                        QuizItem { key: "{exam.id().as_uuid()}", exam: exam.clone() }
-                    }
-                }
-            }
-        }
-    }
+pub struct QuizListPage {
+    widget: gtk::Box,
+    state: SharedState,
+    stack: Rc<gtk::Stack>,
+    list_box: gtk::Box,
+    status_page: adw::StatusPage,
 }
 
-/// Individual quiz item row.
-#[component]
-fn QuizItem(exam: Exam) -> Element {
-    let state = use_context::<AppState>();
-    let video = use_load_video(state.backend.clone(), exam.video_id());
+impl QuizListPage {
+    pub fn new(state: SharedState, stack: Rc<gtk::Stack>) -> Self {
+        let widget = gtk::Box::new(gtk::Orientation::Vertical, 16);
+        widget.add_css_class("content-area");
 
-    let video_title = match video.data.read().as_ref() {
-        Some(v) => v.title().to_string(),
-        None => "Video #".to_string() + &exam.video_id().as_uuid().to_string()[..8],
-    };
+        let heading = gtk::Label::new(Some("Quizzes"));
+        heading.add_css_class("heading");
+        widget.append(&heading);
 
-    let score = exam.score().map(|s| (s * 100.0) as i32);
-    let passed = exam.passed().unwrap_or(false);
-    let is_taken = exam.is_taken();
+        let subtitle = gtk::Label::new(Some("Test your knowledge."));
+        subtitle.add_css_class("subtitle");
+        widget.append(&subtitle);
 
-    rsx! {
-        Link {
-            to: Route::QuizView {
-                exam_id: exam.id().as_uuid().to_string(),
-            },
-            class: "flex items-center gap-4 p-5 bg-base-200 rounded-2xl hover:bg-base-300 transition-all border border-transparent hover:border-primary/20 group",
+        let status_page = adw::StatusPage::new();
+        status_page.set_title("No Quizzes Yet");
+        status_page.set_description(Some("Generate one from a video summary."));
+        status_page.set_icon_name(Some("applications-science-symbolic"));
+        status_page.set_margin_top(16);
+        widget.append(&status_page);
 
-            // Status Icon
-            div {
-                class: match (is_taken, passed) {
-                    (true, true) => {
-                        "w-12 h-12 rounded-xl bg-success/20 text-success flex items-center justify-center text-xl shadow-inner"
-                    }
-                    (true, false) => {
-                        "w-12 h-12 rounded-xl bg-error/20 text-error flex items-center justify-center text-xl shadow-inner"
-                    }
-                    (false, _) => {
-                        "w-12 h-12 rounded-xl bg-warning/20 text-warning flex items-center justify-center text-xl shadow-inner"
+        let scroll = gtk::ScrolledWindow::new();
+        scroll.set_vexpand(true);
+        scroll.set_hexpand(true);
+
+        let list_box = gtk::Box::new(gtk::Orientation::Vertical, 8);
+        list_box.set_margin_start(16);
+        list_box.set_margin_end(16);
+        scroll.set_child(Some(&list_box));
+
+        widget.append(&scroll);
+
+        Self { widget, state, stack, list_box, status_page }
+    }
+
+    pub fn widget(&self) -> &gtk::Box {
+        &self.widget
+    }
+
+    pub fn refresh(&self) {
+        while let Some(child) = self.list_box.first_child() {
+            self.list_box.remove(&child);
+        }
+        self.list_box.set_visible(false);
+        self.status_page.set_visible(false);
+
+        let state = self.state.borrow();
+        if let Some(ref ctx) = state.backend {
+            match ctx.exam_repo.find_all() {
+                Ok(exams) => {
+                    if exams.is_empty() {
+                        self.status_page.set_visible(true);
+                    } else {
+                        for exam in &exams {
+                            let card = self.build_exam_card(exam);
+                            self.list_box.append(&card);
+                        }
+                        self.list_box.set_visible(true);
                     }
                 },
-                if is_taken {
-                    if passed {
-                        "✓"
-                    } else {
-                        "✕"
-                    }
-                } else {
-                    "?"
-                }
+                Err(e) => {
+                    self.status_page.set_title("Error Loading Quizzes");
+                    self.status_page
+                        .set_description(Some(&format!("Failed to load quizzes: {}", e)));
+                    self.status_page.set_visible(true);
+                },
             }
-
-            // Info
-            div { class: "flex-1",
-                h3 { class: "font-bold text-lg group-hover:text-primary transition-colors",
-                    "{video_title}"
-                }
-                div { class: "flex items-center gap-3 mt-1",
-                    if let Some(s) = score {
-                        span { class: if passed { "text-success text-sm font-medium" } else { "text-error text-sm font-medium" },
-                            "Score: {s}%"
-                        }
-                    } else {
-                        span { class: "text-sm text-base-content/50", "Not attempted" }
-                    }
-                    span { class: "text-xs text-base-content/30", "•" }
-                    span { class: "text-xs text-base-content/30",
-                        "Ref: {&exam.id().as_uuid().to_string()[..8]}"
-                    }
-                }
-            }
-
-            // Badge/Action
-            div { class: "text-right flex flex-col items-end gap-2",
-                span { class: if is_taken { if passed { "badge badge-success badge-sm" } else { "badge badge-error badge-sm" } } else { "badge badge-warning badge-sm" },
-                    if is_taken {
-                        if passed {
-                            "PASSED"
-                        } else {
-                            "FAILED"
-                        }
-                    } else {
-                        "PENDING"
-                    }
-                }
-                span { class: "text-xs opacity-0 group-hover:opacity-100 transition-opacity text-primary font-bold",
-                    if is_taken {
-                        "Review →"
-                    } else {
-                        "Take Quiz →"
-                    }
-                }
-            }
+        } else {
+            self.status_page.set_title("No Backend");
+            self.status_page.set_description(Some("No backend connected."));
+            self.status_page.set_visible(true);
         }
+    }
+
+    fn build_exam_card(&self, exam: &crate::domain::entities::Exam) -> gtk::Frame {
+        let frame = gtk::Frame::new(None);
+        frame.add_css_class("card");
+        frame.set_hexpand(true);
+
+        let vbox = gtk::Box::new(gtk::Orientation::Horizontal, 8);
+        vbox.set_margin_start(12);
+        vbox.set_margin_end(12);
+        vbox.set_margin_top(12);
+        vbox.set_margin_bottom(12);
+
+        let info_box = gtk::Box::new(gtk::Orientation::Vertical, 4);
+        info_box.set_hexpand(true);
+
+        let title = gtk::Label::new(Some(&format!("Exam for video {}", exam.video_id())));
+        title.set_halign(gtk::Align::Start);
+        title.add_css_class("heading");
+        info_box.append(&title);
+
+        if exam.is_taken() {
+            let score_text = format!(
+                "Score: {:.0}% {}",
+                exam.score().unwrap_or(0.0) * 100.0,
+                if exam.passed().unwrap_or(false) { "[PASS]" } else { "[FAIL]" }
+            );
+            let score_label = gtk::Label::new(Some(&score_text));
+            score_label.set_halign(gtk::Align::Start);
+            score_label.add_css_class("subtitle");
+            info_box.append(&score_label);
+        } else {
+            let pending = gtk::Label::new(Some("Not taken yet"));
+            pending.set_halign(gtk::Align::Start);
+            pending.add_css_class("subtitle");
+            info_box.append(&pending);
+        }
+
+        vbox.append(&info_box);
+
+        let start_btn = gtk::Button::with_label(if exam.is_taken() { "Review" } else { "Start" });
+        start_btn.set_valign(gtk::Align::Center);
+
+        let state_cl = self.state.clone();
+        let stack_cl = self.stack.clone();
+        let exam_id = exam.id().to_string();
+        start_btn.connect_clicked(move |_| {
+            state_cl.borrow_mut().current_quiz_id = Some(exam_id.clone());
+            stack_cl.set_visible_child_name(PAGE_QUIZ_VIEW);
+        });
+        vbox.append(&start_btn);
+
+        frame.set_child(Some(&vbox));
+        frame
     }
 }

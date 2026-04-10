@@ -1,682 +1,362 @@
-//! Video player page - Sanctuary for focused learning.
+use std::cell::{Cell, RefCell};
+use std::rc::Rc;
 
-use dioxus::prelude::*;
-use std::str::FromStr;
+use adw::prelude::*;
 
-use crate::application::ServiceFactory;
 use crate::domain::ports::VideoRepository;
-use crate::domain::value_objects::{CourseId, ExamDifficulty, VideoId};
-use crate::ui::Route;
-use crate::ui::actions::{import_subtitle_for_video, start_exam};
-use crate::ui::custom::{
-    ErrorAlert, LocalVideoPlayer, MarkdownRenderer, Spinner, SuccessAlert, YouTubePlayer,
-};
-use crate::ui::hooks::{use_load_modules, use_load_video, use_load_videos_by_course};
-use crate::ui::state::AppState;
+use crate::infrastructure::video::VideoPlayer;
+use crate::ui::navigation::PAGE_COURSE_VIEW;
+use crate::ui::state::SharedState;
 
-/// Video player with controls and completion actions.
-#[component]
-pub fn VideoPlayer(course_id: String, video_id: String) -> Element {
-    let mut state = use_context::<AppState>();
-    let backend = state.backend.clone();
-    let nav = use_navigator();
-
-    {
-        let mut state = state.clone();
-        let backend = state.backend.clone();
-        use_effect(move || {
-            if let Some(ref ctx) = backend {
-                let use_case = ServiceFactory::preferences(ctx);
-                match use_case.load() {
-                    Ok(prefs) => {
-                        state.right_panel_visible.set(true);
-                        let width = (prefs.right_panel_width() as f64).max(240.0);
-                        state.right_panel_width.set(width);
-                        state.onboarding_completed.set(prefs.onboarding_completed());
-                    },
-                    Err(e) => {
-                        log::error!("Failed to load preferences: {}", e);
-                        state.right_panel_visible.set(true);
-                        state.right_panel_width.set(320.0);
-                    },
-                }
-            } else {
-                state.right_panel_visible.set(true);
-                state.right_panel_width.set(320.0);
-            }
-        });
-    }
-
-    // Parse IDs
-    let course_id_vo = match CourseId::from_str(&course_id) {
-        Ok(id) => id,
-        Err(_) => {
-            return rsx! {
-                div { class: "p-6 text-error", "Invalid Course ID" }
-            };
-        },
-    };
-
-    let video_id_vo = match VideoId::from_str(&video_id) {
-        Ok(id) => id,
-        Err(_) => {
-            return rsx! {
-                div { class: "p-6 text-error", "Invalid Video ID" }
-            };
-        },
-    };
-
-    // Load data
-    let video = use_load_video(backend.clone(), &video_id_vo);
-    let video_state = video.state.clone();
-    let modules = use_load_modules(backend.clone(), &course_id_vo);
-    let modules_state = modules.state.clone();
-    let all_videos = use_load_videos_by_course(backend.clone(), &course_id_vo);
-    let videos_state = all_videos.state.clone();
-
-    // Track current video in global state for AI companion context
-    let video_id_for_state = video_id.clone();
-    let course_id_for_state = course_id.clone();
-    use_effect(move || {
-        state.current_video_id.set(Some(video_id_for_state.clone()));
-        state
-            .last_video_by_course
-            .write()
-            .insert(course_id_for_state.clone(), video_id_for_state.clone());
-    });
-
-    // Extract video data reactively
-    let video_read = video.data.read();
-    let v = match video_read.as_ref() {
-        Some(v) => v.clone(),
-        None => {
-            if let Some(ref err) = *video_state.error.read() {
-                return rsx! {
-                    div { class: "p-6",
-                        ErrorAlert { message: err.clone(), on_dismiss: None }
-                    }
-                };
-            }
-            return rsx! {
-                div { class: "p-6",
-                    Spinner { message: Some("Loading video...".to_string()) }
-                }
-            };
-        },
-    };
-
-    // Find current module name
-    let module_title = modules
-        .data
-        .read()
-        .iter()
-        .find(|m| m.id() == v.module_id())
-        .map(|m| m.title().to_string())
-        .unwrap_or_else(|| "Module".to_string());
-
-    // Compute prev/next videos
-    let videos_list = all_videos.data.read();
-    let current_idx = videos_list.iter().position(|vid| vid.id() == v.id());
-
-    let prev_video =
-        current_idx.and_then(|idx| if idx > 0 { videos_list.get(idx - 1).cloned() } else { None });
-
-    let next_video = current_idx.and_then(|idx| videos_list.get(idx + 1).cloned());
-
-    // Clone data for closures
-    let backend_for_complete = backend.clone();
-    let backend_for_quiz = backend.clone();
-    let video_id_for_complete = v.id().clone();
-    let video_id_for_quiz = v.id().clone();
-    let is_completed_now = video.data.read().as_ref().map(|v| v.is_completed()).unwrap_or(false);
-    let is_local_video = use_signal(|| false);
-    let has_transcript = use_signal(|| false);
-    {
-        let mut is_local_video = is_local_video;
-        let mut has_transcript = has_transcript;
-        use_effect(move || {
-            let value = video.data.read();
-            let (local, transcript) = value
-                .as_ref()
-                .map(|video| {
-                    (
-                        video.local_path().is_some(),
-                        video.transcript().map(|t| !t.trim().is_empty()).unwrap_or(false),
-                    )
-                })
-                .unwrap_or((false, false));
-            is_local_video.set(local);
-            has_transcript.set(transcript);
-        });
-    }
-    let mut quiz_num_questions = use_signal(|| 5u8);
-    let mut quiz_difficulty = use_signal(|| ExamDifficulty::Medium);
-    let quiz_disabled = !state.has_gemini() || (*is_local_video.read() && !*has_transcript.read());
-    let action_status = use_signal(|| None::<(bool, String)>);
-
-    // Handlers
-    let mut action_status_complete = action_status;
-    let mut video_for_complete = video.clone();
-    let on_mark_complete = move |_| {
-        if let Some(ctx) = backend_for_complete.as_ref() {
-            let current_completed =
-                video_for_complete.data.read().as_ref().map(|v| v.is_completed()).unwrap_or(false);
-            let new_status = !current_completed;
-            if let Err(e) = ctx.video_repo.update_completion(&video_id_for_complete, new_status) {
-                log::error!("Failed to update completion: {}", e);
-                action_status_complete
-                    .set(Some((false, format!("Failed to update completion: {}", e))));
-                return;
-            }
-
-            if let Ok(Some(updated)) = ctx.video_repo.find_by_id(&video_id_for_complete) {
-                video_for_complete.data.set(Some(updated));
-            }
-
-            let message = if new_status { "Marked as completed." } else { "Marked as incomplete." };
-            action_status_complete.set(Some((true, message.to_string())));
-        } else {
-            action_status_complete.set(Some((false, "Backend not available".to_string())));
-        }
-    };
-
-    let mut action_status_quiz = action_status;
-    let on_take_quiz = move |_| {
-        let backend_inner = backend_for_quiz.clone();
-        let vid = video_id_for_quiz.clone();
-        let num_questions = *quiz_num_questions.read();
-        let difficulty = *quiz_difficulty.read();
-        spawn(async move {
-            match start_exam(backend_inner, vid, num_questions, difficulty, false).await {
-                Ok(exam_id) => {
-                    nav.push(Route::QuizView { exam_id: exam_id.as_uuid().to_string() });
-                },
-                Err(e) => {
-                    log::error!("Failed to start exam: {}", e);
-                    action_status_quiz.set(Some((false, format!("Failed to start exam: {}", e))));
-                },
-            }
-        });
-    };
-
-    let on_transcript_update = {
-        let backend = backend.clone();
-        let video_id_for_refresh = v.id().clone();
-        let mut video_for_refresh = video.clone();
-        move |_| {
-            if let Some(ctx) = backend.as_ref() {
-                if let Ok(Some(updated)) = ctx.video_repo.find_by_id(&video_id_for_refresh) {
-                    video_for_refresh.data.set(Some(updated));
-                }
-            }
-        }
-    };
-
-    rsx! {
-        div { class: "p-6 min-h-full flex flex-col max-w-5xl mx-auto",
-
-            if let Some((is_success, ref msg)) = *action_status.read() {
-                if is_success {
-                    SuccessAlert { message: msg.clone(), on_dismiss: None }
-                } else {
-                    ErrorAlert { message: msg.clone(), on_dismiss: None }
-                }
-            }
-
-            if let Some(ref err) = *video_state.error.read() {
-                ErrorAlert { message: err.clone(), on_dismiss: None }
-            }
-            if let Some(ref err) = *modules_state.error.read() {
-                ErrorAlert { message: err.clone(), on_dismiss: None }
-            }
-            if let Some(ref err) = *videos_state.error.read() {
-                ErrorAlert { message: err.clone(), on_dismiss: None }
-            }
-
-            // Header/Nav
-            div { class: "flex flex-wrap justify-between items-center mb-6 gap-2",
-                Link {
-                    to: Route::CourseView {
-                        course_id: course_id.clone(),
-                    },
-                    class: "btn btn-ghost btn-sm gap-2",
-                    "← Back to Course"
-                }
-                div { class: "flex items-center gap-2 text-sm font-medium opacity-60",
-                    span { "{module_title}" }
-                    span { "•" }
-                    span { "{v.duration_secs() / 60} min" }
-                }
-            }
-
-            // Video player section
-            div { class: "aspect-video w-full rounded-3xl overflow-hidden shadow-2xl bg-black border-4 border-base-300",
-                if let Some(path) = v.local_path() {
-                    LocalVideoPlayer { path: path.to_string() }
-                } else if let Some(youtube_id) = v.youtube_id() {
-                    YouTubePlayer { video_id: youtube_id.as_str().to_string() }
-                } else {
-                    div { class: "flex items-center justify-center w-full h-full text-base-content/60",
-                        "Video source unavailable."
-                    }
-                }
-            }
-
-            // Info & Actions
-            div { class: "mt-8 flex flex-col md:flex-row md:items-start justify-between gap-6",
-                div { class: "flex-1",
-                    h1 { class: "text-3xl font-bold mb-2", "{v.title()}" }
-                    p { class: "text-base-content/60",
-                        if is_completed_now {
-                            span { class: "text-success font-medium flex items-center gap-1",
-                                "✓ Completed"
-                            }
-                        } else {
-                            span { "Not yet completed" }
-                        }
-                    }
-                }
-
-                div { class: "flex flex-wrap items-center gap-3",
-                    button {
-                        class: if is_completed_now { "btn btn-success" } else { "btn btn-outline btn-success" },
-                        onclick: on_mark_complete,
-                        if is_completed_now {
-                            "✓ Completed"
-                        } else {
-                            "Mark Complete"
-                        }
-                    }
-
-                    div { class: "flex items-center gap-2",
-                        span { class: "text-xs uppercase tracking-wide opacity-60", "Questions" }
-                        input {
-                            class: "input input-bordered input-sm w-20",
-                            r#type: "number",
-                            min: "1",
-                            max: "20",
-                            value: "{quiz_num_questions}",
-                            disabled: quiz_disabled,
-                            oninput: move |e| {
-                                let parsed = e.value().trim().parse::<u8>().ok().unwrap_or(5);
-                                quiz_num_questions.set(parsed.clamp(1, 20));
-                            },
-                        }
-                    }
-
-                    div { class: "flex items-center gap-2",
-                        span { class: "text-xs uppercase tracking-wide opacity-60", "Difficulty" }
-                        select {
-                            class: "select select-bordered select-sm",
-                            value: "{quiz_difficulty.read().as_str()}",
-                            disabled: quiz_disabled,
-                            oninput: move |e| {
-                                let next = ExamDifficulty::from_str(&e.value())
-                                    .unwrap_or(ExamDifficulty::Medium);
-                                quiz_difficulty.set(next);
-                            },
-                            option { value: "easy", "Easy" }
-                            option { value: "medium", "Medium" }
-                            option { value: "hard", "Hard" }
-                        }
-                    }
-
-                    button {
-                        class: "btn btn-primary gap-2",
-                        onclick: on_take_quiz,
-                        disabled: quiz_disabled,
-                        title: if !state.has_gemini() { "Configure Gemini API key in Settings" } else if *is_local_video.read() && !*has_transcript.read() { "Local videos need subtitles to enable quizzes" } else { "" },
-                        "📝 Take Quiz"
-                    }
-                }
-
-                if *is_local_video.read() && !*has_transcript.read() {
-                    p { class: "text-xs text-warning mt-2",
-                        "Local videos need subtitles (SRT/VTT) to enable summaries and quizzes."
-                    }
-                }
-            }
-
-            // AI Summary Section
-            SummarySection {
-                video_id: v.id().as_uuid().to_string(),
-                is_local: is_local_video,
-                has_transcript,
-                on_transcript_update,
-            }
-
-            // Navigation Footer
-            div { class: "mt-auto pt-12 flex justify-between border-t border-base-300",
-                // Previous video
-                if let Some(pv) = prev_video {
-                    Link {
-                        to: Route::VideoPlayer {
-                            course_id: course_id.clone(),
-                            video_id: pv.id().as_uuid().to_string(),
-                        },
-                        class: "group flex items-center gap-4 p-4 rounded-2xl hover:bg-base-200 transition-all",
-                        div { class: "w-10 h-10 rounded-full bg-base-300 flex items-center justify-center group-hover:bg-primary group-hover:text-primary-content transition-colors",
-                            "←"
-                        }
-                        div {
-                            p { class: "text-xs font-bold opacity-40 uppercase tracking-widest",
-                                "Previous"
-                            }
-                            p { class: "font-medium truncate max-w-[200px]", "{pv.title()}" }
-                        }
-                    }
-                } else {
-                    Link {
-                        to: Route::CourseView {
-                            course_id: course_id.clone(),
-                        },
-                        class: "group flex items-center gap-4 p-4 rounded-2xl hover:bg-base-200 transition-all opacity-50",
-                        div { class: "w-10 h-10 rounded-full bg-base-300 flex items-center justify-center",
-                            "←"
-                        }
-                        div {
-                            p { class: "text-xs font-bold opacity-40 uppercase tracking-widest",
-                                "Previous"
-                            }
-                            p { class: "font-medium", "Back to Course" }
-                        }
-                    }
-                }
-
-                // Next video
-                if let Some(nv) = next_video {
-                    Link {
-                        to: Route::VideoPlayer {
-                            course_id: course_id.clone(),
-                            video_id: nv.id().as_uuid().to_string(),
-                        },
-                        class: "group flex items-center text-right gap-4 p-4 rounded-2xl hover:bg-base-200 transition-all",
-                        div {
-                            p { class: "text-xs font-bold opacity-40 uppercase tracking-widest",
-                                "Next"
-                            }
-                            p { class: "font-medium truncate max-w-[200px]", "{nv.title()}" }
-                        }
-                        div { class: "w-10 h-10 rounded-full bg-base-300 flex items-center justify-center group-hover:bg-primary group-hover:text-primary-content transition-colors",
-                            "→"
-                        }
-                    }
-                } else {
-                    Link {
-                        to: Route::CourseView {
-                            course_id: course_id.clone(),
-                        },
-                        class: "group flex items-center text-right gap-4 p-4 rounded-2xl hover:bg-base-200 transition-all opacity-50",
-                        div {
-                            p { class: "text-xs font-bold opacity-40 uppercase tracking-widest",
-                                "Complete"
-                            }
-                            p { class: "font-medium", "Back to Course" }
-                        }
-                        div { class: "w-10 h-10 rounded-full bg-base-300 flex items-center justify-center",
-                            "✓"
-                        }
-                    }
-                }
-            }
-        }
-    }
+fn fmt_ns(ns: u64) -> String {
+    let total_secs = ns / 1_000_000_000;
+    let mins = total_secs / 60;
+    let secs = total_secs % 60;
+    format!("{:02}:{:02}", mins, secs)
 }
 
-/// Summary generation state
-#[derive(Clone, PartialEq)]
-enum SummaryState {
-    Empty,
-    Loading(String),
-    Ready { summary: String, cached: bool },
-    Error(String),
+pub struct VideoPlayerPage {
+    widget: gtk::Box,
+    state: SharedState,
+    player: Rc<RefCell<Option<VideoPlayer>>>,
+    play_btn: gtk::Button,
+    seek_bar: gtk::Scale,
+    pos_label: gtk::Label,
+    dur_label: gtk::Label,
+    vol_scale: gtk::Scale,
+    timer_source: RefCell<Option<glib::SourceId>>,
+    video_title: gtk::Label,
+    player_frame: gtk::Frame,
+    status_page: adw::StatusPage,
+    suppress_seek: Rc<Cell<bool>>,
 }
 
-/// AI Summary section with cached transcript + summary persistence
-#[component]
-fn SummarySection(
-    video_id: String,
-    is_local: Signal<bool>,
-    has_transcript: Signal<bool>,
-    on_transcript_update: EventHandler<()>,
-) -> Element {
-    let state = use_context::<AppState>();
-    let mut summary_state = use_signal(|| SummaryState::Empty);
-    let mut expanded = use_signal(|| false);
-    let summary_disabled = !state.has_gemini() || (*is_local.read() && !*has_transcript.read());
+impl VideoPlayerPage {
+    pub fn new(state: SharedState, stack: Rc<gtk::Stack>) -> Self {
+        let widget = gtk::Box::new(gtk::Orientation::Vertical, 8);
+        widget.add_css_class("content-area");
 
-    let backend = state.backend.clone();
-    let video_id_clone = video_id.clone();
-    let attach_status = use_signal(|| None::<String>);
+        let top_bar = gtk::Box::new(gtk::Orientation::Horizontal, 8);
+        top_bar.set_margin_start(8);
+        top_bar.set_margin_top(8);
 
-    let on_attach_subtitle = {
-        let backend = state.backend.clone();
-        let video_id = video_id_clone.clone();
-        let on_transcript_update = on_transcript_update;
-        move |_| {
-            let Some(path) =
-                rfd::FileDialog::new().add_filter("Subtitles", &["srt", "vtt", "txt"]).pick_file()
-            else {
-                return;
-            };
+        let back_btn = gtk::Button::with_label("Back");
+        back_btn.add_css_class("flat");
+        let stack_cl = stack;
+        back_btn.connect_clicked(move |_| {
+            stack_cl.set_visible_child_name(PAGE_COURSE_VIEW);
+        });
+        top_bar.append(&back_btn);
 
-            let backend = backend.clone();
-            let video_id = video_id.clone();
-            let mut attach_status = attach_status;
-            let on_transcript_update = on_transcript_update;
-            spawn(async move {
-                let video_id_vo = match VideoId::from_str(&video_id) {
-                    Ok(id) => id,
-                    Err(_) => {
-                        attach_status.set(Some("Invalid video ID".to_string()));
-                        return;
-                    },
-                };
+        let video_title = gtk::Label::new(Some("Video Player"));
+        video_title.add_css_class("heading");
+        video_title.set_hexpand(true);
+        video_title.set_halign(gtk::Align::Start);
+        top_bar.append(&video_title);
+        widget.append(&top_bar);
 
-                attach_status.set(Some("Importing subtitles...".to_string()));
-                match import_subtitle_for_video(backend, video_id_vo, path.display().to_string())
-                    .await
-                {
-                    Ok(len) => {
-                        attach_status
-                            .set(Some(format!("Subtitles attached ({} chars cleaned).", len)));
-                        on_transcript_update.call(());
-                    },
-                    Err(e) => {
-                        attach_status.set(Some(format!("Subtitle import failed: {e}")));
-                    },
-                }
-            });
-        }
-    };
+        let player_frame = gtk::Frame::new(None);
+        player_frame.set_hexpand(true);
+        player_frame.set_vexpand(true);
+        player_frame.add_css_class("card");
+        player_frame.set_margin_start(8);
+        player_frame.set_margin_end(8);
 
-    {
-        let backend = backend.clone();
-        let video_id = video_id.clone();
-        let mut summary_state = summary_state;
-        use_effect(move || {
-            let Some(ref ctx) = backend else {
-                return;
-            };
-            let video_id_vo = match VideoId::from_str(&video_id) {
-                Ok(id) => id,
-                Err(_) => return,
-            };
+        let status_page = adw::StatusPage::new();
+        status_page.set_title("No Video Loaded");
+        status_page.set_description(Some("Select a video to start watching."));
+        status_page.set_icon_name(Some("video-x-generic-symbolic"));
+        player_frame.set_child(Some(&status_page));
+        widget.append(&player_frame);
 
-            if let Some(use_case) = crate::application::ServiceFactory::summarize_video(ctx) {
-                spawn(async move {
-                    let input = crate::application::use_cases::SummarizeVideoInput {
-                        video_id: video_id_vo,
-                        force_refresh: false,
-                    };
-                    if let Ok(result) = use_case.execute(input).await {
-                        if result.cached {
-                            summary_state
-                                .set(SummaryState::Ready { summary: result.summary, cached: true });
-                        }
-                    }
-                });
+        let controls = gtk::Box::new(gtk::Orientation::Vertical, 4);
+        controls.set_margin_start(8);
+        controls.set_margin_end(8);
+        controls.set_margin_bottom(8);
+
+        let seek_box = gtk::Box::new(gtk::Orientation::Horizontal, 8);
+
+        let pos_label = gtk::Label::new(Some("00:00"));
+        seek_box.append(&pos_label);
+
+        let seek_bar = gtk::Scale::with_range(gtk::Orientation::Horizontal, 0.0, 100.0, 0.5);
+        seek_bar.set_hexpand(true);
+        seek_bar.set_draw_value(false);
+        seek_box.append(&seek_bar);
+
+        let dur_label = gtk::Label::new(Some("00:00"));
+        seek_box.append(&dur_label);
+
+        controls.append(&seek_box);
+
+        let btn_box = gtk::Box::new(gtk::Orientation::Horizontal, 8);
+        btn_box.set_halign(gtk::Align::Center);
+
+        let play_btn = gtk::Button::with_label("Play");
+        play_btn.add_css_class("circular");
+        btn_box.append(&play_btn);
+
+        controls.append(&btn_box);
+
+        let vol_box = gtk::Box::new(gtk::Orientation::Horizontal, 8);
+        let vol_label = gtk::Label::new(Some("Volume"));
+        vol_box.append(&vol_label);
+
+        let vol_scale = gtk::Scale::with_range(gtk::Orientation::Horizontal, 0.0, 1.0, 0.05);
+        vol_scale.set_value(0.8);
+        vol_scale.set_width_request(120);
+        vol_box.append(&vol_scale);
+
+        controls.append(&vol_box);
+        widget.append(&controls);
+
+        let player_rc: Rc<RefCell<Option<VideoPlayer>>> = Rc::new(RefCell::new(None));
+
+        let player_cl = player_rc.clone();
+        vol_scale.connect_value_changed(move |s| {
+            if let Some(ref p) = *player_cl.borrow() {
+                p.set_volume(s.value());
             }
         });
+
+        let suppress_seek = Rc::new(Cell::new(false));
+        let player_cl = player_rc.clone();
+        let seek_bar_cl = seek_bar.clone();
+        let suppress_seek_cl = suppress_seek.clone();
+        seek_bar.connect_value_changed(move |_| {
+            if suppress_seek_cl.get() {
+                return;
+            }
+            if let Some(ref p) = *player_cl.borrow() {
+                let val_ns = seek_bar_cl.value() as u64;
+                p.seek(val_ns);
+            }
+        });
+
+        let player_cl = player_rc.clone();
+        let play_btn_cl = play_btn.clone();
+        play_btn.connect_clicked(move |_| {
+            let p = player_cl.borrow_mut();
+            if let Some(ref player) = *p {
+                if play_btn_cl.label().as_deref() == Some("Play") {
+                    player.resume();
+                    play_btn_cl.set_label("Pause");
+                } else {
+                    player.pause();
+                    play_btn_cl.set_label("Play");
+                }
+            }
+        });
+
+        let page = Self {
+            widget,
+            state,
+            player: player_rc,
+            play_btn,
+            seek_bar,
+            pos_label,
+            dur_label,
+            vol_scale,
+            timer_source: RefCell::new(None),
+            video_title,
+            player_frame,
+            status_page,
+            suppress_seek,
+        };
+
+        page.setup_keyboard_shortcuts();
+
+        page
     }
 
-    let generate_summary = move |force_refresh: bool| {
-        let backend = backend.clone();
-        let video_id = video_id_clone.clone();
+    fn setup_keyboard_shortcuts(&self) {
+        let controller = gtk::EventControllerKey::new();
+        let player = self.player.clone();
+        let seek_bar = self.seek_bar.clone();
+        let play_btn = self.play_btn.clone();
 
-        spawn(async move {
-            summary_state.set(SummaryState::Loading("Generating summary...".to_string()));
+        controller.connect_key_pressed(move |_, keyval, _code, _state| match keyval {
+            gtk::gdk::Key::Left | gtk::gdk::Key::KP_Left => {
+                let val = seek_bar.value();
+                let new_val = (val - 5_000_000_000.0).max(seek_bar.adjustment().lower());
+                seek_bar.set_value(new_val);
+                if let Some(ref p) = *player.borrow() {
+                    p.seek(new_val as u64);
+                }
+                glib::Propagation::Stop
+            },
+            gtk::gdk::Key::Right | gtk::gdk::Key::KP_Right => {
+                let val = seek_bar.value();
+                let new_val = (val + 5_000_000_000.0).min(seek_bar.adjustment().upper());
+                seek_bar.set_value(new_val);
+                if let Some(ref p) = *player.borrow() {
+                    p.seek(new_val as u64);
+                }
+                glib::Propagation::Stop
+            },
+            gtk::gdk::Key::Up | gtk::gdk::Key::KP_Up => {
+                let val = seek_bar.value();
+                let new_val = (val + 10_000_000_000.0).min(seek_bar.adjustment().upper());
+                seek_bar.set_value(new_val);
+                if let Some(ref p) = *player.borrow() {
+                    p.seek(new_val as u64);
+                }
+                glib::Propagation::Stop
+            },
+            gtk::gdk::Key::Down | gtk::gdk::Key::KP_Down => {
+                let val = seek_bar.value();
+                let new_val = (val - 10_000_000_000.0).max(seek_bar.adjustment().lower());
+                seek_bar.set_value(new_val);
+                if let Some(ref p) = *player.borrow() {
+                    p.seek(new_val as u64);
+                }
+                glib::Propagation::Stop
+            },
+            gtk::gdk::Key::space => {
+                let p = player.borrow();
+                if let Some(ref player) = *p {
+                    if play_btn.label().as_deref() == Some("Play") {
+                        player.resume();
+                        play_btn.set_label("Pause");
+                    } else {
+                        player.pause();
+                        play_btn.set_label("Play");
+                    }
+                }
+                glib::Propagation::Stop
+            },
+            _ => glib::Propagation::Proceed,
+        });
+        self.widget.add_controller(controller);
+    }
 
-            let video_id_vo = match VideoId::from_str(&video_id) {
+    pub fn widget(&self) -> &gtk::Box {
+        &self.widget
+    }
+
+    pub fn refresh(&self) {
+        self.stop_timer();
+        if let Some(ref p) = *self.player.borrow() {
+            p.stop();
+        }
+
+        let state = self.state.borrow();
+        let video_id_str = match state.current_video_id {
+            Some(ref id) => id.clone(),
+            None => {
+                self.video_title.set_text("No video selected.");
+                self.player_frame.set_child(Some(&self.status_page));
+                return;
+            },
+        };
+
+        if let Some(ref ctx) = state.backend {
+            let video_id = match video_id_str.parse::<crate::domain::value_objects::VideoId>() {
                 Ok(id) => id,
                 Err(_) => {
-                    summary_state.set(SummaryState::Error("Invalid Video ID".to_string()));
+                    self.video_title.set_text("Invalid video ID.");
+                    self.player_frame.set_child(Some(&self.status_page));
                     return;
                 },
             };
 
-            if let Some(ref ctx) = backend {
-                if let Some(use_case) = crate::application::ServiceFactory::summarize_video(ctx) {
-                    let input = crate::application::use_cases::SummarizeVideoInput {
-                        video_id: video_id_vo,
-                        force_refresh,
+            match ctx.video_repo.find_by_id(&video_id) {
+                Ok(Some(video)) => {
+                    self.video_title.set_text(video.title());
+
+                    let player = match VideoPlayer::new() {
+                        Ok(p) => p,
+                        Err(e) => {
+                            self.video_title.set_text(&format!("Player error: {}", e));
+                            self.player_frame.set_child(Some(&self.status_page));
+                            return;
+                        },
                     };
 
-                    match use_case.execute(input).await {
-                        Ok(result) => {
-                            summary_state.set(SummaryState::Ready {
-                                summary: result.summary,
-                                cached: result.cached,
-                            });
-                            on_transcript_update.call(());
-                        },
-                        Err(e) => {
-                            summary_state
-                                .set(SummaryState::Error(format!("Summary failed: {}", e)));
-                        },
-                    }
-                } else {
-                    summary_state.set(SummaryState::Error("Gemini API not configured".to_string()));
-                }
-            } else {
-                summary_state.set(SummaryState::Error("Backend not available".to_string()));
-            }
-        });
-    };
+                    let picture = player.widget();
+                    picture.set_vexpand(true);
+                    picture.set_hexpand(true);
 
-    rsx! {
-        div { class: "mt-8 bg-base-200 rounded-2xl overflow-hidden",
+                    self.player_frame.set_child(Some(picture));
 
-            // Header (clickable to expand)
-            button {
-                class: "w-full p-4 flex items-center justify-between hover:bg-base-300 transition-colors",
-                onclick: move |_| {
-                    let current = *expanded.read();
-                    expanded.set(!current);
+                    let dur_ns = (video.duration_secs() as u64) * 1_000_000_000;
+                    self.seek_bar.set_range(0.0, dur_ns as f64);
+                    self.seek_bar.set_value(0.0);
+                    self.pos_label.set_text("00:00");
+                    self.dur_label.set_text(&fmt_ns(dur_ns));
+
+                    let uri = match video.source() {
+                        crate::domain::value_objects::VideoSource::YouTube(yid) => {
+                            format!("https://www.youtube.com/watch?v={}", yid.as_str())
+                        },
+                        crate::domain::value_objects::VideoSource::LocalPath(path) => {
+                            format!("file://{}", path)
+                        },
+                    };
+
+                    player.play_uri(&uri);
+
+                    *self.player.borrow_mut() = Some(player);
+                    self.play_btn.set_label("Pause");
+                    self.vol_scale.set_value(0.8);
+
+                    self.start_timer();
                 },
+                Ok(None) => {
+                    self.video_title.set_text("Video not found.");
+                    self.player_frame.set_child(Some(&self.status_page));
+                },
+                Err(e) => {
+                    self.video_title.set_text(&format!("Error: {}", e));
+                    self.player_frame.set_child(Some(&self.status_page));
+                },
+            }
+        } else {
+            self.video_title.set_text("No backend connected.");
+            self.player_frame.set_child(Some(&self.status_page));
+        }
+    }
 
-                div { class: "flex items-center gap-3",
-                    span { class: "text-xl", "✨" }
-                    span { class: "font-bold", "AI Summary" }
-                    match &*summary_state.read() {
-                        SummaryState::Ready { cached, .. } => rsx! {
-                            span { class: "badge badge-success badge-sm",
-                                if *cached {
-                                    "Cached"
-                                } else {
-                                    "Ready"
-                                }
-                            }
-                        },
-                        SummaryState::Loading(_) => rsx! {
-                            span { class: "badge badge-warning badge-sm", "Loading" }
-                        },
-                        SummaryState::Error(_) => rsx! {
-                            span { class: "badge badge-error badge-sm", "Error" }
-                        },
-                        SummaryState::Empty => rsx! {},
-                    }
+    pub fn stop(&self) {
+        self.stop_timer();
+        if let Some(ref p) = *self.player.borrow() {
+            p.stop();
+        }
+        self.player_frame.set_child(Some(&self.status_page));
+        self.play_btn.set_label("Play");
+    }
+
+    fn start_timer(&self) {
+        self.stop_timer();
+
+        let player = self.player.clone();
+        let seek_bar = self.seek_bar.clone();
+        let pos_label = self.pos_label.clone();
+        let dur_label = self.dur_label.clone();
+        let suppress = self.suppress_seek.clone();
+
+        let source_id = glib::timeout_add_local(std::time::Duration::from_millis(250), move || {
+            let p = player.borrow();
+            if let Some(ref player) = *p {
+                if let Some(pos) = player.position() {
+                    suppress.set(true);
+                    seek_bar.set_value(pos as f64);
+                    suppress.set(false);
+                    pos_label.set_text(&fmt_ns(pos));
                 }
-
-                span {
-                    class: "transition-transform",
-                    style: if *expanded.read() { "transform: rotate(180deg)" } else { "" },
-                    "▼"
+                if let Some(dur) = player.duration() {
+                    dur_label.set_text(&fmt_ns(dur));
                 }
             }
+            glib::ControlFlow::Continue
+        });
 
-            // Content (expanded)
-            if *expanded.read() {
-                div { class: "p-4 pt-0",
+        *self.timer_source.borrow_mut() = Some(source_id);
+    }
 
-                    match &*summary_state.read() {
-                        SummaryState::Empty => rsx! {
-                            div { class: "text-center py-8",
-                                if *is_local.read() && !*has_transcript.read() {
-                                    p { class: "text-base-content/60 mb-2",
-                                        "Local videos need a subtitle file (SRT/VTT) before summaries can be generated."
-                                    }
-                                    p { class: "text-xs text-warning mb-4",
-                                        "Attach subtitles to store a cleaned transcript for this video."
-                                    }
-                                    button {
-                                        class: "btn btn-outline btn-primary btn-sm",
-                                        onclick: on_attach_subtitle,
-                                        "Attach Subtitles"
-                                    }
-                                    if let Some(ref status) = *attach_status.read() {
-                                        p { class: "text-xs text-base-content/60 mt-2", "{status}" }
-                                    }
-                                } else {
-                                    p { class: "text-base-content/60 mb-4", "Generate an AI summary from the video transcript" }
-                                }
-                                button {
-                                    class: "btn btn-primary",
-                                    onclick: move |_| generate_summary(false),
-                                    disabled: summary_disabled,
-                                    "✨ Generate Summary"
-                                }
-                                if !state.has_gemini() {
-                                    p { class: "text-sm text-warning mt-2", "Configure Gemini API key in Settings" }
-                                }
-                            }
-                        },
-                        SummaryState::Loading(msg) => rsx! {
-                            div { class: "flex flex-col items-center py-8",
-                                div { class: "loading loading-spinner loading-lg text-primary" }
-                                p { class: "text-base-content/60 mt-4", "{msg}" }
-                            }
-                        },
-                        SummaryState::Ready { summary, cached } => rsx! {
-                            div { class: "space-y-4",
-                                if *cached {
-                                    p { class: "text-xs text-base-content/60", "Loaded from cache" }
-                                }
-                                div { class: "prose prose-sm max-w-none",
-                                    MarkdownRenderer { src: summary.clone() }
-                                }
-                                div { class: "flex justify-end",
-                                    button {
-                                        class: "btn btn-outline btn-primary btn-sm",
-                                        onclick: move |_| generate_summary(true),
-                                        "Regenerate"
-                                    }
-                                }
-                            }
-                        },
-                        SummaryState::Error(err) => rsx! {
-                            div { class: "text-center py-8",
-                                p { class: "text-error mb-4", "{err}" }
-                                button {
-                                    class: "btn btn-outline btn-primary",
-                                    onclick: move |_| generate_summary(false),
-                                    "Try Again"
-                                }
-                            }
-                        },
-                    }
-                }
-            }
+    fn stop_timer(&self) {
+        if let Some(source_id) = self.timer_source.borrow_mut().take() {
+            source_id.remove();
         }
     }
 }
