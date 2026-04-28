@@ -35,14 +35,12 @@ case $OS in
             build-essential \
             pkg-config \
             libssl-dev \
-            libgtk-3-dev \
-            libwebkit2gtk-4.1-dev \
+            libgtk-4-dev \
+            libadwaita-1-dev \
+            libgstreamer1.0-dev \
+            libgstreamer-plugins-base1.0-dev \
+            libgraphene-1.0-dev \
             libsqlite3-dev \
-            libayatana-appindicator3-dev \
-            librsvg2-dev \
-            libxdo-dev \
-            gstreamer1.0-libav \
-            gstreamer1.0-plugins-base \
             gstreamer1.0-plugins-good \
             cmake
         ;;
@@ -52,16 +50,13 @@ case $OS in
             base-devel \
             pkgconf \
             openssl \
-            gtk3 \
-            webkit2gtk-4.1 \
-            sqlite \
-            libayatana-appindicator \
-            librsvg \
-            xdotool \
+            gtk4 \
+            libadwaita \
             gstreamer \
             gst-plugins-base \
             gst-plugins-good \
-            gst-libav \
+            graphene \
+            sqlite \
             cmake
         ;;
     fedora)
@@ -70,31 +65,28 @@ case $OS in
         sudo -n dnf install -y \
             pkgconf-pkg-config \
             openssl-devel \
-            gtk3-devel \
-            webkit2gtk4.1-devel \
+            gtk4-devel \
+            libadwaita-devel \
+            gstreamer1-devel \
+            gstreamer1-plugins-base-devel \
+            graphene-devel \
             sqlite-devel \
-            libayatana-appindicator-devel \
-            librsvg2-devel \
-            libxdo-devel \
-            gstreamer1-libav \
-            gstreamer1-plugins-base \
-            gstreamer1-plugins-good \
             cmake
         ;;
     *)
         echo -e "Unsupported distribution: ${BLUE}$OS${NC}"
         echo "Please manually install the following development headers:"
-        echo "- GTK3"
-        echo "- WebKit2GTK (4.1 preferred)"
+        echo "- GTK4"
+        echo "- libadwaita"
+        echo "- GStreamer (base + plugins)"
+        echo "- libgraphene"
         echo "- SQLite3"
         echo "- OpenSSL"
-        echo "- libayatana-appindicator"
         exit 1
         ;;
 esac
 
-echo -e "${GREEN}✅ System dependencies installed successfully!${NC}"
+echo -e "${GREEN}System dependencies installed successfully!${NC}"
 echo -e "Next steps:"
 echo "1. Ensure you have Rust installed: curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh"
-echo "2. Install Dioxus CLI: cargo install dioxus-cli"
-echo "3. Run the app: dx serve"
+echo "2. Run the app: cargo run --release"

@@ -1,0 +1,8 @@
+[Desktop Entry]
+Name=Course Pilot
+Comment=Transform YouTube playlists into structured study plans
+Exec=course_pilot
+Icon=com.coursepilot.app
+Type=Application
+Categories=Education;
+StartupNotify=true

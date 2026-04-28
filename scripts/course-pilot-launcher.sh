@@ -23,9 +23,15 @@ log_err() { echo -e "${RED}[ERROR]${NC} $1"; }
 check_dependencies() {
     local missing_deps=false
 
-    # Check for WebKit2GTK (Common dependency for Dioxus Desktop)
-    if ! ldconfig -p | grep -q "libwebkit2gtk-4.0.so\|libwebkit2gtk-4.1.so"; then
-        log_warn "WebKit2GTK not found. It is required for the UI."
+    # Check for GTK4
+    if ! ldconfig -p | grep -q "libgtk-4.so"; then
+        log_warn "GTK4 not found. It is required for the UI."
+        missing_deps=true
+    fi
+
+    # Check for libadwaita
+    if ! ldconfig -p | grep -q "libadwaita-1.so"; then
+        log_warn "libadwaita not found. It is required for the UI."
         missing_deps=true
     fi
 
@@ -35,7 +41,7 @@ check_dependencies() {
         missing_deps=true
     fi
 
-    # Check for GStreamer (codec support for WebKit video playback)
+    # Check for GStreamer
     if ! command -v gst-inspect-1.0 >/dev/null 2>&1; then
         log_warn "GStreamer not found. It is required for video playback."
         missing_deps=true
@@ -53,18 +59,14 @@ check_dependencies() {
                         log_info "Installing dependencies non-interactively..."
                         sudo -n apt update
                         sudo -n apt install -y \
-                            libwebkit2gtk-4.1-0 \
-                            libgtk-3-0 \
+                            libgtk-4-1 \
+                            libadwaita-1-0 \
                             libsqlite3-0 \
-                            libayatana-appindicator3-1 \
-                            librsvg2-2 \
-                            libxdo3 \
-                            gstreamer1.0-libav \
                             gstreamer1.0-plugins-base \
                             gstreamer1.0-plugins-good
                     else
                         log_err "Non-interactive sudo is not available."
-                        log_info "Run: sudo apt update && sudo apt install -y libwebkit2gtk-4.1-0 libgtk-3-0 libsqlite3-0 libayatana-appindicator3-1 librsvg2-2 libxdo3 gstreamer1.0-libav gstreamer1.0-plugins-base gstreamer1.0-plugins-good"
+                        log_info "Run: sudo apt update && sudo apt install -y libgtk-4-1 libadwaita-1-0 libsqlite3-0 gstreamer1.0-plugins-base gstreamer1.0-plugins-good"
                         exit 1
                     fi
                     ;;
@@ -73,19 +75,15 @@ check_dependencies() {
                     if sudo -n true 2>/dev/null; then
                         log_info "Installing dependencies non-interactively..."
                         sudo -n pacman -S --needed --noconfirm \
-                            webkit2gtk-4.1 \
-                            gtk3 \
+                            gtk4 \
+                            libadwaita \
                             sqlite \
-                            libayatana-appindicator \
-                            librsvg \
-                            xdotool \
                             gstreamer \
                             gst-plugins-base \
-                            gst-plugins-good \
-                            gst-libav
+                            gst-plugins-good
                     else
                         log_err "Non-interactive sudo is not available."
-                        log_info "Run: sudo pacman -S --needed webkit2gtk-4.1 gtk3 sqlite libayatana-appindicator librsvg xdotool gstreamer gst-plugins-base gst-plugins-good gst-libav"
+                        log_info "Run: sudo pacman -S --needed gtk4 libadwaita sqlite gstreamer gst-plugins-base gst-plugins-good"
                         exit 1
                     fi
                     ;;
@@ -94,24 +92,20 @@ check_dependencies() {
                     if sudo -n true 2>/dev/null; then
                         log_info "Installing dependencies non-interactively..."
                         sudo -n dnf install -y \
-                            webkit2gtk4.1 \
-                            gtk3 \
+                            gtk4 \
+                            libadwaita \
                             sqlite \
-                            libayatana-appindicator \
-                            librsvg2 \
-                            libxdo \
-                            gstreamer1-libav \
                             gstreamer1-plugins-base \
                             gstreamer1-plugins-good
                     else
                         log_err "Non-interactive sudo is not available."
-                        log_info "Run: sudo dnf install -y webkit2gtk4.1 gtk3 sqlite libayatana-appindicator librsvg2 libxdo gstreamer1-libav gstreamer1-plugins-base gstreamer1-plugins-good"
+                        log_info "Run: sudo dnf install -y gtk4 libadwaita sqlite gstreamer1-plugins-base gstreamer1-plugins-good"
                         exit 1
                     fi
                     ;;
                 *)
                     log_err "Unsupported or unknown distribution: $ID"
-                    log_err "Please manually install webkit2gtk (4.0 or 4.1), gtk3, and sqlite3."
+                    log_err "Please manually install gtk4, libadwaita, sqlite3, and gstreamer."
                     exit 1
                     ;;
             esac
@@ -127,10 +121,8 @@ check_dependencies
 
 # 2. Check if binary exists
 if [ ! -f "$BIN_PATH" ]; then
-    # Fallback to legacy layout (binary alongside script)
     BIN_PATH="$SCRIPT_DIR/$APP_NAME"
     if [ ! -f "$BIN_PATH" ]; then
-        # Fallback to looking in the current directory if script is moved
         BIN_PATH="./$APP_NAME"
         if [ ! -f "$BIN_PATH" ]; then
             log_err "Binary '$APP_NAME' not found in $SCRIPT_DIR/bin, $SCRIPT_DIR, or current directory."
