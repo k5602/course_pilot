@@ -2,6 +2,7 @@ pub mod app;
 pub mod css;
 pub mod dialogs;
 pub mod layout;
+pub mod list_models;
 pub mod navigation;
 pub mod pages;
 pub mod right_panel;

@@ -1,20 +1,13 @@
 use std::cell::RefCell;
 use std::rc::Rc;
 
+use adw::NavigationView;
 use adw::prelude::*;
 
+use crate::domain::entities::QuizQuestion;
 use crate::domain::ports::ExamRepository;
-use crate::ui::navigation::PAGE_QUIZ_LIST;
 use crate::ui::state::SharedState;
 use crate::ui::toast::Toast;
-
-#[derive(serde::Deserialize)]
-struct QuizQuestion {
-    question: String,
-    options: Vec<String>,
-    correct_index: usize,
-    explanation: String,
-}
 
 struct QuizState {
     questions: Vec<QuizQuestion>,
@@ -25,28 +18,16 @@ struct QuizState {
 pub struct QuizViewPage {
     widget: gtk::Box,
     state: SharedState,
-    stack: Rc<gtk::Stack>,
+    nav: Rc<NavigationView>,
     content_box: gtk::Box,
     status_page: adw::StatusPage,
     quiz_state: Rc<RefCell<Option<QuizState>>>,
 }
 
 impl QuizViewPage {
-    pub fn new(state: SharedState, stack: Rc<gtk::Stack>) -> Self {
+    pub fn new(state: SharedState, nav: Rc<NavigationView>) -> Self {
         let widget = gtk::Box::new(gtk::Orientation::Vertical, 16);
         widget.add_css_class("content-area");
-
-        let back_btn = gtk::Button::with_label("Back to Quizzes");
-        back_btn.add_css_class("flat");
-        back_btn.set_halign(gtk::Align::Start);
-        back_btn.set_margin_start(8);
-        back_btn.set_margin_top(8);
-
-        let stack_cl = stack.clone();
-        back_btn.connect_clicked(move |_| {
-            stack_cl.set_visible_child_name(PAGE_QUIZ_LIST);
-        });
-        widget.append(&back_btn);
 
         let heading = gtk::Label::new(Some("Quiz"));
         heading.add_css_class("heading");
@@ -72,7 +53,7 @@ impl QuizViewPage {
         Self {
             widget,
             state,
-            stack,
+            nav,
             content_box,
             status_page,
             quiz_state: Rc::new(RefCell::new(None)),
@@ -131,7 +112,7 @@ impl QuizViewPage {
                                 if let Some(ref qs) = *qs {
                                     Self::show_results(
                                         &self.content_box,
-                                        &self.stack,
+                                        &self.nav,
                                         qs,
                                         exam.score(),
                                         exam.passed(),
@@ -230,7 +211,7 @@ impl QuizViewPage {
         let quiz_state = self.quiz_state.clone();
         let content_box = self.content_box.clone();
         let state = self.state.clone();
-        let stack = self.stack.clone();
+        let nav = self.nav.clone();
         let radios_clone = radios;
 
         next_btn.connect_clicked(move |_| {
@@ -249,7 +230,7 @@ impl QuizViewPage {
 
             if is_last {
                 drop(qs_borrow);
-                submit_quiz_inner(&quiz_state, &state, &stack, &content_box);
+                submit_quiz_inner(&quiz_state, &state, &nav, &content_box);
             } else {
                 qs.current_index += 1;
                 drop(qs_borrow);
@@ -262,12 +243,12 @@ impl QuizViewPage {
     }
 
     fn submit_quiz(&self) {
-        submit_quiz_inner(&self.quiz_state, &self.state, &self.stack, &self.content_box);
+        submit_quiz_inner(&self.quiz_state, &self.state, &self.nav, &self.content_box);
     }
 
     fn show_results(
         content_box: &gtk::Box,
-        stack: &Rc<gtk::Stack>,
+        nav: &Rc<NavigationView>,
         qs: &QuizState,
         score: Option<f32>,
         passed: Option<bool>,
@@ -335,9 +316,9 @@ impl QuizViewPage {
         let back_btn = gtk::Button::with_label("Back to Quizzes");
         back_btn.set_halign(gtk::Align::Center);
         back_btn.add_css_class("suggested-action");
-        let stack_cl = stack.clone();
+        let nav_cl = nav.clone();
         back_btn.connect_clicked(move |_| {
-            stack_cl.set_visible_child_name(PAGE_QUIZ_LIST);
+            nav_cl.pop();
         });
         content_box.append(&back_btn);
     }
@@ -434,7 +415,7 @@ fn show_question_inner(quiz_state: &Rc<RefCell<Option<QuizState>>>, content_box:
 fn submit_quiz_inner(
     quiz_state: &Rc<RefCell<Option<QuizState>>>,
     state: &SharedState,
-    stack: &Rc<gtk::Stack>,
+    nav: &Rc<NavigationView>,
     content_box: &gtk::Box,
 ) {
     while let Some(child) = content_box.first_child() {
@@ -485,9 +466,9 @@ fn submit_quiz_inner(
     let back_btn = gtk::Button::with_label("Back to Quizzes");
     back_btn.set_halign(gtk::Align::Center);
     back_btn.add_css_class("suggested-action");
-    let stack_cl = stack.clone();
+    let nav_cl = nav.clone();
     back_btn.connect_clicked(move |_| {
-        stack_cl.set_visible_child_name(PAGE_QUIZ_LIST);
+        nav_cl.pop();
     });
     content_box.append(&back_btn);
 }

@@ -5,7 +5,6 @@ use adw::prelude::*;
 
 use crate::domain::ports::VideoRepository;
 use crate::infrastructure::video::VideoPlayer;
-use crate::ui::navigation::PAGE_COURSE_VIEW;
 use crate::ui::state::SharedState;
 
 fn fmt_ns(ns: u64) -> String {
@@ -32,28 +31,15 @@ pub struct VideoPlayerPage {
 }
 
 impl VideoPlayerPage {
-    pub fn new(state: SharedState, stack: Rc<gtk::Stack>) -> Self {
+    pub fn new(state: SharedState) -> Self {
         let widget = gtk::Box::new(gtk::Orientation::Vertical, 8);
         widget.add_css_class("content-area");
-
-        let top_bar = gtk::Box::new(gtk::Orientation::Horizontal, 8);
-        top_bar.set_margin_start(8);
-        top_bar.set_margin_top(8);
-
-        let back_btn = gtk::Button::with_label("Back");
-        back_btn.add_css_class("flat");
-        let stack_cl = stack;
-        back_btn.connect_clicked(move |_| {
-            stack_cl.set_visible_child_name(PAGE_COURSE_VIEW);
-        });
-        top_bar.append(&back_btn);
 
         let video_title = gtk::Label::new(Some("Video Player"));
         video_title.add_css_class("heading");
         video_title.set_hexpand(true);
         video_title.set_halign(gtk::Align::Start);
-        top_bar.append(&video_title);
-        widget.append(&top_bar);
+        widget.append(&video_title);
 
         let player_frame = gtk::Frame::new(None);
         player_frame.set_hexpand(true);
