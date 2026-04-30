@@ -1,21 +1,27 @@
+use std::cell::RefCell;
+use std::collections::HashMap;
 use std::rc::Rc;
 
 use adw::prelude::*;
+use adw::{NavigationPage, NavigationView};
+use gio::prelude::ListModelExt;
 
 use crate::domain::ports::ExamRepository;
+use crate::ui::list_models::QuizObject;
 use crate::ui::navigation::PAGE_QUIZ_VIEW;
 use crate::ui::state::SharedState;
 
 pub struct QuizListPage {
     widget: gtk::Box,
     state: SharedState,
-    stack: Rc<gtk::Stack>,
-    list_box: gtk::Box,
+    nav_pages: Rc<RefCell<Rc<HashMap<&'static str, NavigationPage>>>>,
+    store: gio::ListStore,
     status_page: adw::StatusPage,
+    list_view: gtk::ListView,
 }
 
 impl QuizListPage {
-    pub fn new(state: SharedState, stack: Rc<gtk::Stack>) -> Self {
+    pub fn new(state: SharedState, nav: Rc<NavigationView>) -> Self {
         let widget = gtk::Box::new(gtk::Orientation::Vertical, 16);
         widget.add_css_class("content-area");
 
@@ -34,29 +40,119 @@ impl QuizListPage {
         status_page.set_margin_top(16);
         widget.append(&status_page);
 
-        let scroll = gtk::ScrolledWindow::new();
-        scroll.set_vexpand(true);
-        scroll.set_hexpand(true);
+        let store = gio::ListStore::new::<QuizObject>();
+        let no_selection = gtk::NoSelection::new(Some(store.clone()));
 
-        let list_box = gtk::Box::new(gtk::Orientation::Vertical, 8);
-        list_box.set_margin_start(16);
-        list_box.set_margin_end(16);
-        scroll.set_child(Some(&list_box));
+        let factory = gtk::SignalListItemFactory::new();
 
-        widget.append(&scroll);
+        factory.connect_setup(|_factory, list_item| {
+            let list_item = list_item.downcast_ref::<gtk::ListItem>().unwrap();
 
-        Self { widget, state, stack, list_box, status_page }
+            let frame = gtk::Frame::new(None);
+            frame.add_css_class("card");
+            frame.set_hexpand(true);
+
+            let hbox = gtk::Box::new(gtk::Orientation::Horizontal, 8);
+            hbox.set_margin_start(12);
+            hbox.set_margin_end(12);
+            hbox.set_margin_top(12);
+            hbox.set_margin_bottom(12);
+
+            let info_box = gtk::Box::new(gtk::Orientation::Vertical, 4);
+            info_box.set_hexpand(true);
+
+            let title = gtk::Label::new(None);
+            title.set_halign(gtk::Align::Start);
+            title.add_css_class("heading");
+            info_box.append(&title);
+
+            let status_label = gtk::Label::new(None);
+            status_label.set_halign(gtk::Align::Start);
+            status_label.add_css_class("subtitle");
+            info_box.append(&status_label);
+
+            hbox.append(&info_box);
+
+            let start_btn = gtk::Button::with_label("Start");
+            start_btn.set_valign(gtk::Align::Center);
+            hbox.append(&start_btn);
+
+            frame.set_child(Some(&hbox));
+            list_item.set_child(Some(&frame));
+        });
+
+        factory.connect_bind(move |_factory, list_item| {
+            let list_item = list_item.downcast_ref::<gtk::ListItem>().unwrap();
+            let frame = list_item.child().and_then(|c| c.downcast::<gtk::Frame>().ok()).unwrap();
+            let hbox = frame.child().and_then(|c| c.downcast::<gtk::Box>().ok()).unwrap();
+            let info_box = hbox.first_child().and_then(|c| c.downcast::<gtk::Box>().ok()).unwrap();
+            let title =
+                info_box.first_child().and_then(|c| c.downcast::<gtk::Label>().ok()).unwrap();
+            let status_label =
+                title.next_sibling().and_then(|c| c.downcast::<gtk::Label>().ok()).unwrap();
+            let start_btn =
+                info_box.next_sibling().and_then(|c| c.downcast::<gtk::Button>().ok()).unwrap();
+
+            let item = list_item.item();
+            if let Some(quiz) = item.as_ref().and_then(|i| i.downcast_ref::<QuizObject>()) {
+                title.set_text(&quiz.title());
+
+                if quiz.is_taken() {
+                    let score_text = format!(
+                        "Score: {:.0}% {}",
+                        quiz.score().unwrap_or(0.0) * 100.0,
+                        if quiz.passed().unwrap_or(false) { "[PASS]" } else { "[FAIL]" }
+                    );
+                    status_label.set_text(&score_text);
+                    start_btn.set_label("Review");
+                } else {
+                    status_label.set_text("Not taken yet");
+                    start_btn.set_label("Start");
+                }
+            }
+        });
+
+        let list_view = gtk::ListView::new(Some(no_selection), Some(factory));
+        list_view.set_single_click_activate(true);
+        list_view.set_margin_start(16);
+        list_view.set_margin_end(16);
+        list_view.add_css_class("boxed-list");
+        list_view.set_vexpand(true);
+        list_view.set_hexpand(true);
+
+        let nav_pages_rc: Rc<RefCell<Rc<HashMap<&'static str, NavigationPage>>>> =
+            Rc::new(RefCell::new(Rc::new(HashMap::new())));
+        let store_for_activate = store.clone();
+        let nav_for_activate = nav.clone();
+        let state_for_activate = state.clone();
+        let pages_for_activate = nav_pages_rc.clone();
+        list_view.connect_activate(move |_, pos| {
+            let item = store_for_activate.item(pos);
+            if let Some(quiz) = item.as_ref().and_then(|i| i.downcast_ref::<QuizObject>()) {
+                state_for_activate.borrow_mut().current_quiz_id = Some(quiz.id());
+                let pages = pages_for_activate.borrow();
+                if let Some(page) = pages.get(PAGE_QUIZ_VIEW) {
+                    nav_for_activate.push(page);
+                }
+            }
+        });
+
+        widget.append(&list_view);
+
+        Self { widget, state, nav_pages: nav_pages_rc, store, status_page, list_view }
     }
 
     pub fn widget(&self) -> &gtk::Box {
         &self.widget
     }
 
+    pub fn set_nav_pages(&self, pages: Rc<HashMap<&'static str, NavigationPage>>) {
+        *self.nav_pages.borrow_mut() = pages;
+    }
+
     pub fn refresh(&self) {
-        while let Some(child) = self.list_box.first_child() {
-            self.list_box.remove(&child);
-        }
-        self.list_box.set_visible(false);
+        self.store.remove_all();
+        self.list_view.set_visible(false);
         self.status_page.set_visible(false);
 
         let state = self.state.borrow();
@@ -67,10 +163,17 @@ impl QuizListPage {
                         self.status_page.set_visible(true);
                     } else {
                         for exam in &exams {
-                            let card = self.build_exam_card(exam);
-                            self.list_box.append(&card);
+                            let obj = QuizObject::new(
+                                exam.id().to_string(),
+                                format!("Exam for video {}", exam.video_id()),
+                                exam.video_id().to_string(),
+                                exam.is_taken(),
+                                exam.score(),
+                                exam.passed(),
+                            );
+                            self.store.append(&obj);
                         }
-                        self.list_box.set_visible(true);
+                        self.list_view.set_visible(true);
                     }
                 },
                 Err(e) => {
@@ -85,59 +188,5 @@ impl QuizListPage {
             self.status_page.set_description(Some("No backend connected."));
             self.status_page.set_visible(true);
         }
-    }
-
-    fn build_exam_card(&self, exam: &crate::domain::entities::Exam) -> gtk::Frame {
-        let frame = gtk::Frame::new(None);
-        frame.add_css_class("card");
-        frame.set_hexpand(true);
-
-        let vbox = gtk::Box::new(gtk::Orientation::Horizontal, 8);
-        vbox.set_margin_start(12);
-        vbox.set_margin_end(12);
-        vbox.set_margin_top(12);
-        vbox.set_margin_bottom(12);
-
-        let info_box = gtk::Box::new(gtk::Orientation::Vertical, 4);
-        info_box.set_hexpand(true);
-
-        let title = gtk::Label::new(Some(&format!("Exam for video {}", exam.video_id())));
-        title.set_halign(gtk::Align::Start);
-        title.add_css_class("heading");
-        info_box.append(&title);
-
-        if exam.is_taken() {
-            let score_text = format!(
-                "Score: {:.0}% {}",
-                exam.score().unwrap_or(0.0) * 100.0,
-                if exam.passed().unwrap_or(false) { "[PASS]" } else { "[FAIL]" }
-            );
-            let score_label = gtk::Label::new(Some(&score_text));
-            score_label.set_halign(gtk::Align::Start);
-            score_label.add_css_class("subtitle");
-            info_box.append(&score_label);
-        } else {
-            let pending = gtk::Label::new(Some("Not taken yet"));
-            pending.set_halign(gtk::Align::Start);
-            pending.add_css_class("subtitle");
-            info_box.append(&pending);
-        }
-
-        vbox.append(&info_box);
-
-        let start_btn = gtk::Button::with_label(if exam.is_taken() { "Review" } else { "Start" });
-        start_btn.set_valign(gtk::Align::Center);
-
-        let state_cl = self.state.clone();
-        let stack_cl = self.stack.clone();
-        let exam_id = exam.id().to_string();
-        start_btn.connect_clicked(move |_| {
-            state_cl.borrow_mut().current_quiz_id = Some(exam_id.clone());
-            stack_cl.set_visible_child_name(PAGE_QUIZ_VIEW);
-        });
-        vbox.append(&start_btn);
-
-        frame.set_child(Some(&vbox));
-        frame
     }
 }

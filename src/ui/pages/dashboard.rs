@@ -4,11 +4,12 @@ use adw::prelude::*;
 
 use crate::ui::state::SharedState;
 use crate::ui::toast::Toast;
+use adw::NavigationView;
 
 pub struct DashboardPage {
     widget: gtk::Box,
     state: SharedState,
-    _stack: Rc<gtk::Stack>,
+    _nav: Rc<NavigationView>,
     stat_courses: gtk::Label,
     stat_modules: gtk::Label,
     stat_videos: gtk::Label,
@@ -21,7 +22,7 @@ pub struct DashboardPage {
 }
 
 impl DashboardPage {
-    pub fn new(state: SharedState, stack: Rc<gtk::Stack>) -> Self {
+    pub fn new(state: SharedState, nav: Rc<NavigationView>) -> Self {
         let widget = gtk::Box::new(gtk::Orientation::Vertical, 16);
         widget.add_css_class("content-area");
 
@@ -96,7 +97,7 @@ impl DashboardPage {
         let s = Self {
             widget,
             state,
-            _stack: stack,
+            _nav: nav,
             stat_courses: stat_courses.1,
             stat_modules: stat_modules.1,
             stat_videos: stat_videos.1,

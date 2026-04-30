@@ -1,5 +1,6 @@
 use std::rc::Rc;
 
+use adw::NavigationView;
 use adw::prelude::*;
 
 use crate::domain::ports::SecretStore;
@@ -8,7 +9,7 @@ use crate::ui::state::SharedState;
 pub struct SettingsPage {
     widget: gtk::Box,
     state: SharedState,
-    _stack: Rc<gtk::Stack>,
+    _nav: Rc<NavigationView>,
     api_key_entry: adw::EntryRow,
     api_status_label: gtk::Label,
     db_path_row: adw::ActionRow,
@@ -20,7 +21,7 @@ pub struct SettingsPage {
 }
 
 impl SettingsPage {
-    pub fn new(state: SharedState, stack: Rc<gtk::Stack>) -> Self {
+    pub fn new(state: SharedState, nav: Rc<NavigationView>) -> Self {
         let widget = gtk::Box::new(gtk::Orientation::Vertical, 16);
         widget.add_css_class("content-area");
 
@@ -112,7 +113,7 @@ impl SettingsPage {
         let page = Self {
             widget,
             state: state.clone(),
-            _stack: stack,
+            _nav: nav,
             api_key_entry,
             api_status_label,
             db_path_row,
