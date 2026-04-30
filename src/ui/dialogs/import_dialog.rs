@@ -6,12 +6,10 @@ use adw::prelude::*;
 use crate::application::ServiceFactory;
 use crate::application::use_cases::IngestPlaylistInput;
 use crate::infrastructure::tokio_bridge;
-use crate::ui::navigation::PAGE_COURSE_LIST;
 use crate::ui::state::SharedState;
 
 pub fn show_import_playlist_dialog(
     state: SharedState,
-    stack: Rc<gtk::Stack>,
     parent_window: Option<&gtk::Window>,
     on_success: Option<Rc<dyn Fn()>>,
 ) {
@@ -78,7 +76,6 @@ pub fn show_import_playlist_dialog(
     let spinner_cl = spinner.clone();
     let dialog_cl = dialog.clone();
     let state_cl = state.clone();
-    let stack_cl = stack.clone();
     let on_success_cl = on_success;
 
     import_btn.connect_clicked(move |_| {
@@ -109,7 +106,6 @@ pub fn show_import_playlist_dialog(
             let status_idle = status_cl.clone();
             let sp_idle = spinner_cl.clone();
             let dlg_idle = dialog_cl.clone();
-            let sk_idle = stack_cl.clone();
             let url_idle = url_entry_cl.clone();
             let name_idle = name_entry_cl.clone();
             let import_idle = import_btn_cl.clone();
@@ -124,7 +120,6 @@ pub fn show_import_playlist_dialog(
                     if success {
                         crate::ui::toast::Toast::show(&msg);
                         dlg_idle.close();
-                        sk_idle.set_visible_child_name(PAGE_COURSE_LIST);
                         if let Some(ref cb) = on_success_cb {
                             cb();
                         }
