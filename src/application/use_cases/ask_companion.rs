@@ -98,6 +98,8 @@ where
             .map_err(|e| CompanionError::Repository(e.to_string()))?
             .map(|note| note.content().to_string());
 
+        let transcript = video.transcript().map(|s| s.to_string());
+
         // Build context
         let context = CompanionContext {
             video_title: video.title().to_string(),
@@ -106,6 +108,7 @@ where
             course_name: course.name().to_string(),
             summary: video.summary().map(|s| s.to_string()),
             notes,
+            transcript,
             local_context: input.local_context.clone(),
         };
 

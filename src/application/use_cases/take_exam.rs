@@ -87,7 +87,13 @@ where
         // Generate questions via AI
         let questions = self
             .examiner
-            .generate_mcq(video.title(), video.description(), input.num_questions, input.difficulty)
+            .generate_mcq(
+                video.title(),
+                video.description(),
+                video.transcript(),
+                input.num_questions,
+                input.difficulty,
+            )
             .await
             .map_err(|e| ExamError::AI(e.to_string()))?;
 

@@ -27,6 +27,7 @@ pub struct CompanionContext {
     pub course_name: String,
     pub summary: Option<String>,
     pub notes: Option<String>,
+    pub transcript: Option<String>,
     /// Extra user-provided context for local videos without transcripts.
     pub local_context: Option<String>,
 }
@@ -55,6 +56,7 @@ pub trait ExaminerAI: Send + Sync {
         &self,
         video_title: &str,
         video_description: Option<&str>,
+        video_transcript: Option<&str>,
         num_questions: u8,
         difficulty: ExamDifficulty,
     ) -> Result<Vec<MCQuestion>, LLMError>;
