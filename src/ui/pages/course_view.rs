@@ -1,6 +1,8 @@
 use std::cell::RefCell;
+use std::collections::HashMap;
 use std::rc::Rc;
 
+use adw::NavigationView;
 use adw::prelude::*;
 
 use crate::application::ServiceFactory;
@@ -8,35 +10,24 @@ use crate::application::use_cases::{CreateModuleInput, MoveVideoInput, UpdateMod
 use crate::domain::entities::Module;
 use crate::domain::ports::{CourseRepository, ModuleRepository, VideoRepository};
 use crate::domain::value_objects::ModuleId;
-use crate::ui::navigation::{PAGE_COURSE_LIST, PAGE_VIDEO_PLAYER};
+use crate::ui::navigation::PAGE_VIDEO_PLAYER;
 use crate::ui::state::SharedState;
 
 #[allow(clippy::type_complexity)]
 pub struct CourseViewPage {
     widget: gtk::Box,
     state: SharedState,
-    stack: Rc<gtk::Stack>,
+    nav: Rc<NavigationView>,
+    nav_pages: Rc<RefCell<Rc<HashMap<&'static str, adw::NavigationPage>>>>,
     content_box: gtk::Box,
     status_page: adw::StatusPage,
     refresh_cb: Rc<RefCell<Option<Rc<dyn Fn()>>>>,
 }
 
 impl CourseViewPage {
-    pub fn new(state: SharedState, stack: Rc<gtk::Stack>) -> Self {
+    pub fn new(state: SharedState, nav: Rc<NavigationView>) -> Self {
         let widget = gtk::Box::new(gtk::Orientation::Vertical, 16);
         widget.add_css_class("content-area");
-
-        let back_btn = gtk::Button::with_label("Back to Courses");
-        back_btn.add_css_class("flat");
-        back_btn.set_halign(gtk::Align::Start);
-        back_btn.set_margin_start(8);
-        back_btn.set_margin_top(8);
-
-        let stack_cl = stack.clone();
-        back_btn.connect_clicked(move |_| {
-            stack_cl.set_visible_child_name(PAGE_COURSE_LIST);
-        });
-        widget.append(&back_btn);
 
         let status_page = adw::StatusPage::new();
         status_page.set_title("Loading...");
@@ -58,7 +49,8 @@ impl CourseViewPage {
         Self {
             widget,
             state,
-            stack,
+            nav,
+            nav_pages: Rc::new(RefCell::new(Rc::new(HashMap::new()))),
             content_box,
             status_page,
             refresh_cb: Rc::new(RefCell::new(None)),
@@ -71,6 +63,10 @@ impl CourseViewPage {
 
     pub fn set_refresh_cb(&self, cb: Rc<dyn Fn()>) {
         *self.refresh_cb.borrow_mut() = Some(cb);
+    }
+
+    pub fn set_nav_pages(&self, pages: Rc<HashMap<&'static str, adw::NavigationPage>>) {
+        *self.nav_pages.borrow_mut() = pages;
     }
 
     pub fn refresh(&self) {
@@ -210,11 +206,13 @@ impl CourseViewPage {
                             },
                         };
 
+                        let pages_borrow = self.nav_pages.borrow();
                         for (vid_idx, video) in videos.iter().enumerate() {
                             let row = Self::build_video_row(
                                 video,
                                 &self.state,
-                                &self.stack,
+                                &self.nav,
+                                &pages_borrow,
                                 vid_idx,
                                 videos.len(),
                                 module.id(),
@@ -263,7 +261,8 @@ impl CourseViewPage {
     fn build_video_row(
         video: &crate::domain::entities::Video,
         state: &SharedState,
-        stack: &Rc<gtk::Stack>,
+        nav: &Rc<NavigationView>,
+        nav_pages: &HashMap<&'static str, adw::NavigationPage>,
         video_position: usize,
         video_count: usize,
         current_module_id: &ModuleId,
@@ -419,11 +418,14 @@ impl CourseViewPage {
         play_btn.add_css_class("circular");
 
         let state_cl = state.clone();
-        let stack_cl = stack.clone();
+        let nav_cl = nav.clone();
+        let vp_page = nav_pages.get(PAGE_VIDEO_PLAYER).cloned();
         let video_id = video.id().to_string();
         play_btn.connect_clicked(move |_| {
             state_cl.borrow_mut().current_video_id = Some(video_id.clone());
-            stack_cl.set_visible_child_name(PAGE_VIDEO_PLAYER);
+            if let Some(ref vp_page) = vp_page {
+                nav_cl.push(vp_page);
+            }
         });
         row.append(&play_btn);
 

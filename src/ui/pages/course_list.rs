@@ -1,8 +1,13 @@
+use std::cell::RefCell;
+use std::collections::HashMap;
 use std::rc::Rc;
 
 use adw::prelude::*;
+use adw::{NavigationPage, NavigationView};
+use gio::prelude::ListModelExt;
 
 use crate::domain::ports::{CourseRepository, ModuleRepository};
+use crate::ui::list_models::CourseObject;
 use crate::ui::navigation::PAGE_COURSE_VIEW;
 use crate::ui::state::SharedState;
 use crate::ui::toast::Toast;
@@ -10,14 +15,15 @@ use crate::ui::toast::Toast;
 pub struct CourseListPage {
     widget: gtk::Box,
     state: SharedState,
-    stack: Rc<gtk::Stack>,
+    nav_pages: Rc<RefCell<Rc<HashMap<&'static str, NavigationPage>>>>,
+    store: gio::ListStore,
     search_entry: gtk::SearchEntry,
-    list_box: gtk::Box,
     status_page: adw::StatusPage,
+    list_view: gtk::ListView,
 }
 
 impl CourseListPage {
-    pub fn new(state: SharedState, stack: Rc<gtk::Stack>) -> Self {
+    pub fn new(state: SharedState, nav: Rc<NavigationView>) -> Self {
         let widget = gtk::Box::new(gtk::Orientation::Vertical, 16);
         widget.add_css_class("content-area");
 
@@ -43,35 +49,112 @@ impl CourseListPage {
         status_page.set_margin_top(16);
         widget.append(&status_page);
 
-        let scroll = gtk::ScrolledWindow::new();
-        scroll.set_vexpand(true);
-        scroll.set_hexpand(true);
+        let store = gio::ListStore::new::<CourseObject>();
+        let no_selection = gtk::NoSelection::new(Some(store.clone()));
 
-        let list_box = gtk::Box::new(gtk::Orientation::Vertical, 8);
-        list_box.set_margin_start(16);
-        list_box.set_margin_end(16);
-        list_box.set_margin_bottom(16);
-        scroll.set_child(Some(&list_box));
+        let factory = gtk::SignalListItemFactory::new();
 
-        widget.append(&scroll);
+        factory.connect_setup(|_factory, list_item| {
+            let list_item = list_item.downcast_ref::<gtk::ListItem>().unwrap();
+
+            let frame = gtk::Frame::new(None);
+            frame.add_css_class("card");
+            frame.set_hexpand(true);
+
+            let vbox = gtk::Box::new(gtk::Orientation::Vertical, 4);
+            vbox.set_margin_start(12);
+            vbox.set_margin_end(12);
+            vbox.set_margin_top(12);
+            vbox.set_margin_bottom(12);
+
+            let title = gtk::Label::new(None);
+            title.set_halign(gtk::Align::Start);
+            title.add_css_class("heading");
+            vbox.append(&title);
+
+            let desc_label = gtk::Label::new(None);
+            desc_label.set_halign(gtk::Align::Start);
+            desc_label.set_wrap(true);
+            desc_label.add_css_class("subtitle");
+            vbox.append(&desc_label);
+
+            let info_label = gtk::Label::new(None);
+            info_label.set_halign(gtk::Align::Start);
+            info_label.add_css_class("caption");
+            vbox.append(&info_label);
+
+            frame.set_child(Some(&vbox));
+            list_item.set_child(Some(&frame));
+        });
+
+        factory.connect_bind(move |_factory, list_item| {
+            let list_item = list_item.downcast_ref::<gtk::ListItem>().unwrap();
+            let frame = list_item.child().and_then(|c| c.downcast::<gtk::Frame>().ok()).unwrap();
+            let vbox = frame.child().and_then(|c| c.downcast::<gtk::Box>().ok()).unwrap();
+            let title = vbox.first_child().and_then(|c| c.downcast::<gtk::Label>().ok()).unwrap();
+            let desc_label =
+                title.next_sibling().and_then(|c| c.downcast::<gtk::Label>().ok()).unwrap();
+            let info_label =
+                desc_label.next_sibling().and_then(|c| c.downcast::<gtk::Label>().ok()).unwrap();
+
+            let item = list_item.item();
+            if let Some(course) = item.as_ref().and_then(|i| i.downcast_ref::<CourseObject>()) {
+                title.set_text(&course.title());
+                match course.description() {
+                    Some(ref d) => {
+                        desc_label.set_text(d);
+                        desc_label.set_visible(true);
+                    },
+                    None => desc_label.set_visible(false),
+                }
+                info_label.set_text(&format!("{} modules", course.module_count()));
+            }
+        });
+
+        let list_view = gtk::ListView::new(Some(no_selection.clone()), Some(factory.clone()));
+        list_view.set_single_click_activate(true);
+        list_view.set_margin_start(16);
+        list_view.set_margin_end(16);
+        list_view.add_css_class("boxed-list");
+        list_view.set_vexpand(true);
+        list_view.set_hexpand(true);
+
+        let nav_pages_rc: Rc<RefCell<Rc<HashMap<&'static str, NavigationPage>>>> =
+            Rc::new(RefCell::new(Rc::new(HashMap::new())));
+        let store_for_activate = store.clone();
+        let nav_for_activate = nav.clone();
+        let state_for_activate = state.clone();
+        let pages_for_activate = nav_pages_rc.clone();
+        list_view.connect_activate(move |_, pos| {
+            let item = store_for_activate.item(pos);
+            if let Some(course) = item.as_ref().and_then(|i| i.downcast_ref::<CourseObject>()) {
+                state_for_activate.borrow_mut().current_course_id = Some(course.id());
+                let pages = pages_for_activate.borrow();
+                if let Some(page) = pages.get(PAGE_COURSE_VIEW) {
+                    nav_for_activate.push(page);
+                }
+            }
+        });
+
+        widget.append(&list_view);
 
         let page = Self {
             widget,
             state: state.clone(),
-            stack,
+            nav_pages: nav_pages_rc,
+            store: store.clone(),
             search_entry: search_entry.clone(),
-            list_box: list_box.clone(),
             status_page,
+            list_view,
         };
 
         let state_cl = state.clone();
         let search_cl = search_entry.clone();
-        let list_cl = list_box.clone();
+        let store_cl = page.store.clone();
         let status_cl = page.status_page.clone();
-        let stack_cl = page.stack.clone();
-
+        let lv_clone = page.list_view.clone();
         search_entry.connect_search_changed(move |_| {
-            Self::repopulate(&state_cl, &search_cl, &list_cl, &status_cl, &stack_cl);
+            Self::repopulate(&state_cl, &search_cl, &store_cl, &status_cl, &lv_clone);
         });
 
         page
@@ -81,27 +164,29 @@ impl CourseListPage {
         &self.widget
     }
 
+    pub fn set_nav_pages(&self, pages: Rc<HashMap<&'static str, NavigationPage>>) {
+        *self.nav_pages.borrow_mut() = pages;
+    }
+
     pub fn refresh(&self) {
         Self::repopulate(
             &self.state,
             &self.search_entry,
-            &self.list_box,
+            &self.store,
             &self.status_page,
-            &self.stack,
+            &self.list_view,
         );
     }
 
     fn repopulate(
         state: &SharedState,
         search: &gtk::SearchEntry,
-        list_box: &gtk::Box,
+        store: &gio::ListStore,
         status_page: &adw::StatusPage,
-        stack: &Rc<gtk::Stack>,
+        list_view: &gtk::ListView,
     ) {
-        while let Some(child) = list_box.first_child() {
-            list_box.remove(&child);
-        }
-        list_box.set_visible(false);
+        store.remove_all();
+        list_view.set_visible(false);
         status_page.set_visible(false);
 
         let s = state.borrow();
@@ -129,10 +214,21 @@ impl CourseListPage {
                             status_page.set_visible(true);
                         } else {
                             for course in &filtered {
-                                let card = Self::build_course_card(course, state, stack);
-                                list_box.append(&card);
+                                let mc = ctx
+                                    .module_repo
+                                    .find_by_course(course.id())
+                                    .ok()
+                                    .map(|m| m.len())
+                                    .unwrap_or(0);
+                                let obj = CourseObject::new(
+                                    course.id().to_string(),
+                                    course.name().to_string(),
+                                    course.description().map(|s| s.to_string()),
+                                    mc as i32,
+                                );
+                                store.append(&obj);
                             }
-                            list_box.set_visible(true);
+                            list_view.set_visible(true);
                         }
                     }
                 },
@@ -148,59 +244,5 @@ impl CourseListPage {
             status_page.set_description(Some("No backend connected."));
             status_page.set_visible(true);
         }
-    }
-
-    fn build_course_card(
-        course: &crate::domain::entities::Course,
-        state: &SharedState,
-        stack: &Rc<gtk::Stack>,
-    ) -> gtk::Frame {
-        let frame = gtk::Frame::new(None);
-        frame.add_css_class("card");
-        frame.set_hexpand(true);
-
-        let vbox = gtk::Box::new(gtk::Orientation::Vertical, 4);
-        vbox.set_margin_start(12);
-        vbox.set_margin_end(12);
-        vbox.set_margin_top(12);
-        vbox.set_margin_bottom(12);
-
-        let title = gtk::Label::new(Some(course.name()));
-        title.set_halign(gtk::Align::Start);
-        title.add_css_class("heading");
-        vbox.append(&title);
-
-        if let Some(desc) = course.description() {
-            let desc_label = gtk::Label::new(Some(desc));
-            desc_label.set_halign(gtk::Align::Start);
-            desc_label.set_wrap(true);
-            desc_label.add_css_class("subtitle");
-            vbox.append(&desc_label);
-        }
-
-        let module_count = state
-            .borrow()
-            .backend
-            .as_ref()
-            .and_then(|ctx| ctx.module_repo.find_by_course(course.id()).ok().map(|m| m.len()))
-            .unwrap_or(0);
-
-        let info_label = gtk::Label::new(Some(&format!("{} modules", module_count)));
-        info_label.set_halign(gtk::Align::Start);
-        info_label.add_css_class("caption");
-        vbox.append(&info_label);
-
-        let gesture = gtk::GestureClick::new();
-        let state_clone = state.clone();
-        let stack_clone = stack.clone();
-        let course_id = course.id().to_string();
-        gesture.connect_pressed(move |_, _, _, _| {
-            state_clone.borrow_mut().current_course_id = Some(course_id.clone());
-            stack_clone.set_visible_child_name(PAGE_COURSE_VIEW);
-        });
-        frame.add_controller(gesture);
-
-        frame.set_child(Some(&vbox));
-        frame
     }
 }
