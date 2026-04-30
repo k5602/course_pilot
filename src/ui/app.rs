@@ -24,8 +24,7 @@ impl CoursePilotApp {
             .build();
 
         let state = new_shared_state();
-        let gtk_window: &gtk::Window = window.upcast_ref();
-        let layout = MainLayout::build(state.clone(), gtk_window);
+        let layout = MainLayout::build(state.clone(), &window);
         window.set_content(Some(&layout));
         onboarding::check_onboarding(state, &window);
         window.present();
