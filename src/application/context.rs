@@ -36,6 +36,8 @@ pub struct AppConfig {
     pub gemini_api_key: Option<String>,
     /// Discord Rich Presence client ID (optional).
     pub discord_client_id: Option<String>,
+    /// LLM model identifier (default: gemini/gemini-2.5-flash).
+    pub llm_model: String,
 }
 
 impl Default for AppConfig {
@@ -44,6 +46,7 @@ impl Default for AppConfig {
             database_url: "course_pilot.db".to_string(),
             gemini_api_key: None,
             discord_client_id: None,
+            llm_model: "gemini/gemini-2.5-flash".to_string(),
         }
     }
 }
@@ -57,6 +60,8 @@ impl AppConfig {
                 .unwrap_or_else(|_| "course_pilot.db".to_string()),
             gemini_api_key: std::env::var("GEMINI_API_KEY").ok().filter(|s| !s.is_empty()),
             discord_client_id: std::env::var("DISCORD_CLIENT_ID").ok().filter(|s| !s.is_empty()),
+            llm_model: std::env::var("LLM_MODEL")
+                .unwrap_or_else(|_| "gemini/gemini-2.5-flash".to_string()),
         }
     }
 
@@ -85,6 +90,11 @@ impl AppConfigBuilder {
 
     pub fn discord_client_id(mut self, client_id: impl Into<String>) -> Self {
         self.config.discord_client_id = Some(client_id.into());
+        self
+    }
+
+    pub fn llm_model(mut self, model: impl Into<String>) -> Self {
+        self.config.llm_model = model.into();
         self
     }
 
@@ -172,7 +182,8 @@ impl AppContext {
             .or_else(|| keystore.retrieve("gemini_api_key").ok().flatten());
 
         // Create LLM adapter if key is available
-        let llm = gemini_api_key.map(|key| Arc::new(GeminiAdapter::new(key)));
+        let llm =
+            gemini_api_key.map(|key| Arc::new(GeminiAdapter::new(key, config.llm_model.clone())));
 
         Ok(Self {
             config,
@@ -204,14 +215,15 @@ impl AppContext {
         self.keystore
             .store("gemini_api_key", key)
             .map_err(|e| AppContextError::Keystore(e.to_string()))?;
-        self.llm = Some(Arc::new(GeminiAdapter::new(key.to_string())));
+        self.llm =
+            Some(Arc::new(GeminiAdapter::new(key.to_string(), self.config.llm_model.clone())));
         Ok(())
     }
 
     /// Reloads the LLM adapter from the keystore (for dynamic key updates).
     pub fn reload_llm(&mut self) -> Result<(), AppContextError> {
         if let Ok(Some(key)) = self.keystore.retrieve("gemini_api_key") {
-            self.llm = Some(Arc::new(GeminiAdapter::new(key)));
+            self.llm = Some(Arc::new(GeminiAdapter::new(key, self.config.llm_model.clone())));
         }
         Ok(())
     }
@@ -250,6 +262,7 @@ impl ServiceFactory {
             ctx.video_repo.clone(),
             ctx.search_repo.clone(),
             ctx.llm.clone().map(|a| a as Arc<dyn ModuleTitleGenerator>),
+            Some(ctx.db_pool.clone()),
         )
     }
 
@@ -270,6 +283,7 @@ impl ServiceFactory {
             ctx.video_repo.clone(),
             ctx.search_repo.clone(),
             ctx.llm.clone().map(|a| a as Arc<dyn ModuleTitleGenerator>),
+            Some(ctx.db_pool.clone()),
         )
     }
 

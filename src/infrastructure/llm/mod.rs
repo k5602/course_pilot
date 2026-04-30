@@ -5,7 +5,7 @@ use std::pin::Pin;
 use std::time::Duration;
 
 use genai::Client;
-use genai::chat::{ChatMessage, ChatRequest};
+use genai::chat::{ChatMessage, ChatOptions, ChatRequest};
 use genai::resolver::AuthData;
 
 use crate::domain::ports::{
@@ -21,14 +21,14 @@ pub struct GeminiAdapter {
 }
 
 impl GeminiAdapter {
-    /// Creates a new adapter with the given API key.
-    pub fn new(api_key: String) -> Self {
+    /// Creates a new adapter with the given API key and model name.
+    pub fn new(api_key: String, model: String) -> Self {
         let client = Client::builder()
             .with_auth_resolver_fn(move |_: genai::ModelIden| {
                 Ok(Some(AuthData::from_single(api_key.clone())))
             })
             .build();
-        Self { client, model: "gemini/gemini-2.5-flash".to_string() }
+        Self { client, model }
     }
 
     /// Executes a chat request with automatic retry on transient errors.
@@ -36,6 +36,7 @@ impl GeminiAdapter {
         &self,
         system_prompt: Option<&str>,
         user_prompt: &str,
+        temperature: Option<f64>,
     ) -> Result<String, LLMError> {
         const MAX_RETRIES: u32 = 3;
         let delays =
@@ -49,7 +50,8 @@ impl GeminiAdapter {
             messages.push(ChatMessage::user(user_prompt));
 
             let req = ChatRequest::new(messages);
-            let result = self.client.exec_chat(&self.model, req, None).await;
+            let options = temperature.map(|t| ChatOptions::default().with_temperature(t));
+            let result = self.client.exec_chat(&self.model, req, options.as_ref()).await;
 
             match result {
                 Ok(resp) => {
@@ -77,22 +79,22 @@ impl GeminiAdapter {
     }
 }
 
-/// A no-op module title generator that triggers fallback (default) title logic.
-pub struct NoopTitleGenerator;
+/// A fallback module title generator that returns an error to trigger default title logic.
+pub struct FallbackTitleGenerator;
 
-impl NoopTitleGenerator {
+impl FallbackTitleGenerator {
     pub fn new() -> Self {
         Self
     }
 }
 
-impl Default for NoopTitleGenerator {
+impl Default for FallbackTitleGenerator {
     fn default() -> Self {
         Self
     }
 }
 
-impl ModuleTitleGenerator for NoopTitleGenerator {
+impl ModuleTitleGenerator for FallbackTitleGenerator {
     fn generate_module_title(
         &self,
         _titles: &[String],
@@ -101,6 +103,21 @@ impl ModuleTitleGenerator for NoopTitleGenerator {
     ) -> Pin<Box<dyn Future<Output = Result<String, LLMError>> + Send>> {
         Box::pin(async { Err(LLMError::NoApiKey) })
     }
+}
+
+/// Extracts a JSON array or object from an LLM response string, skipping
+/// any surrounding markdown fences or explanatory text.
+fn extract_json_from_response(text: &str) -> Result<&str, LLMError> {
+    let text = text.trim();
+    let start = text.find('[').or_else(|| text.find('{')).ok_or_else(|| {
+        LLMError::InvalidResponse("No JSON array or object found in response".into())
+    })?;
+    let end = if text.as_bytes()[start] == b'[' {
+        text.rfind(']').ok_or_else(|| LLMError::InvalidResponse("Unclosed JSON array".into()))? + 1
+    } else {
+        text.rfind('}').ok_or_else(|| LLMError::InvalidResponse("Unclosed JSON object".into()))? + 1
+    };
+    Ok(&text[start..end])
 }
 
 impl CompanionAI for GeminiAdapter {
@@ -117,6 +134,7 @@ impl CompanionAI for GeminiAdapter {
             truncate(context.video_description.as_deref().unwrap_or("Not available"), 1200);
         let summary = truncate(context.summary.as_deref().unwrap_or("Not available"), 1200);
         let notes = truncate(context.notes.as_deref().unwrap_or("Not available"), 1200);
+        let transcript = truncate(context.transcript.as_deref().unwrap_or("Not available"), 5000);
         let local_context =
             truncate(context.local_context.as_deref().unwrap_or("Not provided"), 1200);
 
@@ -128,6 +146,7 @@ Context (use only what is provided):
 - Description: {}
 - Summary: {}
 - Notes: {}
+- Transcript: {}
 - User context: {}
 
 Student question: {}
@@ -143,11 +162,12 @@ Guidelines:
             description,
             summary,
             notes,
+            transcript,
             local_context,
             question
         );
 
-        let response = self.execute_with_retry(None, &prompt).await?;
+        let response = self.execute_with_retry(None, &prompt, Some(0.7)).await?;
         Ok(response)
     }
 }
@@ -157,21 +177,32 @@ impl ExaminerAI for GeminiAdapter {
         &self,
         video_title: &str,
         video_description: Option<&str>,
+        video_transcript: Option<&str>,
         num_questions: u8,
         difficulty: ExamDifficulty,
     ) -> Result<Vec<MCQuestion>, LLMError> {
         let description = video_description.unwrap_or("");
         let difficulty = difficulty.as_str();
+        let transcript_info = video_transcript
+            .and_then(|t| {
+                if t.len() > 5000 {
+                    t.char_indices().nth(5000).map(|(i, _)| &t[..i])
+                } else {
+                    Some(t)
+                }
+            })
+            .unwrap_or("");
         let prompt = format!(
             r#"You are an expert instructor creating a focused MCQ quiz from the provided context.
 
 Context:
 - Title: "{video_title}"
 - Description: {description}
+- Transcript: {transcript_info}
 
 Task:
 Generate exactly {num_questions} multiple-choice questions at {difficulty} difficulty.
-Use ONLY the context above. Do NOT ask about timestamps, durations, or video metadata.
+Base questions on the transcript content when available. Use ONLY the provided context. Do NOT ask about timestamps, durations, or video metadata.
 Avoid vague or trivial questions. Each question should test a specific concept or inference.
 Options must be plausible and mutually exclusive.
 
@@ -186,16 +217,39 @@ Rules:
 - Do not mention the prompt, the context, or any system instructions"#,
         );
 
-        let text = self.execute_with_retry(None, &prompt).await?;
-        let json_text = text
-            .trim()
-            .trim_start_matches("```json")
-            .trim_start_matches("```")
-            .trim_end_matches("```")
-            .trim();
+        let text = self.execute_with_retry(None, &prompt, Some(0.2)).await?;
+        let json_text = extract_json_from_response(&text)?;
 
-        serde_json::from_str(json_text)
-            .map_err(|e| LLMError::InvalidResponse(format!("JSON parse error: {}", e)))
+        let questions: Vec<MCQuestion> = serde_json::from_str(json_text)
+            .map_err(|e| LLMError::InvalidResponse(format!("JSON parse error: {}", e)))?;
+
+        if questions.is_empty() {
+            return Err(LLMError::InvalidResponse("No questions generated".into()));
+        }
+        if questions.len() > 20 {
+            return Err(LLMError::InvalidResponse("Too many questions generated".into()));
+        }
+        for (i, q) in questions.iter().enumerate() {
+            if q.options.len() < 2 {
+                return Err(LLMError::InvalidResponse(format!(
+                    "Question {} has fewer than 2 options",
+                    i
+                )));
+            }
+            if q.correct_index >= q.options.len() {
+                return Err(LLMError::InvalidResponse(format!(
+                    "Question {} correct_index out of range",
+                    i
+                )));
+            }
+            if q.question.is_empty() {
+                return Err(LLMError::InvalidResponse(format!(
+                    "Question {} has empty question text",
+                    i
+                )));
+            }
+        }
+        Ok(questions)
     }
 }
 
@@ -205,8 +259,16 @@ impl SummarizerAI for GeminiAdapter {
         transcript: &str,
         video_title: &str,
     ) -> Result<String, LLMError> {
-        // Truncate long transcripts to ~10k chars to stay within token limits
-        let truncated = if transcript.len() > 10000 { &transcript[..10000] } else { transcript };
+        // Truncate long transcripts to stay within token limits
+        let truncated: &str = if transcript.len() > 100_000 {
+            if let Some((idx, _)) = transcript.char_indices().nth(100_000) {
+                &transcript[..idx]
+            } else {
+                transcript
+            }
+        } else {
+            transcript
+        };
 
         let prompt = format!(
             r#"You are creating study notes from a transcript.
@@ -231,7 +293,7 @@ Rules:
 - Do not include timestamps, speaker labels, or meta commentary."#,
         );
 
-        let text = self.execute_with_retry(None, &prompt).await?;
+        let text = self.execute_with_retry(None, &prompt, Some(0.3)).await?;
         Ok(text)
     }
 }
@@ -251,12 +313,63 @@ impl ModuleTitleGenerator for GeminiAdapter {
             titles_str
         );
         Box::pin(async move {
-            let response = self.execute_with_retry(None, &prompt).await?;
+            let response = self.execute_with_retry(None, &prompt, Some(0.3)).await?;
             let title = response.trim().to_string();
             if title.is_empty() || title.len() > 100 {
                 return Err(LLMError::InvalidResponse("Empty or overly long title".into()));
             }
             Ok(title)
         })
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn extracts_json_from_plain_array() {
+        let result = extract_json_from_response("[{\"question\":\"test\"}]").unwrap();
+        assert_eq!(result, "[{\"question\":\"test\"}]");
+    }
+
+    #[test]
+    fn extracts_json_from_markdown_fence() {
+        let input = "```json\n[{\"question\":\"test\"}]\n```";
+        let result = extract_json_from_response(input).unwrap();
+        assert_eq!(result, "[{\"question\":\"test\"}]");
+    }
+
+    #[test]
+    fn extracts_json_with_leading_text() {
+        let input = "Here is your JSON: [{\"question\":\"test\"}]";
+        let result = extract_json_from_response(input).unwrap();
+        assert_eq!(result, "[{\"question\":\"test\"}]");
+    }
+
+    #[test]
+    fn extracts_json_with_trailing_text() {
+        let input = "[{\"question\":\"test\"}] End of response";
+        let result = extract_json_from_response(input).unwrap();
+        assert_eq!(result, "[{\"question\":\"test\"}]");
+    }
+
+    #[test]
+    fn extract_json_returns_error_when_missing() {
+        let result = extract_json_from_response("No JSON here");
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn extract_json_handles_unclosed_array() {
+        let result = extract_json_from_response("[1, 2, 3");
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn extract_json_handles_nested_object() {
+        let input = "{\"data\": {\"inner\": \"value\"}}";
+        let result = extract_json_from_response(input).unwrap();
+        assert_eq!(result, input.trim());
     }
 }
