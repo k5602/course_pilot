@@ -69,6 +69,7 @@ yt-transcript-rs = "0.1"
 # Secure Storage
 keyring = { version = "3", features = ["linux-native"] }
 gst-app = { package = "gstreamer-app", version = "0.25" }
+url = "2.5"
 
 [target.'cfg(windows)'.dependencies]
 keyring = { version = "3", features = ["windows-native"] }
