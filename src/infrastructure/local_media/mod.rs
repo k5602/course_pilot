@@ -72,7 +72,9 @@ impl LocalMediaScannerAdapter {
     }
 
     fn get_video_duration(&self, path: &Path) -> Result<u32, LocalMediaError> {
-        let url = format!("file://{}", path.to_string_lossy());
+        let url = url::Url::from_file_path(path)
+            .map(|u| u.to_string())
+            .unwrap_or_else(|_| format!("file://{}", path.to_string_lossy()));
         let info = self
             .discoverer
             .discover_uri(&url)
@@ -187,20 +189,52 @@ fn is_subtitle_file(path: &Path) -> bool {
 
 const MIN_MATCH_SCORE: f32 = 0.75;
 
+struct VideoInfo {
+    path: PathBuf,
+    norm: String,
+    tokens: Vec<String>,
+}
+
+struct SubtitleInfo {
+    path: PathBuf,
+    norm: String,
+    tokens: Vec<String>,
+}
+
 /// Greedy, folder-level subtitle matching.
 /// Each subtitle can be assigned to at most one video, and only within the same folder.
 fn match_subtitles_greedy(
     video_paths: &[PathBuf],
     subtitle_paths: &[PathBuf],
 ) -> HashMap<PathBuf, PathBuf> {
+    let video_info: Vec<VideoInfo> = video_paths
+        .iter()
+        .map(|p| {
+            let stem = p.file_stem().and_then(|s| s.to_str()).unwrap_or("");
+            let norm = normalize_name(stem);
+            let tokens = tokenize(&norm);
+            VideoInfo { path: p.clone(), norm, tokens }
+        })
+        .collect();
+
+    let sub_info_map: HashMap<PathBuf, SubtitleInfo> = subtitle_paths
+        .iter()
+        .map(|p| {
+            let stem = p.file_stem().and_then(|s| s.to_str()).unwrap_or("");
+            let norm = normalize_name(stem);
+            let tokens = tokenize(&norm);
+            (p.clone(), SubtitleInfo { path: p.clone(), norm, tokens })
+        })
+        .collect();
+
     let mut assignments: HashMap<PathBuf, PathBuf> = HashMap::new();
 
-    let mut videos_by_folder: HashMap<PathBuf, Vec<PathBuf>> = HashMap::new();
+    let mut videos_by_folder: HashMap<PathBuf, Vec<&VideoInfo>> = HashMap::new();
     let mut subs_by_folder: HashMap<PathBuf, Vec<PathBuf>> = HashMap::new();
 
-    for video in video_paths {
-        let folder = video.parent().map(Path::to_path_buf).unwrap_or_else(PathBuf::new);
-        videos_by_folder.entry(folder).or_default().push(video.clone());
+    for video in &video_info {
+        let folder = video.path.parent().map(Path::to_path_buf).unwrap_or_else(PathBuf::new);
+        videos_by_folder.entry(folder).or_default().push(video);
     }
 
     for sub in subtitle_paths {
@@ -210,7 +244,7 @@ fn match_subtitles_greedy(
 
     for (folder, videos) in videos_by_folder {
         let subtitles = match subs_by_folder.get(&folder) {
-            Some(subs) => subs.clone(),
+            Some(subs) => subs,
             None => continue,
         };
 
@@ -218,16 +252,13 @@ fn match_subtitles_greedy(
         let mut candidates: Vec<(f32, PathBuf, PathBuf)> = Vec::new();
 
         for video in &videos {
-            let video_stem = video.file_stem().and_then(|s| s.to_str()).unwrap_or("");
-            let video_norm = normalize_name(video_stem);
-            let video_tokens = tokenize(&video_norm);
-
-            for subtitle in &subtitles {
-                let sub_stem = subtitle.file_stem().and_then(|s| s.to_str()).unwrap_or("");
-                let sub_norm = normalize_name(sub_stem);
-                let score = similarity_score(&video_norm, &video_tokens, &sub_norm);
-                if score >= MIN_MATCH_SCORE {
-                    candidates.push((score, video.clone(), subtitle.clone()));
+            for sub_path in subtitles {
+                if let Some(sub) = sub_info_map.get(sub_path) {
+                    let score =
+                        similarity_score(&video.norm, &video.tokens, &sub.norm, &sub.tokens);
+                    if score >= MIN_MATCH_SCORE {
+                        candidates.push((score, video.path.clone(), sub.path.clone()));
+                    }
                 }
             }
         }
@@ -249,37 +280,34 @@ fn match_subtitles_greedy(
     // Pass 2: Walk up parent directories for unmatched videos
     let mut used_subs_global: HashSet<PathBuf> = assignments.values().cloned().collect();
 
-    for video in video_paths {
-        if assignments.contains_key(video) {
+    for video in &video_info {
+        if assignments.contains_key(&video.path) {
             continue;
         }
 
-        let video_stem = video.file_stem().and_then(|s| s.to_str()).unwrap_or("");
-        let video_norm = normalize_name(video_stem);
-        let video_tokens = tokenize(&video_norm);
-
-        let mut parent = video.parent();
+        let mut parent = video.path.parent();
         while let Some(parent_path) = parent {
             if let Some(parent_subs) = subs_by_folder.get(parent_path) {
                 let mut best_score = MIN_MATCH_SCORE;
                 let mut best_sub: Option<PathBuf> = None;
 
-                for sub in parent_subs {
-                    if used_subs_global.contains(sub) {
+                for sub_path in parent_subs {
+                    if used_subs_global.contains(sub_path) {
                         continue;
                     }
-                    let sub_stem = sub.file_stem().and_then(|s| s.to_str()).unwrap_or("");
-                    let sub_norm = normalize_name(sub_stem);
-                    let score = similarity_score(&video_norm, &video_tokens, &sub_norm);
-                    if score >= best_score {
-                        best_score = score;
-                        best_sub = Some(sub.clone());
+                    if let Some(sub) = sub_info_map.get(sub_path) {
+                        let score =
+                            similarity_score(&video.norm, &video.tokens, &sub.norm, &sub.tokens);
+                        if score >= best_score {
+                            best_score = score;
+                            best_sub = Some(sub.path.clone());
+                        }
                     }
                 }
 
                 if let Some(sub) = best_sub {
                     used_subs_global.insert(sub.clone());
-                    assignments.insert(video.clone(), sub);
+                    assignments.insert(video.path.clone(), sub);
                     break;
                 }
             }
@@ -406,7 +434,12 @@ fn is_stopword(token: &str) -> bool {
     )
 }
 
-fn similarity_score(video_norm: &str, video_tokens: &[String], sub_norm: &str) -> f32 {
+fn similarity_score(
+    video_norm: &str,
+    video_tokens: &[String],
+    sub_norm: &str,
+    sub_tokens: &[String],
+) -> f32 {
     if video_norm.is_empty() || sub_norm.is_empty() {
         return 0.0;
     }
@@ -415,8 +448,8 @@ fn similarity_score(video_norm: &str, video_tokens: &[String], sub_norm: &str) -
         return 1.0;
     }
 
-    let a: HashSet<String> = video_tokens.iter().cloned().collect();
-    let b: HashSet<String> = tokenize(sub_norm).into_iter().collect();
+    let a: HashSet<&str> = video_tokens.iter().map(|s| s.as_str()).collect();
+    let b: HashSet<&str> = sub_tokens.iter().map(|s| s.as_str()).collect();
 
     if a.is_empty() || b.is_empty() {
         return 0.0;
