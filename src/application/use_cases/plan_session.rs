@@ -23,6 +23,8 @@ pub enum PlanError {
 pub struct PlanSessionInput {
     pub course_id: CourseId,
     pub cognitive_limit_minutes: u32,
+    /// Days per week available for study (5 = weekdays only, 7 = every day).
+    pub week_study_days: u32,
 }
 
 /// Use case for planning study sessions.
@@ -60,6 +62,6 @@ where
         let cognitive_limit = CognitiveLimit::new(input.cognitive_limit_minutes);
         let planner = SessionPlanner::new(cognitive_limit);
 
-        Ok(planner.plan_sessions(&durations, None))
+        Ok(planner.plan_sessions(&durations, None, input.week_study_days))
     }
 }

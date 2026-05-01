@@ -41,7 +41,7 @@ impl Default for CognitiveLimit {
 /// A planned session containing videos to watch.
 #[derive(Debug, Clone)]
 pub struct SessionPlan {
-    /// Day number (1-indexed)
+    /// Calendar day (1-indexed, accounts for study breaks / weekends)
     pub day: u32,
     /// Video indices in this session
     pub video_indices: Vec<usize>,
