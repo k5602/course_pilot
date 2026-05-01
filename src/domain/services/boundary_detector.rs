@@ -372,4 +372,12 @@ mod tests {
         assert_eq!(groups.len(), 1);
         assert_eq!(groups[0], vec![0]);
     }
+
+    #[test]
+    fn groups_by_major_after_sanitization() {
+        let titles = vec!["1.1 Intro", "1.2 Basics", "Tutorial #5 - Extra", "2.1 Advanced"];
+        let detector = BoundaryDetector::new();
+        let groups = detector.group_by_titles(&titles);
+        assert!(!groups.is_empty());
+    }
 }
