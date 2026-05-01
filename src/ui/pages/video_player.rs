@@ -6,6 +6,7 @@ use adw::prelude::*;
 use crate::domain::ports::VideoRepository;
 use crate::infrastructure::video::VideoPlayer;
 use crate::ui::state::SharedState;
+use crate::ui::widgets::QualitySelector;
 
 fn fmt_ns(ns: u64) -> String {
     let total_secs = ns / 1_000_000_000;
@@ -23,11 +24,19 @@ pub struct VideoPlayerPage {
     pos_label: gtk::Label,
     dur_label: gtk::Label,
     vol_scale: gtk::Scale,
+    quality_selector: QualitySelector,
     timer_source: RefCell<Option<glib::SourceId>>,
     video_title: gtk::Label,
     player_frame: gtk::Frame,
     status_page: adw::StatusPage,
     suppress_seek: Rc<Cell<bool>>,
+    current_video_source: RefCell<Option<VideoSourceForQuality>>,
+}
+
+#[derive(Clone)]
+enum VideoSourceForQuality {
+    YouTube(String),
+    Local,
 }
 
 impl VideoPlayerPage {
@@ -84,6 +93,11 @@ impl VideoPlayerPage {
 
         controls.append(&btn_box);
 
+        let mid_box = gtk::Box::new(gtk::Orientation::Horizontal, 16);
+        mid_box.set_halign(gtk::Align::Center);
+
+        let quality_selector = QualitySelector::new("Quality");
+
         let vol_box = gtk::Box::new(gtk::Orientation::Horizontal, 8);
         let vol_label = gtk::Label::new(Some("Volume"));
         vol_box.append(&vol_label);
@@ -93,7 +107,10 @@ impl VideoPlayerPage {
         vol_scale.set_width_request(120);
         vol_box.append(&vol_scale);
 
-        controls.append(&vol_box);
+        mid_box.append(quality_selector.widget());
+        mid_box.append(&vol_box);
+        controls.append(&mid_box);
+
         widget.append(&controls);
 
         let player_rc: Rc<RefCell<Option<VideoPlayer>>> = Rc::new(RefCell::new(None));
@@ -136,19 +153,76 @@ impl VideoPlayerPage {
 
         let page = Self {
             widget,
-            state,
+            state: state.clone(),
             player: player_rc,
             play_btn,
             seek_bar,
             pos_label,
             dur_label,
             vol_scale,
+            quality_selector,
             timer_source: RefCell::new(None),
             video_title,
             player_frame,
             status_page,
             suppress_seek,
+            current_video_source: RefCell::new(None),
         };
+
+        // Quality change handler: re-resolve YouTube stream URL
+        let state_q = state.clone();
+        let player_q = page.player.clone();
+        let source_q = page.current_video_source.clone();
+        page.quality_selector.connect_selected(move |quality| {
+            let src = source_q.borrow().clone();
+            match src {
+                Some(VideoSourceForQuality::YouTube(yid)) => {
+                    let saved_pos = {
+                        let p = player_q.borrow();
+                        p.as_ref().and_then(|pl| pl.position())
+                    };
+                    // Stop current playback
+                    if let Some(ref p) = *player_q.borrow() {
+                        p.stop();
+                    }
+                    // Save the new quality as session override
+                    state_q.borrow_mut().session_quality = quality;
+                    // Re-resolve and play
+                    let yid_clone = yid.clone();
+                    let player_cl = player_q.clone();
+                    let (tx, rx) = std::sync::mpsc::channel::<String>();
+                    crate::infrastructure::tokio_bridge::spawn(async move {
+                        let result = crate::infrastructure::youtube::resolve_youtube_stream_inner(
+                            &yid_clone, quality,
+                        )
+                        .await;
+                        match result {
+                            Ok(url) => {
+                                let _ = tx.send(url);
+                            },
+                            Err(e) => log::error!("Failed to resolve stream: {e}"),
+                        }
+                    });
+                    glib::idle_add_local(move || match rx.try_recv() {
+                        Ok(stream_url) => {
+                            if let Some(ref p) = *player_cl.borrow() {
+                                p.play_uri(&stream_url);
+                                // Seek to saved position
+                                if let Some(pos) = saved_pos {
+                                    p.seek(pos);
+                                }
+                            }
+                            glib::ControlFlow::Break
+                        },
+                        Err(std::sync::mpsc::TryRecvError::Empty) => glib::ControlFlow::Continue,
+                        Err(std::sync::mpsc::TryRecvError::Disconnected) => {
+                            glib::ControlFlow::Break
+                        },
+                    });
+                },
+                Some(VideoSourceForQuality::Local) | None => {},
+            }
+        });
 
         page.setup_keyboard_shortcuts();
 
@@ -271,20 +345,59 @@ impl VideoPlayerPage {
                     self.pos_label.set_text("00:00");
                     self.dur_label.set_text(&fmt_ns(dur_ns));
 
-                    let uri = match video.source() {
+                    let quality = state.session_quality;
+                    match video.source() {
                         crate::domain::value_objects::VideoSource::YouTube(yid) => {
-                            format!("https://www.youtube.com/watch?v={}", yid.as_str())
+                            *self.current_video_source.borrow_mut() =
+                                Some(VideoSourceForQuality::YouTube(yid.as_str().to_string()));
+                            self.quality_selector.set_quality(quality);
+                            *self.player.borrow_mut() = Some(player);
+                            self.play_btn.set_label("Loading...");
+                            self.play_btn.set_sensitive(false);
+                            self.vol_scale.set_value(0.8);
+
+                            let yid_str = yid.as_str().to_string();
+                            let player_rc = self.player.clone();
+                            let (tx, rx) = std::sync::mpsc::channel::<String>();
+
+                            crate::infrastructure::tokio_bridge::spawn(async move {
+                                match crate::infrastructure::youtube::resolve_youtube_stream_inner(
+                                    &yid_str, quality,
+                                )
+                                .await
+                                {
+                                    Ok(url) => {
+                                        let _ = tx.send(url);
+                                    },
+                                    Err(e) => log::error!("Failed to resolve YouTube stream: {e}"),
+                                }
+                            });
+
+                            glib::idle_add_local(move || match rx.try_recv() {
+                                Ok(stream_url) => {
+                                    if let Some(ref p) = *player_rc.borrow() {
+                                        p.play_uri(&stream_url);
+                                    }
+                                    glib::ControlFlow::Break
+                                },
+                                Err(std::sync::mpsc::TryRecvError::Empty) => {
+                                    glib::ControlFlow::Continue
+                                },
+                                Err(std::sync::mpsc::TryRecvError::Disconnected) => {
+                                    glib::ControlFlow::Break
+                                },
+                            });
                         },
                         crate::domain::value_objects::VideoSource::LocalPath(path) => {
-                            format!("file://{}", path)
+                            *self.current_video_source.borrow_mut() =
+                                Some(VideoSourceForQuality::Local);
+                            let uri = format!("file://{path}");
+                            player.play_uri(&uri);
+                            *self.player.borrow_mut() = Some(player);
+                            self.play_btn.set_label("Pause");
+                            self.vol_scale.set_value(0.8);
                         },
                     };
-
-                    player.play_uri(&uri);
-
-                    *self.player.borrow_mut() = Some(player);
-                    self.play_btn.set_label("Pause");
-                    self.vol_scale.set_value(0.8);
 
                     self.start_timer();
                 },
