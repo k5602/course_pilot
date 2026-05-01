@@ -33,13 +33,18 @@ impl TitleSanitizer {
         ];
 
         let mut result = text.to_string();
-        let lower = result.to_lowercase();
 
         for pattern in patterns {
+            let lower = result.to_lowercase();
             if let Some(start) = lower.find(pattern) {
                 // Find the end of this marker (including any numbers)
                 let end = self.find_marker_end(&result, start + pattern.len());
-                result = format!("{}{}", &result[..start], &result[end..]);
+                if start < result.len() && end <= result.len() {
+                    let new_result = format!("{}{}", &result[..start], &result[end..]);
+                    if new_result.len() < result.len() {
+                        result = new_result;
+                    }
+                }
             }
         }
 
@@ -189,5 +194,39 @@ mod tests {
         let sanitizer = TitleSanitizer::new();
         let result = sanitizer.sanitize("Too   many    spaces");
         assert!(!result.contains("  "));
+    }
+
+    #[test]
+    fn handles_multiple_pattern_removals() {
+        let sanitizer = TitleSanitizer::new();
+        let result =
+            sanitizer.sanitize("Tutorial Part Episode Lesson Chapter Section Module Lecture Video");
+        assert!(result.len() < 70);
+    }
+
+    #[test]
+    fn handles_nested_brackets_safely() {
+        let sanitizer = TitleSanitizer::new();
+        let result = sanitizer.sanitize("Title [2024 Update] (with bonus)");
+        assert!(!result.contains("2024"));
+    }
+
+    #[test]
+    fn does_not_panic_on_edge_case_titles() {
+        let sanitizer = TitleSanitizer::new();
+        let edge_cases = vec![
+            "",
+            "   ",
+            "A",
+            "!@#$%^&*()",
+            "Tutorial #1 - Introduction to Rust",
+            "Episode 5: The One Where Everything Breaks",
+            "Module 3 Part 2 Section 1.1",
+            "Part 1 of 3: Getting Started",
+        ];
+        for title in edge_cases {
+            let result = sanitizer.sanitize(title);
+            assert!(result.chars().all(|c| c != '\u{FFFD}'));
+        }
     }
 }
