@@ -14,11 +14,11 @@ pub enum VideoQuality {
 impl VideoQuality {
     pub fn ytdlp_format(self) -> &'static str {
         match self {
-            Self::P240 => "bestvideo[height<=240]+bestaudio/best[height<=240]",
-            Self::P360 => "bestvideo[height<=360]+bestaudio/best[height<=360]",
-            Self::P480 => "bestvideo[height<=480]+bestaudio/best[height<=480]",
-            Self::P720 => "bestvideo[height<=720]+bestaudio/best[height<=720]",
-            Self::P1080 => "bestvideo[height<=1080]+bestaudio/best[height<=1080]",
+            Self::P240 => "best[height<=240]/best",
+            Self::P360 => "best[height<=360]/best",
+            Self::P480 => "best[height<=480]/best",
+            Self::P720 => "best[height<=720]/best",
+            Self::P1080 => "best[height<=1080]/best",
             Self::Best => "best[ext=mp4]/best",
         }
     }
@@ -89,6 +89,17 @@ mod tests {
     fn ytdlp_format_bounded_includes_height() {
         let fmt = VideoQuality::P720.ytdlp_format();
         assert!(fmt.contains("height<=720"));
+    }
+
+    #[test]
+    fn ytdlp_format_is_single_stream() {
+        for v in VideoQuality::variants() {
+            let fmt = v.ytdlp_format();
+            assert!(
+                !fmt.contains('+'),
+                "{fmt} contains '+' which produces separate audio/video URLs"
+            );
+        }
     }
 
     #[test]

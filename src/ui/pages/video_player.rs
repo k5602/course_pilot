@@ -23,7 +23,6 @@ pub struct VideoPlayerPage {
     seek_bar: gtk::Scale,
     pos_label: gtk::Label,
     dur_label: gtk::Label,
-    vol_scale: gtk::Scale,
     quality_selector: QualitySelector,
     timer_source: RefCell<Option<glib::SourceId>>,
     video_title: gtk::Label,
@@ -31,6 +30,7 @@ pub struct VideoPlayerPage {
     status_page: adw::StatusPage,
     suppress_seek: Rc<Cell<bool>>,
     current_video_source: RefCell<Option<VideoSourceForQuality>>,
+    suppress_quality: Rc<Cell<bool>>,
 }
 
 #[derive(Clone)]
@@ -151,6 +151,7 @@ impl VideoPlayerPage {
             }
         });
 
+        let suppress_quality = Rc::new(Cell::new(false));
         let page = Self {
             widget,
             state: state.clone(),
@@ -159,7 +160,6 @@ impl VideoPlayerPage {
             seek_bar,
             pos_label,
             dur_label,
-            vol_scale,
             quality_selector,
             timer_source: RefCell::new(None),
             video_title,
@@ -167,13 +167,18 @@ impl VideoPlayerPage {
             status_page,
             suppress_seek,
             current_video_source: RefCell::new(None),
+            suppress_quality,
         };
 
         // Quality change handler: re-resolve YouTube stream URL
         let state_q = state.clone();
         let player_q = page.player.clone();
         let source_q = page.current_video_source.clone();
+        let suppress_q = page.suppress_quality.clone();
         page.quality_selector.connect_selected(move |quality| {
+            if suppress_q.get() {
+                return;
+            }
             let src = source_q.borrow().clone();
             match src {
                 Some(VideoSourceForQuality::YouTube(yid)) => {
@@ -181,13 +186,10 @@ impl VideoPlayerPage {
                         let p = player_q.borrow();
                         p.as_ref().and_then(|pl| pl.position())
                     };
-                    // Stop current playback
                     if let Some(ref p) = *player_q.borrow() {
                         p.stop();
                     }
-                    // Save the new quality as session override
                     state_q.borrow_mut().session_quality = quality;
-                    // Re-resolve and play
                     let yid_clone = yid.clone();
                     let player_cl = player_q.clone();
                     let (tx, rx) = std::sync::mpsc::channel::<String>();
@@ -207,7 +209,6 @@ impl VideoPlayerPage {
                         Ok(stream_url) => {
                             if let Some(ref p) = *player_cl.borrow() {
                                 p.play_uri(&stream_url);
-                                // Seek to saved position
                                 if let Some(pos) = saved_pos {
                                     p.seek(pos);
                                 }
@@ -348,16 +349,20 @@ impl VideoPlayerPage {
                     let quality = state.session_quality;
                     match video.source() {
                         crate::domain::value_objects::VideoSource::YouTube(yid) => {
+                            player.set_volume(0.8);
                             *self.current_video_source.borrow_mut() =
                                 Some(VideoSourceForQuality::YouTube(yid.as_str().to_string()));
-                            self.quality_selector.set_quality(quality);
                             *self.player.borrow_mut() = Some(player);
                             self.play_btn.set_label("Loading...");
                             self.play_btn.set_sensitive(false);
-                            self.vol_scale.set_value(0.8);
+
+                            self.suppress_quality.set(true);
+                            self.quality_selector.set_quality(quality);
+                            self.suppress_quality.set(false);
 
                             let yid_str = yid.as_str().to_string();
                             let player_rc = self.player.clone();
+                            let play_btn_cl = self.play_btn.clone();
                             let (tx, rx) = std::sync::mpsc::channel::<String>();
 
                             crate::infrastructure::tokio_bridge::spawn(async move {
@@ -378,6 +383,8 @@ impl VideoPlayerPage {
                                     if let Some(ref p) = *player_rc.borrow() {
                                         p.play_uri(&stream_url);
                                     }
+                                    play_btn_cl.set_label("Pause");
+                                    play_btn_cl.set_sensitive(true);
                                     glib::ControlFlow::Break
                                 },
                                 Err(std::sync::mpsc::TryRecvError::Empty) => {
@@ -391,11 +398,11 @@ impl VideoPlayerPage {
                         crate::domain::value_objects::VideoSource::LocalPath(path) => {
                             *self.current_video_source.borrow_mut() =
                                 Some(VideoSourceForQuality::Local);
+                            player.set_volume(0.8);
                             let uri = format!("file://{path}");
                             player.play_uri(&uri);
                             *self.player.borrow_mut() = Some(player);
                             self.play_btn.set_label("Pause");
-                            self.vol_scale.set_value(0.8);
                         },
                     };
 
