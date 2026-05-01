@@ -127,7 +127,9 @@ impl VideoPlayer {
     }
 
     pub fn play_file(&self, path: &str) {
-        let uri = format!("file://{}", path);
+        let uri = url::Url::from_file_path(path)
+            .map(|u| u.to_string())
+            .unwrap_or_else(|_| format!("file://{}", path));
         self.playbin.set_property("uri", &uri);
         let _ = self.pipeline.set_state(gst::State::Playing);
     }
