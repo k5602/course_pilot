@@ -10,6 +10,7 @@ use std::sync::Arc;
 
 use crate::domain::{
     ports::{RepositoryError, SummarizerAI, TranscriptError, TranscriptProvider, VideoRepository},
+    services::TranscriptChunker,
     value_objects::VideoId,
 };
 
@@ -75,26 +76,23 @@ where
             .map_err(map_repo_err)?
             .ok_or(SummarizeVideoError::VideoNotFound)?;
 
-        if !input.force_refresh {
-            if let Some(summary) = video.summary() {
-                let transcript = video.transcript().unwrap_or_default().to_string();
-                return Ok(SummarizeVideoOutput {
-                    summary: summary.to_string(),
-                    transcript_used: transcript,
-                    cached: true,
-                });
-            }
+        if !input.force_refresh
+            && let Some(summary) = video.summary()
+        {
+            let transcript = video.transcript().unwrap_or_default().to_string();
+            return Ok(SummarizeVideoOutput {
+                summary: summary.to_string(),
+                transcript_used: transcript,
+                cached: true,
+            });
         }
 
-        let transcript =
-            if !input.force_refresh { video.transcript().map(|t| t.to_string()) } else { None };
-
-        let transcript = match transcript {
-            Some(t) if !t.trim().is_empty() => t,
+        let transcript = match video.transcript() {
+            Some(t) if !t.trim().is_empty() => t.to_string(),
             _ => {
                 let youtube_id = video.youtube_id().ok_or_else(|| {
                     SummarizeVideoError::Transcript(
-                        "Transcript unavailable for local videos. Add a subtitle file (SRT/VTT) to enable summaries.".to_string(),
+                        "No subtitles found for this local video. Add an SRT or VTT file next to the video file and re-import.".to_string(),
                     )
                 })?;
                 let fetched = self
@@ -111,15 +109,54 @@ where
             },
         };
 
-        let summary = self
-            .llm
-            .summarize_transcript(&transcript, video.title())
-            .await
-            .map_err(|e| SummarizeVideoError::AI(e.to_string()))?;
+        let chunker = TranscriptChunker::new();
 
-        self.video_repo.update_summary(&input.video_id, Some(&summary)).map_err(map_repo_err)?;
+        if chunker.chunk_count(&transcript) <= 1 {
+            let summary = self
+                .llm
+                .summarize_transcript(&transcript, video.title())
+                .await
+                .map_err(|e| SummarizeVideoError::AI(e.to_string()))?;
 
-        Ok(SummarizeVideoOutput { summary, transcript_used: transcript, cached: false })
+            self.video_repo
+                .update_summary(&input.video_id, Some(&summary))
+                .map_err(map_repo_err)?;
+
+            Ok(SummarizeVideoOutput { summary, transcript_used: transcript, cached: false })
+        } else {
+            let chunks = chunker.chunk(&transcript);
+            let total = chunks.len();
+            let mut part_summaries = Vec::with_capacity(total);
+
+            for (i, chunk) in chunks.iter().enumerate() {
+                let part_title = format!("{} (Part {}/{})", video.title(), i + 1, total);
+                let part_summary = self
+                    .llm
+                    .summarize_transcript(chunk, &part_title)
+                    .await
+                    .map_err(|e| SummarizeVideoError::AI(e.to_string()))?;
+                part_summaries.push(format!(
+                    "--- Part {} of {} ---\n{}",
+                    i + 1,
+                    total,
+                    part_summary
+                ));
+            }
+
+            let merged_transcript = part_summaries.join("\n\n");
+
+            let summary = self
+                .llm
+                .summarize_transcript(&merged_transcript, video.title())
+                .await
+                .map_err(|e| SummarizeVideoError::AI(e.to_string()))?;
+
+            self.video_repo
+                .update_summary(&input.video_id, Some(&summary))
+                .map_err(map_repo_err)?;
+
+            Ok(SummarizeVideoOutput { summary, transcript_used: transcript, cached: false })
+        }
     }
 }
 

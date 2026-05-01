@@ -1,915 +1,549 @@
-//! Course view page - modules and videos
-
-use dioxus::prelude::*;
+use std::cell::RefCell;
 use std::collections::HashMap;
-use std::str::FromStr;
+use std::rc::Rc;
 
-use crate::application::{
-    ServiceFactory,
-    use_cases::{MoveVideoInput, PlanSessionInput, UpdateCourseInput, UpdateModuleTitleInput},
-};
-use crate::domain::entities::{Module, Tag};
-use crate::domain::ports::{CourseRepository, TagRepository, VideoRepository};
-use crate::domain::value_objects::{CourseId, ModuleId, SessionPlan, TagId};
-use crate::ui::Route;
-use crate::ui::actions::export_course_notes_with_dialog;
-use crate::ui::custom::{ErrorAlert, PageSkeleton, TagBadge, TagInput, VideoItem};
-use crate::ui::hooks::{
-    use_load_course, use_load_course_tags, use_load_modules, use_load_tags,
-    use_load_videos_by_course,
-};
-use crate::ui::state::AppState;
+use adw::NavigationView;
+use adw::prelude::*;
 
-/// Detailed course view with modules accordion.
-#[component]
-pub fn CourseView(course_id: String) -> Element {
-    let state = use_context::<AppState>();
-    let nav = use_navigator();
+use crate::application::ServiceFactory;
+use crate::application::use_cases::{CreateModuleInput, MoveVideoInput, UpdateModuleTitleInput};
+use crate::domain::entities::Module;
+use crate::domain::ports::{CourseRepository, ModuleRepository, VideoRepository};
+use crate::domain::value_objects::ModuleId;
+use crate::ui::navigation::PAGE_VIDEO_PLAYER;
+use crate::ui::state::SharedState;
 
-    {
-        let mut state = state.clone();
-        use_effect(move || {
-            state.current_video_id.set(None);
-        });
+#[allow(clippy::type_complexity)]
+pub struct CourseViewPage {
+    widget: gtk::Box,
+    state: SharedState,
+    nav: Rc<NavigationView>,
+    nav_pages: Rc<RefCell<Rc<HashMap<&'static str, adw::NavigationPage>>>>,
+    content_box: gtk::Box,
+    status_page: adw::StatusPage,
+    refresh_cb: Rc<RefCell<Option<Rc<dyn Fn()>>>>,
+}
+
+impl CourseViewPage {
+    pub fn new(state: SharedState, nav: Rc<NavigationView>) -> Self {
+        let widget = gtk::Box::new(gtk::Orientation::Vertical, 16);
+        widget.add_css_class("content-area");
+
+        let status_page = adw::StatusPage::new();
+        status_page.set_title("Loading...");
+        status_page.set_description(Some("Loading course..."));
+        widget.append(&status_page);
+
+        let scroll = gtk::ScrolledWindow::new();
+        scroll.set_vexpand(true);
+        scroll.set_hexpand(true);
+
+        let content_box = gtk::Box::new(gtk::Orientation::Vertical, 12);
+        content_box.set_margin_start(16);
+        content_box.set_margin_end(16);
+        content_box.set_margin_bottom(16);
+        scroll.set_child(Some(&content_box));
+
+        widget.append(&scroll);
+
+        Self {
+            widget,
+            state,
+            nav,
+            nav_pages: Rc::new(RefCell::new(Rc::new(HashMap::new()))),
+            content_box,
+            status_page,
+            refresh_cb: Rc::new(RefCell::new(None)),
+        }
     }
 
-    // Parse course ID
-    let course_id_parsed = CourseId::from_str(&course_id);
-    let course_id_effective = course_id_parsed.clone().unwrap_or_else(|_| CourseId::new());
-
-    // Load course and modules
-    let course = use_load_course(state.backend.clone(), &course_id_effective);
-    let course_state = course.state.clone();
-
-    let modules = use_load_modules(state.backend.clone(), &course_id_effective);
-    let modules_state = modules.state.clone();
-
-    let all_videos = use_load_videos_by_course(state.backend.clone(), &course_id_effective);
-    let videos_state = all_videos.state.clone();
-
-    let course_tags = use_load_course_tags(state.backend.clone(), &course_id_effective);
-
-    let all_tags = use_load_tags(state.backend.clone());
-
-    let total_videos = all_videos.data.read().len();
-    let completed_videos = all_videos.data.read().iter().filter(|v| v.is_completed()).count();
-    let progress = if total_videos > 0 {
-        (completed_videos as f32 / total_videos as f32) * 100.0
-    } else {
-        0.0
-    };
-
-    if *course_state.is_loading.read() && course.data.read().is_none() {
-        return rsx! {
-            div { class: "p-6", PageSkeleton {} }
-        };
+    pub fn widget(&self) -> &gtk::Box {
+        &self.widget
     }
 
-    // State for modals
-    let mut show_delete_modal = use_signal(|| false);
-    let mut show_session_modal = use_signal(|| false);
-    let mut is_deleting = use_signal(|| false);
-    let is_exporting = use_signal(|| false);
-    let export_status = use_signal(|| None::<(bool, String)>);
-    let mut session_plans = use_signal(Vec::<SessionPlan>::new);
-    let active_plan_day = use_signal(|| None::<u32>);
-    let mut cognitive_limit = use_signal(|| 45u32);
-
-    // Course editing state
-    let mut edit_mode = use_signal(|| false);
-    let mut edit_name = use_signal(String::new);
-    let mut edit_description = use_signal(String::new);
-    let edit_status = use_signal(|| None::<(bool, String)>);
-
-    // Tag management state
-    let mut selected_tag_id = use_signal(String::new);
-    let tag_status = use_signal(|| None::<(bool, String)>);
-
-    // Module boundary editing toggle
-    let mut boundary_edit_mode = use_signal(|| false);
-
-    // Sync edit fields with current course when not editing
-    {
-        let mut edit_name = edit_name;
-        let mut edit_description = edit_description;
-        let edit_mode = edit_mode;
-        use_effect(move || {
-            if *edit_mode.read() {
-                return;
-            }
-            if let Some(c) = course.data.read().as_ref() {
-                edit_name.set(c.name().to_string());
-                edit_description.set(c.description().unwrap_or("").to_string());
-            }
-        });
+    pub fn set_refresh_cb(&self, cb: Rc<dyn Fn()>) {
+        *self.refresh_cb.borrow_mut() = Some(cb);
     }
 
-    // Delete course handler
-    let backend_for_delete = state.backend.clone();
-    let course_id_for_delete = course_id_parsed.clone();
-    let on_delete_confirm = move |_| {
-        if let Ok(ref cid) = course_id_for_delete {
-            if let Some(ref ctx) = backend_for_delete {
-                is_deleting.set(true);
-                match ctx.course_repo.delete(cid) {
-                    Ok(_) => {
-                        log::info!("Course deleted successfully");
-                        nav.push(Route::CourseList {});
-                    },
-                    Err(e) => {
-                        log::error!("Failed to delete course: {}", e);
-                        is_deleting.set(false);
-                    },
-                }
-            }
+    pub fn set_nav_pages(&self, pages: Rc<HashMap<&'static str, adw::NavigationPage>>) {
+        *self.nav_pages.borrow_mut() = pages;
+    }
+
+    pub fn refresh(&self) {
+        while let Some(child) = self.content_box.first_child() {
+            self.content_box.remove(&child);
         }
-    };
+        self.content_box.set_visible(false);
+        self.status_page.set_visible(true);
 
-    // Session planning handler
-    let backend_for_session = state.backend.clone();
-    let course_id_for_session = course_id_parsed.clone();
-    let mut active_plan_day_for_session = active_plan_day;
-    let on_plan_sessions = move |_| {
-        if let Ok(ref cid) = course_id_for_session {
-            if let Some(ref ctx) = backend_for_session {
-                let use_case = ServiceFactory::plan_session(ctx);
-                let input = PlanSessionInput {
-                    course_id: cid.clone(),
-                    cognitive_limit_minutes: *cognitive_limit.read(),
-                };
-                match use_case.execute(input) {
-                    Ok(plans) => {
-                        session_plans.set(plans);
-                        active_plan_day_for_session.set(None);
-                    },
-                    Err(e) => log::error!("Failed to plan sessions: {}", e),
-                }
-            }
-        }
-    };
+        let refresh_cb =
+            self.refresh_cb.borrow().as_ref().cloned().unwrap_or_else(|| Rc::new(|| {}));
 
-    // Export notes handler
-    let backend_for_export = state.backend.clone();
-    let course_id_for_export = course_id_parsed.clone();
-    let mut export_status_for_export = export_status;
-    let is_exporting_for_export = is_exporting;
-    let on_export_notes = move |_| {
-        if let Ok(ref cid) = course_id_for_export {
-            let backend = backend_for_export.clone();
-            let course_id = cid.clone();
-            let mut export_status_for_export = export_status_for_export;
-            let mut is_exporting_for_export = is_exporting_for_export;
-            spawn(async move {
-                is_exporting_for_export.set(true);
-                match export_course_notes_with_dialog(backend, course_id).await {
-                    Ok(path) => {
-                        export_status_for_export
-                            .set(Some((true, format!("Notes exported to {}", path))));
-                    },
-                    Err(e) => {
-                        if e != "Save cancelled" {
-                            export_status_for_export.set(Some((false, e)));
-                        }
-                    },
-                }
-                is_exporting_for_export.set(false);
-            });
-        } else {
-            export_status_for_export.set(Some((false, "Invalid course ID".to_string())));
-        }
-    };
-
-    // Course update handler
-    let backend_for_update = state.backend.clone();
-    let course_id_for_update = course_id_parsed.clone();
-    let mut course_for_update = course.clone();
-    let edit_name_for_update = edit_name;
-    let edit_description_for_update = edit_description;
-    let mut edit_status_for_update = edit_status;
-    let mut edit_mode_for_update = edit_mode;
-    let on_save_course = move |_| {
-        let name = edit_name_for_update.read().trim().to_string();
-        if name.is_empty() {
-            edit_status_for_update.set(Some((false, "Course name cannot be empty.".to_string())));
-
-            return;
-        }
-
-        if let Ok(ref cid) = course_id_for_update {
-            if let Some(ref ctx) = backend_for_update {
-                let use_case = ServiceFactory::update_course(ctx);
-                let description = {
-                    let read_guard = edit_description_for_update.read();
-                    let desc = read_guard.trim();
-                    if desc.is_empty() { None } else { Some(desc.to_string()) }
-                };
-                let input =
-                    UpdateCourseInput { course_id: cid.clone(), name: name.clone(), description };
-
-                match use_case.execute(input) {
-                    Ok(_) => {
-                        edit_status_for_update.set(Some((true, "Course updated.".to_string())));
-                        if let Ok(updated) = ctx.course_repo.find_by_id(cid) {
-                            course_for_update.data.set(updated);
-                        }
-                        edit_mode_for_update.set(false);
-                    },
-                    Err(e) => {
-                        edit_status_for_update
-                            .set(Some((false, format!("Failed to update course: {}", e))));
-                    },
-                }
-            }
-        }
-    };
-
-    // Tag management handlers
-    let backend_for_create_tag = state.backend.clone();
-    let course_id_for_create_tag = course_id_parsed.clone();
-    let mut course_tags_for_create = course_tags.clone();
-    let mut all_tags_for_create = all_tags.clone();
-    let mut tag_status_for_create = tag_status;
-    let on_create_tag = move |name: String| {
-        let trimmed = name.trim().to_string();
-        if trimmed.is_empty() {
-            tag_status_for_create.set(Some((false, "Tag name cannot be empty.".to_string())));
-            return;
-        }
-
-        if let Ok(ref cid) = course_id_for_create_tag {
-            if let Some(ref ctx) = backend_for_create_tag {
-                let tag = Tag::new(TagId::new(), trimmed);
-                if let Err(e) = ctx.tag_repo.save(&tag) {
-                    tag_status_for_create
-                        .set(Some((false, format!("Failed to create tag: {}", e))));
-                    return;
-                }
-                if let Err(e) = ctx.tag_repo.add_to_course(cid, tag.id()) {
-                    tag_status_for_create
-                        .set(Some((false, format!("Failed to attach tag: {}", e))));
-                    return;
-                }
-                if let Ok(updated) = ctx.tag_repo.find_by_course(cid) {
-                    course_tags_for_create.data.set(updated);
-                }
-                if let Ok(all) = ctx.tag_repo.find_all() {
-                    all_tags_for_create.data.set(all);
-                }
-                tag_status_for_create.set(Some((true, "Tag added.".to_string())));
-            }
-        }
-    };
-
-    let backend_for_attach_tag = state.backend.clone();
-    let course_id_for_attach_tag = course_id_parsed.clone();
-    let mut course_tags_for_attach = course_tags.clone();
-    let mut tag_status_for_attach = tag_status;
-    let mut selected_tag_for_attach = selected_tag_id;
-    let on_attach_tag = move |_| {
-        let tag_id_value = selected_tag_for_attach.read().trim().to_string();
-        if tag_id_value.is_empty() {
-            tag_status_for_attach.set(Some((false, "Select a tag to add.".to_string())));
-            return;
-        }
-        let tag_id = match TagId::from_str(&tag_id_value) {
-            Ok(id) => id,
-            Err(_) => {
-                tag_status_for_attach.set(Some((false, "Invalid tag selection.".to_string())));
+        let state = self.state.borrow();
+        let course_id_str = match state.current_course_id {
+            Some(ref id) => id.clone(),
+            None => {
+                self.status_page.set_title("No Selection");
+                self.status_page.set_description(Some("No course selected."));
+                self.status_page.set_visible(true);
                 return;
             },
         };
 
-        if let Ok(ref cid) = course_id_for_attach_tag {
-            if let Some(ref ctx) = backend_for_attach_tag {
-                if let Err(e) = ctx.tag_repo.add_to_course(cid, &tag_id) {
-                    tag_status_for_attach
-                        .set(Some((false, format!("Failed to attach tag: {}", e))));
+        if let Some(ref ctx) = state.backend {
+            let course_id = match course_id_str.parse::<crate::domain::value_objects::CourseId>() {
+                Ok(id) => id,
+                Err(_) => {
+                    self.status_page.set_title("Invalid ID");
+                    self.status_page.set_description(Some("Invalid course ID."));
+                    self.status_page.set_visible(true);
                     return;
-                }
-                if let Ok(updated) = ctx.tag_repo.find_by_course(cid) {
-                    course_tags_for_attach.data.set(updated);
-                }
-                selected_tag_for_attach.set(String::new());
-                tag_status_for_attach.set(Some((true, "Tag added.".to_string())));
-            }
-        }
-    };
+                },
+            };
 
-    let ordered_videos = all_videos.data.read().clone();
+            match ctx.course_repo.find_by_id(&course_id) {
+                Ok(Some(course)) => {
+                    self.status_page.set_visible(false);
+                    self.content_box.set_visible(true);
 
-    rsx! {
-        div { class: "p-6",
+                    let header = gtk::Box::new(gtk::Orientation::Vertical, 4);
+                    let name_label = gtk::Label::new(Some(course.name()));
+                    name_label.add_css_class("heading");
+                    name_label.set_halign(gtk::Align::Start);
+                    header.append(&name_label);
 
-            if let Some(ref err) = *course_state.error.read() {
-                ErrorAlert { message: err.clone(), on_dismiss: None }
-            }
-            if let Some(ref err) = *modules_state.error.read() {
-                ErrorAlert { message: err.clone(), on_dismiss: None }
-            }
-            if let Some(ref err) = *videos_state.error.read() {
-                ErrorAlert { message: err.clone(), on_dismiss: None }
-            }
+                    if let Some(desc) = course.description() {
+                        let desc_label = gtk::Label::new(Some(desc));
+                        desc_label.set_halign(gtk::Align::Start);
+                        desc_label.set_wrap(true);
+                        desc_label.add_css_class("subtitle");
+                        header.append(&desc_label);
+                    }
 
-            if let Some((is_success, ref msg)) = *export_status.read() {
-                div { class: if is_success { "alert alert-success mb-4" } else { "alert alert-error mb-4" },
-                    "{msg}"
-                }
-            }
+                    self.content_box.append(&header);
 
-            // Back button and actions row
-            div { class: "flex flex-wrap justify-between items-center mb-4 gap-3",
-                Link { to: Route::CourseList {}, class: "btn btn-ghost btn-sm", "← Back to Courses" }
+                    // New Module button
+                    let new_mod_btn = gtk::Button::with_label("+ New Module");
+                    new_mod_btn.set_halign(gtk::Align::Start);
+                    new_mod_btn.add_css_class("flat");
+                    new_mod_btn.set_margin_start(8);
+                    new_mod_btn.set_margin_bottom(8);
 
-                div { class: "flex gap-2 flex-wrap",
-                    button {
-                        class: "btn btn-ghost btn-sm text-primary hover:bg-primary/10",
-                        onclick: move |_| {
-                            session_plans.set(Vec::new());
-                            show_session_modal.set(true);
+                    let new_mod_state = self.state.clone();
+                    let course_id_new = course.id().clone();
+                    let new_mod_cb = refresh_cb.clone();
+                    new_mod_btn.connect_clicked(move |_| {
+                        let s = new_mod_state.borrow();
+                        if let Some(ref ctx) = s.backend {
+                            let modules =
+                                ctx.module_repo.find_by_course(&course_id_new).unwrap_or_default();
+                            let next_order = modules.len() as u32;
+                            let _ = ServiceFactory::create_module(ctx).execute(CreateModuleInput {
+                                course_id: course_id_new.clone(),
+                                title: format!("Module {}", next_order + 1),
+                                sort_order: next_order,
+                            });
+                        }
+                        drop(s);
+                        new_mod_cb();
+                    });
+                    self.content_box.append(&new_mod_btn);
+
+                    let modules = match ctx.module_repo.find_by_course(course.id()) {
+                        Ok(m) => m,
+                        Err(_) => {
+                            let err_mod = gtk::Label::new(Some("Failed to load modules."));
+                            err_mod.add_css_class("subtitle");
+                            self.content_box.append(&err_mod);
+                            return;
                         },
-                        "📅 Plan Study Sessions"
-                    }
-                    button {
-                        class: "btn btn-ghost btn-sm",
-                        onclick: on_export_notes,
-                        disabled: *is_exporting.read(),
-                        if *is_exporting.read() {
-                            span { class: "loading loading-spinner loading-sm" }
-                        } else {
-                            "📤 Export Notes"
-                        }
-                    }
-                    button {
-                        class: if *boundary_edit_mode.read() { "btn btn-outline btn-sm" } else { "btn btn-ghost btn-sm" },
-                        onclick: move |_| {
-                            let current = *boundary_edit_mode.read();
-                            boundary_edit_mode.set(!current);
-                        },
-                        if *boundary_edit_mode.read() {
-                            "✅ Editing Boundaries"
-                        } else {
-                            "✂️ Edit Boundaries"
-                        }
-                    }
-                    button {
-                        class: "btn btn-ghost btn-sm text-error hover:bg-error/10",
-                        onclick: move |_| show_delete_modal.set(true),
-                        "🗑️ Delete"
-                    }
-                }
-            }
+                    };
 
-            // Course header
-            if let Some(ref c) = *course.data.read() {
-                div { class: "mb-4",
+                    for module in &modules {
+                        let title_box = gtk::Box::new(gtk::Orientation::Horizontal, 6);
+                        let title_label = gtk::Label::new(Some(module.title()));
+                        title_label.set_halign(gtk::Align::Start);
+                        title_label.set_hexpand(true);
+                        title_box.append(&title_label);
 
-                    if *edit_mode.read() {
-                        div { class: "space-y-3",
-                            input {
-                                class: "input input-bordered w-full",
-                                r#type: "text",
-                                placeholder: "Course name",
-                                value: "{edit_name}",
-                                oninput: move |e| edit_name.set(e.value()),
-                            }
-                            textarea {
-                                class: "textarea textarea-bordered w-full",
-                                placeholder: "Course description (optional)",
-                                value: "{edit_description}",
-                                oninput: move |e| edit_description.set(e.value()),
-                            }
-                            div { class: "flex gap-2",
-                                button {
-                                    class: "btn btn-primary btn-sm",
-                                    onclick: on_save_course,
-                                    "Save"
-                                }
-                                button {
-                                    class: "btn btn-ghost btn-sm",
-                                    onclick: {
-                                        // Clone course data before the closure
-                                        let course_name = c.name().to_string();
-                                        let course_desc = c.description().unwrap_or("").to_string();
-                                        move |_| {
-                                            edit_mode.set(false);
-                                            edit_name.set(course_name.clone());
-                                            edit_description.set(course_desc.clone());
-                                        }
-                                    },
-                                    "Cancel"
-                                }
-                            }
-                        }
-                    } else {
-                        h1 { class: "text-2xl font-bold mb-2", "{c.name()}" }
-                        if let Some(desc) = c.description() {
-                            p { class: "text-base-content/70 mb-4", "{desc}" }
-                        }
-                        button {
-                            class: "btn btn-ghost btn-sm",
-                            onclick: move |_| edit_mode.set(true),
-                            "✏️ Edit Course"
-                        }
-                    }
+                        let edit_btn = gtk::Button::from_icon_name("document-edit-symbolic");
+                        edit_btn.add_css_class("flat");
+                        edit_btn.set_valign(gtk::Align::Center);
+                        title_box.append(&edit_btn);
 
-                    if let Some((is_success, ref msg)) = *edit_status.read() {
-                        div { class: if is_success { "alert alert-success mt-4" } else { "alert alert-error mt-4" },
-                            "{msg}"
-                        }
-                    }
+                        let expander = gtk::Expander::new(Some(""));
+                        expander.set_label_widget(Some(&title_box));
+                        expander.set_expanded(false);
+                        expander.set_margin_start(8);
 
-                    div { class: "mt-4 bg-base-200 rounded-lg p-4 space-y-3",
-                        div { class: "flex items-center justify-between",
-                            span { class: "text-sm font-semibold", "Tags" }
-                            TagInput { on_create: on_create_tag }
-                        }
+                        let edit_state = self.state.clone();
+                        let edit_module_id = module.id().clone();
+                        let edit_title = module.title().to_string();
+                        let edit_cb = refresh_cb.clone();
+                        edit_btn.connect_clicked(move |_| {
+                            show_rename_module_dialog(
+                                edit_state.clone(),
+                                edit_module_id.clone(),
+                                edit_title.clone(),
+                                edit_cb.clone(),
+                            );
+                        });
 
-                        if !course_tags.data.read().is_empty() {
-                            div { class: "flex flex-wrap gap-2",
-                                for tag in course_tags.data.read().iter() {
-                                    {
-                                        let tag_id = tag.id().clone();
-                                        let backend_clone = state.backend.clone();
-                                        let course_id_clone = course_id_parsed.clone();
-                                        let mut course_tags_clone = course_tags.clone();
-                                        let mut tag_status_clone = tag_status;
-                                        rsx! {
-                                            TagBadge {
-                                                tag: tag.clone(),
-                                                removable: true,
-                                                on_remove: move |_| {
-                                                    if let Ok(ref cid) = course_id_clone {
-                                                        if let Some(ref ctx) = backend_clone {
-                                                            if let Err(e) = ctx.tag_repo.remove_from_course(cid, &tag_id) {
-                                                                tag_status_clone
-                                                                    .set(Some((false, format!("Failed to remove tag: {}", e))));
-                                                                return;
-                                                            }
-                                                            if let Ok(updated) = ctx.tag_repo.find_by_course(cid) {
-                                                                course_tags_clone.data.set(updated);
-                                                            }
-                                                            tag_status_clone.set(Some((true, "Tag removed.".to_string())));
-                                                        }
-                                                    }
-                                                },
-                                            }
-                                        }
-                                    }
-                                }
-                            }
-                        } else {
-                            p { class: "text-sm text-base-content/60", "No tags yet" }
-                        }
+                        let video_box = gtk::Box::new(gtk::Orientation::Vertical, 4);
+                        video_box.set_margin_start(12);
+                        video_box.set_margin_top(4);
+                        video_box.set_margin_bottom(4);
 
-                        div { class: "flex gap-2 items-center",
-                            select {
-                                class: "select select-bordered select-sm w-full",
-                                value: "{selected_tag_id}",
-                                oninput: move |e| selected_tag_id.set(e.value()),
-                                option { value: "", "Select a tag to add" }
-                                for tag in all_tags.data.read().iter() {
-                                    if !course_tags.data.read().iter().any(|t| t.id() == tag.id()) {
-                                        option { value: "{tag.id().as_uuid()}", "{tag.name()}" }
-                                    }
-                                }
-                            }
-                            button {
-                                class: "btn btn-sm btn-outline",
-                                onclick: on_attach_tag,
-                                "Add Tag"
-                            }
-                        }
-
-                        if let Some((is_success, ref msg)) = *tag_status.read() {
-                            div { class: if is_success { "text-xs text-success" } else { "text-xs text-error" },
-                                "{msg}"
-                            }
-                        }
-                    }
-                }
-            } else {
-                h1 { class: "text-2xl font-bold mb-2", "Course: {course_id}" }
-            }
-
-            // Progress bar
-            div { class: "w-full max-w-md bg-base-300 rounded-full h-3 mb-6",
-                div {
-                    class: "bg-primary h-3 rounded-full transition-all",
-                    style: "width: {progress}%",
-                }
-            }
-
-            if let Some(last_video_id) = state.last_video_by_course.read().get(&course_id).cloned() {
-                div { class: "mb-6",
-                    Link {
-                        to: Route::VideoPlayer {
-                            course_id: course_id.clone(),
-                            video_id: last_video_id,
-                        },
-                        class: "btn btn-primary btn-sm",
-                        "▶ Resume last video"
-                    }
-                }
-            }
-
-            // Modules accordion
-            div { class: "space-y-4",
-
-                if modules.data.read().is_empty() {
-                    div { class: "text-center py-8 bg-base-200 rounded-lg",
-                        p { class: "text-base-content/60", "No modules found" }
-                    }
-                } else {
-                    for module in modules.data.read().iter() {
-                        ModuleAccordion {
-                            course_id: course_id.clone(),
-                            module: module.clone(),
-                            all_modules: modules.data.read().clone(),
-                            boundary_edit_mode: *boundary_edit_mode.read(),
-                        }
-                    }
-                }
-            }
-        }
-
-        // Delete confirmation modal
-        if *show_delete_modal.read() {
-            div {
-                class: "fixed inset-0 bg-black/50 flex items-center justify-center z-50",
-                onclick: move |_| show_delete_modal.set(false),
-
-                div {
-                    class: "bg-base-100 rounded-2xl p-6 max-w-md mx-4 shadow-2xl",
-                    onclick: |e| e.stop_propagation(),
-
-                    h3 { class: "text-xl font-bold mb-4", "Delete Course?" }
-                    p { class: "text-base-content/70 mb-6",
-                        "This will permanently delete this course, all its modules, videos, and any associated quizzes. This action cannot be undone."
-                    }
-
-                    div { class: "flex justify-end gap-3",
-                        button {
-                            class: "btn btn-ghost",
-                            onclick: move |_| show_delete_modal.set(false),
-                            "Cancel"
-                        }
-                        button {
-                            class: "btn btn-error",
-                            disabled: *is_deleting.read(),
-                            onclick: on_delete_confirm,
-                            if *is_deleting.read() {
-                                span { class: "loading loading-spinner loading-sm" }
-                            } else {
-                                "Delete"
-                            }
-                        }
-                    }
-                }
-            }
-        }
-
-        // Session planning modal
-        if *show_session_modal.read() {
-            div {
-                class: "fixed inset-0 bg-black/50 flex items-center justify-center z-50",
-                onclick: move |_| show_session_modal.set(false),
-
-                div {
-                    class: "bg-base-100 rounded-2xl p-6 max-w-2xl mx-4 shadow-2xl max-h-[80vh] overflow-y-auto",
-                    onclick: |e| e.stop_propagation(),
-
-                    h3 { class: "text-xl font-bold mb-4", "📅 Plan Your Study Sessions" }
-
-                    // Cognitive limit slider
-                    div { class: "mb-6",
-                        label { class: "block text-sm font-medium mb-2",
-                            "Daily study time: {cognitive_limit} minutes"
-                        }
-                        input {
-                            r#type: "range",
-                            class: "range range-primary w-full",
-                            min: "15",
-                            max: "120",
-                            step: "5",
-                            value: "{cognitive_limit}",
-                            oninput: move |e| {
-                                if let Ok(val) = e.value().parse::<u32>() {
-                                    cognitive_limit.set(val);
-                                }
+                        let videos = match ctx.video_repo.find_by_module(module.id()) {
+                            Ok(v) => v,
+                            Err(_) => {
+                                let err_vid = gtk::Label::new(Some("Failed to load videos."));
+                                err_vid.add_css_class("subtitle");
+                                video_box.append(&err_vid);
+                                expander.set_child(Some(&video_box));
+                                self.content_box.append(&expander);
+                                continue;
                             },
+                        };
+
+                        let pages_borrow = self.nav_pages.borrow();
+                        for (vid_idx, video) in videos.iter().enumerate() {
+                            let row = Self::build_video_row(
+                                video,
+                                &self.state,
+                                &self.nav,
+                                &pages_borrow,
+                                vid_idx,
+                                videos.len(),
+                                module.id(),
+                                &modules,
+                                refresh_cb.clone(),
+                            );
+                            video_box.append(&row);
                         }
-                        div { class: "flex justify-between text-xs text-base-content/50 mt-1",
-                            span { "15 min" }
-                            span { "45 min" }
-                            span { "120 min" }
+
+                        if videos.is_empty() {
+                            let empty_mod = gtk::Label::new(Some("No videos in this module."));
+                            empty_mod.add_css_class("subtitle");
+                            empty_mod.set_margin_start(12);
+                            video_box.append(&empty_mod);
                         }
+
+                        expander.set_child(Some(&video_box));
+                        self.content_box.append(&expander);
                     }
 
-                    button {
-                        class: "btn btn-primary w-full mb-4",
-                        onclick: on_plan_sessions,
-                        "Generate Study Plan"
+                    if modules.is_empty() {
+                        let no_modules = gtk::Label::new(Some("No modules in this course."));
+                        no_modules.add_css_class("subtitle");
+                        self.content_box.append(&no_modules);
                     }
-
-                    // Session results
-                    if !session_plans.read().is_empty() {
-                        div { class: "space-y-3",
-                            p { class: "text-sm text-base-content/70 mb-3",
-                                "Estimated {session_plans.read().len()} days to complete:"
-                            }
-                            div { class: "flex flex-wrap items-center gap-2",
-                                span { class: "text-xs text-base-content/60", "Jump to day:" }
-                                {
-                                    let mut active_plan_day_reset = active_plan_day;
-                                    rsx! {
-                                        button {
-                                            class: if active_plan_day.read().is_none() { "btn btn-xs btn-primary" } else { "btn btn-xs btn-outline" },
-                                            onclick: move |_| active_plan_day_reset.set(None),
-                                            "All"
-                                        }
-                                    }
-                                }
-                                for plan in session_plans.read().iter() {
-                                    {
-                                        let day = plan.day;
-                                        rsx! {
-                                            button {
-                                                class: if Some(day) == *active_plan_day.read() { "btn btn-xs btn-primary" } else { "btn btn-xs btn-outline" },
-                                                onclick: move |_| {
-                                                    let mut active_plan_day_for_jump = active_plan_day;
-                                                    active_plan_day_for_jump.set(Some(day));
-                                                },
-                                                "Day {day}"
-                                            }
-                                        }
-                                    }
-                                }
-                            }
-                            for plan in session_plans
-                                .read()
-                                .iter()
-                                .filter(|p| {
-                                    let active_day = *active_plan_day.read();
-                                    active_day.map(|day| p.day == day).unwrap_or(true)
-                                })
-                            {
-                                div { class: "bg-base-200 rounded-xl p-4 space-y-2",
-                                    div { class: "flex justify-between items-center",
-                                        span { class: "font-bold", "Day {plan.day}" }
-                                        span { class: "text-sm text-base-content/60",
-                                            "{plan.total_duration_secs / 60} min"
-                                        }
-                                    }
-                                    div { class: "text-sm text-base-content/70",
-                                        "{plan.video_indices.len()} video(s)"
-                                    }
-                                    div { class: "divider my-2" }
-                                    ul { class: "space-y-2",
-                                        for idx in plan.video_indices.iter() {
-                                            if let Some(video) = ordered_videos.get(*idx) {
-                                                li { class: "flex justify-between text-sm",
-                                                    span { class: "truncate", "{video.title()}" }
-                                                    span { class: "text-base-content/60",
-                                                        "{format_duration(video.duration_secs())}"
-                                                    }
-                                                }
-                                            }
-                                        }
-                                    }
-                                }
-                            }
-                        }
-                    }
-
-                    div { class: "mt-6 flex justify-end",
-                        button {
-                            class: "btn btn-ghost",
-                            onclick: move |_| show_session_modal.set(false),
-                            "Close"
-                        }
-                    }
-                }
-            }
-        }
-    }
-}
-
-/// Module accordion with lazy-loaded videos and boundary editing controls.
-#[component]
-fn ModuleAccordion(
-    course_id: String,
-    module: Module,
-    all_modules: Vec<Module>,
-    boundary_edit_mode: bool,
-) -> Element {
-    let state = use_context::<AppState>();
-    let backend_for_effect = state.backend.clone();
-    let module_id = module.id().clone();
-    let module_id_for_effect = module_id.clone();
-
-    // Load videos for this module
-    let mut videos = use_signal(Vec::new);
-
-    use_effect(move || {
-        if let Some(ref ctx) = backend_for_effect {
-            if let Ok(loaded) = ctx.video_repo.find_by_module(&module_id_for_effect) {
-                videos.set(loaded);
-            }
-        }
-    });
-
-    let mut is_editing_title = use_signal(|| false);
-    let mut edit_title = use_signal(|| module.title().to_string());
-    let edit_status = use_signal(|| None::<(bool, String)>);
-    let move_status = use_signal(|| None::<(bool, String)>);
-
-    let backend_for_title = state.backend.clone();
-    let module_id_for_title = module_id.clone();
-    let mut edit_status_for_title = edit_status;
-    let on_save_title = move |_| {
-        let title = edit_title.read().trim().to_string();
-        if title.is_empty() {
-            edit_status_for_title.set(Some((false, "Module title cannot be empty.".to_string())));
-            return;
-        }
-        if let Some(ref ctx) = backend_for_title {
-            let use_case = ServiceFactory::update_module_title(ctx);
-            let input = UpdateModuleTitleInput { module_id: module_id_for_title.clone(), title };
-            match use_case.execute(input) {
-                Ok(_) => {
-                    edit_status_for_title.set(Some((true, "Module updated.".to_string())));
-                    is_editing_title.set(false);
+                },
+                Ok(None) => {
+                    self.status_page.set_title("Not Found");
+                    self.status_page.set_description(Some("Course not found."));
+                    self.status_page.set_visible(true);
                 },
                 Err(e) => {
-                    edit_status_for_title
-                        .set(Some((false, format!("Failed to update module: {e}"))));
+                    self.status_page.set_title("Error");
+                    self.status_page.set_description(Some(&format!("Error loading course: {}", e)));
+                    self.status_page.set_visible(true);
                 },
             }
+        } else {
+            self.status_page.set_title("No Backend");
+            self.status_page.set_description(Some("No backend connected."));
+            self.status_page.set_visible(true);
         }
-    };
+    }
 
-    let move_targets: Signal<HashMap<String, String>> = use_signal(HashMap::new);
+    #[allow(clippy::too_many_arguments)]
+    fn build_video_row(
+        video: &crate::domain::entities::Video,
+        state: &SharedState,
+        nav: &Rc<NavigationView>,
+        nav_pages: &HashMap<&'static str, adw::NavigationPage>,
+        video_position: usize,
+        video_count: usize,
+        current_module_id: &ModuleId,
+        all_modules: &[Module],
+        refresh_cb: Rc<dyn Fn()>,
+    ) -> gtk::Box {
+        let row = gtk::Box::new(gtk::Orientation::Horizontal, 8);
+        row.set_margin_top(2);
+        row.set_margin_bottom(2);
 
-    // Clone module for use in multiple closures
-    let module_for_cancel = module.clone();
-    let module_for_loop = module.clone();
+        let complete_btn = gtk::CheckButton::new();
+        complete_btn.set_active(video.is_completed());
+        complete_btn.set_valign(gtk::Align::Center);
+        row.append(&complete_btn);
 
-    rsx! {
-        div { class: "collapse collapse-arrow bg-base-200",
-            input { r#type: "checkbox" }
-            div { class: "collapse-title font-medium flex items-center justify-between gap-2",
+        // Move Up button
+        if video_position > 0 {
+            let up_btn = gtk::Button::from_icon_name("go-up-symbolic");
+            up_btn.add_css_class("flat");
+            up_btn.set_valign(gtk::Align::Center);
+            up_btn.set_tooltip_text(Some("Move Up"));
 
-                if *is_editing_title.read() {
-                    div { class: "flex-1 flex items-center gap-2",
-                        input {
-                            class: "input input-bordered input-sm w-full",
-                            value: "{edit_title}",
-                            oninput: move |e| edit_title.set(e.value()),
-                        }
-                        button {
-                            class: "btn btn-primary btn-sm",
-                            onclick: on_save_title,
-                            "Save"
-                        }
-                        button {
-                            class: "btn btn-ghost btn-sm",
-                            onclick: move |_| {
-                                is_editing_title.set(false);
-                                edit_title.set(module_for_cancel.title().to_string());
-                            },
-                            "Cancel"
-                        }
-                    }
-                } else {
-                    div { class: "flex-1",
-                        "{module.title()}"
-                        span { class: "text-sm text-base-content/60 ml-2",
-                            "({videos.read().len()} videos)"
-                        }
-                    }
-                    if boundary_edit_mode {
-                        button {
-                            class: "btn btn-ghost btn-sm",
-                            onclick: move |_| is_editing_title.set(true),
-                            "✏️ Rename"
-                        }
+            let up_state = state.clone();
+            let up_video_id = video.id().clone();
+            let up_module_id = current_module_id.clone();
+            let up_cb = refresh_cb.clone();
+            up_btn.connect_clicked(move |_| {
+                let s = up_state.borrow();
+                if let Some(ref ctx) = s.backend
+                    && let Ok(videos) = ctx.video_repo.find_by_module(&up_module_id)
+                {
+                    let mut sorted: Vec<_> = videos.iter().collect();
+                    sorted.sort_by_key(|v| v.sort_order());
+                    let pos = sorted.iter().position(|v| v.id() == &up_video_id);
+                    if let Some(pos) = pos
+                        && pos > 0
+                    {
+                        let current = sorted[pos];
+                        let adjacent = sorted[pos - 1];
+                        let _ = ctx.video_repo.update_module(
+                            current.id(),
+                            &up_module_id,
+                            adjacent.sort_order(),
+                        );
+                        let _ = ctx.video_repo.update_module(
+                            adjacent.id(),
+                            &up_module_id,
+                            current.sort_order(),
+                        );
                     }
                 }
-            }
-            div { class: "collapse-content",
-                if let Some((is_success, ref msg)) = *edit_status.read() {
-                    div { class: if is_success { "text-xs text-success mb-2" } else { "text-xs text-error mb-2" },
-                        "{msg}"
-                    }
-                }
-                if let Some((is_success, ref msg)) = *move_status.read() {
-                    if is_success {
-                        div { class: "text-xs text-success mb-2", "{msg}" }
-                    } else {
-                        ErrorAlert { message: msg.clone(), on_dismiss: None }
-                    }
-                }
-
-                if videos.read().is_empty() {
-                    p { class: "text-base-content/60 py-2", "No videos in this module" }
-                } else {
-                    div { class: "space-y-2",
-                        {
-                            let current_videos = videos.read().clone();
-                            current_videos
-                                .iter()
-                                .map(|video| {
-                                    let vid = video.id().clone();
-                                    let vid_key = vid.as_uuid().to_string();
-                                    let vid_key_for_oninput = vid_key.clone();
-                                    let vid_key_for_onclick = vid_key.clone();
-                                    let vid_for_onclick = vid.clone();
-                                    let backend_for_move = state.backend.clone();
-                                    let mut move_status_for_move = move_status;
-                                    let mut move_targets_for_select = move_targets;
-                                    let move_targets_for_click = move_targets;
-                                    let module_id_for_filter = module_for_loop.id().clone();
-                                    rsx! {
-                                        div { class: "flex items-center gap-3",
-                                            VideoItem {
-                                                course_id: course_id.clone(),
-                                                video_id: vid_key.clone(),
-                                                title: video.title().to_string(),
-                                                duration_secs: video.duration_secs(),
-                                                is_completed: video.is_completed(),
-                                            }
-                                            if boundary_edit_mode {
-                                                div { class: "flex items-center gap-2",
-                                                    select {
-                                                        class: "select select-bordered select-sm",
-                                                        value: "{move_targets.read().get(&vid_key).cloned().unwrap_or_default()}",
-                                                        oninput: move |e| {
-                                                            let mut map = move_targets_for_select.write();
-                                                            map.insert(vid_key_for_oninput.clone(), e.value());
-                                                        },
-                                                        option { value: "", "Move to..." }
-                                                        for target in all_modules.iter() {
-                                                            if target.id() != &module_id_for_filter {
-                                                                option { value: "{target.id().as_uuid()}", "{target.title()}" }
-                                                            }
-                                                        }
-                                                    }
-                                                    button {
-                                                        class: "btn btn-outline btn-sm",
-                                                        onclick: move |_| {
-                                                            if let Some(value) = move_targets_for_click
-                                                                .read()
-                                                                .get(&vid_key_for_onclick)
-                                                                .cloned()
-                                                            {
-                                                                if let Ok(target_id) = ModuleId::from_str(&value) {
-                                                                    if let Some(ref ctx) = backend_for_move {
-                                                                        let use_case = ServiceFactory::move_video_to_module(ctx);
-                                                                        let input = MoveVideoInput {
-                                                                            video_id: vid_for_onclick.clone(),
-                                                                            target_module_id: target_id,
-                                                                            sort_order: 0,
-                                                                        };
-                                                                        match use_case.execute(input) {
-                                                                            Ok(_) => {
-                                                                                move_status_for_move
-                                                                                    .set(Some((true, "Video moved successfully.".to_string())));
-                                                                            }
-                                                                            Err(e) => {
-                                                                                log::error!("Failed to move video: {}", e);
-                                                                                move_status_for_move
-                                                                                    .set(Some((false, format!("Failed to move video: {}", e))));
-                                                                            }
-                                                                        }
-                                                                    }
-                                                                }
-                                                            }
-                                                        },
-                                                        "Move"
-                                                    }
-                                                }
-                                            }
-                                        }
-                                    }
-                                })
-                                .collect::<Vec<_>>()
-                                .into_iter()
-                        }
-                    }
-                }
-            }
+                drop(s);
+                up_cb();
+            });
+            row.append(&up_btn);
         }
+
+        // Move Down button
+        if video_position + 1 < video_count {
+            let down_btn = gtk::Button::from_icon_name("go-down-symbolic");
+            down_btn.add_css_class("flat");
+            down_btn.set_valign(gtk::Align::Center);
+            down_btn.set_tooltip_text(Some("Move Down"));
+
+            let down_state = state.clone();
+            let down_video_id = video.id().clone();
+            let down_module_id = current_module_id.clone();
+            let down_cb = refresh_cb.clone();
+            down_btn.connect_clicked(move |_| {
+                let s = down_state.borrow();
+                if let Some(ref ctx) = s.backend
+                    && let Ok(videos) = ctx.video_repo.find_by_module(&down_module_id)
+                {
+                    let mut sorted: Vec<_> = videos.iter().collect();
+                    sorted.sort_by_key(|v| v.sort_order());
+                    let pos = sorted.iter().position(|v| v.id() == &down_video_id);
+                    if let Some(pos) = pos
+                        && pos + 1 < sorted.len()
+                    {
+                        let current = sorted[pos];
+                        let adjacent = sorted[pos + 1];
+                        let _ = ctx.video_repo.update_module(
+                            current.id(),
+                            &down_module_id,
+                            adjacent.sort_order(),
+                        );
+                        let _ = ctx.video_repo.update_module(
+                            adjacent.id(),
+                            &down_module_id,
+                            current.sort_order(),
+                        );
+                    }
+                }
+                drop(s);
+                down_cb();
+            });
+            row.append(&down_btn);
+        }
+
+        // Move to module dropdown
+        if all_modules.len() > 1 {
+            let module_titles: Vec<&str> = all_modules.iter().map(|m| m.title()).collect();
+            let dropdown = gtk::DropDown::from_strings(&module_titles);
+            let current_mod_idx =
+                all_modules.iter().position(|m| m.id() == current_module_id).unwrap_or(0);
+            dropdown.set_selected(current_mod_idx as u32);
+            dropdown.set_valign(gtk::Align::Center);
+
+            let mv_state = state.clone();
+            let mv_video_id = video.id().clone();
+            let mv_modules: Vec<Module> = all_modules.to_vec();
+            let cur_mod_id = current_module_id.clone();
+            let mv_ref_cb = refresh_cb.clone();
+            dropdown.connect_selected_notify(move |dd| {
+                let idx = dd.selected() as usize;
+                if idx >= mv_modules.len() {
+                    return;
+                }
+                let target = &mv_modules[idx];
+                if target.id() == &cur_mod_id {
+                    return;
+                }
+                let s = mv_state.borrow();
+                if let Some(ref ctx) = s.backend {
+                    let uc = ServiceFactory::move_video_to_module(ctx);
+                    let _ = uc.execute(MoveVideoInput {
+                        video_id: mv_video_id.clone(),
+                        target_module_id: target.id().clone(),
+                        sort_order: 0,
+                    });
+                }
+                drop(s);
+                mv_ref_cb();
+            });
+            row.append(&dropdown);
+        }
+
+        let title_label = gtk::Label::new(Some(video.title()));
+        title_label.set_halign(gtk::Align::Start);
+        title_label.set_hexpand(true);
+        title_label.set_ellipsize(gtk::pango::EllipsizeMode::End);
+        row.append(&title_label);
+
+        let dur_mins = video.duration_secs() / 60;
+        let dur_secs = video.duration_secs() % 60;
+        let dur_label = gtk::Label::new(Some(&format!("{:02}:{:02}", dur_mins, dur_secs)));
+        dur_label.add_css_class("subtitle");
+        dur_label.set_valign(gtk::Align::Center);
+        row.append(&dur_label);
+
+        let play_btn = gtk::Button::with_label("Play");
+        play_btn.set_valign(gtk::Align::Center);
+        play_btn.add_css_class("circular");
+
+        let state_cl = state.clone();
+        let nav_cl = nav.clone();
+        let vp_page = nav_pages.get(PAGE_VIDEO_PLAYER).cloned();
+        let video_id = video.id().to_string();
+        play_btn.connect_clicked(move |_| {
+            state_cl.borrow_mut().current_video_id = Some(video_id.clone());
+            if let Some(ref vp_page) = vp_page {
+                nav_cl.push(vp_page);
+            }
+        });
+        row.append(&play_btn);
+
+        let has_llm = state
+            .borrow()
+            .backend
+            .as_ref()
+            .and_then(|ctx| crate::application::ServiceFactory::summarize_video(ctx))
+            .is_some();
+
+        let summarize_btn = gtk::Button::with_label("Summarize");
+        summarize_btn.add_css_class("flat");
+        summarize_btn.set_valign(gtk::Align::Center);
+        summarize_btn.set_sensitive(has_llm);
+        if !has_llm {
+            summarize_btn.set_tooltip_text(Some("No LLM API key configured in Settings"));
+        }
+        let sum_state = state.clone();
+        let sum_video_id = video.id().clone();
+        summarize_btn.connect_clicked(move |_| {
+            sum_state.borrow_mut().current_video_id = Some(sum_video_id.to_string());
+            crate::ui::toast::Toast::show("Summarization started. Check the AI Chat panel.");
+            let s = sum_state.borrow();
+            if let Some(ref ctx) = s.backend
+                && let Some(uc) = crate::application::ServiceFactory::summarize_video(ctx)
+            {
+                let input = crate::application::use_cases::SummarizeVideoInput {
+                    video_id: sum_video_id.clone(),
+                    force_refresh: false,
+                };
+                crate::infrastructure::tokio_bridge::spawn(async move {
+                    if let Err(e) = uc.execute(input).await {
+                        log::error!("Summarization failed: {e}");
+                    }
+                });
+            }
+        });
+        row.append(&summarize_btn);
+
+        let quiz_btn = gtk::Button::with_label("Generate Quiz");
+        quiz_btn.add_css_class("flat");
+        quiz_btn.set_valign(gtk::Align::Center);
+        quiz_btn.set_sensitive(has_llm);
+        if !has_llm {
+            quiz_btn.set_tooltip_text(Some("No LLM API key configured in Settings"));
+        }
+        let quiz_state = state.clone();
+        let quiz_video_id = video.id().clone();
+        quiz_btn.connect_clicked(move |_| {
+            quiz_state.borrow_mut().current_video_id = Some(quiz_video_id.to_string());
+            crate::ui::toast::Toast::show("Quiz generation started. Check the AI Chat panel.");
+            let s = quiz_state.borrow();
+            if let Some(ref ctx) = s.backend
+                && let Some(uc) = crate::application::ServiceFactory::take_exam(ctx)
+            {
+                use crate::domain::value_objects::ExamDifficulty;
+                let input = crate::application::use_cases::GenerateExamInput {
+                    video_id: quiz_video_id.clone(),
+                    num_questions: 5,
+                    difficulty: ExamDifficulty::Medium,
+                };
+                crate::infrastructure::tokio_bridge::spawn(async move {
+                    if let Err(e) = uc.generate(input).await {
+                        log::error!("Quiz generation failed: {e}");
+                    }
+                });
+            }
+        });
+        row.append(&quiz_btn);
+
+        row
     }
 }
 
-fn format_duration(secs: u32) -> String {
-    let mins = secs / 60;
-    let secs = secs % 60;
-    if mins >= 60 {
-        let hours = mins / 60;
-        let mins = mins % 60;
-        format!("{}:{:02}:{:02}", hours, mins, secs)
-    } else {
-        format!("{}:{:02}", mins, secs)
-    }
+fn show_rename_module_dialog(
+    state: SharedState,
+    module_id: ModuleId,
+    current_title: String,
+    refresh_cb: Rc<dyn Fn()>,
+) {
+    let dialog = adw::Dialog::new();
+    dialog.set_title("Rename Module");
+    dialog.set_content_width(350);
+    dialog.set_content_height(180);
+
+    let vbox = gtk::Box::new(gtk::Orientation::Vertical, 12);
+    vbox.set_margin_start(16);
+    vbox.set_margin_end(16);
+    vbox.set_margin_top(16);
+    vbox.set_margin_bottom(16);
+
+    let entry = gtk::Entry::new();
+    entry.set_text(&current_title);
+    vbox.append(&entry);
+
+    let save_btn = gtk::Button::with_label("Save");
+    save_btn.add_css_class("suggested-action");
+    vbox.append(&save_btn);
+
+    dialog.set_child(Some(&vbox));
+
+    let dialog_cl = dialog.clone();
+    save_btn.connect_clicked(move |_| {
+        let new_title = entry.text().to_string();
+        if !new_title.trim().is_empty() {
+            let s = state.borrow();
+            if let Some(ref ctx) = s.backend {
+                let uc = ServiceFactory::update_module_title(ctx);
+                let _ = uc.execute(UpdateModuleTitleInput {
+                    module_id: module_id.clone(),
+                    title: new_title.trim().to_string(),
+                });
+            }
+            drop(s);
+            refresh_cb();
+        }
+        dialog_cl.close();
+    });
+
+    dialog.present(None::<&gtk::Window>);
 }

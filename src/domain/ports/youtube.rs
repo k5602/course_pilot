@@ -21,6 +21,8 @@ pub enum FetchError {
     Api(String),
     #[error("Playlist not found: {0}")]
     NotFound(String),
+    #[error("yt-dlp not available: {0}")]
+    NotAvailable(String),
     #[error("Rate limited")]
     RateLimited,
 }

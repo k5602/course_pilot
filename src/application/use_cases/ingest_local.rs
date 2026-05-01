@@ -7,15 +7,20 @@ use std::fs;
 use std::path::Path;
 use std::sync::Arc;
 
+use diesel::ExpressionMethods;
+use diesel::QueryDsl;
+use diesel::RunQueryDsl;
+
 use crate::domain::{
     entities::{Course, Module, Video},
     ports::{
-        CourseRepository, LocalMediaScanner, ModuleRepository, RawLocalMediaMetadata,
-        SearchRepository, VideoRepository,
+        CourseRepository, LocalMediaScanner, ModuleRepository, ModuleTitleGenerator,
+        RawLocalMediaMetadata, SearchRepository, VideoRepository,
     },
     services::{BoundaryDetector, SubtitleCleaner, TitleSanitizer, title_number_sequence},
     value_objects::{CourseId, ModuleId, PlaylistUrl, VideoId, VideoSource},
 };
+use crate::infrastructure::{media_hash, persistence::DbPool};
 
 /// Error type for local ingestion.
 #[derive(Debug, thiserror::Error)]
@@ -26,6 +31,14 @@ pub enum IngestLocalError {
     ScanFailed(String),
     #[error("Failed to persist: {0}")]
     PersistFailed(String),
+    #[error("Course already exists: {0}")]
+    AlreadyExists(String),
+}
+
+impl From<diesel::result::Error> for IngestLocalError {
+    fn from(e: diesel::result::Error) -> Self {
+        IngestLocalError::PersistFailed(e.to_string())
+    }
 }
 
 /// Input for the ingest local library use case.
@@ -43,6 +56,7 @@ pub struct IngestLocalOutput {
 }
 
 /// Use case for ingesting a local media library into a structured course.
+#[allow(dead_code)]
 pub struct IngestLocalUseCase<S, CR, MR, VR, SR>
 where
     S: LocalMediaScanner,
@@ -57,6 +71,8 @@ where
     video_repo: Arc<VR>,
     search_repo: Arc<SR>,
     sanitizer: TitleSanitizer,
+    title_generator: Option<Arc<dyn ModuleTitleGenerator>>,
+    pool: Option<Arc<DbPool>>,
 }
 
 impl<S, CR, MR, VR, SR> IngestLocalUseCase<S, CR, MR, VR, SR>
@@ -67,12 +83,31 @@ where
     VR: VideoRepository,
     SR: SearchRepository,
 {
+    async fn generate_module_title(
+        &self,
+        titles: &[String],
+        course_name: &str,
+        module_idx: usize,
+    ) -> String {
+        if let Some(ref generator) = self.title_generator
+            && let Ok(title) =
+                generator.generate_module_title(titles, course_name, module_idx).await
+            && !title.is_empty()
+        {
+            return title;
+        }
+        titles.first().cloned().unwrap_or_else(|| format!("Module {}", module_idx + 1))
+    }
+
+    #[allow(clippy::too_many_arguments)]
     pub fn new(
         scanner: Arc<S>,
         course_repo: Arc<CR>,
         module_repo: Arc<MR>,
         video_repo: Arc<VR>,
         search_repo: Arc<SR>,
+        title_generator: Option<Arc<dyn ModuleTitleGenerator>>,
+        pool: Option<Arc<DbPool>>,
     ) -> Self {
         Self {
             scanner,
@@ -81,6 +116,8 @@ where
             video_repo,
             search_repo,
             sanitizer: TitleSanitizer::new(),
+            title_generator,
+            pool,
         }
     }
 
@@ -94,7 +131,13 @@ where
             return Err(IngestLocalError::InvalidRoot("root path is empty".to_string()));
         }
 
-        // 1. Scan local media
+        // 1. Check for duplicate
+        let source_hash = media_hash::compute_source_hash(root);
+        if let Ok(Some(existing)) = self.course_repo.find_by_source_hash(&source_hash) {
+            return Err(IngestLocalError::AlreadyExists(existing.name().to_string()));
+        }
+
+        // 2. Scan local media
         let mut raw_media = self
             .scanner
             .scan(root)
@@ -127,70 +170,220 @@ where
 
         let course = Course::new(
             course_id.clone(),
-            course_name,
+            course_name.clone(),
             playlist_url.clone(),
             playlist_url.playlist_id().to_string(),
             None,
+            Some(source_hash),
         );
 
-        self.course_repo
-            .save(&course)
-            .map_err(|e| IngestLocalError::PersistFailed(e.to_string()))?;
+        // 5. Pre-compute module/video data (async title generation + subtitle reads, outside transaction)
+        struct PendingVideo {
+            path: String,
+            title: String,
+            duration_secs: u32,
+            transcript: Option<String>,
+        }
 
-        self.search_repo
-            .index_course(course.id(), course.name(), course.description())
-            .map_err(|e| IngestLocalError::PersistFailed(e.to_string()))?;
+        struct PendingModule {
+            module_id: ModuleId,
+            title: String,
+            videos: Vec<PendingVideo>,
+        }
 
-        // 5. Create modules and videos
         let cleaner = SubtitleCleaner::new();
+        let mut pending_modules = Vec::new();
         let mut total_videos = 0;
-        for (module_idx, (folder_path, items)) in grouped.into_iter().enumerate() {
+
+        for (module_idx, (_folder_path, items)) in grouped.into_iter().enumerate() {
             let module_id = ModuleId::new();
-            let module_title = module_title_for(root, &folder_path, &self.sanitizer);
+            let module_video_titles: Vec<String> =
+                items.iter().map(|item| self.sanitizer.sanitize(&item.title)).collect();
+            let module_title =
+                self.generate_module_title(&module_video_titles, &course_name, module_idx).await;
 
-            let module =
-                Module::new(module_id.clone(), course_id.clone(), module_title, module_idx as u32);
-
-            self.module_repo
-                .save(&module)
-                .map_err(|e| IngestLocalError::PersistFailed(e.to_string()))?;
-
-            for (sort_order, item) in items.into_iter().enumerate() {
-                let source = VideoSource::local_path(&item.path)
-                    .map_err(|e| IngestLocalError::PersistFailed(e.to_string()))?;
-
+            let mut videos = Vec::with_capacity(items.len());
+            for item in items {
                 let title = self.sanitizer.sanitize(&item.title);
+                let transcript = item
+                    .subtitles
+                    .first()
+                    .and_then(|sub| {
+                        fs::read_to_string(&sub.path).ok().map(|raw| cleaner.clean(&raw))
+                    })
+                    .filter(|s| !s.trim().is_empty());
 
-                let video = Video::with_description(
-                    VideoId::new(),
-                    module_id.clone(),
-                    source,
+                videos.push(PendingVideo {
+                    path: item.path,
                     title,
-                    None,
-                    item.duration_secs,
-                    sort_order as u32,
-                );
+                    duration_secs: item.duration_secs,
+                    transcript,
+                });
+            }
+            total_videos += videos.len();
+            pending_modules.push(PendingModule { module_id, title: module_title, videos });
+        }
 
-                self.video_repo
-                    .save(&video)
-                    .map_err(|e| IngestLocalError::PersistFailed(e.to_string()))?;
+        // 6. Persist everything atomically in a single transaction
+        if let Some(ref pool) = self.pool {
+            use crate::infrastructure::persistence::models::{NewCourse, NewModule, NewVideo};
+            use crate::schema::{courses, modules, videos};
+            use diesel::connection::Connection;
+            use diesel::sql_types::Text;
 
-                if let Some(subtitle) = item.subtitles.first() {
-                    if let Ok(raw) = fs::read_to_string(&subtitle.path) {
-                        let cleaned = cleaner.clean(&raw);
-                        if !cleaned.trim().is_empty() {
-                            self.video_repo
-                                .update_transcript(video.id(), Some(&cleaned))
-                                .map_err(|e| IngestLocalError::PersistFailed(e.to_string()))?;
+            let course_id_str = course_id.as_uuid().to_string();
+
+            let mut conn =
+                pool.get().map_err(|e| IngestLocalError::PersistFailed(e.to_string()))?;
+
+            conn.transaction::<_, IngestLocalError, _>(|tx| {
+                let new_course = NewCourse {
+                    id: &course_id_str,
+                    name: course.name(),
+                    source_url: course.source_url().raw(),
+                    playlist_id: course.playlist_id(),
+                    description: course.description(),
+                    source_hash: course.source_hash(),
+                };
+                diesel::insert_into(courses::table)
+                    .values(&new_course)
+                    .on_conflict(courses::id)
+                    .do_update()
+                    .set((
+                        courses::name.eq(course.name()),
+                        courses::description.eq(course.description()),
+                    ))
+                    .execute(tx)?;
+
+                diesel::sql_query(
+                    "INSERT INTO search_index (entity_type, entity_id, title, content, course_id) VALUES ('course', ?, ?, ?, ?)",
+                )
+                .bind::<Text, _>(&course_id_str)
+                .bind::<Text, _>(course.name())
+                .bind::<Text, _>("")
+                .bind::<Text, _>(&course_id_str)
+                .execute(tx)?;
+
+                for (module_idx, pm) in pending_modules.iter().enumerate() {
+                    let module_id_str = pm.module_id.as_uuid().to_string();
+
+                    let new_module = NewModule {
+                        id: &module_id_str,
+                        course_id: &course_id_str,
+                        title: &pm.title,
+                        sort_order: module_idx as i32,
+                    };
+                    diesel::insert_into(modules::table)
+                        .values(&new_module)
+                        .on_conflict(modules::id)
+                        .do_update()
+                        .set((
+                            modules::title.eq(&pm.title),
+                            modules::sort_order.eq(module_idx as i32),
+                        ))
+                        .execute(tx)?;
+
+                    for (sort_order, video) in pm.videos.iter().enumerate() {
+                        let video_id = VideoId::new();
+                        let video_id_str = video_id.as_uuid().to_string();
+
+                        let new_video = NewVideo {
+                            id: &video_id_str,
+                            module_id: &module_id_str,
+                            youtube_id: None,
+                            title: &video.title,
+                            duration_secs: video.duration_secs as i32,
+                            is_completed: false,
+                            sort_order: sort_order as i32,
+                            description: None,
+                            transcript: None,
+                            summary: None,
+                            source_type: "local",
+                            source_ref: &video.path,
+                            key_points: None,
+                            key_terms: None,
+                        };
+                        diesel::insert_into(videos::table)
+                            .values(&new_video)
+                            .on_conflict(videos::id)
+                            .do_update()
+                            .set((
+                                videos::title.eq(&video.title),
+                                videos::duration_secs.eq(video.duration_secs as i32),
+                                videos::is_completed.eq(false),
+                                videos::sort_order.eq(sort_order as i32),
+                                videos::description.eq::<Option<&str>>(None),
+                                videos::transcript.eq::<Option<&str>>(None),
+                                videos::summary.eq::<Option<&str>>(None),
+                                videos::module_id.eq(&module_id_str),
+                            ))
+                            .execute(tx)?;
+
+                        if let Some(ref transcript) = video.transcript {
+                            diesel::update(videos::table.find(&video_id_str))
+                                .set(videos::transcript.eq(Some(transcript.as_str())))
+                                .execute(tx)?;
                         }
+
+                        diesel::sql_query(
+                            "INSERT INTO search_index (entity_type, entity_id, title, content, course_id) VALUES ('video', ?, ?, ?, ?)",
+                        )
+                        .bind::<Text, _>(&video_id_str)
+                        .bind::<Text, _>(&video.title)
+                        .bind::<Text, _>("")
+                        .bind::<Text, _>(&course_id_str)
+                        .execute(tx)?;
                     }
                 }
 
-                self.search_repo
-                    .index_video(&video.id().as_uuid().to_string(), video.title(), None, &course_id)
+                Ok(())
+            })?;
+        } else {
+            self.course_repo
+                .save(&course)
+                .map_err(|e| IngestLocalError::PersistFailed(e.to_string()))?;
+            self.search_repo
+                .index_course(course.id(), course.name(), course.description())
+                .map_err(|e| IngestLocalError::PersistFailed(e.to_string()))?;
+            for (module_idx, pm) in pending_modules.iter().enumerate() {
+                let module = Module::new(
+                    pm.module_id.clone(),
+                    course_id.clone(),
+                    pm.title.clone(),
+                    module_idx as u32,
+                );
+                self.module_repo
+                    .save(&module)
                     .map_err(|e| IngestLocalError::PersistFailed(e.to_string()))?;
-
-                total_videos += 1;
+                for (sort_order, video_data) in pm.videos.iter().enumerate() {
+                    let source = VideoSource::local_path(&video_data.path)
+                        .map_err(|e| IngestLocalError::PersistFailed(e.to_string()))?;
+                    let video = Video::with_description(
+                        VideoId::new(),
+                        pm.module_id.clone(),
+                        source,
+                        video_data.title.clone(),
+                        None,
+                        video_data.duration_secs,
+                        sort_order as u32,
+                    );
+                    self.video_repo
+                        .save(&video)
+                        .map_err(|e| IngestLocalError::PersistFailed(e.to_string()))?;
+                    if let Some(ref transcript) = video_data.transcript {
+                        self.video_repo
+                            .update_transcript(video.id(), Some(transcript))
+                            .map_err(|e| IngestLocalError::PersistFailed(e.to_string()))?;
+                    }
+                    self.search_repo
+                        .index_video(
+                            &video.id().as_uuid().to_string(),
+                            video.title(),
+                            None,
+                            &course_id,
+                        )
+                        .map_err(|e| IngestLocalError::PersistFailed(e.to_string()))?;
+                }
             }
         }
 
@@ -293,6 +486,7 @@ fn split_root_group_if_needed(
     split
 }
 
+#[allow(dead_code)]
 fn module_title_for(root: &str, folder: &str, sanitizer: &TitleSanitizer) -> String {
     let root_path = Path::new(root);
     let folder_path = Path::new(folder);

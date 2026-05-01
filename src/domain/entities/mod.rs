@@ -12,7 +12,7 @@ mod video;
 
 pub use analytics::AppAnalytics;
 pub use course::Course;
-pub use exam::Exam;
+pub use exam::{Exam, QuizQuestion};
 pub use module::Module;
 pub use note::{Note, NoteId};
 pub use search::{SearchResult, SearchResultType};

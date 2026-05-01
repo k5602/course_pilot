@@ -5,6 +5,15 @@ use crate::domain::value_objects::{ExamId, VideoId};
 /// Pass threshold for an exam (70%).
 const PASS_THRESHOLD: f32 = 0.70;
 
+/// A single MCQ question for an exam.
+#[derive(Debug, Clone, serde::Deserialize)]
+pub struct QuizQuestion {
+    pub question: String,
+    pub options: Vec<String>,
+    pub correct_index: usize,
+    pub explanation: String,
+}
+
 /// An exam represents an AI-generated MCQ test for a video.
 #[derive(Debug, Clone, PartialEq)]
 pub struct Exam {

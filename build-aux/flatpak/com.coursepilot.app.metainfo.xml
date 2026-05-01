@@ -1,0 +1,34 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<component type="desktop-application">
+  <id>com.coursepilot.app</id>
+  <name>Course Pilot</name>
+  <summary>Transform YouTube playlists into structured, intelligent study plans</summary>
+  <developer_name>k5602</developer_name>
+  <metadata_license>MIT</metadata_license>
+  <project_license>MIT</project_license>
+
+  <description>
+    <p>
+      A modern desktop application that automatically analyzes video-based courses,
+      creates logical learning structures, and generates personalized study schedules.
+    </p>
+    <p>Features include playlist import with metadata extraction, smart video grouping,
+    progress tracking, AI companion for content questions, quiz generation, and
+    session planning based on your cognitive limit.</p>
+  </description>
+
+  <categories>
+    <category>Education</category>
+  </categories>
+
+  <url type="homepage">https://github.com/k5602/course_pilot</url>
+  <url type="bugtracker">https://github.com/k5602/course_pilot/issues</url>
+
+  <releases>
+    <release version="0.1.4" date="2025-01-01"/>
+  </releases>
+
+  <launchable type="desktop-id">com.coursepilot.app.desktop</launchable>
+
+  <content_rating type="oars-1.1"/>
+</component>

@@ -1,252 +1,260 @@
-//! Settings page - API keys and preferences with save functionality
+use std::rc::Rc;
 
-use dioxus::prelude::*;
+use adw::NavigationView;
+use adw::prelude::*;
 
 use crate::application::ServiceFactory;
-use crate::application::use_cases::UpdatePreferencesInput;
 use crate::domain::ports::SecretStore;
-use crate::ui::custom::PresenceHealth;
-use crate::ui::state::AppState;
+use crate::domain::value_objects::VideoQuality;
+use crate::ui::state::SharedState;
+use crate::ui::widgets::QualitySelector;
 
-/// Settings for API keys and app preferences.
-#[component]
-pub fn Settings() -> Element {
-    let mut state = use_context::<AppState>();
+pub struct SettingsPage {
+    widget: gtk::Box,
+    state: SharedState,
+    _nav: Rc<NavigationView>,
+    api_key_entry: adw::EntryRow,
+    api_status_label: gtk::Label,
+    db_path_row: adw::ActionRow,
+    discord_entry: adw::EntryRow,
+    cookie_entry: adw::EntryRow,
+    theme_switch: adw::SwitchRow,
+    quality_selector: QualitySelector,
+    save_status_label: gtk::Label,
+    save_btn: gtk::Button,
+}
 
-    {
-        let mut state = state.clone();
-        use_effect(move || {
-            state.current_video_id.set(None);
+impl SettingsPage {
+    pub fn new(state: SharedState, nav: Rc<NavigationView>) -> Self {
+        let widget = gtk::Box::new(gtk::Orientation::Vertical, 16);
+        widget.add_css_class("content-area");
+
+        let heading = gtk::Label::new(Some("Settings"));
+        heading.add_css_class("heading");
+        heading.set_margin_start(16);
+        heading.set_margin_top(16);
+        widget.append(&heading);
+
+        let scroll = gtk::ScrolledWindow::new();
+        scroll.set_vexpand(true);
+        scroll.set_hexpand(true);
+
+        let prefs_box = gtk::Box::new(gtk::Orientation::Vertical, 12);
+        prefs_box.set_margin_start(16);
+        prefs_box.set_margin_end(16);
+        prefs_box.set_margin_bottom(16);
+
+        let api_group = adw::PreferencesGroup::new();
+        api_group.set_title("Gemini API");
+        api_group
+            .set_description(Some("API key for AI companion, quiz generation, and summaries."));
+
+        let api_key_entry = adw::EntryRow::new();
+        api_key_entry.set_title("Gemini API Key");
+        api_key_entry.set_input_purpose(gtk::InputPurpose::Password);
+        api_group.add(&api_key_entry);
+
+        let api_status_label = gtk::Label::new(None);
+        api_status_label.set_halign(gtk::Align::Start);
+        api_status_label.add_css_class("subtitle");
+        api_group.add(&api_status_label);
+
+        prefs_box.append(&api_group);
+
+        let db_group = adw::PreferencesGroup::new();
+        db_group.set_title("Database");
+
+        let db_path_row = adw::ActionRow::new();
+        db_path_row.set_title("Database Path");
+        db_path_row.set_subtitle("unknown");
+        db_group.add(&db_path_row);
+
+        prefs_box.append(&db_group);
+
+        let discord_group = adw::PreferencesGroup::new();
+        discord_group.set_title("Discord");
+        discord_group.set_description(Some("Discord Rich Presence client ID (optional)."));
+
+        let discord_entry = adw::EntryRow::new();
+        discord_entry.set_title("Discord Client ID");
+        discord_group.add(&discord_entry);
+
+        prefs_box.append(&discord_group);
+
+        let youtube_group = adw::PreferencesGroup::new();
+        youtube_group.set_title("YouTube");
+        youtube_group.set_description(Some("Cookies file path for restricted content (optional)."));
+
+        let cookie_entry = adw::EntryRow::new();
+        cookie_entry.set_title("Cookies File Path");
+        youtube_group.add(&cookie_entry);
+
+        let quality_selector = QualitySelector::new("Preferred Quality");
+        quality_selector.widget().set_subtitle("Default quality for YouTube videos.");
+        youtube_group.add(quality_selector.widget());
+
+        prefs_box.append(&youtube_group);
+
+        let theme_group = adw::PreferencesGroup::new();
+        theme_group.set_title("Appearance");
+
+        let theme_switch = adw::SwitchRow::new();
+        theme_switch.set_title("Dark Mode");
+        theme_switch.set_subtitle("Use dark color scheme.");
+        theme_group.add(&theme_switch);
+
+        prefs_box.append(&theme_group);
+
+        let save_btn = gtk::Button::with_label("Save Settings");
+        save_btn.add_css_class("suggested-action");
+        save_btn.set_halign(gtk::Align::Center);
+        prefs_box.append(&save_btn);
+
+        let save_status_label = gtk::Label::new(None);
+        save_status_label.set_halign(gtk::Align::Center);
+        save_status_label.add_css_class("subtitle");
+        prefs_box.append(&save_status_label);
+
+        scroll.set_child(Some(&prefs_box));
+        widget.append(&scroll);
+
+        let page = Self {
+            widget,
+            state: state.clone(),
+            _nav: nav,
+            api_key_entry,
+            api_status_label,
+            db_path_row,
+            discord_entry,
+            cookie_entry,
+            theme_switch,
+            quality_selector,
+            save_status_label,
+            save_btn,
+        };
+
+        let state_cl = state.clone();
+        let api_entry = page.api_key_entry.clone();
+        let discord_entry_cl = page.discord_entry.clone();
+        let cookie_entry_cl = page.cookie_entry.clone();
+        let theme_sw = page.theme_switch.clone();
+        let status = page.save_status_label.clone();
+        let quality_sel = page.quality_selector.widget().clone();
+
+        page.save_btn.connect_clicked(move |_| {
+            let s = state_cl.borrow();
+            if let Some(ref ctx) = s.backend {
+                let key = api_entry.text().as_str().to_string();
+                if !key.is_empty() {
+                    match ctx.keystore.store("gemini_api_key", &key) {
+                        Ok(_) => {
+                            status.set_text("API key saved.");
+                        },
+                        Err(e) => {
+                            status.set_text(&format!("Failed to save key: {}", e));
+                        },
+                    }
+                }
+
+                let discord_id = discord_entry_cl.text().as_str().to_string();
+                if !discord_id.is_empty() {
+                    let _ = ctx.keystore.store("discord_client_id", &discord_id);
+                }
+
+                let cookie_path = cookie_entry_cl.text().as_str().to_string();
+                if !cookie_path.is_empty() {
+                    let _ = ctx.keystore.store("youtube_cookies", &cookie_path);
+                }
+
+                let selected = quality_sel.selected();
+                let idx = selected as usize;
+                let quality = [
+                    VideoQuality::P240,
+                    VideoQuality::P360,
+                    VideoQuality::P480,
+                    VideoQuality::P720,
+                    VideoQuality::P1080,
+                    VideoQuality::Best,
+                ]
+                .get(idx)
+                .copied()
+                .unwrap_or(VideoQuality::P720);
+
+                use crate::application::use_cases::UpdatePreferencesInput;
+                if let Ok(uc) = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+                    ServiceFactory::preferences(ctx)
+                })) {
+                    let input = UpdatePreferencesInput {
+                        ml_boundary_enabled: false,
+                        cognitive_limit_minutes: 45,
+                        right_panel_visible: s.right_panel_visible,
+                        right_panel_width: s.right_panel_width as u32,
+                        onboarding_completed: s.onboarding_completed,
+                        preferred_quality: quality,
+                    };
+                    match uc.update(input) {
+                        Ok(prefs) => {
+                            drop(s);
+                            let mut s2 = state_cl.borrow_mut();
+                            s2.preferred_quality = prefs.preferred_quality();
+                            s2.session_quality = prefs.preferred_quality();
+                            status.set_text("Settings saved.");
+                        },
+                        Err(e) => {
+                            status.set_text(&format!("Failed to save: {e}"));
+                        },
+                    }
+                } else {
+                    status.set_text("Failed to save preferences.");
+                }
+            } else {
+                status.set_text("No backend connected.");
+            }
+
+            if theme_sw.is_active() {
+                adw::StyleManager::default().set_color_scheme(adw::ColorScheme::ForceDark);
+            } else {
+                adw::StyleManager::default().set_color_scheme(adw::ColorScheme::Default);
+            }
         });
+
+        page.refresh();
+        page
     }
 
-    let mut active_tab = use_signal(|| "integrations".to_string());
+    pub fn widget(&self) -> &gtk::Box {
+        &self.widget
+    }
 
-    let mut gemini_key = use_signal(String::new);
-    let mut ml_boundary_enabled = use_signal(|| false);
-    let mut cognitive_limit = use_signal(|| 45u32);
-    let mut right_panel_visible = use_signal(|| true);
+    pub fn refresh(&self) {
+        let state = self.state.borrow();
+        if let Some(ref ctx) = state.backend {
+            self.db_path_row.set_subtitle(&ctx.config.database_url);
 
-    let mut save_status = use_signal(|| None::<(bool, String)>);
-
-    // Clone backend for closures
-    let backend_load = state.backend.clone();
-    let backend_save = state.backend.clone();
-    let backend_prefs = state.backend.clone();
-
-    // Load current values on mount
-    use_effect(move || {
-        if let Some(ref ctx) = backend_load {
-            // Show masked indicator if key exists
-            if ctx.has_llm() {
-                gemini_key.set("••••••••••••••••".to_string());
-            }
-
-            let use_case = ServiceFactory::preferences(ctx);
-            match use_case.load() {
-                Ok(prefs) => {
-                    ml_boundary_enabled.set(prefs.ml_boundary_enabled());
-                    cognitive_limit.set(prefs.cognitive_limit_minutes());
-                    right_panel_visible.set(prefs.right_panel_visible());
-                    state.right_panel_width.set(prefs.right_panel_width() as f64);
-                    state.onboarding_completed.set(prefs.onboarding_completed());
+            match ctx.keystore.retrieve("gemini_api_key") {
+                Ok(Some(_)) => {
+                    self.api_status_label.set_text("API key is set");
                 },
-                Err(e) => {
-                    save_status.set(Some((false, format!("Failed to load preferences: {}", e))));
+                _ => {
+                    self.api_status_label.set_text("No API key set");
                 },
             }
-        }
-    });
 
-    let handle_save_integrations = move |_| {
-        let gem_key = gemini_key.read().clone();
-
-        // Only save if not masked placeholder
-        if let Some(ref ctx) = backend_save {
-            let mut success = true;
-            let mut errors = Vec::new();
-
-            // Save Gemini key
-            if !gem_key.is_empty() && !gem_key.starts_with("••") {
-                if let Err(e) = ctx.keystore.store("gemini_api_key", &gem_key) {
-                    success = false;
-                    errors.push(format!("Gemini key: {}", e));
-                }
+            if let Ok(Some(id)) = ctx.keystore.retrieve("discord_client_id") {
+                self.discord_entry.set_text(&id);
             }
 
-            if success {
-                save_status.set(Some((true, "Integrations saved.".to_string())));
-            } else {
-                save_status.set(Some((false, errors.join(", "))));
+            if let Ok(Some(path)) = ctx.keystore.retrieve("youtube_cookies") {
+                self.cookie_entry.set_text(&path);
             }
+
+            self.quality_selector.set_quality(state.preferred_quality);
+
+            let is_dark =
+                matches!(adw::StyleManager::default().color_scheme(), adw::ColorScheme::ForceDark);
+            self.theme_switch.set_active(is_dark);
         } else {
-            save_status.set(Some((false, "Backend not available".to_string())));
-        }
-    };
-
-    let handle_save_preferences = move |_| {
-        if let Some(ref ctx) = backend_prefs {
-            let use_case = ServiceFactory::preferences(ctx);
-            let input = UpdatePreferencesInput {
-                ml_boundary_enabled: *ml_boundary_enabled.read(),
-                cognitive_limit_minutes: *cognitive_limit.read(),
-                right_panel_visible: *right_panel_visible.read(),
-                right_panel_width: state.right_panel_width.read().round() as u32,
-                onboarding_completed: *state.onboarding_completed.read(),
-            };
-
-            match use_case.update(input) {
-                Ok(_) => {
-                    save_status.set(Some((true, "Preferences saved.".to_string())));
-                },
-                Err(e) => {
-                    save_status.set(Some((false, format!("Failed to save preferences: {}", e))));
-                },
-            }
-        } else {
-            save_status.set(Some((false, "Backend not available".to_string())));
-        }
-    };
-
-    rsx! {
-        div { class: "p-6 max-w-3xl",
-
-            h1 { class: "text-2xl font-bold mb-6", "Settings" }
-
-            div { class: "tabs tabs-boxed mb-6",
-                button {
-                    class: if *active_tab.read() == "integrations" { "tab tab-active" } else { "tab" },
-                    onclick: move |_| active_tab.set("integrations".to_string()),
-                    "Integrations"
-                }
-                button {
-                    class: if *active_tab.read() == "preferences" { "tab tab-active" } else { "tab" },
-                    onclick: move |_| active_tab.set("preferences".to_string()),
-                    "Preferences"
-                }
-                button {
-                    class: if *active_tab.read() == "about" { "tab tab-active" } else { "tab" },
-                    onclick: move |_| active_tab.set("about".to_string()),
-                    "About"
-                }
-            }
-
-            // Save status alert
-            if let Some((is_success, ref msg)) = *save_status.read() {
-                div { class: if is_success { "alert alert-success mb-6" } else { "alert alert-error mb-6" },
-                    "{msg}"
-                }
-            }
-
-            if *active_tab.read() == "integrations" {
-                section { class: "mb-8",
-                    h2 { class: "text-lg font-semibold mb-4", "API Keys" }
-
-                    div { class: "space-y-4",
-
-                        // Gemini API Key
-                        div {
-                            label { class: "label", "Gemini API Key" }
-                            div { class: "flex gap-2",
-                                input {
-                                    class: "input input-bordered flex-1",
-                                    r#type: "password",
-                                    placeholder: "Enter your Gemini API key",
-                                    value: "{gemini_key}",
-                                    oninput: move |e| gemini_key.set(e.value()),
-                                    onfocus: move |_| {
-                                        if gemini_key.read().starts_with("••") {
-                                            gemini_key.set(String::new());
-                                        }
-                                    },
-                                }
-                                if state.has_gemini() {
-                                    span { class: "badge badge-success self-center",
-                                        "Active"
-                                    }
-                                }
-                            }
-                            p { class: "text-sm text-base-content/60 mt-1",
-                                "Required for AI Companion, quiz generation, and video summaries. "
-                                a {
-                                    href: "https://aistudio.google.com/apikey",
-                                    class: "link link-primary",
-                                    target: "_blank",
-                                    "Get from AI Studio →"
-                                }
-                            }
-                        }
-                    }
-
-                    div { class: "divider" }
-
-                    h2 { class: "text-lg font-semibold mb-4", "Discord Rich Presence" }
-
-                    div { class: "space-y-4",
-                        div { class: "bg-base-200 rounded-lg p-4 flex items-center justify-between",
-                            div {
-                                h3 { class: "font-semibold", "Connection Status" }
-                                p { class: "text-sm text-base-content/60",
-                                    "Show your current course and video on your Discord profile."
-                                }
-                            }
-                            PresenceHealth {}
-                        }
-                    }
-
-                    button {
-                        class: "btn btn-primary mt-6",
-                        onclick: handle_save_integrations,
-                        "Save Integrations"
-                    }
-                }
-            } else if *active_tab.read() == "preferences" {
-                section { class: "mb-8",
-                    h2 { class: "text-lg font-semibold mb-4", "Preferences" }
-
-                    div { class: "space-y-6",
-
-                        // Cognitive limit
-                        div {
-                            label { class: "label", "Daily study time: {cognitive_limit} minutes" }
-                            input {
-                                r#type: "range",
-                                class: "range range-primary w-full",
-                                min: "15",
-                                max: "120",
-                                step: "5",
-                                value: "{cognitive_limit}",
-                                oninput: move |e| {
-                                    if let Ok(val) = e.value().parse::<u32>() {
-                                        cognitive_limit.set(val);
-                                    }
-                                },
-                            }
-                            p { class: "text-sm text-base-content/60 mt-1",
-                                "Used to plan study sessions across modules."
-                            }
-                        }
-                    }
-
-                    button {
-                        class: "btn btn-primary mt-6",
-                        onclick: handle_save_preferences,
-                        "Save Preferences"
-                    }
-                }
-            } else {
-                section { class: "mb-8 space-y-4",
-                    h2 { class: "text-lg font-semibold", "About" }
-                    p { class: "text-sm text-base-content/70",
-                        "Course Pilot helps you transform YouTube playlists into structured study plans."
-                    }
-                    p { class: "text-sm text-base-content/70", "Window title: Course Pilot" }
-                    p { class: "text-sm text-base-content/70",
-                        "Version: {env!(\"CARGO_PKG_VERSION\")}"
-                    }
-                    p { class: "text-sm text-base-content/70", "Author: Made with love by Khaled" }
-                }
-            }
+            self.db_path_row.set_subtitle("unknown (no backend)");
         }
     }
 }

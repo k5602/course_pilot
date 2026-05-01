@@ -6,11 +6,15 @@ mod llm;
 mod local_media;
 mod presence;
 mod repository;
+mod stream;
 mod transcript;
 mod youtube;
 
 pub use keystore::{KeystoreError, SecretStore};
-pub use llm::{CompanionAI, CompanionContext, ExaminerAI, LLMError, MCQuestion, SummarizerAI};
+pub use llm::{
+    CompanionAI, CompanionContext, ExaminerAI, LLMError, MCQuestion, ModuleTitleGenerator,
+    SummarizerAI,
+};
 pub use local_media::{
     LocalMediaError, LocalMediaScanner, RawLocalMediaMetadata, RawSubtitleMetadata,
 };
@@ -19,5 +23,6 @@ pub use repository::{
     CourseRepository, ExamRepository, ModuleRepository, NoteRepository, RepositoryError,
     SearchRepository, TagRepository, UserPreferencesRepository, VideoRepository,
 };
+pub use stream::StreamResolver;
 pub use transcript::{TranscriptError, TranscriptProvider};
 pub use youtube::{FetchError, PlaylistFetcher, RawVideoMetadata};

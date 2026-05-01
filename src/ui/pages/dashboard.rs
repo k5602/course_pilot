@@ -1,409 +1,200 @@
-//! Dashboard page - Course overview and progress
+use std::rc::Rc;
 
-use dioxus::prelude::*;
+use adw::prelude::*;
 
-use crate::domain::entities::Course;
-use crate::domain::ports::TagRepository;
-use crate::domain::value_objects::TagId;
-use crate::ui::Route;
-use crate::ui::actions::{ImportResult, import_local_folder, import_playlist};
-use crate::ui::custom::{
-    AnalyticsOverview, CardSkeleton, CourseCard, ErrorAlert, ImportPlaylistDialog, Spinner,
-    TagBadge, TagFilterChip,
-};
-use crate::ui::hooks::{
-    use_load_courses, use_load_dashboard_analytics, use_load_modules, use_load_tags,
-    use_load_videos_by_course,
-};
-use crate::ui::state::AppState;
+use crate::ui::state::SharedState;
+use crate::ui::toast::Toast;
+use adw::NavigationView;
 
-/// Dashboard showing all courses and overall progress.
-#[component]
-pub fn Dashboard() -> Element {
-    let state = use_context::<AppState>();
+pub struct DashboardPage {
+    widget: gtk::Box,
+    state: SharedState,
+    _nav: Rc<NavigationView>,
+    stat_courses: gtk::Label,
+    stat_modules: gtk::Label,
+    stat_videos: gtk::Label,
+    stat_completed: gtk::Label,
+    progress_bar: gtk::LevelBar,
+    progress_label: gtk::Label,
+    coverage_label: gtk::Label,
+    content_box: gtk::Box,
+    status_page: adw::StatusPage,
+}
 
-    {
-        let mut state = state.clone();
-        use_effect(move || {
-            state.current_video_id.set(None);
-        });
+impl DashboardPage {
+    pub fn new(state: SharedState, nav: Rc<NavigationView>) -> Self {
+        let widget = gtk::Box::new(gtk::Orientation::Vertical, 16);
+        widget.add_css_class("content-area");
+
+        let heading = gtk::Label::new(Some("Dashboard"));
+        heading.add_css_class("heading");
+        widget.append(&heading);
+
+        let status_page = adw::StatusPage::new();
+        status_page.set_title("Loading...");
+        status_page.set_description(Some("Loading analytics..."));
+        widget.append(&status_page);
+
+        let content_box = gtk::Box::new(gtk::Orientation::Vertical, 16);
+        content_box.set_margin_top(8);
+        content_box.set_margin_start(16);
+        content_box.set_margin_end(16);
+
+        let stats_grid = gtk::Grid::new();
+        stats_grid.set_column_spacing(16);
+        stats_grid.set_row_spacing(16);
+        stats_grid.set_halign(gtk::Align::Center);
+
+        let stat_courses = make_stat_card("Total Courses", "0");
+        let stat_modules = make_stat_card("Total Modules", "0");
+        let stat_videos = make_stat_card("Total Videos", "0");
+        let stat_completed = make_stat_card("Completed", "0%");
+
+        stats_grid.attach(&stat_courses.0, 0, 0, 1, 1);
+        stats_grid.attach(&stat_modules.0, 1, 0, 1, 1);
+        stats_grid.attach(&stat_videos.0, 0, 1, 1, 1);
+        stats_grid.attach(&stat_completed.0, 1, 1, 1, 1);
+
+        content_box.append(&stats_grid);
+
+        let progress_section = gtk::Box::new(gtk::Orientation::Vertical, 8);
+        let progress_header = gtk::Label::new(Some("Completion Progress"));
+        progress_header.add_css_class("subtitle");
+        progress_header.set_halign(gtk::Align::Start);
+        progress_section.append(&progress_header);
+
+        let progress_bar = gtk::LevelBar::new();
+        progress_bar.set_min_value(0.0);
+        progress_bar.set_max_value(100.0);
+        progress_bar.set_value(0.0);
+        progress_bar.set_hexpand(true);
+        progress_section.append(&progress_bar);
+
+        let progress_label = gtk::Label::new(Some("0 / 0 videos completed"));
+        progress_label.set_halign(gtk::Align::Start);
+        progress_section.append(&progress_label);
+
+        content_box.append(&progress_section);
+
+        let coverage_section = gtk::Box::new(gtk::Orientation::Vertical, 4);
+        let coverage_header = gtk::Label::new(Some("Summary Coverage"));
+        coverage_header.add_css_class("subtitle");
+        coverage_header.set_halign(gtk::Align::Start);
+
+        let coverage_label = gtk::Label::new(Some("No summaries generated yet."));
+        coverage_label.set_halign(gtk::Align::Start);
+        coverage_section.append(&coverage_header);
+        coverage_section.append(&coverage_label);
+
+        content_box.append(&coverage_section);
+
+        let subtitle = gtk::Label::new(Some("Welcome to Course Pilot."));
+        subtitle.add_css_class("subtitle");
+        widget.append(&subtitle);
+
+        widget.append(&content_box);
+
+        let s = Self {
+            widget,
+            state,
+            _nav: nav,
+            stat_courses: stat_courses.1,
+            stat_modules: stat_modules.1,
+            stat_videos: stat_videos.1,
+            stat_completed: stat_completed.1,
+            progress_bar,
+            progress_label,
+            coverage_label,
+            content_box,
+            status_page,
+        };
+        s.refresh();
+        s
     }
 
-    // Load courses, tags, and analytics from backend
-    let courses = use_load_courses(state.backend.clone());
-    let courses_state = courses.state.clone();
-    let mut courses = courses.data;
-    let all_tags = use_load_tags(state.backend.clone()).data;
-    let analytics = use_load_dashboard_analytics(state.backend.clone());
-    let analytics_state = analytics.state.clone();
-    let analytics = analytics.data;
+    pub fn widget(&self) -> &gtk::Box {
+        &self.widget
+    }
 
-    // Tabs
-    let mut active_tab = use_signal(|| "overview".to_string());
+    pub fn refresh(&self) {
+        let state = self.state.borrow();
+        if let Some(ref ctx) = state.backend {
+            match crate::application::ServiceFactory::dashboard(ctx).execute() {
+                Ok(analytics) => {
+                    self.status_page.set_visible(false);
+                    self.content_box.set_visible(true);
 
-    // Search and filter state
-    let mut search_query = use_signal(String::new);
-    let mut selected_tags = use_signal(Vec::<TagId>::new);
+                    self.stat_courses.set_text(&analytics.total_courses().to_string());
+                    self.stat_modules.set_text(&analytics.total_modules().to_string());
+                    self.stat_videos.set_text(&analytics.total_videos().to_string());
+                    self.stat_completed
+                        .set_text(&format!("{:.0}%", analytics.completion_percent()));
 
-    // Import dialog state
-    let mut import_open = use_signal(|| false);
-    let mut import_status = use_signal(|| None::<String>);
-    let mut import_loading = use_signal(|| false);
+                    let pct = analytics.completion_percent() as f64;
+                    self.progress_bar.set_value(pct);
+                    self.progress_label.set_text(&format!(
+                        "{} / {} videos completed ({:.0}%)",
+                        analytics.completed_videos(),
+                        analytics.total_videos(),
+                        pct
+                    ));
 
-    let backend_for_youtube = state.backend.clone();
-    let backend_for_local = state.backend.clone();
-
-    let handle_import_youtube = move |url: String| {
-        let backend = backend_for_youtube.clone();
-
-        spawn(async move {
-            import_loading.set(true);
-            import_status.set(Some("Importing...".to_string()));
-
-            match import_playlist(backend.clone(), url, None).await {
-                ImportResult::Success { course_id: _, modules, videos } => {
-                    import_status
-                        .set(Some(format!("✓ Imported {} modules, {} videos", modules, videos)));
-
-                    // Reload courses
-                    if let Some(ref ctx) = backend {
-                        use crate::domain::ports::CourseRepository;
-                        if let Ok(loaded) = ctx.course_repo.find_all() {
-                            courses.set(loaded);
+                    let cov = analytics.summary_coverage_percent();
+                    self.coverage_label.set_text(&format!(
+                        "{:.0}% of videos have summaries ({})",
+                        cov,
+                        if cov > 50.0 {
+                            "Great progress!"
+                        } else if cov > 0.0 {
+                            "Getting started."
+                        } else {
+                            "No summaries generated yet."
                         }
-                    }
+                    ));
                 },
-                ImportResult::Error(e) => {
-                    import_status.set(Some(format!("✗ Error: {}", e)));
-                },
-            }
-
-            import_loading.set(false);
-        });
-    };
-
-    let handle_import_local = move |path: String| {
-        let backend = backend_for_local.clone();
-
-        spawn(async move {
-            import_loading.set(true);
-            import_status.set(Some("Importing...".to_string()));
-
-            match import_local_folder(backend.clone(), path, None).await {
-                ImportResult::Success { course_id: _, modules, videos } => {
-                    import_status
-                        .set(Some(format!("✓ Imported {} modules, {} videos", modules, videos)));
-
-                    // Reload courses
-                    if let Some(ref ctx) = backend {
-                        use crate::domain::ports::CourseRepository;
-                        if let Ok(loaded) = ctx.course_repo.find_all() {
-                            courses.set(loaded);
-                        }
-                    }
-                },
-                ImportResult::Error(e) => {
-                    import_status.set(Some(format!("✗ Error: {}", e)));
+                Err(e) => {
+                    Toast::show_error(&format!("Failed to load analytics: {}", e));
+                    self.status_page.set_title("Error");
+                    self.status_page
+                        .set_description(Some(&format!("Failed to load analytics: {}", e)));
+                    self.status_page.set_visible(true);
+                    self.content_box.set_visible(false);
                 },
             }
-
-            import_loading.set(false);
-        });
-    };
-
-    // Filter courses by search query and selected tags
-    let backend_filter = state.backend.clone();
-    let filtered_courses: Vec<Course> = courses
-        .read()
-        .iter()
-        .filter(|course| {
-            // Filter by search query
-            let query = search_query.read();
-            let matches_search = query.is_empty()
-                || course.name().to_lowercase().contains(&query.to_lowercase())
-                || course
-                    .description()
-                    .map(|d| d.to_lowercase().contains(&query.to_lowercase()))
-                    .unwrap_or(false);
-
-            // Filter by selected tags
-            let sel_tags = selected_tags.read();
-            let matches_tags = if sel_tags.is_empty() {
-                true
-            } else {
-                // Check if course has any of the selected tags
-                if let Some(ref ctx) = backend_filter {
-                    ctx.tag_repo
-                        .find_by_course(course.id())
-                        .map(|course_tags| course_tags.iter().any(|ct| sel_tags.contains(ct.id())))
-                        .unwrap_or(false)
-                } else {
-                    true
-                }
-            };
-
-            matches_search && matches_tags
-        })
-        .cloned()
-        .collect();
-
-    rsx! {
-        div { class: "p-6",
-
-            // Header
-            div { class: "flex items-center justify-between mb-6",
-                h1 { class: "text-2xl font-bold", "Dashboard" }
-                button {
-                    class: "btn btn-primary",
-                    onclick: move |_| import_open.set(true),
-                    "+ Import"
-                }
-            }
-
-            // Tabs
-            div { class: "tabs tabs-boxed mb-6",
-                button {
-                    class: if *active_tab.read() == "overview" { "tab tab-active" } else { "tab" },
-                    onclick: move |_| active_tab.set("overview".to_string()),
-                    "Overview"
-                }
-                button {
-                    class: if *active_tab.read() == "courses" { "tab tab-active" } else { "tab" },
-                    onclick: move |_| active_tab.set("courses".to_string()),
-                    "Courses"
-                }
-                button {
-                    class: if *active_tab.read() == "tags" { "tab tab-active" } else { "tab" },
-                    onclick: move |_| active_tab.set("tags".to_string()),
-                    "Tags"
-                }
-            }
-
-            // Import status message
-            if let Some(ref status) = *import_status.read() {
-                div { class: if status.starts_with("✓") { "alert alert-success mb-4" } else if status.starts_with("✗") { "alert alert-error mb-4" } else { "alert alert-info mb-4" },
-                    "{status}"
-                }
-            }
-
-            if *active_tab.read() == "overview" {
-                if let Some(ref err) = *analytics_state.error.read() {
-                    ErrorAlert { message: err.clone(), on_dismiss: None }
-                }
-
-                if *analytics_state.is_loading.read() && analytics.read().is_none() {
-                    div { class: "py-8",
-                        Spinner { message: Some("Loading analytics...".to_string()) }
-                    }
-                } else if let Some(snapshot) = analytics.read().clone() {
-                    AnalyticsOverview { analytics: snapshot }
-                }
-
-                if courses.read().is_empty() {
-                    div { class: "text-center py-10 bg-base-200 rounded-lg mt-6",
-                        p { class: "text-lg mb-2", "No courses yet" }
-                        p { class: "text-base-content/60", "Import a YouTube playlist to get started" }
-                    }
-                } else {
-                    {
-                        let mut recent_courses = courses.read().clone();
-                        recent_courses.sort_by_key(|course| std::cmp::Reverse(course.created_at()));
-                        rsx! {
-                            div { class: "mt-6",
-                                h2 { class: "text-lg font-semibold mb-4", "Recent Courses" }
-                                div { class: "grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4",
-                                    for course in recent_courses.iter().take(3) {
-                                        CourseCardWithStats { key: "{course.id().as_uuid()}", course: course.clone() }
-                                    }
-                                }
-                            }
-                        }
-                    }
-                }
-            } else if *active_tab.read() == "courses" {
-                // Loading/error state for courses
-                if let Some(ref err) = *courses_state.error.read() {
-                    ErrorAlert { message: err.clone(), on_dismiss: None }
-                }
-
-                // Search bar
-                div { class: "mb-4",
-                    div { class: "relative",
-                        span { class: "absolute left-3 top-1/2 -translate-y-1/2 text-base-content/40",
-                            "🔍"
-                        }
-                        input {
-                            class: "input input-bordered w-full pl-10",
-                            r#type: "text",
-                            placeholder: "Search courses...",
-                            value: "{search_query}",
-                            oninput: move |e| search_query.set(e.value()),
-                        }
-                    }
-                }
-
-                // Tag filter
-                {
-                    let tags_list = all_tags.read().clone();
-                    let has_tags = !tags_list.is_empty();
-
-                    if has_tags {
-                        rsx! {
-
-                            // "All" button
-
-                            // Tag chips
-
-                            div { class: "flex flex-wrap gap-2 mb-4",
-
-                                button {
-                                    class: if selected_tags.read().is_empty() { "px-3 py-1 rounded-full text-sm font-medium bg-primary text-primary-content" } else { "px-3 py-1 rounded-full text-sm font-medium bg-base-200 text-base-content hover:bg-base-300" },
-                                    onclick: move |_| selected_tags.set(Vec::new()),
-                                    "All"
-                                }
-
-                                for tag in tags_list.iter() {
-                                    {
-                                        let tag_id = tag.id().clone();
-                                        let tag_id_for_check = tag_id.clone();
-                                        let tag_id_for_toggle = tag_id.clone();
-                                        let is_active = selected_tags.read().contains(&tag_id_for_check);
-                                        rsx! {
-                                            TagFilterChip {
-                                                key: "{tag_id.as_uuid()}",
-                                                tag: tag.clone(),
-                                                active: is_active,
-                                                on_click: move |_| {
-                                                    let mut tags = selected_tags.write();
-                                                    if tags.contains(&tag_id_for_toggle) {
-                                                        let tid = tag_id_for_toggle.clone();
-                                                        tags.retain(|t| *t != tid);
-                                                    } else {
-                                                        tags.push(tag_id_for_toggle.clone());
-                                                    }
-                                                },
-                                            }
-                                        }
-                                    }
-                                }
-                            }
-                        }
-                    } else {
-                        rsx! {}
-                    }
-                }
-
-                // Course grid
-                if *courses_state.is_loading.read() && courses.read().is_empty() {
-                    div { class: "grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4",
-                        CardSkeleton {}
-                        CardSkeleton {}
-                        CardSkeleton {}
-                        CardSkeleton {}
-                        CardSkeleton {}
-                        CardSkeleton {}
-                    }
-                } else if filtered_courses.is_empty() {
-                    if courses.read().is_empty() {
-                        div { class: "text-center py-12 bg-base-200 rounded-lg",
-                            p { class: "text-xl mb-2", "No courses yet" }
-                            p { class: "text-base-content/60",
-                                "Import a YouTube playlist to get started"
-                            }
-                            div { class: "flex justify-center gap-4 mt-4",
-                                button {
-                                    class: "btn btn-primary",
-                                    onclick: move |_| import_open.set(true),
-                                    "Import Playlist"
-                                }
-                                Link {
-                                    to: Route::Settings {},
-                                    class: "btn btn-outline",
-                                    "Configure API Keys"
-                                }
-                            }
-                        }
-                    } else {
-                        div { class: "text-center py-12 bg-base-200 rounded-lg",
-                            p { class: "text-xl mb-2", "No matching courses" }
-                            p { class: "text-base-content/60", "Try adjusting your search or filters" }
-                        }
-                    }
-                } else {
-                    div { class: "grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4",
-                        for course in filtered_courses.iter() {
-                            CourseCardWithStats {
-                                key: "{course.id().as_uuid()}",
-                                course: course.clone(),
-                            }
-                        }
-                    }
-                }
-            } else {
-                {
-                    let tags_list = all_tags.read().clone();
-                    if tags_list.is_empty() {
-                        rsx! {
-                            div { class: "text-center py-12 bg-base-200 rounded-lg",
-                                p { class: "text-xl mb-2", "No tags yet" }
-                                p { class: "text-base-content/60", "Tags will appear after you label courses" }
-                            }
-                        }
-                    } else {
-                        rsx! {
-                            div { class: "flex flex-wrap gap-3",
-                                for tag in tags_list.iter() {
-                                    TagBadge { tag: tag.clone() }
-                                }
-                            }
-                        }
-                    }
-                }
-            }
-        }
-
-        // Import dialog
-        ImportPlaylistDialog {
-            open: import_open,
-            on_import_youtube: handle_import_youtube,
-            on_import_local: handle_import_local,
-            is_loading: import_loading,
-            status_msg: import_status,
+        } else {
+            self.status_page.set_title("Welcome");
+            self.status_page
+                .set_description(Some("No backend connected. Start by importing a course."));
+            self.status_page.set_visible(true);
+            self.content_box.set_visible(false);
         }
     }
 }
 
-#[component]
-fn CourseCardWithStats(course: Course) -> Element {
-    let state = use_context::<AppState>();
-    let backend = state.backend.clone();
+fn make_stat_card(title: &str, value: &str) -> (gtk::Frame, gtk::Label) {
+    let frame = gtk::Frame::new(None);
+    frame.set_width_request(180);
+    frame.set_height_request(100);
+    frame.add_css_class("card");
 
-    let modules = use_load_modules(backend.clone(), course.id());
-    let videos = use_load_videos_by_course(backend.clone(), course.id());
+    let vbox = gtk::Box::new(gtk::Orientation::Vertical, 4);
+    vbox.set_margin_start(12);
+    vbox.set_margin_end(12);
+    vbox.set_margin_top(12);
+    vbox.set_margin_bottom(12);
+    vbox.set_valign(gtk::Align::Center);
+    vbox.set_halign(gtk::Align::Center);
 
-    let module_list = modules.data.read();
-    let video_list = videos.data.read();
+    let title_label = gtk::Label::new(Some(title));
+    title_label.add_css_class("subtitle");
 
-    let module_count = module_list.len();
-    let completed_modules = if video_list.is_empty() {
-        0
-    } else {
-        module_list
-            .iter()
-            .filter(|m| {
-                let module_videos: Vec<_> =
-                    video_list.iter().filter(|v| v.module_id() == m.id()).collect();
-                !module_videos.is_empty() && module_videos.iter().all(|v| v.is_completed())
-            })
-            .count()
-    };
+    let value_label = gtk::Label::new(Some(value));
+    value_label.add_css_class("heading");
+    value_label.set_markup(&format!("<b>{}</b>", value));
 
-    rsx! {
-        CourseCard {
-            id: course.id().as_uuid().to_string(),
-            name: course.name().to_string(),
-            module_count,
-            completed_modules,
-        }
-    }
+    vbox.append(&title_label);
+    vbox.append(&value_label);
+    frame.set_child(Some(&vbox));
+
+    (frame, value_label)
 }

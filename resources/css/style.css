@@ -1,0 +1,147 @@
+window {
+    font-size: 14px;
+}
+
+.sidebar {
+    background-color: @theme_bg_color;
+    border-right: 1px solid @borders;
+    padding: 8px;
+}
+
+.sidebar button.flat {
+    border-radius: 8px;
+    padding: 8px 12px;
+    min-height: 36px;
+}
+
+.sidebar button.flat:hover {
+    background-color: shade(@theme_bg_color, 0.95);
+}
+
+.sidebar button.flat:checked {
+    background-color: @theme_selected_bg_color;
+    color: @theme_selected_fg_color;
+    font-weight: 600;
+}
+
+.content-area {
+    background-color: @theme_bg_color;
+    padding: 24px;
+}
+
+.card {
+    background-color: @theme_base_color;
+    border: 1px solid @borders;
+    border-radius: 12px;
+    box-shadow: 0 1px 3px alpha(#000, 0.05);
+    padding: 20px;
+}
+
+.card:hover {
+    box-shadow: 0 4px 12px alpha(#000, 0.08);
+    transition: box-shadow 150ms ease;
+}
+
+button {
+    border-radius: 8px;
+    padding: 8px 16px;
+    min-height: 36px;
+    font-weight: 500;
+}
+
+button:disabled {
+    opacity: 0.5;
+}
+
+entry {
+    border-radius: 8px;
+    padding: 8px 12px;
+    min-height: 36px;
+}
+
+label.heading {
+    font-size: 24px;
+    font-weight: 700;
+}
+
+label.title {
+    font-size: 18px;
+    font-weight: 600;
+}
+
+label.subtitle {
+    font-size: 13px;
+    color: @theme_text_color_secondary;
+}
+
+label.success {
+    color: @success_color;
+    font-weight: 500;
+}
+
+label.error {
+    color: @error_color;
+    font-weight: 500;
+}
+
+label.warning {
+    color: @warning_color;
+    font-weight: 500;
+}
+
+levelbar block {
+    border-radius: 9999px;
+    min-height: 8px;
+}
+
+levelbar block.filled {
+    background-color: @theme_selected_bg_color;
+}
+
+levelbar block.empty {
+    background-color: @borders;
+}
+
+scrolledwindow {
+    border: none;
+}
+
+expander {
+    background-color: @theme_base_color;
+    border: 1px solid @borders;
+    border-radius: 12px;
+    margin: 4px 0;
+}
+
+expander > box {
+    padding: 12px 16px;
+}
+
+expander {
+    box-shadow: 0 2px 8px alpha(#000, 0.06);
+}
+
+spinner {
+    color: @theme_selected_bg_color;
+}
+
+scrollbar {
+    background-color: transparent;
+}
+
+scrollbar slider {
+    background-color: @theme_text_color_secondary;
+    border-radius: 9999px;
+    min-width: 6px;
+}
+
+scrollbar slider:hover {
+    background-color: @theme_text_color;
+}
+
+separator {
+    background-color: @borders;
+    min-height: 1px;
+}
+
+

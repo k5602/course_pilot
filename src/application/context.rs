@@ -5,12 +5,12 @@
 use std::sync::Arc;
 
 use crate::application::use_cases::{
-    AskCompanionUseCase, AttachTranscriptUseCase, ExportCourseNotesUseCase, IngestLocalUseCase,
-    IngestPlaylistUseCase, LoadDashboardUseCase, NotesUseCase, PlanSessionUseCase,
-    PreferencesUseCase, SummarizeVideoUseCase, TakeExamUseCase, UpdateCourseUseCase,
-    UpdatePresenceUseCase,
+    AskCompanionUseCase, AttachTranscriptUseCase, CreateModuleUseCase, DeleteModuleUseCase,
+    ExportCourseNotesUseCase, IngestLocalUseCase, IngestPlaylistUseCase, LoadDashboardUseCase,
+    NotesUseCase, PlanSessionUseCase, PreferencesUseCase, ReorderVideoUseCase,
+    SummarizeVideoUseCase, TakeExamUseCase, UpdateCourseUseCase, UpdatePresenceUseCase,
 };
-use crate::domain::ports::{PresenceProvider, SecretStore};
+use crate::domain::ports::{ModuleTitleGenerator, PresenceProvider, SecretStore};
 use crate::infrastructure::{
     discord::DiscordPresenceAdapter,
     keystore::NativeKeystore,
@@ -36,6 +36,8 @@ pub struct AppConfig {
     pub gemini_api_key: Option<String>,
     /// Discord Rich Presence client ID (optional).
     pub discord_client_id: Option<String>,
+    /// LLM model identifier (default: gemini/gemini-2.5-flash).
+    pub llm_model: String,
 }
 
 impl Default for AppConfig {
@@ -44,6 +46,7 @@ impl Default for AppConfig {
             database_url: "course_pilot.db".to_string(),
             gemini_api_key: None,
             discord_client_id: None,
+            llm_model: "gemini/gemini-2.5-flash".to_string(),
         }
     }
 }
@@ -57,6 +60,8 @@ impl AppConfig {
                 .unwrap_or_else(|_| "course_pilot.db".to_string()),
             gemini_api_key: std::env::var("GEMINI_API_KEY").ok().filter(|s| !s.is_empty()),
             discord_client_id: std::env::var("DISCORD_CLIENT_ID").ok().filter(|s| !s.is_empty()),
+            llm_model: std::env::var("LLM_MODEL")
+                .unwrap_or_else(|_| "gemini/gemini-2.5-flash".to_string()),
         }
     }
 
@@ -85,6 +90,11 @@ impl AppConfigBuilder {
 
     pub fn discord_client_id(mut self, client_id: impl Into<String>) -> Self {
         self.config.discord_client_id = Some(client_id.into());
+        self
+    }
+
+    pub fn llm_model(mut self, model: impl Into<String>) -> Self {
+        self.config.llm_model = model.into();
         self
     }
 
@@ -145,7 +155,8 @@ impl AppContext {
         let local_media = Arc::new(LocalMediaScannerAdapter::new());
 
         // YouTube adapter (always available - no API key needed)
-        let youtube = Arc::new(RustyYtdlAdapter::new());
+        let cookie_path = keystore.retrieve("youtube_cookies").ok().flatten();
+        let youtube = Arc::new(RustyYtdlAdapter::with_cookies(cookie_path));
 
         // Presence provider (Discord)
         let discord_client_id = config
@@ -171,7 +182,8 @@ impl AppContext {
             .or_else(|| keystore.retrieve("gemini_api_key").ok().flatten());
 
         // Create LLM adapter if key is available
-        let llm = gemini_api_key.map(|key| Arc::new(GeminiAdapter::new(key)));
+        let llm =
+            gemini_api_key.map(|key| Arc::new(GeminiAdapter::new(key, config.llm_model.clone())));
 
         Ok(Self {
             config,
@@ -203,14 +215,15 @@ impl AppContext {
         self.keystore
             .store("gemini_api_key", key)
             .map_err(|e| AppContextError::Keystore(e.to_string()))?;
-        self.llm = Some(Arc::new(GeminiAdapter::new(key.to_string())));
+        self.llm =
+            Some(Arc::new(GeminiAdapter::new(key.to_string(), self.config.llm_model.clone())));
         Ok(())
     }
 
     /// Reloads the LLM adapter from the keystore (for dynamic key updates).
     pub fn reload_llm(&mut self) -> Result<(), AppContextError> {
         if let Ok(Some(key)) = self.keystore.retrieve("gemini_api_key") {
-            self.llm = Some(Arc::new(GeminiAdapter::new(key)));
+            self.llm = Some(Arc::new(GeminiAdapter::new(key, self.config.llm_model.clone())));
         }
         Ok(())
     }
@@ -248,6 +261,8 @@ impl ServiceFactory {
             ctx.module_repo.clone(),
             ctx.video_repo.clone(),
             ctx.search_repo.clone(),
+            ctx.llm.clone().map(|a| a as Arc<dyn ModuleTitleGenerator>),
+            Some(ctx.db_pool.clone()),
         )
     }
 
@@ -267,6 +282,8 @@ impl ServiceFactory {
             ctx.module_repo.clone(),
             ctx.video_repo.clone(),
             ctx.search_repo.clone(),
+            ctx.llm.clone().map(|a| a as Arc<dyn ModuleTitleGenerator>),
+            Some(ctx.db_pool.clone()),
         )
     }
 
@@ -360,6 +377,23 @@ impl ServiceFactory {
         ctx: &AppContext,
     ) -> crate::application::use_cases::UpdateModuleTitleUseCase<SqliteModuleRepository> {
         crate::application::use_cases::UpdateModuleTitleUseCase::new(ctx.module_repo.clone())
+    }
+
+    /// Creates the create module use case.
+    pub fn create_module(ctx: &AppContext) -> CreateModuleUseCase<SqliteModuleRepository> {
+        CreateModuleUseCase::new(ctx.module_repo.clone())
+    }
+
+    /// Creates the delete module use case.
+    pub fn delete_module(
+        ctx: &AppContext,
+    ) -> DeleteModuleUseCase<SqliteModuleRepository, SqliteVideoRepository> {
+        DeleteModuleUseCase::new(ctx.module_repo.clone(), ctx.video_repo.clone())
+    }
+
+    /// Creates the reorder video use case.
+    pub fn reorder_video(ctx: &AppContext) -> ReorderVideoUseCase<SqliteVideoRepository> {
+        ReorderVideoUseCase::new(ctx.video_repo.clone())
     }
 
     /// Creates the move video use case.

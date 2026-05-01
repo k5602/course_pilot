@@ -1,5 +1,8 @@
 //! LLM ports for AI features.
 
+use std::future::Future;
+use std::pin::Pin;
+
 use crate::domain::value_objects::ExamDifficulty;
 
 /// Error type for LLM operations.
@@ -24,6 +27,7 @@ pub struct CompanionContext {
     pub course_name: String,
     pub summary: Option<String>,
     pub notes: Option<String>,
+    pub transcript: Option<String>,
     /// Extra user-provided context for local videos without transcripts.
     pub local_context: Option<String>,
 }
@@ -52,6 +56,7 @@ pub trait ExaminerAI: Send + Sync {
         &self,
         video_title: &str,
         video_description: Option<&str>,
+        video_transcript: Option<&str>,
         num_questions: u8,
         difficulty: ExamDifficulty,
     ) -> Result<Vec<MCQuestion>, LLMError>;
@@ -66,4 +71,16 @@ pub trait SummarizerAI: Send + Sync {
         transcript: &str,
         video_title: &str,
     ) -> Result<String, LLMError>;
+}
+
+/// Port for generating descriptive module titles from grouped video titles.
+pub trait ModuleTitleGenerator: Send + Sync {
+    /// Generates a concise module title from the video titles in that module.
+    /// Returns the title string, or an error if generation fails.
+    fn generate_module_title(
+        &self,
+        video_titles: &[String],
+        course_name: &str,
+        module_index: usize,
+    ) -> Pin<Box<dyn Future<Output = Result<String, LLMError>> + Send + '_>>;
 }

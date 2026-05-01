@@ -1,148 +1,192 @@
-//! Quiz list page - Shows all generated exams and their status.
+use std::cell::RefCell;
+use std::collections::HashMap;
+use std::rc::Rc;
 
-use dioxus::prelude::*;
+use adw::prelude::*;
+use adw::{NavigationPage, NavigationView};
+use gio::prelude::ListModelExt;
 
-use crate::domain::entities::Exam;
-use crate::ui::Route;
-use crate::ui::custom::{ErrorAlert, Spinner};
-use crate::ui::hooks::{use_load_all_exams, use_load_video};
-use crate::ui::state::AppState;
+use crate::domain::ports::ExamRepository;
+use crate::ui::list_models::QuizObject;
+use crate::ui::navigation::PAGE_QUIZ_VIEW;
+use crate::ui::state::SharedState;
 
-/// List of pending and completed quizzes.
-#[component]
-pub fn QuizList() -> Element {
-    let state = use_context::<AppState>();
-
-    {
-        let mut state = state.clone();
-        use_effect(move || {
-            state.current_video_id.set(None);
-        });
-    }
-
-    let exams = use_load_all_exams(state.backend.clone());
-    let exams_state = exams.state.clone();
-
-    rsx! {
-        div { class: "p-6 max-w-4xl mx-auto",
-
-            div { class: "flex justify-between items-center mb-8",
-                h1 { class: "text-3xl font-bold", "My Quizzes" }
-                span { class: "badge badge-primary", "{exams.data.read().len()} Total" }
-            }
-
-            if let Some(ref err) = *exams_state.error.read() {
-                ErrorAlert { message: err.clone(), on_dismiss: None }
-            }
-
-            if *exams_state.is_loading.read() && exams.data.read().is_empty() {
-                Spinner { message: Some("Loading quizzes...".to_string()) }
-            } else if exams.data.read().is_empty() {
-                div { class: "text-center py-20 bg-base-200 rounded-3xl border-2 border-dashed border-base-300",
-                    div { class: "text-6xl mb-4", "📝" }
-                    h2 { class: "text-xl font-semibold mb-2", "No quizzes yet" }
-                    p { class: "text-base-content/60 max-w-md mx-auto",
-                        "Quizzes are generated when you mark a video as mastered. Start learning to challenge yourself!"
-                    }
-                }
-            } else {
-                div { class: "grid gap-4",
-                    for exam in exams.data.read().iter() {
-                        QuizItem { key: "{exam.id().as_uuid()}", exam: exam.clone() }
-                    }
-                }
-            }
-        }
-    }
+pub struct QuizListPage {
+    widget: gtk::Box,
+    state: SharedState,
+    nav_pages: Rc<RefCell<Rc<HashMap<&'static str, NavigationPage>>>>,
+    store: gio::ListStore,
+    status_page: adw::StatusPage,
+    list_view: gtk::ListView,
 }
 
-/// Individual quiz item row.
-#[component]
-fn QuizItem(exam: Exam) -> Element {
-    let state = use_context::<AppState>();
-    let video = use_load_video(state.backend.clone(), exam.video_id());
+impl QuizListPage {
+    pub fn new(state: SharedState, nav: Rc<NavigationView>) -> Self {
+        let widget = gtk::Box::new(gtk::Orientation::Vertical, 16);
+        widget.add_css_class("content-area");
 
-    let video_title = match video.data.read().as_ref() {
-        Some(v) => v.title().to_string(),
-        None => "Video #".to_string() + &exam.video_id().as_uuid().to_string()[..8],
-    };
+        let heading = gtk::Label::new(Some("Quizzes"));
+        heading.add_css_class("heading");
+        widget.append(&heading);
 
-    let score = exam.score().map(|s| (s * 100.0) as i32);
-    let passed = exam.passed().unwrap_or(false);
-    let is_taken = exam.is_taken();
+        let subtitle = gtk::Label::new(Some("Test your knowledge."));
+        subtitle.add_css_class("subtitle");
+        widget.append(&subtitle);
 
-    rsx! {
-        Link {
-            to: Route::QuizView {
-                exam_id: exam.id().as_uuid().to_string(),
-            },
-            class: "flex items-center gap-4 p-5 bg-base-200 rounded-2xl hover:bg-base-300 transition-all border border-transparent hover:border-primary/20 group",
+        let status_page = adw::StatusPage::new();
+        status_page.set_title("No Quizzes Yet");
+        status_page.set_description(Some("Generate one from a video summary."));
+        status_page.set_icon_name(Some("applications-science-symbolic"));
+        status_page.set_margin_top(16);
+        widget.append(&status_page);
 
-            // Status Icon
-            div {
-                class: match (is_taken, passed) {
-                    (true, true) => {
-                        "w-12 h-12 rounded-xl bg-success/20 text-success flex items-center justify-center text-xl shadow-inner"
-                    }
-                    (true, false) => {
-                        "w-12 h-12 rounded-xl bg-error/20 text-error flex items-center justify-center text-xl shadow-inner"
-                    }
-                    (false, _) => {
-                        "w-12 h-12 rounded-xl bg-warning/20 text-warning flex items-center justify-center text-xl shadow-inner"
+        let store = gio::ListStore::new::<QuizObject>();
+        let no_selection = gtk::NoSelection::new(Some(store.clone()));
+
+        let factory = gtk::SignalListItemFactory::new();
+
+        factory.connect_setup(|_factory, list_item| {
+            let list_item = list_item.downcast_ref::<gtk::ListItem>().unwrap();
+
+            let frame = gtk::Frame::new(None);
+            frame.add_css_class("card");
+            frame.set_hexpand(true);
+
+            let hbox = gtk::Box::new(gtk::Orientation::Horizontal, 8);
+            hbox.set_margin_start(12);
+            hbox.set_margin_end(12);
+            hbox.set_margin_top(12);
+            hbox.set_margin_bottom(12);
+
+            let info_box = gtk::Box::new(gtk::Orientation::Vertical, 4);
+            info_box.set_hexpand(true);
+
+            let title = gtk::Label::new(None);
+            title.set_halign(gtk::Align::Start);
+            title.add_css_class("heading");
+            info_box.append(&title);
+
+            let status_label = gtk::Label::new(None);
+            status_label.set_halign(gtk::Align::Start);
+            status_label.add_css_class("subtitle");
+            info_box.append(&status_label);
+
+            hbox.append(&info_box);
+
+            let start_btn = gtk::Button::with_label("Start");
+            start_btn.set_valign(gtk::Align::Center);
+            hbox.append(&start_btn);
+
+            frame.set_child(Some(&hbox));
+            list_item.set_child(Some(&frame));
+        });
+
+        factory.connect_bind(move |_factory, list_item| {
+            let list_item = list_item.downcast_ref::<gtk::ListItem>().unwrap();
+            let frame = list_item.child().and_then(|c| c.downcast::<gtk::Frame>().ok()).unwrap();
+            let hbox = frame.child().and_then(|c| c.downcast::<gtk::Box>().ok()).unwrap();
+            let info_box = hbox.first_child().and_then(|c| c.downcast::<gtk::Box>().ok()).unwrap();
+            let title =
+                info_box.first_child().and_then(|c| c.downcast::<gtk::Label>().ok()).unwrap();
+            let status_label =
+                title.next_sibling().and_then(|c| c.downcast::<gtk::Label>().ok()).unwrap();
+            let start_btn =
+                info_box.next_sibling().and_then(|c| c.downcast::<gtk::Button>().ok()).unwrap();
+
+            let item = list_item.item();
+            if let Some(quiz) = item.as_ref().and_then(|i| i.downcast_ref::<QuizObject>()) {
+                title.set_text(&quiz.title());
+
+                if quiz.is_taken() {
+                    let score_text = format!(
+                        "Score: {:.0}% {}",
+                        quiz.score().unwrap_or(0.0) * 100.0,
+                        if quiz.passed().unwrap_or(false) { "[PASS]" } else { "[FAIL]" }
+                    );
+                    status_label.set_text(&score_text);
+                    start_btn.set_label("Review");
+                } else {
+                    status_label.set_text("Not taken yet");
+                    start_btn.set_label("Start");
+                }
+            }
+        });
+
+        let list_view = gtk::ListView::new(Some(no_selection), Some(factory));
+        list_view.set_single_click_activate(true);
+        list_view.set_margin_start(16);
+        list_view.set_margin_end(16);
+        list_view.add_css_class("boxed-list");
+        list_view.set_vexpand(true);
+        list_view.set_hexpand(true);
+
+        let nav_pages_rc: Rc<RefCell<Rc<HashMap<&'static str, NavigationPage>>>> =
+            Rc::new(RefCell::new(Rc::new(HashMap::new())));
+        let store_for_activate = store.clone();
+        let nav_for_activate = nav.clone();
+        let state_for_activate = state.clone();
+        let pages_for_activate = nav_pages_rc.clone();
+        list_view.connect_activate(move |_, pos| {
+            let item = store_for_activate.item(pos);
+            if let Some(quiz) = item.as_ref().and_then(|i| i.downcast_ref::<QuizObject>()) {
+                state_for_activate.borrow_mut().current_quiz_id = Some(quiz.id());
+                let pages = pages_for_activate.borrow();
+                if let Some(page) = pages.get(PAGE_QUIZ_VIEW) {
+                    nav_for_activate.push(page);
+                }
+            }
+        });
+
+        widget.append(&list_view);
+
+        Self { widget, state, nav_pages: nav_pages_rc, store, status_page, list_view }
+    }
+
+    pub fn widget(&self) -> &gtk::Box {
+        &self.widget
+    }
+
+    pub fn set_nav_pages(&self, pages: Rc<HashMap<&'static str, NavigationPage>>) {
+        *self.nav_pages.borrow_mut() = pages;
+    }
+
+    pub fn refresh(&self) {
+        self.store.remove_all();
+        self.list_view.set_visible(false);
+        self.status_page.set_visible(false);
+
+        let state = self.state.borrow();
+        if let Some(ref ctx) = state.backend {
+            match ctx.exam_repo.find_all() {
+                Ok(exams) => {
+                    if exams.is_empty() {
+                        self.status_page.set_visible(true);
+                    } else {
+                        for exam in &exams {
+                            let obj = QuizObject::new(
+                                exam.id().to_string(),
+                                format!("Exam for video {}", exam.video_id()),
+                                exam.video_id().to_string(),
+                                exam.is_taken(),
+                                exam.score(),
+                                exam.passed(),
+                            );
+                            self.store.append(&obj);
+                        }
+                        self.list_view.set_visible(true);
                     }
                 },
-                if is_taken {
-                    if passed {
-                        "✓"
-                    } else {
-                        "✕"
-                    }
-                } else {
-                    "?"
-                }
+                Err(e) => {
+                    self.status_page.set_title("Error Loading Quizzes");
+                    self.status_page
+                        .set_description(Some(&format!("Failed to load quizzes: {}", e)));
+                    self.status_page.set_visible(true);
+                },
             }
-
-            // Info
-            div { class: "flex-1",
-                h3 { class: "font-bold text-lg group-hover:text-primary transition-colors",
-                    "{video_title}"
-                }
-                div { class: "flex items-center gap-3 mt-1",
-                    if let Some(s) = score {
-                        span { class: if passed { "text-success text-sm font-medium" } else { "text-error text-sm font-medium" },
-                            "Score: {s}%"
-                        }
-                    } else {
-                        span { class: "text-sm text-base-content/50", "Not attempted" }
-                    }
-                    span { class: "text-xs text-base-content/30", "•" }
-                    span { class: "text-xs text-base-content/30",
-                        "Ref: {&exam.id().as_uuid().to_string()[..8]}"
-                    }
-                }
-            }
-
-            // Badge/Action
-            div { class: "text-right flex flex-col items-end gap-2",
-                span { class: if is_taken { if passed { "badge badge-success badge-sm" } else { "badge badge-error badge-sm" } } else { "badge badge-warning badge-sm" },
-                    if is_taken {
-                        if passed {
-                            "PASSED"
-                        } else {
-                            "FAILED"
-                        }
-                    } else {
-                        "PENDING"
-                    }
-                }
-                span { class: "text-xs opacity-0 group-hover:opacity-100 transition-opacity text-primary font-bold",
-                    if is_taken {
-                        "Review →"
-                    } else {
-                        "Take Quiz →"
-                    }
-                }
-            }
+        } else {
+            self.status_page.set_title("No Backend");
+            self.status_page.set_description(Some("No backend connected."));
+            self.status_page.set_visible(true);
         }
     }
 }

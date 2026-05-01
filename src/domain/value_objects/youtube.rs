@@ -1,7 +1,5 @@
 //! YouTube-related value objects.
 
-use rusty_ytdl::get_video_id;
-use rusty_ytdl::search::Playlist;
 use thiserror::Error;
 
 /// Error when parsing YouTube URLs or IDs.
@@ -27,7 +25,7 @@ impl PlaylistUrl {
     pub fn new(url: &str) -> Result<Self, YouTubeError> {
         if let Some(playlist_id) = Self::extract_playlist_id(url) {
             let video_id = Self::extract_video_id(url);
-            let raw = Playlist::get_playlist_url(url).unwrap_or_else(|| url.to_string());
+            let raw = format!("https://www.youtube.com/playlist?list={}", playlist_id);
             return Ok(Self { raw, playlist_id, video_id });
         }
 
@@ -40,18 +38,12 @@ impl PlaylistUrl {
     }
 
     fn extract_playlist_id(url: &str) -> Option<String> {
-        // Try finding list= in the raw URL first (handles watch?v=...&list=...)
-        if let Some(id) = Self::parse_list_param(url) {
-            return Some(id);
-        }
-
-        // Fallback to checking what rusty_ytdl considers a playlist URL
-        Playlist::get_playlist_url(url).and_then(|p_url| Self::parse_list_param(&p_url))
+        Self::parse_query_param(url, "list=")
     }
 
-    fn parse_list_param(url: &str) -> Option<String> {
-        if let Some(start) = url.find("list=") {
-            let id_start = start + 5;
+    fn parse_query_param(url: &str, param: &str) -> Option<String> {
+        if let Some(start) = url.find(param) {
+            let id_start = start + param.len();
             let id_end = url[id_start..].find('&').map(|i| id_start + i).unwrap_or(url.len());
             let id = &url[id_start..id_end];
             if !id.is_empty() {
@@ -62,7 +54,26 @@ impl PlaylistUrl {
     }
 
     fn extract_video_id(url: &str) -> Option<String> {
-        get_video_id(url)
+        if let Some(id) = Self::parse_query_param(url, "v=") {
+            return Some(id);
+        }
+        if let Some(pos) = url.find("youtu.be/") {
+            let start = pos + 9;
+            let end = url[start..].find(['?', '&', '#']).map(|i| start + i).unwrap_or(url.len());
+            let id = &url[start..end];
+            if !id.is_empty() {
+                return Some(id.to_string());
+            }
+        }
+        if let Some(pos) = url.find("/embed/") {
+            let start = pos + 7;
+            let end = url[start..].find(['?', '&', '#']).map(|i| start + i).unwrap_or(url.len());
+            let id = &url[start..end];
+            if !id.is_empty() {
+                return Some(id.to_string());
+            }
+        }
+        None
     }
 
     pub fn raw(&self) -> &str {

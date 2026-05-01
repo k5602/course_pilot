@@ -1,26 +1,87 @@
 //! Local media scanner adapter.
 //!
-//! Scans a local folder recursively and extracts lightweight metadata for MP4 and MKV files.
+//! Scans a local folder recursively and extracts lightweight metadata for video files.
+//! Duration extraction uses GStreamer Discoverer for universal container support.
 
 use std::collections::{HashMap, HashSet};
-use std::fs::File;
-use std::io::BufReader;
 use std::path::{Path, PathBuf};
+use std::process::Command;
 
+use gst_pbutils::Discoverer;
 use walkdir::WalkDir;
 
 use crate::domain::ports::{
     LocalMediaError, LocalMediaScanner, RawLocalMediaMetadata, RawSubtitleMetadata,
 };
 
-/// Local media scanner implementation.
-#[derive(Debug, Default, Clone)]
-pub struct LocalMediaScannerAdapter;
+/// Local media scanner implementation backed by GStreamer Discoverer.
+#[derive(Debug, Clone)]
+pub struct LocalMediaScannerAdapter {
+    discoverer: Discoverer,
+}
+
+impl Default for LocalMediaScannerAdapter {
+    fn default() -> Self {
+        Self::new()
+    }
+}
 
 impl LocalMediaScannerAdapter {
-    /// Creates a new adapter.
+    /// Creates a new adapter with a GStreamer discoverer (5-second timeout).
     pub fn new() -> Self {
-        Self
+        gst::init().ok();
+        let discoverer = Discoverer::new(5 * gst::ClockTime::SECOND)
+            .expect("Failed to create GStreamer discoverer");
+        Self { discoverer }
+    }
+
+    fn scan_video_file(
+        &self,
+        path: &Path,
+        subtitle: Option<&PathBuf>,
+    ) -> Option<RawLocalMediaMetadata> {
+        if !is_video_file(path) {
+            return None;
+        }
+
+        let title = path
+            .file_stem()
+            .and_then(|s| s.to_str())
+            .map(|s| s.to_string())
+            .filter(|s| !s.trim().is_empty())
+            .unwrap_or_else(|| "Untitled".to_string());
+
+        let duration_secs = self.get_video_duration(path).unwrap_or(0);
+
+        let mut subtitles: Vec<RawSubtitleMetadata> = subtitle
+            .map(|p| RawSubtitleMetadata { path: p.to_string_lossy().to_string() })
+            .into_iter()
+            .collect();
+
+        if subtitles.is_empty() {
+            let embedded = extract_embedded_subtitles_ffmpeg(path);
+            subtitles = embedded
+                .into_iter()
+                .map(|p| RawSubtitleMetadata { path: p.to_string_lossy().to_string() })
+                .collect();
+        }
+
+        let absolute = path.to_string_lossy().to_string();
+
+        Some(RawLocalMediaMetadata { path: absolute, title, duration_secs, subtitles })
+    }
+
+    fn get_video_duration(&self, path: &Path) -> Result<u32, LocalMediaError> {
+        let url = url::Url::from_file_path(path)
+            .map(|u| u.to_string())
+            .unwrap_or_else(|_| format!("file://{}", path.to_string_lossy()));
+        let info = self
+            .discoverer
+            .discover_uri(&url)
+            .map_err(|e| LocalMediaError::Metadata(e.to_string()))?;
+        let duration =
+            info.duration().ok_or_else(|| LocalMediaError::Metadata("no duration".into()))?;
+        Ok(duration.seconds() as u32)
     }
 }
 
@@ -63,13 +124,57 @@ impl LocalMediaScanner for LocalMediaScannerAdapter {
 
         let mut results = Vec::new();
         for path in video_paths {
-            if let Some(item) = scan_video_file(&path, assignments.get(&path)) {
+            if let Some(item) = self.scan_video_file(&path, assignments.get(&path)) {
                 results.push(item);
             }
         }
 
         Ok(results)
     }
+}
+
+fn extract_embedded_subtitles_ffmpeg(path: &Path) -> Vec<PathBuf> {
+    let ffmpeg_check = Command::new("ffmpeg").arg("-version").output();
+    if ffmpeg_check.is_err() {
+        return vec![];
+    }
+
+    let mut paths = Vec::new();
+    let base_stem = path.file_stem().and_then(|s| s.to_str()).unwrap_or("subtitle");
+    let temp_dir = std::env::temp_dir();
+
+    for stream_idx in 0..10 {
+        let output_path = temp_dir.join(format!("{}_{}.srt", base_stem, stream_idx));
+
+        let result = Command::new("ffmpeg")
+            .args([
+                "-i",
+                &path.to_string_lossy(),
+                "-map",
+                &format!("0:s:{}", stream_idx),
+                "-f",
+                "srt",
+                &output_path.to_string_lossy(),
+            ])
+            .output();
+
+        match result {
+            Ok(output) => {
+                if output.status.success()
+                    && output_path.exists()
+                    && output_path.metadata().map(|m| m.len() > 0).unwrap_or(false)
+                {
+                    paths.push(output_path);
+                } else {
+                    let _ = std::fs::remove_file(&output_path);
+                    break;
+                }
+            },
+            Err(_) => break,
+        }
+    }
+
+    paths
 }
 
 fn is_video_file(path: &Path) -> bool {
@@ -84,34 +189,16 @@ fn is_subtitle_file(path: &Path) -> bool {
 
 const MIN_MATCH_SCORE: f32 = 0.75;
 
-fn scan_video_file(path: &Path, subtitle: Option<&PathBuf>) -> Option<RawLocalMediaMetadata> {
-    if !is_video_file(path) {
-        return None;
-    }
+struct VideoInfo {
+    path: PathBuf,
+    norm: String,
+    tokens: Vec<String>,
+}
 
-    let ext = path.extension().and_then(|s| s.to_str()).unwrap_or("").to_lowercase();
-
-    let title = path
-        .file_stem()
-        .and_then(|s| s.to_str())
-        .map(|s| s.to_string())
-        .filter(|s| !s.trim().is_empty())
-        .unwrap_or_else(|| "Untitled".to_string());
-
-    let duration_secs = match ext.as_str() {
-        "mp4" => read_mp4_duration(path).unwrap_or(0),
-        "mkv" | "webm" => read_matroska_duration(path).unwrap_or(0),
-        _ => 0,
-    };
-
-    let subtitles = subtitle
-        .map(|path| RawSubtitleMetadata { path: path.to_string_lossy().to_string() })
-        .into_iter()
-        .collect();
-
-    let absolute = path.to_string_lossy().to_string();
-
-    Some(RawLocalMediaMetadata { path: absolute, title, duration_secs, subtitles })
+struct SubtitleInfo {
+    path: PathBuf,
+    norm: String,
+    tokens: Vec<String>,
 }
 
 /// Greedy, folder-level subtitle matching.
@@ -120,14 +207,34 @@ fn match_subtitles_greedy(
     video_paths: &[PathBuf],
     subtitle_paths: &[PathBuf],
 ) -> HashMap<PathBuf, PathBuf> {
+    let video_info: Vec<VideoInfo> = video_paths
+        .iter()
+        .map(|p| {
+            let stem = p.file_stem().and_then(|s| s.to_str()).unwrap_or("");
+            let norm = normalize_name(stem);
+            let tokens = tokenize(&norm);
+            VideoInfo { path: p.clone(), norm, tokens }
+        })
+        .collect();
+
+    let sub_info_map: HashMap<PathBuf, SubtitleInfo> = subtitle_paths
+        .iter()
+        .map(|p| {
+            let stem = p.file_stem().and_then(|s| s.to_str()).unwrap_or("");
+            let norm = normalize_name(stem);
+            let tokens = tokenize(&norm);
+            (p.clone(), SubtitleInfo { path: p.clone(), norm, tokens })
+        })
+        .collect();
+
     let mut assignments: HashMap<PathBuf, PathBuf> = HashMap::new();
 
-    let mut videos_by_folder: HashMap<PathBuf, Vec<PathBuf>> = HashMap::new();
+    let mut videos_by_folder: HashMap<PathBuf, Vec<&VideoInfo>> = HashMap::new();
     let mut subs_by_folder: HashMap<PathBuf, Vec<PathBuf>> = HashMap::new();
 
-    for video in video_paths {
-        let folder = video.parent().map(Path::to_path_buf).unwrap_or_else(PathBuf::new);
-        videos_by_folder.entry(folder).or_default().push(video.clone());
+    for video in &video_info {
+        let folder = video.path.parent().map(Path::to_path_buf).unwrap_or_else(PathBuf::new);
+        videos_by_folder.entry(folder).or_default().push(video);
     }
 
     for sub in subtitle_paths {
@@ -137,7 +244,7 @@ fn match_subtitles_greedy(
 
     for (folder, videos) in videos_by_folder {
         let subtitles = match subs_by_folder.get(&folder) {
-            Some(subs) => subs.clone(),
+            Some(subs) => subs,
             None => continue,
         };
 
@@ -145,16 +252,13 @@ fn match_subtitles_greedy(
         let mut candidates: Vec<(f32, PathBuf, PathBuf)> = Vec::new();
 
         for video in &videos {
-            let video_stem = video.file_stem().and_then(|s| s.to_str()).unwrap_or("");
-            let video_norm = normalize_name(video_stem);
-            let video_tokens = tokenize(&video_norm);
-
-            for subtitle in &subtitles {
-                let sub_stem = subtitle.file_stem().and_then(|s| s.to_str()).unwrap_or("");
-                let sub_norm = normalize_name(sub_stem);
-                let score = similarity_score(&video_norm, &video_tokens, &sub_norm);
-                if score >= MIN_MATCH_SCORE {
-                    candidates.push((score, video.clone(), subtitle.clone()));
+            for sub_path in subtitles {
+                if let Some(sub) = sub_info_map.get(sub_path) {
+                    let score =
+                        similarity_score(&video.norm, &video.tokens, &sub.norm, &sub.tokens);
+                    if score >= MIN_MATCH_SCORE {
+                        candidates.push((score, video.path.clone(), sub.path.clone()));
+                    }
                 }
             }
         }
@@ -170,6 +274,44 @@ fn match_subtitles_greedy(
             }
             assignments.insert(video, subtitle.clone());
             used_subs.insert(subtitle);
+        }
+    }
+
+    // Pass 2: Walk up parent directories for unmatched videos
+    let mut used_subs_global: HashSet<PathBuf> = assignments.values().cloned().collect();
+
+    for video in &video_info {
+        if assignments.contains_key(&video.path) {
+            continue;
+        }
+
+        let mut parent = video.path.parent();
+        while let Some(parent_path) = parent {
+            if let Some(parent_subs) = subs_by_folder.get(parent_path) {
+                let mut best_score = MIN_MATCH_SCORE;
+                let mut best_sub: Option<PathBuf> = None;
+
+                for sub_path in parent_subs {
+                    if used_subs_global.contains(sub_path) {
+                        continue;
+                    }
+                    if let Some(sub) = sub_info_map.get(sub_path) {
+                        let score =
+                            similarity_score(&video.norm, &video.tokens, &sub.norm, &sub.tokens);
+                        if score >= best_score {
+                            best_score = score;
+                            best_sub = Some(sub.path.clone());
+                        }
+                    }
+                }
+
+                if let Some(sub) = best_sub {
+                    used_subs_global.insert(sub.clone());
+                    assignments.insert(video.path.clone(), sub);
+                    break;
+                }
+            }
+            parent = parent_path.parent();
         }
     }
 
@@ -292,7 +434,12 @@ fn is_stopword(token: &str) -> bool {
     )
 }
 
-fn similarity_score(video_norm: &str, video_tokens: &[String], sub_norm: &str) -> f32 {
+fn similarity_score(
+    video_norm: &str,
+    video_tokens: &[String],
+    sub_norm: &str,
+    sub_tokens: &[String],
+) -> f32 {
     if video_norm.is_empty() || sub_norm.is_empty() {
         return 0.0;
     }
@@ -301,8 +448,8 @@ fn similarity_score(video_norm: &str, video_tokens: &[String], sub_norm: &str) -
         return 1.0;
     }
 
-    let a: HashSet<String> = video_tokens.iter().cloned().collect();
-    let b: HashSet<String> = tokenize(sub_norm).into_iter().collect();
+    let a: HashSet<&str> = video_tokens.iter().map(|s| s.as_str()).collect();
+    let b: HashSet<&str> = sub_tokens.iter().map(|s| s.as_str()).collect();
 
     if a.is_empty() || b.is_empty() {
         return 0.0;
@@ -312,26 +459,6 @@ fn similarity_score(video_norm: &str, video_tokens: &[String], sub_norm: &str) -
     let union = a.union(&b).count() as f32;
 
     if union == 0.0 { 0.0 } else { intersection / union }
-}
-
-fn read_mp4_duration(path: &Path) -> Result<u32, LocalMediaError> {
-    let file = File::open(path).map_err(|e| LocalMediaError::Io(e.to_string()))?;
-    let size = file.metadata().map_err(|e| LocalMediaError::Io(e.to_string()))?.len();
-    let reader = BufReader::new(file);
-
-    let mp4 = mp4::Mp4Reader::read_header(reader, size)
-        .map_err(|e| LocalMediaError::Metadata(e.to_string()))?;
-
-    let duration = mp4.duration();
-    Ok(u32::try_from(duration.as_secs()).unwrap_or(u32::MAX))
-}
-
-fn read_matroska_duration(path: &Path) -> Result<u32, LocalMediaError> {
-    let info = matroska::get_from::<_, matroska::Info>(path)
-        .map_err(|e| LocalMediaError::Metadata(e.to_string()))?;
-
-    let duration = info.and_then(|i| i.duration).map(|d| d.as_secs()).unwrap_or(0);
-    Ok(u32::try_from(duration).unwrap_or(u32::MAX))
 }
 
 fn canonicalize_path(path: &Path) -> Result<PathBuf, LocalMediaError> {
@@ -371,5 +498,11 @@ mod tests {
 
         let assignments = match_subtitles_greedy(std::slice::from_ref(&video), &[subtitle]);
         assert!(!assignments.contains_key(&video));
+    }
+
+    #[test]
+    fn ffmpeg_absent_does_not_crash() {
+        let result = extract_embedded_subtitles_ffmpeg(Path::new("/nonexistent/video.mkv"));
+        assert!(result.is_empty());
     }
 }

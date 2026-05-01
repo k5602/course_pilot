@@ -1,17 +1,18 @@
-# Course Pilot 🎓
+# Course Pilot
 
-[![Rust CI](https://github.com/k5602/course_pilot/actions/workflows/rust.yml/badge.svg?branch=main)](https://github.com/k5602/course_pilot/actions/workflows/rust.yml) [![Clippy](https://img.shields.io/github/actions/workflow/status/k5602/course_pilot/rust.yml?branch=main&label=clippy)](https://github.com/k5602/course_pilot/actions/workflows/rust.yml)
+[![Rust CI](https://github.com/k5602/course_pilot/actions/workflows/rust.yml/badge.svg?branch=main)](https://github.com/k5602/course_pilot/actions/workflows/rust.yml)
 
 > Transform YouTube playlists into structured, intelligent study plans
 
 A modern Rust desktop application that automatically analyzes video-based courses, creates logical learning structures, and generates personalized study schedules.
 
 ![Rust](https://img.shields.io/badge/rust-1.80+-orange.svg)
-![Dioxus](https://img.shields.io/badge/dioxus-0.7+-blue.svg)
+![GTK4](https://img.shields.io/badge/GTK4-0.9+-blue.svg)
+![GStreamer](https://img.shields.io/badge/GStreamer-0.25+-lightblue.svg)
 ![License](https://img.shields.io/badge/license-MIT-green.svg)
 ![Development Status](https://img.shields.io/badge/status-active%20development-brightgreen.svg)
 
-## ✨ Features
+## Features
 
 ### Core Functionality
 
@@ -29,21 +30,20 @@ A modern Rust desktop application that automatically analyzes video-based course
 
 ### User Experience
 
-- **Dark Theme** - Eye-friendly DaisyUI dark theme
+- **Dark Theme** - Eye-friendly dark theme (libadwaita)
 - **Settings Persistence** - Preferences saved to database
 - **Course Management** - Delete courses with confirmation dialog
 - **Loading States** - Skeleton loaders and spinners throughout
 
-## 🚀 Quick Start
+## Quick Start
 
 ### Prerequisites
 
-- **Rust 1.80+**
-- **[Dioxus CLI](https://dioxuslabs.com/learn/0.7/getting_started)**: `cargo install dioxus-cli`
+- **Rust 1.88+**
 
 #### Linux Dependencies
 
-Building and running on Linux requires several system libraries (WebKit2GTK, GTK3, SQLite3).
+Building and running on Linux requires several system libraries (GTK4, libadwaita, GStreamer, SQLite3).
 
 **Automatic Setup (Recommended):**
 
@@ -55,9 +55,9 @@ chmod +x scripts/setup-linux.sh
 **Manual Installation:**
 | Distribution | Command |
 | :--- | :--- |
-| **Ubuntu/Debian** | `sudo apt install libwebkit2gtk-4.1-dev libgtk-3-dev libsqlite3-dev` |
-| **Fedora** | `sudo dnf install webkit2gtk4.1-devel gtk3-devel sqlite-devel` |
-| **Arch Linux** | `sudo pacman -S webkit2gtk-4.1 gtk3 sqlite` |
+| **Ubuntu/Debian** | `sudo apt install libgtk-4-dev libadwaita-1-dev libgstreamer1.0-dev libgstreamer-plugins-base1.0-dev libgraphene-1.0-dev libsqlite3-dev` |
+| **Fedora** | `sudo dnf install gtk4-devel libadwaita-devel gstreamer1-devel gstreamer1-plugins-base-devel graphene-devel sqlite-devel` |
+| **Arch Linux** | `sudo pacman -S gtk4 libadwaita gstreamer gst-plugins-base graphene sqlite` |
 
 ### 1. Clone & Configure
 
@@ -71,7 +71,6 @@ Edit `.env`:
 
 ```env
 DATABASE_URL=course_pilot.db
-YOUTUBE_API_KEY=your_youtube_api_key_here
 GEMINI_API_KEY=your_gemini_api_key_here  # optional
 ```
 
@@ -81,36 +80,26 @@ GEMINI_API_KEY=your_gemini_api_key_here  # optional
 diesel migration run
 ```
 
-### 3. Run
+### 3. Build & Run
 
 ```bash
-dx serve
+cargo run --release
 # or with logging:
-RUST_LOG=info dx serve
+RUST_LOG=info cargo run --release
 ```
 
-### 4. Build Release
-
-```bash
-dx build --release
-```
-
-On Linux, you can also use `dx bundle --release` to create a `.deb` package.
-
-## 📦 Distribution
+## Distribution
 
 ### Linux
 
-We provide two formats for Linux:
+We provide a generic tarball (.tar.gz) with each release. Extract and run the binary directly:
 
-1. **Debian Package (.deb)**: Recommended for Ubuntu, Mint, Pop!\_OS. Install via `sudo apt install ./course-pilot-linux-x64.deb`.
-2. **Generic Tarball (.tar.gz)**: Recommended for Arch or other distros. Extract and run `course-pilot-launcher`. This script will automatically check for missing dependencies and offer to install them for you.
+```bash
+tar -xzf course-pilot-linux-x64.tar.gz
+./course_pilot
+```
 
-### Windows
-
-Download the `.zip`, extract, and run `course_pilot.exe`.
-
-## ⚙️ Configuration
+## Configuration
 
 | Variable          | Required | Default           | Description                               |
 | ----------------- | -------- | ----------------- | ----------------------------------------- |
@@ -118,7 +107,7 @@ Download the `.zip`, extract, and run `course_pilot.exe`.
 | `YOUTUBE_API_KEY` | No       | -                 | Optional YouTube Data API v3 key (unused) |
 | `GEMINI_API_KEY`  | No       | -                 | Gemini API key for AI features            |
 
-## 🔑 API Keys
+## API Keys
 
 ### YouTube API Key (Optional)
 
@@ -131,17 +120,17 @@ Course Pilot uses API-free playlist import by default. A YouTube API key is not 
 
 > API keys can also be configured in Settings page within the app.
 
-## 🛠️ Development
+## Development
 
 ```bash
-# Run development server
-dx serve
+# Run
+cargo run --release
 
 # Run tests
 cargo test --lib
 
 # Lint
-cargo clippy --all-targets -- -D warnings
+cargo clippy
 
 # Format
 cargo fmt
@@ -150,7 +139,7 @@ cargo fmt
 rm course_pilot.db && diesel migration run
 ```
 
-## 📁 Project Structure
+## Project Structure
 
 ```
 src/
@@ -158,11 +147,18 @@ src/
 ├── domain/           # Entities, ports, value objects
 ├── infrastructure/   # SQLite, YouTube, LLM adapters
 └── ui/
-    ├── pages/        # Dashboard, CourseView, VideoPlayer, etc.
-    ├── custom/       # Reusable components
-    └── hooks.rs      # Data loading hooks
+    ├── app.rs        # Main application entry point
+    ├── layout.rs     # Top-level layout
+    ├── navigation.rs # Navigation state management
+    ├── right_panel.rs# Right sidebar panel
+    ├── shortcuts.rs  # Keyboard shortcuts
+    ├── state.rs      # UI state management
+    ├── toast.rs      # Toast notifications
+    ├── css.rs        # Custom CSS styling
+    ├── dialogs/      # Import dialogs, etc.
+    └── pages/        # Dashboard, CourseView, VideoPlayer, etc.
 ```
 
-## 📄 License
+## License
 
 MIT License - see [LICENSE](LICENSE) for details.

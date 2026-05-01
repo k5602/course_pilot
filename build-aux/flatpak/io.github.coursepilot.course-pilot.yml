@@ -1,0 +1,40 @@
+app-id: com.coursepilot.app
+runtime: org.freedesktop.Platform
+runtime-version: '24.08'
+sdk: org.freedesktop.Sdk
+sdk-extensions:
+  - org.freedesktop.Sdk.Extension.rust-stable
+
+command: course_pilot
+
+finish-args:
+  - --socket=wayland
+  - --socket=fallback-x11
+  - --share=network
+  - --device=dri
+  - --talk=org.freedesktop.secrets
+
+add-extensions:
+  org.freedesktop.Platform.GStreamer:
+    directory: lib/gstreamer-1.0
+    version: '24.08'
+    add-ld-path: plugins
+    no-autodownload: false
+    autodelete: false
+
+modules:
+  - name: course-pilot
+    buildsystem: simple
+    build-options:
+      prepend-path: /usr/lib/sdk/rust-stable/bin
+      build-args:
+        - --share=network
+    build-commands:
+      - cargo build --release --locked
+      - install -Dm755 target/release/course_pilot -t /app/bin/
+      - install -Dm644 com.coursepilot.app.desktop -t /app/share/applications/
+      - install -Dm644 com.coursepilot.app.png -t /app/share/icons/hicolor/256x256/apps/
+      - install -Dm644 com.coursepilot.app.metainfo.xml -t /app/share/metainfo/
+    sources:
+      - type: dir
+        path: ../../

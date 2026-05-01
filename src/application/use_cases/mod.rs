@@ -2,7 +2,9 @@
 
 mod ask_companion;
 mod attach_transcript;
+mod create_module;
 mod dashboard;
+mod delete_module;
 mod export_course_notes;
 mod ingest_local;
 mod ingest_playlist;
@@ -10,6 +12,7 @@ mod move_video_to_module;
 mod notes;
 mod plan_session;
 mod preferences;
+mod reorder_video;
 mod summarize_video;
 mod take_exam;
 mod update_course;
@@ -20,18 +23,23 @@ pub use ask_companion::{AskCompanionInput, AskCompanionUseCase};
 pub use attach_transcript::{
     AttachTranscriptError, AttachTranscriptInput, AttachTranscriptOutput, AttachTranscriptUseCase,
 };
+pub use create_module::{CreateModuleError, CreateModuleInput, CreateModuleUseCase};
 pub use dashboard::LoadDashboardUseCase;
+pub use delete_module::{DeleteModuleError, DeleteModuleInput, DeleteModuleUseCase};
 pub use export_course_notes::{
     ExportCourseNotesError, ExportCourseNotesInput, ExportCourseNotesUseCase,
 };
 pub use ingest_local::{IngestLocalInput, IngestLocalOutput, IngestLocalUseCase};
-pub use ingest_playlist::{IngestPlaylistInput, IngestPlaylistOutput, IngestPlaylistUseCase};
+pub use ingest_playlist::{
+    IngestError, IngestPlaylistInput, IngestPlaylistOutput, IngestPlaylistUseCase,
+};
 pub use move_video_to_module::{MoveVideoError, MoveVideoInput, MoveVideoToModuleUseCase};
 pub use notes::{
     DeleteNoteInput, LoadNoteInput, NoteView, NotesError, NotesUseCase, SaveNoteInput,
 };
 pub use plan_session::{PlanSessionInput, PlanSessionUseCase};
 pub use preferences::{PreferencesUseCase, UpdatePreferencesInput};
+pub use reorder_video::{ReorderError, ReorderVideoInput, ReorderVideoUseCase};
 pub use summarize_video::{
     SummarizeVideoError, SummarizeVideoInput, SummarizeVideoOutput, SummarizeVideoUseCase,
 };

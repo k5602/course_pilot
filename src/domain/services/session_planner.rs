@@ -14,12 +14,22 @@ impl SessionPlanner {
         Self { cognitive_limit }
     }
 
+    /// Converts a 1-indexed session number to a 1-indexed calendar day,
+    /// inserting weekend-style gaps when `week_study_days < 7`.
+    fn session_to_calendar_day(session_num: u32, week_study_days: u32) -> u32 {
+        let n = session_num - 1;
+        let weeks = n / week_study_days;
+        let day_in_week = n % week_study_days;
+        weeks * 7 + day_in_week + 1
+    }
+
     /// Plans sessions for a list of video durations (in seconds).
     /// Respects module boundaries when provided.
     ///
     /// # Arguments
     /// * `durations` - Duration of each video in seconds
     /// * `module_boundaries` - Optional indices where module boundaries exist
+    /// * `week_study_days` - How many days per week are study days (e.g. 5 = weekdays only, 7 = every day)
     ///
     /// # Returns
     /// A list of session plans, each containing video indices for that day.
@@ -27,40 +37,38 @@ impl SessionPlanner {
         &self,
         durations: &[u32],
         module_boundaries: Option<&[usize]>,
+        week_study_days: u32,
     ) -> Vec<SessionPlan> {
         if durations.is_empty() {
             return vec![];
         }
 
+        let week_study_days = week_study_days.max(1);
         let limit_secs = self.cognitive_limit.seconds();
         let boundaries: Vec<usize> = module_boundaries.map(|b| b.to_vec()).unwrap_or_default();
 
         let mut sessions = Vec::new();
         let mut current_session_videos = Vec::new();
         let mut current_session_duration = 0u32;
-        let mut day = 1u32;
+        let mut session_num = 0u32;
 
         for (idx, &duration) in durations.iter().enumerate() {
             let is_boundary = boundaries.contains(&idx);
 
-            // Check if adding this video would exceed the limit
             let would_exceed = current_session_duration + duration > limit_secs;
 
-            // Start new session if:
-            // 1. We would exceed the limit AND we have at least one video
-            // 2. We're at a module boundary AND we have videos AND the current session is substantial
             let should_split = (would_exceed && !current_session_videos.is_empty())
                 || (is_boundary
                     && !current_session_videos.is_empty()
                     && current_session_duration >= limit_secs / 2);
 
             if should_split {
+                session_num += 1;
                 sessions.push(SessionPlan::new(
-                    day,
+                    Self::session_to_calendar_day(session_num, week_study_days),
                     current_session_videos.clone(),
                     current_session_duration,
                 ));
-                day += 1;
                 current_session_videos.clear();
                 current_session_duration = 0;
             }
@@ -69,17 +77,22 @@ impl SessionPlanner {
             current_session_duration += duration;
         }
 
-        // Don't forget the last session
         if !current_session_videos.is_empty() {
-            sessions.push(SessionPlan::new(day, current_session_videos, current_session_duration));
+            session_num += 1;
+            sessions.push(SessionPlan::new(
+                Self::session_to_calendar_day(session_num, week_study_days),
+                current_session_videos,
+                current_session_duration,
+            ));
         }
 
         sessions
     }
 
-    /// Calculates the total number of days needed to complete the course.
-    pub fn estimate_days(&self, durations: &[u32]) -> u32 {
-        self.plan_sessions(durations, None).len() as u32
+    /// Calculates the total number of calendar days needed to complete the course.
+    pub fn estimate_days(&self, durations: &[u32], week_study_days: u32) -> u32 {
+        let sessions = self.plan_sessions(durations, None, week_study_days);
+        sessions.last().map(|s| s.day).unwrap_or(0)
     }
 }
 
@@ -89,31 +102,90 @@ mod tests {
 
     #[test]
     fn test_single_session() {
-        let planner = SessionPlanner::new(CognitiveLimit::new(60)); // 60 min
-        let durations = vec![600, 600, 600]; // 3 videos, 10 min each = 30 min total
-        let sessions = planner.plan_sessions(&durations, None);
+        let planner = SessionPlanner::new(CognitiveLimit::new(60));
+        let durations = vec![600, 600, 600];
+        let sessions = planner.plan_sessions(&durations, None, 7);
 
         assert_eq!(sessions.len(), 1);
         assert_eq!(sessions[0].video_indices, vec![0, 1, 2]);
+        assert_eq!(sessions[0].day, 1);
     }
 
     #[test]
     fn test_multiple_sessions() {
-        let planner = SessionPlanner::new(CognitiveLimit::new(30)); // 30 min
-        let durations = vec![900, 900, 900, 900]; // 4 videos, 15 min each
-        let sessions = planner.plan_sessions(&durations, None);
+        let planner = SessionPlanner::new(CognitiveLimit::new(30));
+        let durations = vec![900, 900, 900, 900];
+        let sessions = planner.plan_sessions(&durations, None, 7);
 
         assert_eq!(sessions.len(), 2);
-        assert_eq!(sessions[0].video_indices, vec![0, 1]); // 30 min
-        assert_eq!(sessions[1].video_indices, vec![2, 3]); // 30 min
+        assert_eq!(sessions[0].video_indices, vec![0, 1]);
+        assert_eq!(sessions[1].video_indices, vec![2, 3]);
+        assert_eq!(sessions[0].day, 1);
+        assert_eq!(sessions[1].day, 2);
     }
 
     #[test]
     fn test_estimate_days() {
-        let planner = SessionPlanner::new(CognitiveLimit::new(45)); // 45 min
-        let durations = vec![900; 6]; // 6 videos, 15 min each = 90 min total
-        let days = planner.estimate_days(&durations);
+        let planner = SessionPlanner::new(CognitiveLimit::new(45));
+        let durations = vec![900; 6];
+        let days = planner.estimate_days(&durations, 7);
+        assert_eq!(days, 2);
+    }
 
-        assert_eq!(days, 2); // 45 min per day = 2 days
+    #[test]
+    fn test_week_study_days_weekday_schedule() {
+        let planner = SessionPlanner::new(CognitiveLimit::new(30));
+        let durations = vec![900; 14];
+        let sessions = planner.plan_sessions(&durations, None, 5);
+
+        assert_eq!(sessions.len(), 7);
+        assert_eq!(sessions[0].day, 1);
+        assert_eq!(sessions[1].day, 2);
+        assert_eq!(sessions[2].day, 3);
+        assert_eq!(sessions[3].day, 4);
+        assert_eq!(sessions[4].day, 5);
+        assert_eq!(sessions[5].day, 8);
+        assert_eq!(sessions[6].day, 9);
+    }
+
+    #[test]
+    fn test_week_study_days_midweek_gap() {
+        let planner = SessionPlanner::new(CognitiveLimit::new(30));
+        let durations = vec![900; 6];
+        let sessions = planner.plan_sessions(&durations, None, 2);
+
+        assert_eq!(sessions.len(), 3);
+        assert_eq!(sessions[0].day, 1);
+        assert_eq!(sessions[1].day, 2);
+        assert_eq!(sessions[2].day, 8);
+    }
+
+    #[test]
+    fn test_empty_durations() {
+        let planner = SessionPlanner::new(CognitiveLimit::new(30));
+        let sessions = planner.plan_sessions(&[], None, 5);
+        assert!(sessions.is_empty());
+    }
+
+    #[test]
+    fn respects_week_study_days() {
+        let planner = SessionPlanner::new(CognitiveLimit::new(60));
+        let durations = vec![600; 10];
+        let sessions = planner.plan_sessions(&durations, None, 5);
+
+        assert_eq!(sessions.len(), 2);
+        assert_eq!(sessions[0].day, 1);
+        assert_eq!(sessions[1].day, 2);
+    }
+
+    #[test]
+    fn week_boundary_crossing() {
+        let planner = SessionPlanner::new(CognitiveLimit::new(10));
+        let durations = vec![600; 12];
+        let sessions = planner.plan_sessions(&durations, None, 5);
+
+        if sessions.len() >= 6 {
+            assert!(sessions[5].day >= 7);
+        }
     }
 }
