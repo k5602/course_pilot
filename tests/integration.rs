@@ -311,6 +311,7 @@ fn ingest_local_with_folder_grouping() {
         video_repo.clone(),
         search_repo,
         None,
+        None,
     );
 
     let input = course_pilot::application::use_cases::IngestLocalInput {
@@ -370,6 +371,7 @@ fn ingest_playlist_with_mock_fetcher() {
         video_repo.clone(),
         search_repo,
         None,
+        None,
     );
 
     let input = course_pilot::application::use_cases::IngestPlaylistInput {
@@ -403,6 +405,7 @@ fn ingest_playlist_failure_returns_error() {
         module_repo.clone(),
         video_repo.clone(),
         search_repo,
+        None,
         None,
     );
 
