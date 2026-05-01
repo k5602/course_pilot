@@ -64,6 +64,7 @@ diesel::table! {
         right_panel_visible -> Integer,
         onboarding_completed -> Integer,
         right_panel_width -> Integer,
+        preferred_quality -> Text,
     }
 }
 

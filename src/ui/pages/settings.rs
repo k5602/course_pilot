@@ -3,8 +3,11 @@ use std::rc::Rc;
 use adw::NavigationView;
 use adw::prelude::*;
 
+use crate::application::ServiceFactory;
 use crate::domain::ports::SecretStore;
+use crate::domain::value_objects::VideoQuality;
 use crate::ui::state::SharedState;
+use crate::ui::widgets::QualitySelector;
 
 pub struct SettingsPage {
     widget: gtk::Box,
@@ -16,6 +19,7 @@ pub struct SettingsPage {
     discord_entry: adw::EntryRow,
     cookie_entry: adw::EntryRow,
     theme_switch: adw::SwitchRow,
+    quality_selector: QualitySelector,
     save_status_label: gtk::Label,
     save_btn: gtk::Button,
 }
@@ -85,6 +89,10 @@ impl SettingsPage {
         cookie_entry.set_title("Cookies File Path");
         youtube_group.add(&cookie_entry);
 
+        let quality_selector = QualitySelector::new("Preferred Quality");
+        quality_selector.widget().set_subtitle("Default quality for YouTube videos.");
+        youtube_group.add(quality_selector.widget());
+
         prefs_box.append(&youtube_group);
 
         let theme_group = adw::PreferencesGroup::new();
@@ -120,6 +128,7 @@ impl SettingsPage {
             discord_entry,
             cookie_entry,
             theme_switch,
+            quality_selector,
             save_status_label,
             save_btn,
         };
@@ -130,6 +139,7 @@ impl SettingsPage {
         let cookie_entry_cl = page.cookie_entry.clone();
         let theme_sw = page.theme_switch.clone();
         let status = page.save_status_label.clone();
+        let quality_sel = page.quality_selector.widget().clone();
 
         page.save_btn.connect_clicked(move |_| {
             let s = state_cl.borrow();
@@ -154,6 +164,48 @@ impl SettingsPage {
                 let cookie_path = cookie_entry_cl.text().as_str().to_string();
                 if !cookie_path.is_empty() {
                     let _ = ctx.keystore.store("youtube_cookies", &cookie_path);
+                }
+
+                let selected = quality_sel.selected();
+                let idx = selected as usize;
+                let quality = [
+                    VideoQuality::P240,
+                    VideoQuality::P360,
+                    VideoQuality::P480,
+                    VideoQuality::P720,
+                    VideoQuality::P1080,
+                    VideoQuality::Best,
+                ]
+                .get(idx)
+                .copied()
+                .unwrap_or(VideoQuality::P720);
+
+                use crate::application::use_cases::UpdatePreferencesInput;
+                if let Ok(uc) = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+                    ServiceFactory::preferences(ctx)
+                })) {
+                    let input = UpdatePreferencesInput {
+                        ml_boundary_enabled: false,
+                        cognitive_limit_minutes: 45,
+                        right_panel_visible: s.right_panel_visible,
+                        right_panel_width: s.right_panel_width as u32,
+                        onboarding_completed: s.onboarding_completed,
+                        preferred_quality: quality,
+                    };
+                    match uc.update(input) {
+                        Ok(prefs) => {
+                            drop(s);
+                            let mut s2 = state_cl.borrow_mut();
+                            s2.preferred_quality = prefs.preferred_quality();
+                            s2.session_quality = prefs.preferred_quality();
+                            status.set_text("Settings saved.");
+                        },
+                        Err(e) => {
+                            status.set_text(&format!("Failed to save: {e}"));
+                        },
+                    }
+                } else {
+                    status.set_text("Failed to save preferences.");
                 }
             } else {
                 status.set_text("No backend connected.");
@@ -195,6 +247,8 @@ impl SettingsPage {
             if let Ok(Some(path)) = ctx.keystore.retrieve("youtube_cookies") {
                 self.cookie_entry.set_text(&path);
             }
+
+            self.quality_selector.set_quality(state.preferred_quality);
 
             let is_dark =
                 matches!(adw::StyleManager::default().color_scheme(), adw::ColorScheme::ForceDark);

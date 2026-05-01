@@ -145,14 +145,11 @@ where
 
             let merged_transcript = part_summaries.join("\n\n");
 
-            let summary = if total > 3 {
-                self.llm
-                    .summarize_transcript(&merged_transcript, video.title())
-                    .await
-                    .map_err(|e| SummarizeVideoError::AI(e.to_string()))?
-            } else {
-                merged_transcript
-            };
+            let summary = self
+                .llm
+                .summarize_transcript(&merged_transcript, video.title())
+                .await
+                .map_err(|e| SummarizeVideoError::AI(e.to_string()))?;
 
             self.video_repo
                 .update_summary(&input.video_id, Some(&summary))

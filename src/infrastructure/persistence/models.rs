@@ -151,6 +151,7 @@ pub struct UserPreferencesRow {
     pub right_panel_visible: i32,
     pub onboarding_completed: i32,
     pub right_panel_width: i32,
+    pub preferred_quality: String,
 }
 
 /// Insertable model for user preferences.
@@ -163,6 +164,7 @@ pub struct NewUserPreferences<'a> {
     pub right_panel_visible: i32,
     pub right_panel_width: i32,
     pub onboarding_completed: i32,
+    pub preferred_quality: &'a str,
 }
 
 /// Changeset for updating user preferences.
@@ -174,6 +176,7 @@ pub struct UpdatePreferences {
     pub right_panel_visible: Option<i32>,
     pub right_panel_width: Option<i32>,
     pub onboarding_completed: Option<i32>,
+    pub preferred_quality: Option<String>,
 }
 
 /// Diesel model for the tags table.

@@ -4,6 +4,8 @@ use std::rc::Rc;
 use std::sync::Arc;
 
 use crate::application::AppContext;
+use crate::domain::ports::UserPreferencesRepository;
+use crate::domain::value_objects::VideoQuality;
 
 #[derive(Clone, Copy, Debug, Default, PartialEq)]
 pub enum RightPanelTab {
@@ -39,6 +41,8 @@ pub struct AppState {
     pub current_course_id: Option<String>,
     pub current_quiz_id: Option<String>,
     pub last_video_by_course: HashMap<String, String>,
+    pub preferred_quality: VideoQuality,
+    pub session_quality: VideoQuality,
 }
 
 impl AppState {
@@ -57,11 +61,24 @@ impl AppState {
             current_course_id: None,
             current_quiz_id: None,
             last_video_by_course: HashMap::new(),
+            preferred_quality: VideoQuality::P720,
+            session_quality: VideoQuality::P720,
         }
     }
 
     pub fn with_backend(backend: Arc<AppContext>) -> Self {
-        Self { backend: Some(backend), ..Self::new() }
+        let mut state = Self::new();
+        let quality = backend
+            .preferences_repo
+            .load("default")
+            .ok()
+            .flatten()
+            .map(|p| p.preferred_quality())
+            .unwrap_or(VideoQuality::P720);
+        state.backend = Some(backend);
+        state.preferred_quality = quality;
+        state.session_quality = quality;
+        state
     }
 
     pub fn has_backend(&self) -> bool {

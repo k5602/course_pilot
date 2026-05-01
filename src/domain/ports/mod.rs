@@ -6,6 +6,7 @@ mod llm;
 mod local_media;
 mod presence;
 mod repository;
+mod stream;
 mod transcript;
 mod youtube;
 
@@ -22,5 +23,6 @@ pub use repository::{
     CourseRepository, ExamRepository, ModuleRepository, NoteRepository, RepositoryError,
     SearchRepository, TagRepository, UserPreferencesRepository, VideoRepository,
 };
+pub use stream::StreamResolver;
 pub use transcript::{TranscriptError, TranscriptProvider};
 pub use youtube::{FetchError, PlaylistFetcher, RawVideoMetadata};

@@ -1,5 +1,7 @@
 //! User preferences entity - persisted app settings.
 
+use crate::domain::value_objects::VideoQuality;
+
 /// User preferences stored in the database.
 #[derive(Debug, Clone, PartialEq)]
 pub struct UserPreferences {
@@ -9,6 +11,7 @@ pub struct UserPreferences {
     right_panel_visible: bool,
     right_panel_width: u32,
     onboarding_completed: bool,
+    preferred_quality: VideoQuality,
 }
 
 impl UserPreferences {
@@ -20,6 +23,7 @@ impl UserPreferences {
         right_panel_visible: bool,
         right_panel_width: u32,
         onboarding_completed: bool,
+        preferred_quality: VideoQuality,
     ) -> Self {
         Self {
             id,
@@ -28,6 +32,7 @@ impl UserPreferences {
             right_panel_visible,
             right_panel_width,
             onboarding_completed,
+            preferred_quality,
         }
     }
 
@@ -40,6 +45,7 @@ impl UserPreferences {
             right_panel_visible: true,
             right_panel_width: 320,
             onboarding_completed: false,
+            preferred_quality: VideoQuality::P720,
         }
     }
 
@@ -67,6 +73,10 @@ impl UserPreferences {
         self.onboarding_completed
     }
 
+    pub fn preferred_quality(&self) -> VideoQuality {
+        self.preferred_quality
+    }
+
     pub fn set_ml_boundary_enabled(&mut self, enabled: bool) {
         self.ml_boundary_enabled = enabled;
     }
@@ -85,5 +95,9 @@ impl UserPreferences {
 
     pub fn set_onboarding_completed(&mut self, completed: bool) {
         self.onboarding_completed = completed;
+    }
+
+    pub fn set_preferred_quality(&mut self, quality: VideoQuality) {
+        self.preferred_quality = quality;
     }
 }

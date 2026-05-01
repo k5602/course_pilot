@@ -49,9 +49,3 @@ impl TranscriptProvider for TranscriptAdapter {
         })
     }
 }
-
-impl Default for TranscriptAdapter {
-    fn default() -> Self {
-        Self::new().expect("Failed to create TranscriptAdapter")
-    }
-}
