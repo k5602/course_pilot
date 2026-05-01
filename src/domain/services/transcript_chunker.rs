@@ -57,14 +57,19 @@ impl TranscriptChunker {
         let mut start = 0;
 
         while start < clean.len() {
-            let end = self.find_chunk_end(clean, start);
-            chunks.push(clean[start..end].trim().to_string());
+            let safe_start = clean.floor_char_boundary(start);
+            let end = self.find_chunk_end(clean, safe_start);
+            let safe_end = clean.floor_char_boundary(end);
+            chunks.push(clean[safe_start..safe_end].trim().to_string());
 
-            let next_start = end.saturating_sub(self.overlap);
-            if next_start <= start {
-                start = end;
+            let next_start = safe_end.saturating_sub(self.overlap);
+            if next_start <= safe_start {
+                start = safe_end;
             } else {
                 start = self.find_chunk_start(clean, next_start);
+                if start <= safe_start {
+                    start = safe_end;
+                }
             }
 
             if start >= clean.len() {
@@ -77,62 +82,73 @@ impl TranscriptChunker {
 
     /// Finds the end boundary for a chunk starting at `start`.
     fn find_chunk_end(&self, text: &str, start: usize) -> usize {
-        let end = start + self.chunk_size;
+        let safe_start = text.floor_char_boundary(start);
+        let end = safe_start + self.chunk_size;
         if end >= text.len() {
             return text.len();
         }
+        let safe_end = text.floor_char_boundary(end);
 
-        if let Some(pos) = text[start..end].rfind("\n\n") {
-            return start + pos + 2;
+        if let Some(pos) = text[safe_start..safe_end].rfind("\n\n") {
+            return safe_start + pos + 2;
         }
 
         for delim in [". ", "! ", "? ", ".\"", "!\"", "?\""] {
-            if let Some(pos) = text[start..end].rfind(delim) {
-                return start + pos + delim.len();
+            if let Some(pos) = text[safe_start..safe_end].rfind(delim) {
+                return safe_start + pos + delim.len();
             }
         }
 
-        if let Some(pos) = text[start..end].rfind('\n') {
-            return start + pos + 1;
+        if let Some(pos) = text[safe_start..safe_end].rfind('\n') {
+            return safe_start + pos + 1;
         }
 
-        if let Some(pos) = text[start..end].rfind(' ')
-            && end - (start + pos) < self.chunk_size / 2
+        if let Some(pos) = text[safe_start..safe_end].rfind(' ')
+            && safe_end - (safe_start + pos) < self.chunk_size / 2
         {
-            return start + pos + 1;
+            return safe_start + pos + 1;
         }
 
-        end
+        safe_end
     }
 
     /// Finds the start boundary for the next chunk, preferring sentence starts.
     fn find_chunk_start(&self, text: &str, start: usize) -> usize {
-        if start >= text.len() {
+        let safe_start = text.floor_char_boundary(start);
+        if safe_start >= text.len() {
             return text.len();
         }
 
-        let search_end = (start + self.chunk_size / 3).min(text.len());
+        let search_end = (safe_start + self.chunk_size / 3).min(text.len());
 
-        for offset in start..search_end {
-            if offset + 1 < text.len() && &text[offset..offset + 2] == "\n\n" {
+        for offset in safe_start..search_end {
+            if !text.is_char_boundary(offset) {
+                continue;
+            }
+            if text[offset..].starts_with("\n\n") {
                 return offset + 2;
             }
         }
 
-        for offset in start..search_end {
-            if offset + 2 < text.len() {
-                let window = &text[offset..offset + 2];
-                if matches!(window, ". " | "! " | "? ") {
-                    return offset + 2;
-                }
+        for offset in safe_start..search_end {
+            if !text.is_char_boundary(offset) {
+                continue;
+            }
+            let remaining = &text[offset..];
+            if remaining.starts_with(". ")
+                || remaining.starts_with("! ")
+                || remaining.starts_with("? ")
+            {
+                return offset + 2;
             }
         }
 
-        if let Some(pos) = text[start..search_end].find('\n') {
-            return start + pos + 1;
+        let safe_search_end = text.floor_char_boundary(search_end);
+        if let Some(pos) = text[safe_start..safe_search_end].find('\n') {
+            return safe_start + pos + 1;
         }
 
-        start
+        safe_start
     }
 
     /// Returns the number of chunks that would be produced.
@@ -228,5 +244,28 @@ mod tests {
     #[should_panic(expected = "overlap must be < chunk_size")]
     fn rejects_overlap_gte_chunk_size() {
         TranscriptChunker::with_params(100, 100);
+    }
+
+    #[test]
+    fn handles_multi_byte_utf8_at_boundary() {
+        let chunker = TranscriptChunker::with_params(10, 2);
+        let text = "你好世界这是一个测试".repeat(5);
+        let chunks = chunker.chunk(&text);
+        assert!(!chunks.is_empty());
+        for chunk in &chunks {
+            assert!(chunk.len() <= 12);
+            assert!(chunk.chars().all(|c| c != '\u{FFFD}'));
+        }
+    }
+
+    #[test]
+    fn handles_mixed_ascii_and_unicode() {
+        let chunker = TranscriptChunker::with_params(15, 3);
+        let text = "Hello world 这是一个测试 sentence here.";
+        let chunks = chunker.chunk(&text);
+        assert!(!chunks.is_empty());
+        for chunk in &chunks {
+            assert!(!chunk.contains('\u{FFFD}'));
+        }
     }
 }
