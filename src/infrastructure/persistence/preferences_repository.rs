@@ -74,6 +74,29 @@ fn bool_to_i32(value: bool) -> i32 {
     if value { 1 } else { 0 }
 }
 
+fn str_to_quality(s: &str) -> VideoQuality {
+    match s.to_lowercase().trim() {
+        "p240" | "240p" => VideoQuality::P240,
+        "p360" | "360p" => VideoQuality::P360,
+        "p480" | "480p" => VideoQuality::P480,
+        "p720" | "720p" => VideoQuality::P720,
+        "p1080" | "1080p" => VideoQuality::P1080,
+        "best" => VideoQuality::Best,
+        _ => VideoQuality::P720,
+    }
+}
+
+fn quality_to_str(q: VideoQuality) -> String {
+    match q {
+        VideoQuality::P240 => "p240".to_string(),
+        VideoQuality::P360 => "p360".to_string(),
+        VideoQuality::P480 => "p480".to_string(),
+        VideoQuality::P720 => "p720".to_string(),
+        VideoQuality::P1080 => "p1080".to_string(),
+        VideoQuality::Best => "best".to_string(),
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -134,28 +157,5 @@ mod tests {
         };
         let prefs = row_to_preferences(row);
         assert_eq!(prefs.preferred_quality(), VideoQuality::P1080);
-    }
-}
-
-fn str_to_quality(s: &str) -> VideoQuality {
-    match s.to_lowercase().trim() {
-        "p240" | "240p" => VideoQuality::P240,
-        "p360" | "360p" => VideoQuality::P360,
-        "p480" | "480p" => VideoQuality::P480,
-        "p720" | "720p" => VideoQuality::P720,
-        "p1080" | "1080p" => VideoQuality::P1080,
-        "best" => VideoQuality::Best,
-        _ => VideoQuality::P720,
-    }
-}
-
-fn quality_to_str(q: VideoQuality) -> String {
-    match q {
-        VideoQuality::P240 => "p240".to_string(),
-        VideoQuality::P360 => "p360".to_string(),
-        VideoQuality::P480 => "p480".to_string(),
-        VideoQuality::P720 => "p720".to_string(),
-        VideoQuality::P1080 => "p1080".to_string(),
-        VideoQuality::Best => "best".to_string(),
     }
 }

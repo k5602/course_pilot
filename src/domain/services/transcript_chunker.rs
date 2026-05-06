@@ -262,7 +262,7 @@ mod tests {
     fn handles_mixed_ascii_and_unicode() {
         let chunker = TranscriptChunker::with_params(15, 3);
         let text = "Hello world 这是一个测试 sentence here.";
-        let chunks = chunker.chunk(&text);
+        let chunks = chunker.chunk(text);
         assert!(!chunks.is_empty());
         for chunk in &chunks {
             assert!(!chunk.contains('\u{FFFD}'));
