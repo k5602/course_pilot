@@ -51,3 +51,47 @@ impl FromStr for ExamDifficulty {
         }
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn from_str_valid_variants() {
+        assert_eq!("easy".parse::<ExamDifficulty>().unwrap(), ExamDifficulty::Easy);
+        assert_eq!("medium".parse::<ExamDifficulty>().unwrap(), ExamDifficulty::Medium);
+        assert_eq!("hard".parse::<ExamDifficulty>().unwrap(), ExamDifficulty::Hard);
+    }
+
+    #[test]
+    fn from_str_case_insensitive() {
+        assert_eq!("Easy".parse::<ExamDifficulty>().unwrap(), ExamDifficulty::Easy);
+        assert_eq!("MEDIUM".parse::<ExamDifficulty>().unwrap(), ExamDifficulty::Medium);
+        assert_eq!("Hard".parse::<ExamDifficulty>().unwrap(), ExamDifficulty::Hard);
+    }
+
+    #[test]
+    fn from_str_with_whitespace() {
+        assert_eq!("  easy  ".parse::<ExamDifficulty>().unwrap(), ExamDifficulty::Easy);
+    }
+
+    #[test]
+    fn from_str_invalid() {
+        assert!("impossible".parse::<ExamDifficulty>().is_err());
+        assert!("".parse::<ExamDifficulty>().is_err());
+    }
+
+    #[test]
+    fn as_str_roundtrip() {
+        for variant in [ExamDifficulty::Easy, ExamDifficulty::Medium, ExamDifficulty::Hard] {
+            let s = variant.as_str();
+            let parsed: ExamDifficulty = s.parse().unwrap();
+            assert_eq!(parsed, variant);
+        }
+    }
+
+    #[test]
+    fn default_is_medium() {
+        assert_eq!(ExamDifficulty::default(), ExamDifficulty::Medium);
+    }
+}

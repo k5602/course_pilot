@@ -133,3 +133,86 @@ impl Video {
         self.is_completed = false;
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn sample_video() -> Video {
+        let yt_id = YouTubeVideoId::new("dQw4w9WgXcQ").unwrap();
+        Video::new(
+            VideoId::new(),
+            ModuleId::new(),
+            VideoSource::youtube(yt_id),
+            "Test Video".to_string(),
+            120,
+            0,
+        )
+    }
+
+    #[test]
+    fn new_video_not_completed() {
+        let video = sample_video();
+        assert!(!video.is_completed());
+        assert_eq!(video.title(), "Test Video");
+        assert_eq!(video.duration_secs(), 120);
+        assert_eq!(video.sort_order(), 0);
+    }
+
+    #[test]
+    fn mark_completed_then_pending() {
+        let mut video = sample_video();
+        assert!(!video.is_completed());
+        video.mark_completed();
+        assert!(video.is_completed());
+        video.mark_pending();
+        assert!(!video.is_completed());
+    }
+
+    #[test]
+    fn update_transcript() {
+        let mut video = sample_video();
+        assert!(video.transcript().is_none());
+        video.update_transcript(Some("Hello world".to_string()));
+        assert_eq!(video.transcript(), Some("Hello world"));
+        video.update_transcript(None);
+        assert!(video.transcript().is_none());
+    }
+
+    #[test]
+    fn update_summary() {
+        let mut video = sample_video();
+        assert!(video.summary().is_none());
+        video.update_summary(Some("A summary".to_string()));
+        assert_eq!(video.summary(), Some("A summary"));
+    }
+
+    #[test]
+    fn youtube_source_delegates() {
+        let yt_id = YouTubeVideoId::new("9bZkp7q19f0").unwrap();
+        let video = Video::new(
+            VideoId::new(),
+            ModuleId::new(),
+            VideoSource::youtube(yt_id),
+            "YT Video".to_string(),
+            60,
+            1,
+        );
+        assert!(video.youtube_id().is_some());
+        assert!(video.local_path().is_none());
+    }
+
+    #[test]
+    fn local_source_delegates() {
+        let video = Video::new(
+            VideoId::new(),
+            ModuleId::new(),
+            VideoSource::local_path("/tmp/v.mp4").unwrap(),
+            "Local Video".to_string(),
+            300,
+            2,
+        );
+        assert!(video.youtube_id().is_none());
+        assert_eq!(video.local_path(), Some("/tmp/v.mp4"));
+    }
+}

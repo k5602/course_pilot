@@ -75,3 +75,45 @@ impl VideoSource {
         }
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn local_path_rejects_empty() {
+        assert!(VideoSource::local_path("").is_err());
+    }
+
+    #[test]
+    fn local_path_rejects_whitespace_only() {
+        assert!(VideoSource::local_path("   ").is_err());
+    }
+
+    #[test]
+    fn local_path_rejects_relative() {
+        assert!(VideoSource::local_path("videos/course.mp4").is_err());
+    }
+
+    #[test]
+    fn local_path_accepts_absolute() {
+        let src = VideoSource::local_path("/home/user/videos/course.mp4").unwrap();
+        assert_eq!(src.local_path_str(), Some("/home/user/videos/course.mp4"));
+    }
+
+    #[test]
+    fn youtube_source_returns_id() {
+        let yt_id = YouTubeVideoId::new("dQw4w9WgXcQ").unwrap();
+        let src = VideoSource::youtube(yt_id);
+        assert!(src.youtube_id().is_some());
+        assert!(src.local_path_str().is_none());
+        assert_eq!(src.source_type(), "youtube");
+    }
+
+    #[test]
+    fn local_source_type_and_ref() {
+        let src = VideoSource::local_path("/tmp/test.mp4").unwrap();
+        assert_eq!(src.source_type(), "local");
+        assert_eq!(src.source_ref(), "/tmp/test.mp4");
+    }
+}

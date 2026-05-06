@@ -3,7 +3,7 @@
 use crate::domain::value_objects::{ExamId, VideoId};
 
 /// Pass threshold for an exam (70%).
-const PASS_THRESHOLD: f32 = 0.70;
+pub const PASS_THRESHOLD: f32 = 0.70;
 
 /// A single MCQ question for an exam.
 #[derive(Debug, Clone, serde::Deserialize)]
@@ -87,5 +87,47 @@ mod tests {
             Exam::new(ExamId::new(), VideoId::new(), r#"[{"question": "test"}]"#.to_string());
         exam.record_result(0.5, None);
         assert!(!exam.passed().unwrap());
+    }
+
+    #[test]
+    fn exam_pass_at_boundary() {
+        let mut exam = Exam::new(ExamId::new(), VideoId::new(), "[]".to_string());
+        exam.record_result(0.70, None);
+        assert!(exam.passed().unwrap());
+        assert_eq!(exam.score(), Some(0.70));
+    }
+
+    #[test]
+    fn exam_fail_below_boundary() {
+        let mut exam = Exam::new(ExamId::new(), VideoId::new(), "[]".to_string());
+        exam.record_result(0.69, None);
+        assert!(!exam.passed().unwrap());
+    }
+
+    #[test]
+    fn exam_not_taken_initially() {
+        let exam = Exam::new(ExamId::new(), VideoId::new(), "[]".to_string());
+        assert!(!exam.is_taken());
+        assert_eq!(exam.score(), None);
+        assert_eq!(exam.passed(), None);
+    }
+
+    #[test]
+    fn exam_score_clamped_to_valid_range() {
+        let mut exam = Exam::new(ExamId::new(), VideoId::new(), "[]".to_string());
+        exam.record_result(1.5, None);
+        assert_eq!(exam.score(), Some(1.0));
+
+        let mut exam2 = Exam::new(ExamId::new(), VideoId::new(), "[]".to_string());
+        exam2.record_result(-0.3, None);
+        assert_eq!(exam2.score(), Some(0.0));
+    }
+
+    #[test]
+    fn exam_records_answers() {
+        let mut exam = Exam::new(ExamId::new(), VideoId::new(), "[]".to_string());
+        let answers = Some(r#"[0, 2, 1]"#.to_string());
+        exam.record_result(0.8, answers.clone());
+        assert_eq!(exam.user_answers_json(), answers.as_deref());
     }
 }
