@@ -15,8 +15,8 @@ use std::borrow::Cow;
 /// The cleaner:
 /// - Strips BOM and format headers (WEBVTT, KIND, etc.)
 /// - Removes timestamp lines and cue indices
-/// - Drops inline formatting tags (e.g., <i>, <c>, <u>)
-/// - Removes speaker labels (e.g., [John]:, SPEAKER:, >>)
+/// - Drops inline formatting tags (e.g., `<i>`, `<c>`, `<u>`)
+/// - Removes speaker labels (e.g., `[John]:`, `SPEAKER:`, `>>`)
 /// - Collapses whitespace
 /// - Removes duplicate consecutive lines
 #[derive(Debug, Default, Clone)]
@@ -143,7 +143,7 @@ fn strip_inline_tags(line: &str) -> Cow<'_, str> {
     Cow::Owned(out)
 }
 
-/// Removes speaker labels like "[John]:", "SPEAKER:", or ">>"
+/// Removes speaker labels like `[John]:`, `SPEAKER:`, or `>>`
 fn strip_speaker_labels(line: &str) -> Cow<'_, str> {
     let trimmed = line.trim();
 

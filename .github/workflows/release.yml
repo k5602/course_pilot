@@ -15,14 +15,47 @@ concurrency:
 env:
   CARGO_TERM_COLOR: always
   RUST_BACKTRACE: 1
-  APP_NAME: course_pilot
   CARGO_INCREMENTAL: 0
-  CARGO_NET_GIT_FETCH_WITH_CLI: "true"
+  APP_NAME: course_pilot
 
 jobs:
+  validate:
+    name: Pre-release Validation
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install system dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            build-essential \
+            libgtk-4-dev \
+            libadwaita-1-dev \
+            libgstreamer1.0-dev \
+            libgstreamer-plugins-base1.0-dev \
+            libgraphene-1.0-dev \
+            pkg-config \
+            libsqlite3-dev
+
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: clippy, rustfmt
+
+      - uses: Swatinem/rust-cache@v2
+        with:
+          cache-on-failure: true
+
+      - name: Lint
+        run: cargo clippy --all-targets --all-features -- -D warnings
+
+      - name: Test
+        run: cargo test --all --locked
+
   build:
-    name: Build (${{ matrix.os }})
+    name: Build (${{ matrix.platform }})
     runs-on: ${{ matrix.os }}
+    needs: validate
     timeout-minutes: 60
     strategy:
       fail-fast: false
@@ -32,59 +65,41 @@ jobs:
             platform: linux
             artifact: course-pilot-linux-x64.tar.gz
             binary: course_pilot
-          # - os: windows-2022
-          #   platform: windows
-          #   artifact: course-pilot-windows-x64.zip
-          #   binary: course_pilot.exe
+
+          - os: windows-latest
+            platform: windows
+            artifact: course-pilot-windows-x64.zip
+            binary: course_pilot.exe
 
     steps:
-      - name: Checkout
-        uses: actions/checkout@v4
+      - name: Configure git (Windows)
+        if: matrix.platform == 'windows'
+        run: git config --global core.autocrlf input
+        shell: pwsh
+
+      - uses: actions/checkout@v4
         with:
           fetch-depth: 0
 
-      - name: Free Disk Space (Linux)
-        if: matrix.platform == 'linux'
-        run: |
-          sudo rm -rf /usr/share/dotnet
-          sudo rm -rf /usr/local/lib/android
-          sudo rm -rf /opt/ghc
-          sudo rm -rf "/usr/local/share/boost"
-          sudo rm -rf "$AGENT_TOOLSDIRECTORY"
-        shell: bash
-
-      - name: Configure Cargo git CLI
-        run: |
-          mkdir -p .cargo
-          cat > .cargo/config.toml <<'EOF'
-          [net]
-          git-fetch-with-cli = true
-          EOF
-        shell: bash
-
-      - name: Enable long paths (Windows)
+      - name: Setup MSYS2 (Windows)
         if: matrix.platform == 'windows'
-        run: git config --system core.longpaths true
-        shell: pwsh
-
-      - name: Enable long paths in registry (Windows)
-        if: matrix.platform == 'windows'
-        run: |
-          Set-ItemProperty -Path 'HKLM:\System\CurrentControlSet\Control\FileSystem' -Name 'LongPathsEnabled' -Value 1
-        shell: pwsh
-
-      - name: Install NASM (Windows)
-        if: matrix.platform == 'windows'
-        uses: ilammy/setup-nasm@v1
-
-      - name: Setup Rust
-        uses: dtolnay/rust-toolchain@stable
+        uses: msys2/setup-msys2@v2
         with:
-          toolchain: stable
-          targets: ${{ matrix.platform == 'windows' && 'x86_64-pc-windows-msvc' || '' }}
-
-      - name: Rust cache
-        uses: Swatinem/rust-cache@v2
+          msystem: UCRT64
+          update: true
+          install: >-
+            mingw-w64-ucrt-x86_64-gcc
+            mingw-w64-ucrt-x86_64-rust
+            mingw-w64-ucrt-x86_64-pkgconf
+            mingw-w64-ucrt-x86_64-gtk4
+            mingw-w64-ucrt-x86_64-libadwaita
+            mingw-w64-ucrt-x86_64-librsvg
+            mingw-w64-ucrt-x86_64-gstreamer
+            mingw-w64-ucrt-x86_64-gst-plugins-base
+            mingw-w64-ucrt-x86_64-gst-plugins-good
+            mingw-w64-ucrt-x86_64-gst-plugins-bad
+            mingw-w64-ucrt-x86_64-gst-plugins-ugly
+            mingw-w64-ucrt-x86_64-gst-libav
 
       - name: Install Linux dependencies
         if: matrix.platform == 'linux'
@@ -99,12 +114,35 @@ jobs:
             libgraphene-1.0-dev \
             pkg-config \
             libsqlite3-dev
-        shell: bash
 
-      - name: Build release binary (Linux)
+      - name: Setup Rust (Linux)
         if: matrix.platform == 'linux'
-        run: cargo build --release
-        shell: bash
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Verify build environment (Windows)
+        if: matrix.platform == 'windows'
+        run: |
+          rustc --version
+          cargo --version
+          pkg-config --cflags --libs gtk4
+          pkg-config --cflags --libs libadwaita-1
+          pkg-config --cflags --libs gstreamer-1.0
+        shell: msys2 {0}
+
+      - name: Rust cache (Linux)
+        if: matrix.platform == 'linux'
+        uses: Swatinem/rust-cache@v2
+
+      - name: Build release (Linux)
+        if: matrix.platform == 'linux'
+        run: cargo build --release --locked
+
+      - name: Build release (Windows)
+        if: matrix.platform == 'windows'
+        run: cargo build --release --locked
+        shell: msys2 {0}
+        env:
+          PKG_CONFIG_ALLOW_CROSS: "1"
 
       - name: Package (Linux)
         if: matrix.platform == 'linux'
@@ -114,34 +152,50 @@ jobs:
           chmod +x "./release-artifacts/${APP_NAME}"
           strip "./release-artifacts/${APP_NAME}" || true
           tar -czf "${{ matrix.artifact }}" -C release-artifacts .
-        shell: bash
 
-      # - name: Build release binary (Windows)
-      #   if: matrix.platform == 'windows'
-      #   run: cargo build --release
-      #   env:
-      #     RUSTFLAGS: "-C link-arg=-fuse-ld=lld"
-      #   shell: pwsh
+      - name: Collect DLLs (Windows)
+        if: matrix.platform == 'windows'
+        run: |
+          set -euo pipefail
+          mkdir -p dist
+          cp "target/release/${APP_NAME}.exe" dist/
 
-      # - name: Package (Windows)
-      #   if: matrix.platform == 'windows'
-      #   run: |
-      #     Compress-Archive -Path target/release/${{ matrix.binary }} -DestinationPath ${{ matrix.artifact }}
-      #   shell: pwsh
+          for dll in $(ldd "target/release/${APP_NAME}.exe" | grep '/ucrt64/' | awk '{print $3}' | sort -u); do
+            cp "$dll" dist/
+          done
 
-      - name: Upload Linux Tarball
-        if: matrix.platform == 'linux'
+          mkdir -p dist/gstreamer-1.0
+          cp /ucrt64/lib/gstreamer-1.0/*.dll dist/gstreamer-1.0/
+
+          mkdir -p dist/share/glib-2.0/schemas
+          cp /ucrt64/share/glib-2.0/schemas/*.gschema.xml dist/share/glib-2.0/schemas/
+          glib-compile-schemas dist/share/glib-2.0/schemas/
+
+          mkdir -p dist/lib/gdk-pixbuf-2.0/2.10.0/loaders
+          cp /ucrt64/lib/gdk-pixbuf-2.0/2.10.0/loaders/*.dll dist/lib/gdk-pixbuf-2.0/2.10.0/loaders/
+          cp "/ucrt64/lib/gdk-pixbuf-2.0/2.10.0/loaders.cache" dist/lib/gdk-pixbuf-2.0/2.10.0/ 2>/dev/null || true
+
+          mkdir -p dist/share/icons
+          cp -r /ucrt64/share/icons/Adwaita dist/share/icons/
+          cp -r /ucrt64/share/icons/hicolor dist/share/icons/
+
+          echo '@echo off' > dist/course_pilot.bat
+          echo 'set "GST_PLUGIN_PATH=%~dp0gstreamer-1.0"' >> dist/course_pilot.bat
+          echo 'set "GSETTINGS_SCHEMA_DIR=%~dp0share\glib-2.0\schemas"' >> dist/course_pilot.bat
+          echo 'set "GDK_PIXBUF_MODULE_FILE=%~dp0lib\gdk-pixbuf-2.0\2.10.0\loaders.cache"' >> dist/course_pilot.bat
+          echo '"%~dp0course_pilot.exe" %*' >> dist/course_pilot.bat
+        shell: msys2 {0}
+
+      - name: Package ZIP (Windows)
+        if: matrix.platform == 'windows'
+        run: Compress-Archive -Path dist\* -DestinationPath "${{ matrix.artifact }}"
+        shell: pwsh
+
+      - name: Upload artifact
         uses: actions/upload-artifact@v4
         with:
-          name: linux-tarball
-          path: course-pilot-linux-x64.tar.gz
-
-      # - name: Upload Windows Archive
-      #   if: matrix.platform == 'windows'
-      #   uses: actions/upload-artifact@v4
-      #   with:
-      #     name: windows-zip
-      #     path: course-pilot-windows-x64.zip
+          name: ${{ matrix.platform }}-tarball
+          path: ${{ matrix.artifact }}
 
   release:
     name: Publish Release
@@ -150,39 +204,31 @@ jobs:
     permissions:
       contents: write
     steps:
-      - name: Checkout
-        uses: actions/checkout@v4
+      - uses: actions/checkout@v4
 
-      - name: Download Linux Tarball
+      - name: Download artifacts
         uses: actions/download-artifact@v4
         with:
-          name: linux-tarball
+          pattern: "*-tarball"
+          merge-multiple: true
 
-      # - name: Download Windows Archive
-      #   uses: actions/download-artifact@v4
-      #   with:
-      #     name: windows-zip
-
-      - name: Compute checksums and sizes
+      - name: Compute checksums
         id: meta
         run: |
           set -euo pipefail
           linux_tar="course-pilot-linux-x64.tar.gz"
-          # win_zip="course-pilot-windows-x64.zip"
+          win_zip="course-pilot-windows-x64.zip"
 
           tar_size=$(du -h "$linux_tar" | cut -f1)
-          # zip_size=$(du -h "$win_zip" | cut -f1)
-
           tar_sha=$(sha256sum "$linux_tar" | cut -d' ' -f1)
-          # zip_sha=$(sha256sum "$win_zip" | cut -d' ' -f1)
-
+          zip_size=$(du -h "$win_zip" | cut -f1)
+          zip_sha=$(sha256sum "$win_zip" | cut -d' ' -f1)
           {
             echo "tar_size=$tar_size"
             echo "tar_sha=$tar_sha"
-            # echo "zip_size=$zip_size"
-            # echo "zip_sha=$zip_sha"
+            echo "zip_size=$zip_size"
+            echo "zip_sha=$zip_sha"
           } >> "$GITHUB_OUTPUT"
-        shell: bash
 
       - name: Prepare release notes
         run: |
@@ -209,28 +255,36 @@ jobs:
             echo "### Downloads"
             echo "| Platform | File | Size | SHA256 |"
             echo "|----------|------|------|--------|"
-            echo "| Linux (Generic) | course-pilot-linux-x64.tar.gz | ${{ steps.meta.outputs.tar_size }} | ${{ steps.meta.outputs.tar_sha }} |"
-            # echo "| Windows x64 | course-pilot-windows-x64.zip | ${{ steps.meta.outputs.zip_size }} | ${{ steps.meta.outputs.zip_sha }} |"
+            echo "| Linux x64 | course-pilot-linux-x64.tar.gz | ${{ steps.meta.outputs.tar_size }} | ${{ steps.meta.outputs.tar_sha }} |"
+            echo "| Windows x64 | course-pilot-windows-x64.zip | ${{ steps.meta.outputs.zip_size }} | ${{ steps.meta.outputs.zip_sha }} |"
             echo ""
             echo "### Installation (Linux)"
             echo "Download the \`.tar.gz\`, extract it, and run \`course_pilot\`:"
             echo ""
-            echo "```bash"
+            echo "\`\`\`bash"
             echo "tar -xzf course-pilot-linux-x64.tar.gz"
             echo "./course_pilot"
-            echo "```"
+            echo "\`\`\`"
+            echo ""
+            echo "### Installation (Windows)"
+            echo "Download the \`.zip\`, extract it, and run \`course_pilot.exe\`. All GTK4, libadwaita, and GStreamer runtimes are bundled."
+            echo ""
+            echo "\`\`\`powershell"
+            echo "Expand-Archive -Path course-pilot-windows-x64.zip -DestinationPath ."
+            echo ".\\course_pilot.exe"
+            echo "\`\`\`"
             echo ""
             echo "### System Requirements"
             echo "- **Linux**: Ubuntu 22.04+ / Debian 12+ / Fedora 38+ / Arch Linux (GTK4 + libadwaita + GStreamer)"
+            echo "- **Windows**: Windows 10+ (64-bit); all runtimes bundled"
           } >> "$notes_file"
-        shell: bash
 
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v2
         with:
           files: |
             course-pilot-linux-x64.tar.gz
-            # course-pilot-windows-x64.zip
+            course-pilot-windows-x64.zip
           tag_name: ${{ github.ref_name }}
           name: Course Pilot ${{ github.ref_name }}
           body_path: release_notes.md
