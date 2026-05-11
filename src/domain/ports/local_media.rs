@@ -25,6 +25,8 @@ pub enum LocalMediaError {
     Unsupported(String),
     #[error("Metadata parse error: {0}")]
     Metadata(String),
+    #[error("GStreamer discovery init failed: {0}")]
+    DiscoveryFailed(String),
 }
 
 /// Port for scanning local media libraries.

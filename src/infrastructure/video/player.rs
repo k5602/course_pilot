@@ -131,32 +131,45 @@ impl VideoPlayer {
             .map(|u| u.to_string())
             .unwrap_or_else(|_| format!("file://{}", path));
         self.playbin.set_property("uri", &uri);
-        let _ = self.pipeline.set_state(gst::State::Playing);
+        if let Err(e) = self.pipeline.set_state(gst::State::Playing) {
+            log::warn!("GStreamer state change to Playing failed: {:?}", e);
+        }
     }
 
     pub fn play_uri(&self, uri: &str) {
         self.playbin.set_property("uri", uri);
-        let _ = self.pipeline.set_state(gst::State::Playing);
+        if let Err(e) = self.pipeline.set_state(gst::State::Playing) {
+            log::warn!("GStreamer state change to Playing failed: {:?}", e);
+        }
     }
 
     pub fn pause(&self) {
-        let _ = self.pipeline.set_state(gst::State::Paused);
+        if let Err(e) = self.pipeline.set_state(gst::State::Paused) {
+            log::warn!("GStreamer state change to Paused failed: {:?}", e);
+        }
     }
 
     pub fn resume(&self) {
-        let _ = self.pipeline.set_state(gst::State::Playing);
+        if let Err(e) = self.pipeline.set_state(gst::State::Playing) {
+            log::warn!("GStreamer state change to Playing failed: {:?}", e);
+        }
     }
 
     pub fn stop(&self) {
-        let _ = self.pipeline.set_state(gst::State::Null);
+        if let Err(e) = self.pipeline.set_state(gst::State::Null) {
+            log::warn!("GStreamer state change to Null failed: {:?}", e);
+        }
     }
 
     pub fn seek(&self, pos_ns: u64) {
         if pos_ns == u64::MAX {
             return;
         }
-        let _ =
-            self.pipeline.seek_simple(gst::SeekFlags::FLUSH, gst::ClockTime::from_nseconds(pos_ns));
+        if let Err(e) =
+            self.pipeline.seek_simple(gst::SeekFlags::FLUSH, gst::ClockTime::from_nseconds(pos_ns))
+        {
+            log::warn!("GStreamer seek failed: {:?}", e);
+        }
     }
 
     pub fn position(&self) -> Option<u64> {
