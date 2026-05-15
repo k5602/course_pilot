@@ -57,6 +57,36 @@ impl CourseRepository for SqliteCourseRepository {
         Ok(())
     }
 
+    fn save_batch(&self, courses: &[Course]) -> Result<(), RepositoryError> {
+        if courses.is_empty() {
+            return Ok(());
+        }
+        let mut conn = self.pool.get().map_err(|e| RepositoryError::Database(e.to_string()))?;
+        conn.transaction::<_, diesel::result::Error, _>(|tx| {
+            for course in courses {
+                let new_course = NewCourse {
+                    id: &course.id().as_uuid().to_string(),
+                    name: course.name(),
+                    source_url: course.source_url().raw(),
+                    playlist_id: course.playlist_id(),
+                    description: course.description(),
+                    source_hash: course.source_hash(),
+                };
+                diesel::insert_into(courses::table)
+                    .values(&new_course)
+                    .on_conflict(courses::id)
+                    .do_update()
+                    .set((
+                        courses::name.eq(new_course.name),
+                        courses::description.eq(new_course.description),
+                    ))
+                    .execute(tx)?;
+            }
+            Ok(())
+        })
+        .map_err(|e| RepositoryError::Database(e.to_string()))
+    }
+
     fn find_by_id(&self, id: &CourseId) -> Result<Option<Course>, RepositoryError> {
         let mut conn = self.pool.get().map_err(|e| RepositoryError::Database(e.to_string()))?;
 
@@ -157,6 +187,34 @@ impl ModuleRepository for SqliteModuleRepository {
             .map_err(|e| RepositoryError::Database(e.to_string()))?;
 
         Ok(())
+    }
+
+    fn save_batch(&self, modules: &[Module]) -> Result<(), RepositoryError> {
+        if modules.is_empty() {
+            return Ok(());
+        }
+        let mut conn = self.pool.get().map_err(|e| RepositoryError::Database(e.to_string()))?;
+        conn.transaction::<_, diesel::result::Error, _>(|tx| {
+            for module in modules {
+                let new_module = NewModule {
+                    id: &module.id().as_uuid().to_string(),
+                    course_id: &module.course_id().as_uuid().to_string(),
+                    title: module.title(),
+                    sort_order: module.sort_order() as i32,
+                };
+                diesel::insert_into(modules::table)
+                    .values(&new_module)
+                    .on_conflict(modules::id)
+                    .do_update()
+                    .set((
+                        modules::title.eq(new_module.title),
+                        modules::sort_order.eq(new_module.sort_order),
+                    ))
+                    .execute(tx)?;
+            }
+            Ok(())
+        })
+        .map_err(|e| RepositoryError::Database(e.to_string()))
     }
 
     fn find_by_id(&self, id: &ModuleId) -> Result<Option<Module>, RepositoryError> {
@@ -266,6 +324,59 @@ impl VideoRepository for SqliteVideoRepository {
             .map_err(|e| RepositoryError::Database(e.to_string()))?;
 
         Ok(())
+    }
+
+    fn save_batch(&self, videos: &[Video]) -> Result<(), RepositoryError> {
+        if videos.is_empty() {
+            return Ok(());
+        }
+        let mut conn = self.pool.get().map_err(|e| RepositoryError::Database(e.to_string()))?;
+        conn.transaction::<_, diesel::result::Error, _>(|tx| {
+            for video in videos {
+                let (source_type, source_ref) = match video.source() {
+                    VideoSource::YouTube(id) => ("youtube", id.as_str().to_string()),
+                    VideoSource::LocalPath(path) => ("local", path.clone()),
+                };
+
+                let new_video = NewVideo {
+                    id: &video.id().as_uuid().to_string(),
+                    module_id: &video.module_id().as_uuid().to_string(),
+                    youtube_id: match video.source() {
+                        VideoSource::YouTube(id) => Some(id.as_str()),
+                        _ => None,
+                    },
+                    title: video.title(),
+                    duration_secs: video.duration_secs() as i32,
+                    is_completed: video.is_completed(),
+                    sort_order: video.sort_order() as i32,
+                    description: video.description(),
+                    transcript: video.transcript(),
+                    summary: video.summary(),
+                    source_type,
+                    source_ref: &source_ref,
+                    key_points: None,
+                    key_terms: None,
+                };
+
+                diesel::insert_into(videos::table)
+                    .values(&new_video)
+                    .on_conflict(videos::id)
+                    .do_update()
+                    .set((
+                        videos::title.eq(new_video.title),
+                        videos::duration_secs.eq(new_video.duration_secs),
+                        videos::is_completed.eq(new_video.is_completed),
+                        videos::sort_order.eq(new_video.sort_order),
+                        videos::description.eq(new_video.description),
+                        videos::transcript.eq(new_video.transcript),
+                        videos::summary.eq(new_video.summary),
+                        videos::module_id.eq(new_video.module_id),
+                    ))
+                    .execute(tx)?;
+            }
+            Ok(())
+        })
+        .map_err(|e| RepositoryError::Database(e.to_string()))
     }
 
     fn find_by_id(&self, id: &VideoId) -> Result<Option<Video>, RepositoryError> {

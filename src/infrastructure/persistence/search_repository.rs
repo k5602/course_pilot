@@ -8,7 +8,7 @@ use diesel::sql_query;
 use diesel::sql_types::Text;
 
 use crate::domain::entities::{SearchResult, SearchResultType};
-use crate::domain::ports::{RepositoryError, SearchRepository};
+use crate::domain::ports::{RepositoryError, SearchEntry, SearchRepository};
 use crate::domain::value_objects::CourseId;
 use crate::infrastructure::persistence::DbPool;
 
@@ -159,5 +159,27 @@ impl SearchRepository for SqliteSearchRepository {
             .map_err(|e| RepositoryError::Database(e.to_string()))?;
 
         Ok(())
+    }
+
+    fn index_batch(&self, entries: &[SearchEntry]) -> Result<(), RepositoryError> {
+        if entries.is_empty() {
+            return Ok(());
+        }
+        let mut conn = self.pool.get().map_err(|e| RepositoryError::Database(e.to_string()))?;
+        conn.transaction::<_, diesel::result::Error, _>(|tx| {
+            for entry in entries {
+                sql_query(
+                    "INSERT INTO search_index (entity_type, entity_id, title, content, course_id) VALUES (?, ?, ?, ?, ?)",
+                )
+                .bind::<Text, _>(&entry.entity_type)
+                .bind::<Text, _>(&entry.entity_id)
+                .bind::<Text, _>(&entry.title)
+                .bind::<Text, _>(&entry.content)
+                .bind::<Text, _>(&entry.course_id)
+                .execute(tx)?;
+            }
+            Ok(())
+        })
+        .map_err(|e| RepositoryError::Database(e.to_string()))
     }
 }
