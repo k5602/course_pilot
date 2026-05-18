@@ -79,32 +79,6 @@ impl GeminiAdapter {
     }
 }
 
-/// A fallback module title generator that returns an error to trigger default title logic.
-pub struct FallbackTitleGenerator;
-
-impl FallbackTitleGenerator {
-    pub fn new() -> Self {
-        Self
-    }
-}
-
-impl Default for FallbackTitleGenerator {
-    fn default() -> Self {
-        Self
-    }
-}
-
-impl ModuleTitleGenerator for FallbackTitleGenerator {
-    fn generate_module_title(
-        &self,
-        _titles: &[String],
-        _course: &str,
-        _idx: usize,
-    ) -> Pin<Box<dyn Future<Output = Result<String, LLMError>> + Send>> {
-        Box::pin(async { Err(LLMError::NoApiKey) })
-    }
-}
-
 /// Extracts a JSON array or object from an LLM response string, skipping
 /// any surrounding markdown fences or explanatory text.
 fn extract_json_from_response(text: &str) -> Result<&str, LLMError> {
