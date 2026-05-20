@@ -9,7 +9,7 @@ mod video_source;
 mod youtube;
 
 pub use exam_difficulty::ExamDifficulty;
-pub use ids::{CourseId, ExamId, ModuleId, VideoId};
+pub use ids::{CourseId, ExamId, ModuleId, UserId, VideoId};
 pub use session::{CognitiveLimit, SessionPlan};
 pub use tag_id::TagId;
 pub use video_quality::VideoQuality;

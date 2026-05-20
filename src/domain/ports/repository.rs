@@ -1,17 +1,13 @@
 //! Repository ports for persistence.
 
 use crate::domain::entities::{Course, Exam, Module, Note, Tag, Video};
-use crate::domain::value_objects::{CourseId, ExamId, ModuleId, TagId, VideoId};
+use crate::domain::value_objects::{CourseId, ExamId, ModuleId, TagId, UserId, VideoId};
 
 /// Error type for repository operations.
 #[derive(Debug, thiserror::Error)]
 pub enum RepositoryError {
-    #[error("Entity not found: {0}")]
-    NotFound(String),
     #[error("Database error: {0}")]
     Database(String),
-    #[error("Constraint violation: {0}")]
-    Constraint(String),
 }
 
 /// Repository for Course entities.
@@ -59,6 +55,12 @@ pub trait VideoRepository: Send + Sync {
         id: &VideoId,
         module_id: &ModuleId,
         sort_order: u32,
+    ) -> Result<(), RepositoryError>;
+    /// Atomically swaps the sort orders of two videos.
+    fn swap_video_orders(
+        &self,
+        video_a_id: &VideoId,
+        video_b_id: &VideoId,
     ) -> Result<(), RepositoryError>;
     fn delete(&self, id: &VideoId) -> Result<(), RepositoryError>;
 }
@@ -114,7 +116,7 @@ pub trait TagRepository: Send + Sync {
 pub trait UserPreferencesRepository: Send + Sync {
     fn load(
         &self,
-        id: &str,
+        id: &UserId,
     ) -> Result<Option<crate::domain::entities::UserPreferences>, RepositoryError>;
     fn save(&self, prefs: &crate::domain::entities::UserPreferences)
     -> Result<(), RepositoryError>;

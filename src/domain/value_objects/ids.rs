@@ -4,7 +4,7 @@ use std::str::FromStr;
 use uuid::Uuid;
 
 /// Unique identifier for a Course.
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub struct CourseId(Uuid);
 
 impl CourseId {
@@ -42,7 +42,7 @@ impl std::fmt::Display for CourseId {
 }
 
 /// Unique identifier for a Module.
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub struct ModuleId(Uuid);
 
 impl ModuleId {
@@ -80,7 +80,7 @@ impl std::fmt::Display for ModuleId {
 }
 
 /// Unique identifier for a Video.
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub struct VideoId(Uuid);
 
 impl VideoId {
@@ -118,7 +118,7 @@ impl std::fmt::Display for VideoId {
 }
 
 /// Unique identifier for an Exam.
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub struct ExamId(Uuid);
 
 impl ExamId {
@@ -150,6 +150,38 @@ impl FromStr for ExamId {
 }
 
 impl std::fmt::Display for ExamId {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}", self.0)
+    }
+}
+
+/// User identifier (non-UUID, arbitrary string).
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+pub struct UserId(pub String);
+
+impl UserId {
+    pub fn new(id: impl Into<String>) -> Self {
+        Self(id.into())
+    }
+
+    pub fn as_str(&self) -> &str {
+        &self.0
+    }
+}
+
+impl From<String> for UserId {
+    fn from(s: String) -> Self {
+        Self(s)
+    }
+}
+
+impl From<&str> for UserId {
+    fn from(s: &str) -> Self {
+        Self(s.to_string())
+    }
+}
+
+impl std::fmt::Display for UserId {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(f, "{}", self.0)
     }

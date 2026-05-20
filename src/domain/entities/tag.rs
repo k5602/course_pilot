@@ -1,5 +1,7 @@
 //! Tag entity - A label for categorizing courses.
 
+use std::borrow::Cow;
+
 use crate::domain::value_objects::TagId;
 
 /// Predefined colors for tags (Tailwind palette).
@@ -21,19 +23,19 @@ pub const TAG_COLORS: &[&str] = &[
 pub struct Tag {
     id: TagId,
     name: String,
-    color: String,
+    color: Cow<'static, str>,
 }
 
 impl Tag {
     /// Creates a new tag with a random color.
     pub fn new(id: TagId, name: String) -> Self {
         let color_idx = id.as_uuid().as_u128() as usize % TAG_COLORS.len();
-        Self { id, name, color: TAG_COLORS[color_idx].to_string() }
+        Self { id, name, color: Cow::Borrowed(TAG_COLORS[color_idx]) }
     }
 
     /// Creates a new tag with a specific color.
     pub fn with_color(id: TagId, name: String, color: String) -> Self {
-        Self { id, name, color }
+        Self { id, name, color: Cow::Owned(color) }
     }
 
     pub fn id(&self) -> &TagId {
