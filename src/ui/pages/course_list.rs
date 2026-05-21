@@ -12,6 +12,15 @@ use crate::ui::navigation::PAGE_COURSE_VIEW;
 use crate::ui::state::SharedState;
 use crate::ui::toast::Toast;
 
+fn bind_course_widgets(list_item: &gtk::ListItem) -> Option<(gtk::Label, gtk::Label, gtk::Label)> {
+    let frame = list_item.child()?.downcast::<gtk::Frame>().ok()?;
+    let vbox = frame.child()?.downcast::<gtk::Box>().ok()?;
+    let title = vbox.first_child()?.downcast::<gtk::Label>().ok()?;
+    let desc_label = title.next_sibling()?.downcast::<gtk::Label>().ok()?;
+    let info_label = desc_label.next_sibling()?.downcast::<gtk::Label>().ok()?;
+    Some((title, desc_label, info_label))
+}
+
 pub struct CourseListPage {
     widget: gtk::Box,
     state: SharedState,
@@ -55,7 +64,10 @@ impl CourseListPage {
         let factory = gtk::SignalListItemFactory::new();
 
         factory.connect_setup(|_factory, list_item| {
-            let list_item = list_item.downcast_ref::<gtk::ListItem>().unwrap();
+            let Some(list_item) = list_item.downcast_ref::<gtk::ListItem>() else {
+                log::warn!("connect_setup: failed to downcast to gtk::ListItem");
+                return;
+            };
 
             let frame = gtk::Frame::new(None);
             frame.add_css_class("card");
@@ -88,14 +100,15 @@ impl CourseListPage {
         });
 
         factory.connect_bind(move |_factory, list_item| {
-            let list_item = list_item.downcast_ref::<gtk::ListItem>().unwrap();
-            let frame = list_item.child().and_then(|c| c.downcast::<gtk::Frame>().ok()).unwrap();
-            let vbox = frame.child().and_then(|c| c.downcast::<gtk::Box>().ok()).unwrap();
-            let title = vbox.first_child().and_then(|c| c.downcast::<gtk::Label>().ok()).unwrap();
-            let desc_label =
-                title.next_sibling().and_then(|c| c.downcast::<gtk::Label>().ok()).unwrap();
-            let info_label =
-                desc_label.next_sibling().and_then(|c| c.downcast::<gtk::Label>().ok()).unwrap();
+            let Some(list_item) = list_item.downcast_ref::<gtk::ListItem>() else {
+                log::warn!("connect_bind: failed to downcast to gtk::ListItem");
+                return;
+            };
+
+            let Some((title, desc_label, info_label)) = bind_course_widgets(list_item) else {
+                log::warn!("connect_bind: failed to downcast course widget tree");
+                return;
+            };
 
             let item = list_item.item();
             if let Some(course) = item.as_ref().and_then(|i| i.downcast_ref::<CourseObject>()) {

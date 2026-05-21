@@ -11,6 +11,16 @@ use crate::ui::list_models::QuizObject;
 use crate::ui::navigation::PAGE_QUIZ_VIEW;
 use crate::ui::state::SharedState;
 
+fn bind_quiz_widgets(list_item: &gtk::ListItem) -> Option<(gtk::Label, gtk::Label, gtk::Button)> {
+    let frame = list_item.child()?.downcast::<gtk::Frame>().ok()?;
+    let hbox = frame.child()?.downcast::<gtk::Box>().ok()?;
+    let info_box = hbox.first_child()?.downcast::<gtk::Box>().ok()?;
+    let title = info_box.first_child()?.downcast::<gtk::Label>().ok()?;
+    let status_label = title.next_sibling()?.downcast::<gtk::Label>().ok()?;
+    let start_btn = info_box.next_sibling()?.downcast::<gtk::Button>().ok()?;
+    Some((title, status_label, start_btn))
+}
+
 pub struct QuizListPage {
     widget: gtk::Box,
     state: SharedState,
@@ -46,7 +56,10 @@ impl QuizListPage {
         let factory = gtk::SignalListItemFactory::new();
 
         factory.connect_setup(|_factory, list_item| {
-            let list_item = list_item.downcast_ref::<gtk::ListItem>().unwrap();
+            let Some(list_item) = list_item.downcast_ref::<gtk::ListItem>() else {
+                log::warn!("connect_setup: failed to downcast to gtk::ListItem");
+                return;
+            };
 
             let frame = gtk::Frame::new(None);
             frame.add_css_class("card");
@@ -82,16 +95,15 @@ impl QuizListPage {
         });
 
         factory.connect_bind(move |_factory, list_item| {
-            let list_item = list_item.downcast_ref::<gtk::ListItem>().unwrap();
-            let frame = list_item.child().and_then(|c| c.downcast::<gtk::Frame>().ok()).unwrap();
-            let hbox = frame.child().and_then(|c| c.downcast::<gtk::Box>().ok()).unwrap();
-            let info_box = hbox.first_child().and_then(|c| c.downcast::<gtk::Box>().ok()).unwrap();
-            let title =
-                info_box.first_child().and_then(|c| c.downcast::<gtk::Label>().ok()).unwrap();
-            let status_label =
-                title.next_sibling().and_then(|c| c.downcast::<gtk::Label>().ok()).unwrap();
-            let start_btn =
-                info_box.next_sibling().and_then(|c| c.downcast::<gtk::Button>().ok()).unwrap();
+            let Some(list_item) = list_item.downcast_ref::<gtk::ListItem>() else {
+                log::warn!("connect_bind: failed to downcast to gtk::ListItem");
+                return;
+            };
+
+            let Some((title, status_label, start_btn)) = bind_quiz_widgets(list_item) else {
+                log::warn!("connect_bind: failed to downcast quiz widget tree");
+                return;
+            };
 
             let item = list_item.item();
             if let Some(quiz) = item.as_ref().and_then(|i| i.downcast_ref::<QuizObject>()) {
