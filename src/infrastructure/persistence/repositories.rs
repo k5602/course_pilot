@@ -34,8 +34,9 @@ impl CourseRepository for SqliteCourseRepository {
     fn save(&self, course: &Course) -> Result<(), RepositoryError> {
         let mut conn = self.pool.get().map_err(|e| RepositoryError::Database(e.to_string()))?;
 
+        let id_str = course.id().as_uuid().to_string();
         let new_course = NewCourse {
-            id: &course.id().as_uuid().to_string(),
+            id: &id_str,
             name: course.name(),
             source_url: course.source_url().raw(),
             playlist_id: course.playlist_id(),
@@ -64,8 +65,9 @@ impl CourseRepository for SqliteCourseRepository {
         let mut conn = self.pool.get().map_err(|e| RepositoryError::Database(e.to_string()))?;
         conn.transaction::<_, diesel::result::Error, _>(|tx| {
             for course in courses {
+                let id_str = course.id().as_uuid().to_string();
                 let new_course = NewCourse {
-                    id: &course.id().as_uuid().to_string(),
+                    id: &id_str,
                     name: course.name(),
                     source_url: course.source_url().raw(),
                     playlist_id: course.playlist_id(),
@@ -90,8 +92,9 @@ impl CourseRepository for SqliteCourseRepository {
     fn find_by_id(&self, id: &CourseId) -> Result<Option<Course>, RepositoryError> {
         let mut conn = self.pool.get().map_err(|e| RepositoryError::Database(e.to_string()))?;
 
+        let id_str = id.as_uuid().to_string();
         let row: Option<CourseRow> = courses::table
-            .find(id.as_uuid().to_string())
+            .find(&id_str)
             .first(&mut conn)
             .optional()
             .map_err(|e| RepositoryError::Database(e.to_string()))?;
@@ -134,7 +137,8 @@ impl CourseRepository for SqliteCourseRepository {
     ) -> Result<(), RepositoryError> {
         let mut conn = self.pool.get().map_err(|e| RepositoryError::Database(e.to_string()))?;
 
-        diesel::update(courses::table.find(id.as_uuid().to_string()))
+        let id_str = id.as_uuid().to_string();
+        diesel::update(courses::table.find(&id_str))
             .set((courses::name.eq(name), courses::description.eq(description)))
             .execute(&mut conn)
             .map_err(|e| RepositoryError::Database(e.to_string()))?;
@@ -145,7 +149,8 @@ impl CourseRepository for SqliteCourseRepository {
     fn delete(&self, id: &CourseId) -> Result<(), RepositoryError> {
         let mut conn = self.pool.get().map_err(|e| RepositoryError::Database(e.to_string()))?;
 
-        diesel::delete(courses::table.find(id.as_uuid().to_string()))
+        let id_str = id.as_uuid().to_string();
+        diesel::delete(courses::table.find(&id_str))
             .execute(&mut conn)
             .map_err(|e| RepositoryError::Database(e.to_string()))?;
 
@@ -168,9 +173,11 @@ impl ModuleRepository for SqliteModuleRepository {
     fn save(&self, module: &Module) -> Result<(), RepositoryError> {
         let mut conn = self.pool.get().map_err(|e| RepositoryError::Database(e.to_string()))?;
 
+        let id_str = module.id().as_uuid().to_string();
+        let course_id_str = module.course_id().as_uuid().to_string();
         let new_module = NewModule {
-            id: &module.id().as_uuid().to_string(),
-            course_id: &module.course_id().as_uuid().to_string(),
+            id: &id_str,
+            course_id: &course_id_str,
             title: module.title(),
             sort_order: module.sort_order() as i32,
         };
@@ -196,9 +203,11 @@ impl ModuleRepository for SqliteModuleRepository {
         let mut conn = self.pool.get().map_err(|e| RepositoryError::Database(e.to_string()))?;
         conn.transaction::<_, diesel::result::Error, _>(|tx| {
             for module in modules {
+                let id_str = module.id().as_uuid().to_string();
+                let course_id_str = module.course_id().as_uuid().to_string();
                 let new_module = NewModule {
-                    id: &module.id().as_uuid().to_string(),
-                    course_id: &module.course_id().as_uuid().to_string(),
+                    id: &id_str,
+                    course_id: &course_id_str,
                     title: module.title(),
                     sort_order: module.sort_order() as i32,
                 };
@@ -220,8 +229,9 @@ impl ModuleRepository for SqliteModuleRepository {
     fn find_by_id(&self, id: &ModuleId) -> Result<Option<Module>, RepositoryError> {
         let mut conn = self.pool.get().map_err(|e| RepositoryError::Database(e.to_string()))?;
 
+        let id_str = id.as_uuid().to_string();
         let row: Option<ModuleRow> = modules::table
-            .find(id.as_uuid().to_string())
+            .find(&id_str)
             .first(&mut conn)
             .optional()
             .map_err(|e| RepositoryError::Database(e.to_string()))?;
@@ -235,8 +245,9 @@ impl ModuleRepository for SqliteModuleRepository {
     fn find_by_course(&self, course_id: &CourseId) -> Result<Vec<Module>, RepositoryError> {
         let mut conn = self.pool.get().map_err(|e| RepositoryError::Database(e.to_string()))?;
 
+        let course_id_str = course_id.as_uuid().to_string();
         let rows: Vec<ModuleRow> = modules::table
-            .filter(modules::course_id.eq(course_id.as_uuid().to_string()))
+            .filter(modules::course_id.eq(&course_id_str))
             .order(modules::sort_order.asc())
             .load(&mut conn)
             .map_err(|e| RepositoryError::Database(e.to_string()))?;
@@ -247,7 +258,8 @@ impl ModuleRepository for SqliteModuleRepository {
     fn update_title(&self, id: &ModuleId, title: &str) -> Result<(), RepositoryError> {
         let mut conn = self.pool.get().map_err(|e| RepositoryError::Database(e.to_string()))?;
 
-        diesel::update(modules::table.find(id.as_uuid().to_string()))
+        let id_str = id.as_uuid().to_string();
+        diesel::update(modules::table.find(&id_str))
             .set(modules::title.eq(title))
             .execute(&mut conn)
             .map_err(|e| RepositoryError::Database(e.to_string()))?;
@@ -258,7 +270,8 @@ impl ModuleRepository for SqliteModuleRepository {
     fn delete(&self, id: &ModuleId) -> Result<(), RepositoryError> {
         let mut conn = self.pool.get().map_err(|e| RepositoryError::Database(e.to_string()))?;
 
-        diesel::delete(modules::table.find(id.as_uuid().to_string()))
+        let id_str = id.as_uuid().to_string();
+        diesel::delete(modules::table.find(&id_str))
             .execute(&mut conn)
             .map_err(|e| RepositoryError::Database(e.to_string()))?;
 
@@ -281,18 +294,17 @@ impl VideoRepository for SqliteVideoRepository {
     fn save(&self, video: &Video) -> Result<(), RepositoryError> {
         let mut conn = self.pool.get().map_err(|e| RepositoryError::Database(e.to_string()))?;
 
-        let (source_type, source_ref) = match video.source() {
-            VideoSource::YouTube(id) => ("youtube", id.as_str().to_string()),
-            VideoSource::LocalPath(path) => ("local", path.clone()),
+        let (source_type, source_ref, youtube_id) = match video.source() {
+            VideoSource::YouTube(id) => ("youtube", id.as_str().to_string(), Some(id.as_str())),
+            VideoSource::LocalPath(path) => ("local", path.clone(), None),
         };
 
+        let video_id_str = video.id().as_uuid().to_string();
+        let module_id_str = video.module_id().as_uuid().to_string();
         let new_video = NewVideo {
-            id: &video.id().as_uuid().to_string(),
-            module_id: &video.module_id().as_uuid().to_string(),
-            youtube_id: match video.source() {
-                VideoSource::YouTube(id) => Some(id.as_str()),
-                _ => None,
-            },
+            id: &video_id_str,
+            module_id: &module_id_str,
+            youtube_id,
             title: video.title(),
             duration_secs: video.duration_secs() as i32,
             is_completed: video.is_completed(),
@@ -318,7 +330,7 @@ impl VideoRepository for SqliteVideoRepository {
                 videos::description.eq(new_video.description),
                 videos::transcript.eq(new_video.transcript),
                 videos::summary.eq(new_video.summary),
-                videos::module_id.eq(new_video.module_id),
+                videos::module_id.eq(&module_id_str),
             ))
             .execute(&mut conn)
             .map_err(|e| RepositoryError::Database(e.to_string()))?;
@@ -333,18 +345,19 @@ impl VideoRepository for SqliteVideoRepository {
         let mut conn = self.pool.get().map_err(|e| RepositoryError::Database(e.to_string()))?;
         conn.transaction::<_, diesel::result::Error, _>(|tx| {
             for video in videos {
-                let (source_type, source_ref) = match video.source() {
-                    VideoSource::YouTube(id) => ("youtube", id.as_str().to_string()),
-                    VideoSource::LocalPath(path) => ("local", path.clone()),
+                let (source_type, source_ref, youtube_id) = match video.source() {
+                    VideoSource::YouTube(id) => {
+                        ("youtube", id.as_str().to_string(), Some(id.as_str()))
+                    },
+                    VideoSource::LocalPath(path) => ("local", path.clone(), None),
                 };
 
+                let video_id_str = video.id().as_uuid().to_string();
+                let module_id_str = video.module_id().as_uuid().to_string();
                 let new_video = NewVideo {
-                    id: &video.id().as_uuid().to_string(),
-                    module_id: &video.module_id().as_uuid().to_string(),
-                    youtube_id: match video.source() {
-                        VideoSource::YouTube(id) => Some(id.as_str()),
-                        _ => None,
-                    },
+                    id: &video_id_str,
+                    module_id: &module_id_str,
+                    youtube_id,
                     title: video.title(),
                     duration_secs: video.duration_secs() as i32,
                     is_completed: video.is_completed(),
@@ -370,7 +383,7 @@ impl VideoRepository for SqliteVideoRepository {
                         videos::description.eq(new_video.description),
                         videos::transcript.eq(new_video.transcript),
                         videos::summary.eq(new_video.summary),
-                        videos::module_id.eq(new_video.module_id),
+                        videos::module_id.eq(&module_id_str),
                     ))
                     .execute(tx)?;
             }
@@ -382,8 +395,9 @@ impl VideoRepository for SqliteVideoRepository {
     fn find_by_id(&self, id: &VideoId) -> Result<Option<Video>, RepositoryError> {
         let mut conn = self.pool.get().map_err(|e| RepositoryError::Database(e.to_string()))?;
 
+        let id_str = id.as_uuid().to_string();
         let row: Option<VideoRow> = videos::table
-            .find(id.as_uuid().to_string())
+            .find(&id_str)
             .first(&mut conn)
             .optional()
             .map_err(|e| RepositoryError::Database(e.to_string()))?;
@@ -397,8 +411,9 @@ impl VideoRepository for SqliteVideoRepository {
     fn find_by_module(&self, module_id: &ModuleId) -> Result<Vec<Video>, RepositoryError> {
         let mut conn = self.pool.get().map_err(|e| RepositoryError::Database(e.to_string()))?;
 
+        let module_id_str = module_id.as_uuid().to_string();
         let rows: Vec<VideoRow> = videos::table
-            .filter(videos::module_id.eq(module_id.as_uuid().to_string()))
+            .filter(videos::module_id.eq(&module_id_str))
             .order(videos::sort_order.asc())
             .load(&mut conn)
             .map_err(|e| RepositoryError::Database(e.to_string()))?;
@@ -409,9 +424,10 @@ impl VideoRepository for SqliteVideoRepository {
     fn find_by_course(&self, course_id: &CourseId) -> Result<Vec<Video>, RepositoryError> {
         let mut conn = self.pool.get().map_err(|e| RepositoryError::Database(e.to_string()))?;
 
+        let course_id_str = course_id.as_uuid().to_string();
         let rows: Vec<VideoRow> = videos::table
             .inner_join(modules::table)
-            .filter(modules::course_id.eq(course_id.as_uuid().to_string()))
+            .filter(modules::course_id.eq(&course_id_str))
             .select(VideoRow::as_select())
             .order((modules::sort_order.asc(), videos::sort_order.asc()))
             .load(&mut conn)
@@ -423,7 +439,8 @@ impl VideoRepository for SqliteVideoRepository {
     fn update_completion(&self, id: &VideoId, completed: bool) -> Result<(), RepositoryError> {
         let mut conn = self.pool.get().map_err(|e| RepositoryError::Database(e.to_string()))?;
 
-        diesel::update(videos::table.find(id.as_uuid().to_string()))
+        let id_str = id.as_uuid().to_string();
+        diesel::update(videos::table.find(&id_str))
             .set(videos::is_completed.eq(completed))
             .execute(&mut conn)
             .map_err(|e| RepositoryError::Database(e.to_string()))?;
@@ -438,7 +455,8 @@ impl VideoRepository for SqliteVideoRepository {
     ) -> Result<(), RepositoryError> {
         let mut conn = self.pool.get().map_err(|e| RepositoryError::Database(e.to_string()))?;
 
-        diesel::update(videos::table.find(id.as_uuid().to_string()))
+        let id_str = id.as_uuid().to_string();
+        diesel::update(videos::table.find(&id_str))
             .set(videos::transcript.eq(transcript))
             .execute(&mut conn)
             .map_err(|e| RepositoryError::Database(e.to_string()))?;
@@ -449,7 +467,8 @@ impl VideoRepository for SqliteVideoRepository {
     fn update_summary(&self, id: &VideoId, summary: Option<&str>) -> Result<(), RepositoryError> {
         let mut conn = self.pool.get().map_err(|e| RepositoryError::Database(e.to_string()))?;
 
-        diesel::update(videos::table.find(id.as_uuid().to_string()))
+        let id_str = id.as_uuid().to_string();
+        diesel::update(videos::table.find(&id_str))
             .set(videos::summary.eq(summary))
             .execute(&mut conn)
             .map_err(|e| RepositoryError::Database(e.to_string()))?;
@@ -465,21 +484,55 @@ impl VideoRepository for SqliteVideoRepository {
     ) -> Result<(), RepositoryError> {
         let mut conn = self.pool.get().map_err(|e| RepositoryError::Database(e.to_string()))?;
 
-        diesel::update(videos::table.find(id.as_uuid().to_string()))
-            .set((
-                videos::module_id.eq(module_id.as_uuid().to_string()),
-                videos::sort_order.eq(sort_order as i32),
-            ))
+        let id_str = id.as_uuid().to_string();
+        let module_id_str = module_id.as_uuid().to_string();
+        diesel::update(videos::table.find(&id_str))
+            .set((videos::module_id.eq(&module_id_str), videos::sort_order.eq(sort_order as i32)))
             .execute(&mut conn)
             .map_err(|e| RepositoryError::Database(e.to_string()))?;
 
         Ok(())
     }
 
+    fn swap_video_orders(
+        &self,
+        video_a_id: &VideoId,
+        video_b_id: &VideoId,
+    ) -> Result<(), RepositoryError> {
+        let mut conn = self.pool.get().map_err(|e| RepositoryError::Database(e.to_string()))?;
+
+        let a_str = video_a_id.as_uuid().to_string();
+        let b_str = video_b_id.as_uuid().to_string();
+
+        conn.transaction(|conn| {
+            let a_row: (i32, String) = videos::table
+                .find(&a_str)
+                .select((videos::sort_order, videos::module_id))
+                .first(conn)?;
+
+            let b_row: (i32, String) = videos::table
+                .find(&b_str)
+                .select((videos::sort_order, videos::module_id))
+                .first(conn)?;
+
+            diesel::update(videos::table.find(&a_str))
+                .set(videos::sort_order.eq(b_row.0))
+                .execute(conn)?;
+
+            diesel::update(videos::table.find(&b_str))
+                .set(videos::sort_order.eq(a_row.0))
+                .execute(conn)?;
+
+            Ok(())
+        })
+        .map_err(|e: diesel::result::Error| RepositoryError::Database(e.to_string()))
+    }
+
     fn delete(&self, id: &VideoId) -> Result<(), RepositoryError> {
         let mut conn = self.pool.get().map_err(|e| RepositoryError::Database(e.to_string()))?;
 
-        diesel::delete(videos::table.find(id.as_uuid().to_string()))
+        let id_str = id.as_uuid().to_string();
+        diesel::delete(videos::table.find(&id_str))
             .execute(&mut conn)
             .map_err(|e| RepositoryError::Database(e.to_string()))?;
 
@@ -502,9 +555,11 @@ impl ExamRepository for SqliteExamRepository {
     fn save(&self, exam: &Exam) -> Result<(), RepositoryError> {
         let mut conn = self.pool.get().map_err(|e| RepositoryError::Database(e.to_string()))?;
 
+        let id_str = exam.id().as_uuid().to_string();
+        let video_id_str = exam.video_id().as_uuid().to_string();
         let new_exam = NewExam {
-            id: &exam.id().as_uuid().to_string(),
-            video_id: &exam.video_id().as_uuid().to_string(),
+            id: &id_str,
+            video_id: &video_id_str,
             question_json: exam.question_json(),
             user_answers_json: exam.user_answers_json(),
         };
@@ -526,8 +581,9 @@ impl ExamRepository for SqliteExamRepository {
     fn find_by_id(&self, id: &ExamId) -> Result<Option<Exam>, RepositoryError> {
         let mut conn = self.pool.get().map_err(|e| RepositoryError::Database(e.to_string()))?;
 
+        let id_str = id.as_uuid().to_string();
         let row: Option<ExamRow> = exams::table
-            .find(id.as_uuid().to_string())
+            .find(&id_str)
             .first(&mut conn)
             .optional()
             .map_err(|e| RepositoryError::Database(e.to_string()))?;
@@ -548,8 +604,9 @@ impl ExamRepository for SqliteExamRepository {
     fn find_by_video(&self, video_id: &VideoId) -> Result<Vec<Exam>, RepositoryError> {
         let mut conn = self.pool.get().map_err(|e| RepositoryError::Database(e.to_string()))?;
 
+        let video_id_str = video_id.as_uuid().to_string();
         let rows: Vec<ExamRow> = exams::table
-            .filter(exams::video_id.eq(video_id.as_uuid().to_string()))
+            .filter(exams::video_id.eq(&video_id_str))
             .load(&mut conn)
             .map_err(|e| RepositoryError::Database(e.to_string()))?;
 
@@ -565,7 +622,8 @@ impl ExamRepository for SqliteExamRepository {
     ) -> Result<(), RepositoryError> {
         let mut conn = self.pool.get().map_err(|e| RepositoryError::Database(e.to_string()))?;
 
-        diesel::update(exams::table.find(id.as_uuid().to_string()))
+        let id_str = id.as_uuid().to_string();
+        diesel::update(exams::table.find(&id_str))
             .set((
                 exams::score.eq(score),
                 exams::passed.eq(passed),
@@ -593,11 +651,9 @@ impl NoteRepository for SqliteNoteRepository {
     fn save(&self, note: &Note) -> Result<(), RepositoryError> {
         let mut conn = self.pool.get().map_err(|e| RepositoryError::Database(e.to_string()))?;
 
-        let new_note = NewNote {
-            id: &note.id().as_uuid().to_string(),
-            video_id: &note.video_id().as_uuid().to_string(),
-            content: note.content(),
-        };
+        let id_str = note.id().as_uuid().to_string();
+        let video_id_str = note.video_id().as_uuid().to_string();
+        let new_note = NewNote { id: &id_str, video_id: &video_id_str, content: note.content() };
 
         diesel::insert_into(notes::table)
             .values(&new_note)
@@ -613,8 +669,9 @@ impl NoteRepository for SqliteNoteRepository {
     fn find_by_video(&self, video_id: &VideoId) -> Result<Option<Note>, RepositoryError> {
         let mut conn = self.pool.get().map_err(|e| RepositoryError::Database(e.to_string()))?;
 
+        let video_id_str = video_id.as_uuid().to_string();
         let row: Option<NoteRow> = notes::table
-            .filter(notes::video_id.eq(video_id.as_uuid().to_string()))
+            .filter(notes::video_id.eq(&video_id_str))
             .first(&mut conn)
             .optional()
             .map_err(|e| RepositoryError::Database(e.to_string()))?;
@@ -628,7 +685,8 @@ impl NoteRepository for SqliteNoteRepository {
     fn delete(&self, video_id: &VideoId) -> Result<(), RepositoryError> {
         let mut conn = self.pool.get().map_err(|e| RepositoryError::Database(e.to_string()))?;
 
-        diesel::delete(notes::table.filter(notes::video_id.eq(video_id.as_uuid().to_string())))
+        let video_id_str = video_id.as_uuid().to_string();
+        diesel::delete(notes::table.filter(notes::video_id.eq(&video_id_str)))
             .execute(&mut conn)
             .map_err(|e| RepositoryError::Database(e.to_string()))?;
 

@@ -132,6 +132,11 @@ impl Video {
     pub fn mark_pending(&mut self) {
         self.is_completed = false;
     }
+
+    /// Updates the sort order.
+    pub fn set_sort_order(&mut self, order: u32) {
+        self.sort_order = order;
+    }
 }
 
 #[cfg(test)]
