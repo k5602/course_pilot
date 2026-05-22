@@ -10,8 +10,9 @@ use std::sync::Arc;
 use crate::domain::{
     entities::{Course, Module, Video},
     ports::{
-        CourseRepository, LocalMediaScanner, ModuleRepository, ModuleTitleGenerator,
-        RawLocalMediaMetadata, SearchEntry, SearchRepository, VideoRepository,
+        CourseRepository, LocalMediaError, LocalMediaScanner, ModuleRepository,
+        ModuleTitleGenerator, RawLocalMediaMetadata, SearchEntry, SearchRepository,
+        VideoRepository,
     },
     services::{BoundaryDetector, SubtitleCleaner, TitleSanitizer, title_number_sequence},
     value_objects::{CourseId, ModuleId, PlaylistUrl, VideoId, VideoSource},
@@ -23,8 +24,8 @@ use crate::infrastructure::media_hash;
 pub enum IngestLocalError {
     #[error("Invalid root path: {0}")]
     InvalidRoot(String),
-    #[error("Failed to scan local media: {0}")]
-    ScanFailed(String),
+    #[error(transparent)]
+    ScanFailed(#[from] LocalMediaError),
     #[error("Failed to persist: {0}")]
     PersistFailed(String),
     #[error("Course already exists: {0}")]
@@ -61,6 +62,7 @@ where
     video_repo: Arc<VR>,
     search_repo: Arc<SR>,
     sanitizer: TitleSanitizer,
+    boundary_batch_size: usize,
     title_generator: Option<Arc<dyn ModuleTitleGenerator>>,
 }
 
@@ -96,6 +98,7 @@ where
         video_repo: Arc<VR>,
         search_repo: Arc<SR>,
         title_generator: Option<Arc<dyn ModuleTitleGenerator>>,
+        boundary_batch_size: usize,
     ) -> Self {
         Self {
             scanner,
@@ -104,6 +107,7 @@ where
             video_repo,
             search_repo,
             sanitizer: TitleSanitizer::new(),
+            boundary_batch_size,
             title_generator,
         }
     }
@@ -125,14 +129,12 @@ where
         }
 
         // 2. Scan local media
-        let mut raw_media = self
-            .scanner
-            .scan(root)
-            .await
-            .map_err(|e| IngestLocalError::ScanFailed(e.to_string()))?;
+        let mut raw_media = self.scanner.scan(root).await?;
 
         if raw_media.is_empty() {
-            return Err(IngestLocalError::ScanFailed("No media files found".to_string()));
+            return Err(IngestLocalError::ScanFailed(LocalMediaError::Io(
+                "No media files found".to_string(),
+            )));
         }
 
         // 2. Sort for deterministic grouping
@@ -140,7 +142,8 @@ where
 
         // 3. Group by directory
         let grouped = group_by_folder(root, &raw_media);
-        let grouped = split_root_group_if_needed(root, &grouped, &self.sanitizer);
+        let grouped =
+            split_root_group_if_needed(root, &grouped, &self.sanitizer, self.boundary_batch_size);
 
         // 4. Create course (use synthetic playlist URL for persistence)
         let course_id = CourseId::new();
@@ -156,7 +159,7 @@ where
         });
 
         let course = Course::new(
-            course_id.clone(),
+            course_id,
             course_name.clone(),
             playlist_url.clone(),
             playlist_url.playlist_id().to_string(),
@@ -224,12 +227,7 @@ where
         let mut video_search_entries = Vec::with_capacity(total_videos);
 
         for (module_idx, pm) in pending_modules.iter().enumerate() {
-            let module = Module::new(
-                pm.module_id.clone(),
-                course_id.clone(),
-                pm.title.clone(),
-                module_idx as u32,
-            );
+            let module = Module::new(pm.module_id, course_id, pm.title.clone(), module_idx as u32);
             all_modules.push(module);
 
             for (sort_order, video_data) in pm.videos.iter().enumerate() {
@@ -237,7 +235,7 @@ where
                     .map_err(|e| IngestLocalError::PersistFailed(e.to_string()))?;
                 let mut video = Video::with_description(
                     VideoId::new(),
-                    pm.module_id.clone(),
+                    pm.module_id,
                     source,
                     video_data.title.clone(),
                     None,
@@ -270,7 +268,7 @@ where
 
         Ok(IngestLocalOutput {
             course_id,
-            modules_count: grouped_len(root, &raw_media),
+            modules_count: grouped_len(root, &raw_media, self.boundary_batch_size),
             videos_count: total_videos,
         })
     }
@@ -312,6 +310,7 @@ fn split_root_group_if_needed(
     root: &str,
     grouped: &BTreeMap<String, Vec<RawLocalMediaMetadata>>,
     sanitizer: &TitleSanitizer,
+    boundary_batch_size: usize,
 ) -> BTreeMap<String, Vec<RawLocalMediaMetadata>> {
     if grouped.len() != 1 {
         return grouped.clone();
@@ -332,7 +331,7 @@ fn split_root_group_if_needed(
         return grouped.clone();
     }
 
-    let detector = BoundaryDetector::new();
+    let detector = BoundaryDetector::with_batch_size(boundary_batch_size);
     let raw_titles: Vec<&str> = items.iter().map(|item| item.title.as_str()).collect();
     let groups = detector.group_by_titles(&raw_titles);
     if groups.len() <= 1 {
@@ -367,10 +366,10 @@ fn split_root_group_if_needed(
     split
 }
 
-fn grouped_len(root: &str, items: &[RawLocalMediaMetadata]) -> usize {
+fn grouped_len(root: &str, items: &[RawLocalMediaMetadata], boundary_batch_size: usize) -> usize {
     let grouped = group_by_folder(root, items);
     let sanitizer = TitleSanitizer::new();
-    split_root_group_if_needed(root, &grouped, &sanitizer).len()
+    split_root_group_if_needed(root, &grouped, &sanitizer, boundary_batch_size).len()
 }
 
 #[cfg(test)]
