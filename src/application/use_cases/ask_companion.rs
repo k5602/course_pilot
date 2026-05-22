@@ -6,8 +6,8 @@ use std::sync::Arc;
 
 use crate::domain::{
     ports::{
-        CompanionAI, CompanionContext, CourseRepository, ModuleRepository, NoteRepository,
-        VideoRepository,
+        CompanionAI, CompanionContext, CourseRepository, LLMError, ModuleRepository,
+        NoteRepository, RepositoryError, VideoRepository,
     },
     value_objects::VideoId,
 };
@@ -21,10 +21,10 @@ pub enum CompanionError {
     ModuleNotFound,
     #[error("Course not found")]
     CourseNotFound,
-    #[error("AI error: {0}")]
-    AI(String),
-    #[error("Repository error: {0}")]
-    Repository(String),
+    #[error(transparent)]
+    AI(#[from] LLMError),
+    #[error(transparent)]
+    Repository(#[from] RepositoryError),
 }
 
 /// Input for the ask companion use case.
@@ -72,33 +72,23 @@ where
     /// Executes the Q&A request.
     pub async fn execute(&self, input: AskCompanionInput) -> Result<String, CompanionError> {
         // Get video
-        let video = self
-            .video_repo
-            .find_by_id(&input.video_id)
-            .map_err(|e| CompanionError::Repository(e.to_string()))?
-            .ok_or(CompanionError::VideoNotFound)?;
+        let video =
+            self.video_repo.find_by_id(&input.video_id)?.ok_or(CompanionError::VideoNotFound)?;
 
         // Get module
         let module = self
             .module_repo
-            .find_by_id(video.module_id())
-            .map_err(|e| CompanionError::Repository(e.to_string()))?
+            .find_by_id(video.module_id())?
             .ok_or(CompanionError::ModuleNotFound)?;
 
         // Get course
         let course = self
             .course_repo
-            .find_by_id(module.course_id())
-            .map_err(|e| CompanionError::Repository(e.to_string()))?
+            .find_by_id(module.course_id())?
             .ok_or(CompanionError::CourseNotFound)?;
 
-        let notes = self
-            .note_repo
-            .find_by_video(&input.video_id)
-            .map_err(|e| CompanionError::Repository(e.to_string()))?
-            .map(|note| note.content().to_string());
-
-        let transcript = video.transcript().map(|s| s.to_string());
+        let notes =
+            self.note_repo.find_by_video(&input.video_id)?.map(|note| note.content().to_string());
 
         // Build context
         let context = CompanionContext {
@@ -108,14 +98,10 @@ where
             course_name: course.name().to_string(),
             summary: video.summary().map(|s| s.to_string()),
             notes,
-            transcript,
             local_context: input.local_context.clone(),
         };
 
         // Ask the AI
-        self.companion
-            .ask(&input.question, &context)
-            .await
-            .map_err(|e| CompanionError::AI(e.to_string()))
+        self.companion.ask(&input.question, &context).await.map_err(CompanionError::from)
     }
 }

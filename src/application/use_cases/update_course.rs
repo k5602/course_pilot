@@ -6,7 +6,7 @@
 use std::sync::Arc;
 
 use crate::domain::{
-    ports::{CourseRepository, SearchRepository},
+    ports::{CourseRepository, RepositoryError, SearchRepository},
     value_objects::CourseId,
 };
 
@@ -15,8 +15,8 @@ use crate::domain::{
 pub enum UpdateCourseError {
     #[error("Course not found")]
     CourseNotFound,
-    #[error("Repository error: {0}")]
-    Repository(String),
+    #[error(transparent)]
+    Repository(#[from] RepositoryError),
 }
 
 /// Input for updating course metadata.
@@ -58,22 +58,19 @@ where
         &self,
         input: UpdateCourseInput,
     ) -> Result<UpdateCourseOutput, UpdateCourseError> {
-        let existing = self
-            .course_repo
-            .find_by_id(&input.course_id)
-            .map_err(|e| UpdateCourseError::Repository(e.to_string()))?;
+        let existing = self.course_repo.find_by_id(&input.course_id)?;
 
         let Some(course) = existing else {
             return Err(UpdateCourseError::CourseNotFound);
         };
 
-        self.course_repo
-            .update_metadata(&input.course_id, &input.name, input.description.as_deref())
-            .map_err(|e| UpdateCourseError::Repository(e.to_string()))?;
+        self.course_repo.update_metadata(
+            &input.course_id,
+            &input.name,
+            input.description.as_deref(),
+        )?;
 
-        self.search_repo
-            .index_course(course.id(), &input.name, input.description.as_deref())
-            .map_err(|e| UpdateCourseError::Repository(e.to_string()))?;
+        self.search_repo.index_course(course.id(), &input.name, input.description.as_deref())?;
 
         Ok(UpdateCourseOutput { course_id: input.course_id })
     }

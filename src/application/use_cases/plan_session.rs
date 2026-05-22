@@ -5,7 +5,7 @@
 use std::sync::Arc;
 
 use crate::domain::{
-    ports::VideoRepository,
+    ports::{RepositoryError, VideoRepository},
     services::SessionPlanner,
     value_objects::{CognitiveLimit, CourseId, SessionPlan},
 };
@@ -15,8 +15,8 @@ use crate::domain::{
 pub enum PlanError {
     #[error("Course not found")]
     CourseNotFound,
-    #[error("Repository error: {0}")]
-    Repository(String),
+    #[error(transparent)]
+    Repository(#[from] RepositoryError),
 }
 
 /// Input for the plan session use case.
@@ -46,10 +46,7 @@ where
     /// Executes the session planning.
     pub fn execute(&self, input: PlanSessionInput) -> Result<Vec<SessionPlan>, PlanError> {
         // Get all videos for the course
-        let videos = self
-            .video_repo
-            .find_by_course(&input.course_id)
-            .map_err(|e| PlanError::Repository(e.to_string()))?;
+        let videos = self.video_repo.find_by_course(&input.course_id)?;
 
         if videos.is_empty() {
             return Err(PlanError::CourseNotFound);

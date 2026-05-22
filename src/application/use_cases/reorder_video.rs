@@ -5,15 +5,15 @@
 use std::sync::Arc;
 
 use crate::domain::{
-    ports::VideoRepository,
+    ports::{RepositoryError, VideoRepository},
     value_objects::{ModuleId, VideoId},
 };
 
 /// Error type for video reordering.
 #[derive(Debug, thiserror::Error)]
 pub enum ReorderError {
-    #[error("Repository error: {0}")]
-    Repository(String),
+    #[error(transparent)]
+    Repository(#[from] RepositoryError),
 }
 
 /// Input for reordering a video.
@@ -40,8 +40,7 @@ where
     }
 
     pub fn execute(&self, input: ReorderVideoInput) -> Result<(), ReorderError> {
-        self.video_repo
-            .update_module(&input.video_id, &input.module_id, input.new_sort_order)
-            .map_err(|e| ReorderError::Repository(e.to_string()))
+        self.video_repo.update_module(&input.video_id, &input.module_id, input.new_sort_order)?;
+        Ok(())
     }
 }

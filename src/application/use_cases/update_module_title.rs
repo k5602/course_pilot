@@ -14,8 +14,8 @@ use crate::domain::{
 pub enum UpdateModuleTitleError {
     #[error("Invalid input: {0}")]
     InvalidInput(String),
-    #[error("Failed to update module: {0}")]
-    PersistFailed(String),
+    #[error(transparent)]
+    PersistFailed(#[from] RepositoryError),
 }
 
 /// Input for updating a module title.
@@ -50,16 +50,8 @@ where
             ));
         }
 
-        self.module_repo
-            .update_title(&input.module_id, trimmed)
-            .map_err(|e| UpdateModuleTitleError::PersistFailed(format!("{e}")))?;
+        self.module_repo.update_title(&input.module_id, trimmed)?;
 
         Ok(())
-    }
-}
-
-impl From<RepositoryError> for UpdateModuleTitleError {
-    fn from(err: RepositoryError) -> Self {
-        UpdateModuleTitleError::PersistFailed(err.to_string())
     }
 }

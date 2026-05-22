@@ -7,8 +7,8 @@ use std::sync::Arc;
 use crate::domain::{
     entities::{Note, Tag},
     ports::{
-        CourseRepository, ModuleRepository, NoteRepository, SearchRepository, TagRepository,
-        VideoRepository,
+        CourseRepository, ModuleRepository, NoteRepository, RepositoryError, SearchRepository,
+        TagRepository, VideoRepository,
     },
     value_objects::{CourseId, VideoId},
 };
@@ -22,8 +22,8 @@ pub enum NotesError {
     ModuleNotFound,
     #[error("Course not found")]
     CourseNotFound,
-    #[error("Repository error: {0}")]
-    Repository(String),
+    #[error(transparent)]
+    Repository(#[from] RepositoryError),
 }
 
 /// Input for saving (create/update) a note.
@@ -96,18 +96,20 @@ where
 
         let mut note = self
             .note_repo
-            .find_by_video(&input.video_id)
-            .map_err(|e| NotesError::Repository(e.to_string()))?
-            .unwrap_or_else(|| Note::empty_for_video(input.video_id.clone()));
+            .find_by_video(&input.video_id)?
+            .unwrap_or_else(|| Note::empty_for_video(input.video_id));
 
         note.update_content(input.content.clone());
 
-        self.note_repo.save(&note).map_err(|e| NotesError::Repository(e.to_string()))?;
+        self.note_repo.save(&note)?;
 
         // Index note for search.
-        self.search_repo
-            .index_note(&note.id().as_uuid().to_string(), &video_title, note.content(), &course_id)
-            .map_err(|e| NotesError::Repository(e.to_string()))?;
+        self.search_repo.index_note(
+            &note.id().as_uuid().to_string(),
+            &video_title,
+            note.content(),
+            &course_id,
+        )?;
 
         Ok(NoteView {
             note_id: note.id().as_uuid().to_string(),
@@ -122,10 +124,7 @@ where
     pub fn load_note(&self, input: LoadNoteInput) -> Result<Option<NoteView>, NotesError> {
         let (video_title, course_id, course_tags) = self.load_context(&input.video_id)?;
 
-        let note = self
-            .note_repo
-            .find_by_video(&input.video_id)
-            .map_err(|e| NotesError::Repository(e.to_string()))?;
+        let note = self.note_repo.find_by_video(&input.video_id)?;
 
         let note = match note {
             Some(note) => note,
@@ -133,9 +132,12 @@ where
         };
 
         // Ensure search index stays up-to-date.
-        self.search_repo
-            .index_note(&note.id().as_uuid().to_string(), &video_title, note.content(), &course_id)
-            .map_err(|e| NotesError::Repository(e.to_string()))?;
+        self.search_repo.index_note(
+            &note.id().as_uuid().to_string(),
+            &video_title,
+            note.content(),
+            &course_id,
+        )?;
 
         Ok(Some(NoteView {
             note_id: note.id().as_uuid().to_string(),
@@ -148,48 +150,28 @@ where
 
     /// Deletes a note by video ID and removes it from the search index.
     pub fn delete_note(&self, input: DeleteNoteInput) -> Result<(), NotesError> {
-        let note = self
-            .note_repo
-            .find_by_video(&input.video_id)
-            .map_err(|e| NotesError::Repository(e.to_string()))?;
+        let note = self.note_repo.find_by_video(&input.video_id)?;
 
         if let Some(note) = note {
-            self.note_repo
-                .delete(&input.video_id)
-                .map_err(|e| NotesError::Repository(e.to_string()))?;
+            self.note_repo.delete(&input.video_id)?;
 
-            self.search_repo
-                .remove_from_index(&note.id().as_uuid().to_string())
-                .map_err(|e| NotesError::Repository(e.to_string()))?;
+            self.search_repo.remove_from_index(&note.id().as_uuid().to_string())?;
         }
 
         Ok(())
     }
 
     fn load_context(&self, video_id: &VideoId) -> Result<(String, CourseId, Vec<Tag>), NotesError> {
-        let video = self
-            .video_repo
-            .find_by_id(video_id)
-            .map_err(|e| NotesError::Repository(e.to_string()))?
-            .ok_or(NotesError::VideoNotFound)?;
+        let video = self.video_repo.find_by_id(video_id)?.ok_or(NotesError::VideoNotFound)?;
 
-        let module = self
-            .module_repo
-            .find_by_id(video.module_id())
-            .map_err(|e| NotesError::Repository(e.to_string()))?
-            .ok_or(NotesError::ModuleNotFound)?;
+        let module =
+            self.module_repo.find_by_id(video.module_id())?.ok_or(NotesError::ModuleNotFound)?;
 
-        let course = self
-            .course_repo
-            .find_by_id(module.course_id())
-            .map_err(|e| NotesError::Repository(e.to_string()))?
-            .ok_or(NotesError::CourseNotFound)?;
+        let course =
+            self.course_repo.find_by_id(module.course_id())?.ok_or(NotesError::CourseNotFound)?;
 
-        let tags = self
-            .tag_repo
-            .find_by_course(course.id())
-            .map_err(|e| NotesError::Repository(e.to_string()))?;
+        let tags = self.tag_repo.find_by_course(course.id())?;
 
-        Ok((video.title().to_string(), course.id().clone(), tags))
+        Ok((video.title().to_string(), *course.id(), tags))
     }
 }
