@@ -12,6 +12,7 @@ use crate::domain::ports::{CourseRepository, ModuleRepository, VideoRepository};
 use crate::domain::value_objects::ModuleId;
 use crate::ui::navigation::PAGE_VIDEO_PLAYER;
 use crate::ui::state::SharedState;
+use crate::ui::toast::Toast;
 
 #[allow(clippy::type_complexity)]
 pub struct CourseViewPage {
@@ -138,11 +139,15 @@ impl CourseViewPage {
                             let modules =
                                 ctx.module_repo.find_by_course(&course_id_new).unwrap_or_default();
                             let next_order = modules.len() as u32;
-                            let _ = ServiceFactory::create_module(ctx).execute(CreateModuleInput {
-                                course_id: course_id_new.clone(),
-                                title: format!("Module {}", next_order + 1),
-                                sort_order: next_order,
-                            });
+                            if let Err(e) =
+                                ServiceFactory::create_module(ctx).execute(CreateModuleInput {
+                                    course_id: course_id_new.clone(),
+                                    title: format!("Module {}", next_order + 1),
+                                    sort_order: next_order,
+                                })
+                            {
+                                Toast::show_error(&format!("Failed to create module: {}", e));
+                            }
                         }
                         drop(s);
                         new_mod_cb();
@@ -276,6 +281,19 @@ impl CourseViewPage {
         let complete_btn = gtk::CheckButton::new();
         complete_btn.set_active(video.is_completed());
         complete_btn.set_valign(gtk::Align::Center);
+
+        let comp_state = state.clone();
+        let comp_video_id = video.id().clone();
+        let comp_cb = refresh_cb.clone();
+        complete_btn.connect_toggled(move |btn| {
+            let s = comp_state.borrow();
+            if let Some(ref ctx) = s.backend {
+                let _ = ctx.video_repo.update_completion(&comp_video_id, btn.is_active());
+            }
+            drop(s);
+            comp_cb();
+        });
+
         row.append(&complete_btn);
 
         // Move Up button
@@ -302,16 +320,20 @@ impl CourseViewPage {
                     {
                         let current = sorted[pos];
                         let adjacent = sorted[pos - 1];
-                        let _ = ctx.video_repo.update_module(
+                        if let Err(e) = ctx.video_repo.update_module(
                             current.id(),
                             &up_module_id,
                             adjacent.sort_order(),
-                        );
-                        let _ = ctx.video_repo.update_module(
+                        ) {
+                            Toast::show_error(&format!("Failed to reorder video: {}", e));
+                        }
+                        if let Err(e) = ctx.video_repo.update_module(
                             adjacent.id(),
                             &up_module_id,
                             current.sort_order(),
-                        );
+                        ) {
+                            Toast::show_error(&format!("Failed to reorder video: {}", e));
+                        }
                     }
                 }
                 drop(s);
@@ -344,16 +366,20 @@ impl CourseViewPage {
                     {
                         let current = sorted[pos];
                         let adjacent = sorted[pos + 1];
-                        let _ = ctx.video_repo.update_module(
+                        if let Err(e) = ctx.video_repo.update_module(
                             current.id(),
                             &down_module_id,
                             adjacent.sort_order(),
-                        );
-                        let _ = ctx.video_repo.update_module(
+                        ) {
+                            Toast::show_error(&format!("Failed to reorder video: {}", e));
+                        }
+                        if let Err(e) = ctx.video_repo.update_module(
                             adjacent.id(),
                             &down_module_id,
                             current.sort_order(),
-                        );
+                        ) {
+                            Toast::show_error(&format!("Failed to reorder video: {}", e));
+                        }
                     }
                 }
                 drop(s);
@@ -388,11 +414,13 @@ impl CourseViewPage {
                 let s = mv_state.borrow();
                 if let Some(ref ctx) = s.backend {
                     let uc = ServiceFactory::move_video_to_module(ctx);
-                    let _ = uc.execute(MoveVideoInput {
+                    if let Err(e) = uc.execute(MoveVideoInput {
                         video_id: mv_video_id.clone(),
                         target_module_id: target.id().clone(),
                         sort_order: 0,
-                    });
+                    }) {
+                        Toast::show_error(&format!("Failed to move video: {}", e));
+                    }
                 }
                 drop(s);
                 mv_ref_cb();
@@ -534,10 +562,12 @@ fn show_rename_module_dialog(
             let s = state.borrow();
             if let Some(ref ctx) = s.backend {
                 let uc = ServiceFactory::update_module_title(ctx);
-                let _ = uc.execute(UpdateModuleTitleInput {
+                if let Err(e) = uc.execute(UpdateModuleTitleInput {
                     module_id: module_id.clone(),
                     title: new_title.trim().to_string(),
-                });
+                }) {
+                    Toast::show_error(&format!("Failed to rename module: {}", e));
+                }
             }
             drop(s);
             refresh_cb();
