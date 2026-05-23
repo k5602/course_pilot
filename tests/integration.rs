@@ -250,6 +250,27 @@ impl VideoRepository for InMemoryVideoRepo {
         Ok(())
     }
 
+    fn swap_video_orders(
+        &self,
+        video_a_id: &VideoId,
+        video_b_id: &VideoId,
+    ) -> Result<(), RepositoryError> {
+        let mut v = self.videos.lock().unwrap();
+        let a_idx = v
+            .iter()
+            .position(|e| e.id() == video_a_id)
+            .ok_or_else(|| RepositoryError::Database(format!("Video not found: {}", video_a_id)))?;
+        let b_idx = v
+            .iter()
+            .position(|e| e.id() == video_b_id)
+            .ok_or_else(|| RepositoryError::Database(format!("Video not found: {}", video_b_id)))?;
+        let a_order = v[a_idx].sort_order();
+        let b_order = v[b_idx].sort_order();
+        v[a_idx].set_sort_order(b_order);
+        v[b_idx].set_sort_order(a_order);
+        Ok(())
+    }
+
     fn delete(&self, _id: &VideoId) -> Result<(), RepositoryError> {
         Ok(())
     }
@@ -336,6 +357,7 @@ fn ingest_local_with_folder_grouping() {
         video_repo.clone(),
         search_repo,
         None,
+        5,
     );
 
     let input = course_pilot::application::use_cases::IngestLocalInput {
@@ -395,6 +417,7 @@ fn ingest_playlist_with_mock_fetcher() {
         video_repo.clone(),
         search_repo,
         None,
+        5,
     );
 
     let input = course_pilot::application::use_cases::IngestPlaylistInput {
@@ -429,6 +452,7 @@ fn ingest_playlist_failure_returns_error() {
         video_repo.clone(),
         search_repo,
         None,
+        5,
     );
 
     let input = course_pilot::application::use_cases::IngestPlaylistInput {
@@ -440,7 +464,7 @@ fn ingest_playlist_failure_returns_error() {
     assert!(result.is_err(), "Should fail for nonexistent playlist");
     match result {
         Err(course_pilot::application::use_cases::IngestError::FetchFailed(msg)) => {
-            assert!(msg.contains("test_not_found"), "Error should contain playlist ID");
+            assert!(msg.to_string().contains("test_not_found"), "Error should contain playlist ID");
         },
         _ => panic!("Expected FetchFailed error, got: {:?}", result),
     }
@@ -464,6 +488,76 @@ fn boundary_detector_integration() {
     assert_eq!(groups[0], vec![0, 1, 2], "Module 1: Intro, Setup, Config");
     assert_eq!(groups[1], vec![3, 4], "Module 2: Advanced, Deep Dive");
     assert_eq!(groups[2], vec![5], "Module 3: Conclusion");
+}
+
+#[test]
+fn ingest_playlist_preserves_labeled_module_boundaries() {
+    let fetcher = Arc::new(MockFetcher::new(vec![
+        course_pilot::domain::ports::RawVideoMetadata {
+            youtube_id: "aaa111aaa11".to_string(),
+            title: "Module 1 - Intro".to_string(),
+            description: None,
+            duration_secs: 100,
+            position: 0,
+        },
+        course_pilot::domain::ports::RawVideoMetadata {
+            youtube_id: "bbb222bbb22".to_string(),
+            title: "Module 1 - Setup".to_string(),
+            description: None,
+            duration_secs: 200,
+            position: 1,
+        },
+        course_pilot::domain::ports::RawVideoMetadata {
+            youtube_id: "ccc333ccc33".to_string(),
+            title: "Module 2 - Deploy".to_string(),
+            description: None,
+            duration_secs: 300,
+            position: 2,
+        },
+        course_pilot::domain::ports::RawVideoMetadata {
+            youtube_id: "ddd444ddd44".to_string(),
+            title: "Module 2 - Testing".to_string(),
+            description: None,
+            duration_secs: 400,
+            position: 3,
+        },
+    ]));
+
+    let course_repo = Arc::new(InMemoryCourseRepo::new());
+    let module_repo = Arc::new(InMemoryModuleRepo::new());
+    let video_repo = Arc::new(InMemoryVideoRepo::new());
+    let search_repo = Arc::new(InMemorySearchRepo);
+
+    let use_case = course_pilot::application::use_cases::IngestPlaylistUseCase::new(
+        fetcher,
+        course_repo.clone(),
+        module_repo.clone(),
+        video_repo.clone(),
+        search_repo,
+        None,
+        5,
+    );
+
+    let input = course_pilot::application::use_cases::IngestPlaylistInput {
+        playlist_url: "https://www.youtube.com/playlist?list=PLlabeledtest".to_string(),
+        course_name: Some("Labeled Test".to_string()),
+    };
+
+    let result = tokio::runtime::Runtime::new().unwrap().block_on(use_case.execute(input));
+    assert!(result.is_ok(), "Ingest should succeed: {:?}", result.err());
+
+    let output = result.unwrap();
+    assert_eq!(output.videos_count, 4, "Should have 4 videos");
+    assert_eq!(output.modules_count, 2, "Should detect 2 modules from labeled patterns");
+
+    let modules = module_repo.find_by_course(&output.course_id).unwrap();
+    assert_eq!(modules.len(), 2, "Should persist 2 modules");
+
+    let m1_videos = video_repo.find_by_module(modules[0].id()).unwrap();
+    assert_eq!(m1_videos.len(), 2, "Module 1 should have 2 videos");
+
+    let m2_videos = video_repo.find_by_module(modules[1].id()).unwrap();
+    assert_eq!(m2_videos.len(), 2, "Module 2 should have 2 videos");
 }
 
 #[test]
