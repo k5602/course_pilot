@@ -4,6 +4,7 @@ use crate::application::ServiceFactory;
 use crate::application::use_cases::{AskCompanionInput, LoadNoteInput, SaveNoteInput};
 use crate::domain::value_objects::VideoId;
 use crate::ui::state::{ChatMessage, ChatRole, SharedState};
+use crate::ui::toast::Toast;
 
 pub struct RightPanel {
     widget: gtk::Box,
@@ -133,9 +134,10 @@ impl RightPanel {
                 .to_string();
             if let Some(ref ctx) = state.backend
                 && let Ok(vid) = video_id.parse::<VideoId>()
+                && let Err(e) = ServiceFactory::notes(ctx)
+                    .save_note(SaveNoteInput { video_id: vid, content: text })
             {
-                let _ = ServiceFactory::notes(ctx)
-                    .save_note(SaveNoteInput { video_id: vid, content: text });
+                Toast::show_error(&format!("Failed to save note: {}", e));
             }
             drop(state);
         });
@@ -166,8 +168,6 @@ impl RightPanel {
 
             {
                 let mut s = state_clone.borrow_mut();
-                s.chat_history
-                    .push(ChatMessage { role: ChatRole::User, content: question.clone() });
                 s.chat_history_by_video
                     .entry(video_id.clone())
                     .or_default()
@@ -218,10 +218,6 @@ impl RightPanel {
                 Ok(response) => {
                     {
                         let mut s = state.borrow_mut();
-                        s.chat_history.push(ChatMessage {
-                            role: ChatRole::Assistant,
-                            content: response.clone(),
-                        });
                         s.chat_history_by_video.entry(vid.clone()).or_default().push(ChatMessage {
                             role: ChatRole::Assistant,
                             content: response.clone(),
@@ -233,7 +229,8 @@ impl RightPanel {
                     }
 
                     let s = state.borrow();
-                    for msg in &s.chat_history {
+                    let history = s.chat_history_by_video.get(&vid).cloned().unwrap_or_default();
+                    for msg in &history {
                         let label = gtk::Label::new(None);
                         label.set_wrap(true);
                         label.set_xalign(0.0);
@@ -298,10 +295,6 @@ impl RightPanel {
         let history = state.chat_history_by_video.get(&video_id).cloned().unwrap_or_default();
 
         drop(state);
-        {
-            let mut s = self.state.borrow_mut();
-            s.chat_history = history.clone();
-        }
 
         while let Some(child) = chat_box.first_child() {
             chat_box.remove(&child);
