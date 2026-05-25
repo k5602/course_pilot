@@ -5,7 +5,9 @@ use std::sync::Arc;
 
 use crate::application::AppContext;
 use crate::domain::ports::UserPreferencesRepository;
-use crate::domain::value_objects::VideoQuality;
+use crate::domain::value_objects::{UserId, VideoQuality};
+
+pub const MAX_CHAT_HISTORY_PER_VIDEO: usize = 50;
 
 #[derive(Clone, Copy, Debug, Default, PartialEq)]
 pub enum RightPanelTab {
@@ -42,6 +44,8 @@ pub struct AppState {
     pub last_video_by_course: HashMap<String, String>,
     pub preferred_quality: VideoQuality,
     pub session_quality: VideoQuality,
+    pub boundary_batch_size: u32,
+    pub cognitive_limit_minutes: u32,
 }
 
 impl AppState {
@@ -50,7 +54,7 @@ impl AppState {
             backend: None,
             sidebar_collapsed: false,
             right_panel_tab: RightPanelTab::default(),
-            right_panel_visible: true,
+            right_panel_visible: false,
             right_panel_width: 320.0,
             onboarding_completed: false,
             chat_history_by_video: HashMap::new(),
@@ -61,21 +65,24 @@ impl AppState {
             last_video_by_course: HashMap::new(),
             preferred_quality: VideoQuality::P720,
             session_quality: VideoQuality::P720,
+            boundary_batch_size: 5,
+            cognitive_limit_minutes: 45,
         }
     }
 
     pub fn with_backend(backend: Arc<AppContext>) -> Self {
         let mut state = Self::new();
-        let quality = backend
-            .preferences_repo
-            .load("default")
-            .ok()
-            .flatten()
-            .map(|p| p.preferred_quality())
-            .unwrap_or(VideoQuality::P720);
+        let prefs = backend.preferences_repo.load(&UserId::new("default")).ok().flatten();
+        if let Some(p) = &prefs {
+            state.preferred_quality = p.preferred_quality();
+            state.session_quality = p.preferred_quality();
+            state.boundary_batch_size = p.boundary_batch_size();
+            state.cognitive_limit_minutes = p.cognitive_limit_minutes();
+            state.onboarding_completed = p.onboarding_completed();
+            state.right_panel_visible = p.right_panel_visible();
+            state.right_panel_width = p.right_panel_width() as f64;
+        }
         state.backend = Some(backend);
-        state.preferred_quality = quality;
-        state.session_quality = quality;
         state
     }
 
