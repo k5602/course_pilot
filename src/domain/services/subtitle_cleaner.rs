@@ -7,12 +7,10 @@
 use std::borrow::Cow;
 
 /// Cleans subtitle text into a compact, readable transcript.
-///
-/// Supported formats:
+/// # Supported formats
 /// - SRT
 /// - WebVTT
-///
-/// The cleaner:
+/// # Processing steps
 /// - Strips BOM and format headers (WEBVTT, KIND, etc.)
 /// - Removes timestamp lines and cue indices
 /// - Drops inline formatting tags (e.g., `<i>`, `<c>`, `<u>`)
@@ -78,12 +76,13 @@ fn strip_bom(input: &str) -> &str {
 }
 
 fn is_vtt_header(line: &str) -> bool {
-    let upper = line.to_ascii_uppercase();
-    upper.starts_with("WEBVTT")
-        || upper.starts_with("KIND:")
-        || upper.starts_with("LANGUAGE:")
-        || upper.starts_with("STYLE")
-        || upper.starts_with("NOTE")
+    let prefixes: &[&[u8]] = &[b"WEBVTT", b"KIND:", b"LANGUAGE:", b"STYLE", b"NOTE"];
+    prefixes.iter().any(|prefix| {
+        line.as_bytes()
+            .get(..prefix.len())
+            .map(|head| head.eq_ignore_ascii_case(prefix))
+            .unwrap_or(false)
+    })
 }
 
 fn is_cue_index(line: &str) -> bool {
