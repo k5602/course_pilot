@@ -6,6 +6,7 @@ use adw::prelude::*;
 use crate::domain::ports::VideoRepository;
 use crate::infrastructure::video::VideoPlayer;
 use crate::ui::state::SharedState;
+use crate::ui::toast::Toast;
 use crate::ui::widgets::QualitySelector;
 
 fn fmt_ns(ns: u64) -> String {
@@ -31,6 +32,7 @@ pub struct VideoPlayerPage {
     suppress_seek: Rc<Cell<bool>>,
     current_video_source: RefCell<Option<VideoSourceForQuality>>,
     suppress_quality: Rc<Cell<bool>>,
+    is_playing: Rc<Cell<bool>>,
 }
 
 #[derive(Clone)]
@@ -123,6 +125,7 @@ impl VideoPlayerPage {
         });
 
         let suppress_seek = Rc::new(Cell::new(false));
+        let is_playing = Rc::new(Cell::new(false));
         let player_cl = player_rc.clone();
         let seek_bar_cl = seek_bar.clone();
         let suppress_seek_cl = suppress_seek.clone();
@@ -138,14 +141,17 @@ impl VideoPlayerPage {
 
         let player_cl = player_rc.clone();
         let play_btn_cl = play_btn.clone();
+        let is_playing_cl = is_playing.clone();
         play_btn.connect_clicked(move |_| {
             let p = player_cl.borrow_mut();
             if let Some(ref player) = *p {
-                if play_btn_cl.label().as_deref() == Some("Play") {
+                if !is_playing_cl.get() {
                     player.resume();
+                    is_playing_cl.set(true);
                     play_btn_cl.set_label("Pause");
                 } else {
                     player.pause();
+                    is_playing_cl.set(false);
                     play_btn_cl.set_label("Play");
                 }
             }
@@ -168,6 +174,7 @@ impl VideoPlayerPage {
             suppress_seek,
             current_video_source: RefCell::new(None),
             suppress_quality,
+            is_playing,
         };
 
         // Quality change handler: re-resolve YouTube stream URL
@@ -175,6 +182,8 @@ impl VideoPlayerPage {
         let player_q = page.player.clone();
         let source_q = page.current_video_source.clone();
         let suppress_q = page.suppress_quality.clone();
+        let is_playing_q = page.is_playing.clone();
+        let play_btn_q = page.play_btn.clone();
         page.quality_selector.connect_selected(move |quality| {
             if suppress_q.get() {
                 return;
@@ -189,9 +198,14 @@ impl VideoPlayerPage {
                     if let Some(ref p) = *player_q.borrow() {
                         p.stop();
                     }
+                    is_playing_q.set(false);
+                    play_btn_q.set_label("Loading...");
+                    play_btn_q.set_sensitive(false);
                     state_q.borrow_mut().session_quality = quality;
                     let yid_clone = yid.clone();
                     let player_cl = player_q.clone();
+                    let is_playing_cl = is_playing_q.clone();
+                    let play_btn_cl = play_btn_q.clone();
                     let (tx, rx) = std::sync::mpsc::channel::<String>();
                     crate::infrastructure::tokio_bridge::spawn(async move {
                         let result = crate::infrastructure::youtube::resolve_youtube_stream_inner(
@@ -202,10 +216,21 @@ impl VideoPlayerPage {
                             Ok(url) => {
                                 let _ = tx.send(url);
                             },
-                            Err(e) => log::error!("Failed to resolve stream: {e}"),
+                            Err(e) => {
+                                let _ = tx.send(format!("ERROR:{e}"));
+                            },
                         }
                     });
                     glib::idle_add_local(move || match rx.try_recv() {
+                        Ok(msg) if msg.starts_with("ERROR:") => {
+                            let detail =
+                                msg.strip_prefix("ERROR:").unwrap_or("Stream resolution failed");
+                            Toast::show_error(detail);
+                            is_playing_cl.set(false);
+                            play_btn_cl.set_label("Play");
+                            play_btn_cl.set_sensitive(true);
+                            glib::ControlFlow::Break
+                        },
                         Ok(stream_url) => {
                             if let Some(ref p) = *player_cl.borrow() {
                                 p.play_uri(&stream_url);
@@ -213,6 +238,9 @@ impl VideoPlayerPage {
                                     p.seek(pos);
                                 }
                             }
+                            is_playing_cl.set(true);
+                            play_btn_cl.set_label("Pause");
+                            play_btn_cl.set_sensitive(true);
                             glib::ControlFlow::Break
                         },
                         Err(std::sync::mpsc::TryRecvError::Empty) => glib::ControlFlow::Continue,
@@ -235,6 +263,7 @@ impl VideoPlayerPage {
         let player = self.player.clone();
         let seek_bar = self.seek_bar.clone();
         let play_btn = self.play_btn.clone();
+        let is_playing = self.is_playing.clone();
 
         controller.connect_key_pressed(move |_, keyval, _code, _state| match keyval {
             gtk::gdk::Key::Left | gtk::gdk::Key::KP_Left => {
@@ -276,11 +305,13 @@ impl VideoPlayerPage {
             gtk::gdk::Key::space => {
                 let p = player.borrow();
                 if let Some(ref player) = *p {
-                    if play_btn.label().as_deref() == Some("Play") {
+                    if !is_playing.get() {
                         player.resume();
+                        is_playing.set(true);
                         play_btn.set_label("Pause");
                     } else {
                         player.pause();
+                        is_playing.set(false);
                         play_btn.set_label("Play");
                     }
                 }
@@ -300,6 +331,8 @@ impl VideoPlayerPage {
         if let Some(ref p) = *self.player.borrow() {
             p.stop();
         }
+        self.is_playing.set(false);
+        self.play_btn.set_label("Play");
 
         let state = self.state.borrow();
         let video_id_str = match state.current_video_id {
@@ -363,6 +396,7 @@ impl VideoPlayerPage {
                             let yid_str = yid.as_str().to_string();
                             let player_rc = self.player.clone();
                             let play_btn_cl = self.play_btn.clone();
+                            let is_playing_cl = self.is_playing.clone();
                             let (tx, rx) = std::sync::mpsc::channel::<String>();
 
                             crate::infrastructure::tokio_bridge::spawn(async move {
@@ -374,15 +408,28 @@ impl VideoPlayerPage {
                                     Ok(url) => {
                                         let _ = tx.send(url);
                                     },
-                                    Err(e) => log::error!("Failed to resolve YouTube stream: {e}"),
+                                    Err(e) => {
+                                        let _ = tx.send(format!("ERROR:{e}"));
+                                    },
                                 }
                             });
 
                             glib::idle_add_local(move || match rx.try_recv() {
+                                Ok(msg) if msg.starts_with("ERROR:") => {
+                                    let detail = msg
+                                        .strip_prefix("ERROR:")
+                                        .unwrap_or("Stream resolution failed");
+                                    Toast::show_error(detail);
+                                    is_playing_cl.set(false);
+                                    play_btn_cl.set_label("Play");
+                                    play_btn_cl.set_sensitive(true);
+                                    glib::ControlFlow::Break
+                                },
                                 Ok(stream_url) => {
                                     if let Some(ref p) = *player_rc.borrow() {
                                         p.play_uri(&stream_url);
                                     }
+                                    is_playing_cl.set(true);
                                     play_btn_cl.set_label("Pause");
                                     play_btn_cl.set_sensitive(true);
                                     glib::ControlFlow::Break
@@ -402,6 +449,7 @@ impl VideoPlayerPage {
                             let uri = format!("file://{path}");
                             player.play_uri(&uri);
                             *self.player.borrow_mut() = Some(player);
+                            self.is_playing.set(true);
                             self.play_btn.set_label("Pause");
                         },
                     };
@@ -428,6 +476,7 @@ impl VideoPlayerPage {
         if let Some(ref p) = *self.player.borrow() {
             p.stop();
         }
+        self.is_playing.set(false);
         self.player_frame.set_child(Some(&self.status_page));
         self.play_btn.set_label("Play");
     }
