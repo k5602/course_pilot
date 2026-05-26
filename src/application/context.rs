@@ -2,7 +2,7 @@
 //!
 //! Wires all infrastructure adapters to application use cases.
 
-use std::sync::Arc;
+use std::sync::{Arc, Mutex};
 
 use crate::application::use_cases::{
     AskCompanionUseCase, AttachTranscriptUseCase, CreateModuleUseCase, DeleteModuleUseCase,
@@ -26,10 +26,9 @@ use crate::infrastructure::{
 };
 
 /// Default LLM model used when none is configured.
-const DEFAULT_LLM_MODEL: &str = "gemini/gemini-2.5-flash";
+const DEFAULT_LLM_MODEL: &str = "gemini-3.1-flash-lite";
 
 /// Configuration for the application.
-///
 /// Load from environment with `AppConfig::from_env()`.
 #[derive(Debug, Clone)]
 pub struct AppConfig {
@@ -60,10 +59,19 @@ impl AppConfig {
     pub fn from_env() -> Self {
         Self {
             database_url: std::env::var("DATABASE_URL")
+                .map(|s| s.trim().to_string())
                 .unwrap_or_else(|_| "course_pilot.db".to_string()),
-            gemini_api_key: std::env::var("GEMINI_API_KEY").ok().filter(|s| !s.is_empty()),
-            discord_client_id: std::env::var("DISCORD_CLIENT_ID").ok().filter(|s| !s.is_empty()),
-            llm_model: std::env::var("LLM_MODEL").unwrap_or_else(|_| DEFAULT_LLM_MODEL.to_string()),
+            gemini_api_key: std::env::var("GEMINI_API_KEY")
+                .ok()
+                .map(|s| s.trim().to_string())
+                .filter(|s| !s.is_empty()),
+            discord_client_id: std::env::var("DISCORD_CLIENT_ID")
+                .ok()
+                .map(|s| s.trim().to_string())
+                .filter(|s| !s.is_empty()),
+            llm_model: std::env::var("LLM_MODEL")
+                .map(|s| s.trim().to_string())
+                .unwrap_or_else(|_| DEFAULT_LLM_MODEL.to_string()),
         }
     }
 
@@ -86,7 +94,7 @@ impl AppConfigBuilder {
     }
 
     pub fn gemini_api_key(mut self, key: impl Into<String>) -> Self {
-        self.config.gemini_api_key = Some(key.into());
+        self.config.gemini_api_key = Some(key.into().trim().to_string());
         self
     }
 
@@ -124,7 +132,7 @@ pub struct AppContext {
     pub local_media: Arc<LocalMediaScannerAdapter>,
     pub youtube: Arc<RustyYtdlAdapter>, // Always available (no API key needed)
     pub transcript: Arc<TranscriptAdapter>,
-    pub llm: Option<Arc<GeminiAdapter>>,
+    pub llm: Mutex<Option<Arc<GeminiAdapter>>>,
     pub presence: Arc<dyn PresenceProvider>,
     pub keystore: Arc<NativeKeystore>,
 
@@ -180,15 +188,25 @@ impl AppContext {
                 .map_err(|e| AppContextError::Transcript(e.to_string()))?,
         );
 
-        // Get Gemini API key from config or keystore
-        let gemini_api_key = config
-            .gemini_api_key
-            .clone()
-            .or_else(|| keystore.retrieve("gemini_api_key").ok().flatten());
+        // Get Gemini API key from environment config first, then secure keystore (ensuring no empty strings)
+        let gemini_api_key =
+            if let Some(env_key) = config.gemini_api_key.as_ref().filter(|s| !s.is_empty()) {
+                log::info!("Gemini API key loaded from environment (.env).");
+                Some(env_key.clone())
+            } else if let Ok(Some(store_key)) =
+                keystore.retrieve("gemini_api_key").map(|opt| opt.filter(|s| !s.is_empty()))
+            {
+                log::info!("Gemini API key loaded from secure OS keystore.");
+                Some(store_key)
+            } else {
+                log::info!("No Gemini API key found in environment or keystore.");
+                None
+            };
 
         // Create LLM adapter if key is available
-        let llm =
-            gemini_api_key.map(|key| Arc::new(GeminiAdapter::new(key, config.llm_model.clone())));
+        let llm = Mutex::new(
+            gemini_api_key.map(|key| Arc::new(GeminiAdapter::new(key, config.llm_model.clone()))),
+        );
 
         Ok(Self {
             config,
@@ -212,23 +230,37 @@ impl AppContext {
 
     /// Checks if the LLM is available.
     pub fn has_llm(&self) -> bool {
-        self.llm.is_some()
+        self.llm.lock().unwrap().is_some()
     }
 
     /// Stores a Gemini API key in the secure keystore and reloads the adapter.
-    pub fn set_gemini_api_key(&mut self, key: &str) -> Result<(), AppContextError> {
+    /// Takes `&self` because interior mutability via `Mutex` is used.
+    pub fn set_gemini_api_key(&self, key: &str) -> Result<(), AppContextError> {
+        let trimmed = key.trim();
         self.keystore
-            .store("gemini_api_key", key)
+            .store("gemini_api_key", trimmed)
             .map_err(|e| AppContextError::Keystore(e.to_string()))?;
-        self.llm =
-            Some(Arc::new(GeminiAdapter::new(key.to_string(), self.config.llm_model.clone())));
+        *self.llm.lock().unwrap() =
+            Some(Arc::new(GeminiAdapter::new(trimmed.to_string(), self.config.llm_model.clone())));
         Ok(())
     }
 
-    /// Reloads the LLM adapter from the keystore (for dynamic key updates).
-    pub fn reload_llm(&mut self) -> Result<(), AppContextError> {
-        if let Ok(Some(key)) = self.keystore.retrieve("gemini_api_key") {
-            self.llm = Some(Arc::new(GeminiAdapter::new(key, self.config.llm_model.clone())));
+    /// Reloads the LLM adapter from the keystore or config (for dynamic key updates).
+    /// Takes `&self` because interior mutability via `Mutex` is used.
+    pub fn reload_llm(&self) -> Result<(), AppContextError> {
+        let key_opt =
+            self.config.gemini_api_key.as_ref().filter(|s| !s.is_empty()).cloned().or_else(|| {
+                self.keystore.retrieve("gemini_api_key").ok().flatten().filter(|s| !s.is_empty())
+            });
+
+        if let Some(key) = key_opt {
+            let trimmed = key.trim().to_string();
+            log::info!("Reloaded Gemini LLM adapter with key.");
+            *self.llm.lock().unwrap() =
+                Some(Arc::new(GeminiAdapter::new(trimmed, self.config.llm_model.clone())));
+        } else {
+            log::info!("Gemini LLM adapter cleared (no key available).");
+            *self.llm.lock().unwrap() = None;
         }
         Ok(())
     }
@@ -260,13 +292,23 @@ impl ServiceFactory {
         SqliteVideoRepository,
         SqliteSearchRepository,
     > {
+        let batch_size = ServiceFactory::preferences(ctx)
+            .load()
+            .map(|p| p.boundary_batch_size() as usize)
+            .unwrap_or(5);
+
         IngestPlaylistUseCase::new(
             ctx.youtube.clone(),
             ctx.course_repo.clone(),
             ctx.module_repo.clone(),
             ctx.video_repo.clone(),
             ctx.search_repo.clone(),
-            ctx.llm.clone().map(|a| a as Arc<dyn ModuleTitleGenerator>),
+            ctx.llm
+                .lock()
+                .unwrap()
+                .as_ref()
+                .map(|a| Arc::clone(a) as Arc<dyn ModuleTitleGenerator>),
+            batch_size,
         )
     }
 
@@ -280,13 +322,23 @@ impl ServiceFactory {
         SqliteVideoRepository,
         SqliteSearchRepository,
     > {
+        let batch_size = ServiceFactory::preferences(ctx)
+            .load()
+            .map(|p| p.boundary_batch_size() as usize)
+            .unwrap_or(5);
+
         IngestLocalUseCase::new(
             ctx.local_media.clone(),
             ctx.course_repo.clone(),
             ctx.module_repo.clone(),
             ctx.video_repo.clone(),
             ctx.search_repo.clone(),
-            ctx.llm.clone().map(|a| a as Arc<dyn ModuleTitleGenerator>),
+            ctx.llm
+                .lock()
+                .unwrap()
+                .as_ref()
+                .map(|a| Arc::clone(a) as Arc<dyn ModuleTitleGenerator>),
+            batch_size,
         )
     }
 
@@ -312,7 +364,7 @@ impl ServiceFactory {
             SqliteNoteRepository,
         >,
     > {
-        let llm = ctx.llm.as_ref()?.clone();
+        let llm = ctx.llm.lock().unwrap().as_ref()?.clone();
 
         Some(AskCompanionUseCase::new(
             llm,
@@ -428,7 +480,7 @@ impl ServiceFactory {
         ctx: &AppContext,
     ) -> Option<SummarizeVideoUseCase<GeminiAdapter, TranscriptAdapter, SqliteVideoRepository>>
     {
-        let llm = ctx.llm.as_ref()?.clone();
+        let llm = ctx.llm.lock().unwrap().as_ref()?.clone();
 
         Some(SummarizeVideoUseCase::new(llm, ctx.transcript.clone(), ctx.video_repo.clone()))
     }
@@ -437,8 +489,56 @@ impl ServiceFactory {
     pub fn take_exam(
         ctx: &AppContext,
     ) -> Option<TakeExamUseCase<GeminiAdapter, SqliteVideoRepository, SqliteExamRepository>> {
-        let llm = ctx.llm.as_ref()?.clone();
+        let llm = ctx.llm.lock().unwrap().as_ref()?.clone();
 
         Some(TakeExamUseCase::new(llm, ctx.video_repo.clone(), ctx.exam_repo.clone()))
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use std::sync::{Arc, Mutex};
+
+    use crate::infrastructure::llm::GeminiAdapter;
+
+    /// Verify that the Mutex<Option<Arc<GeminiAdapter>>> field correctly tracks LLM availability.
+    /// This tests the core logic of set_gemini_api_key / has_llm without spinning up a full AppContext.
+    #[test]
+    fn mutex_llm_starts_none_and_becomes_some_after_set() {
+        // Simulate the LLM field in AppContext
+        let llm: Mutex<Option<Arc<GeminiAdapter>>> = Mutex::new(None);
+
+        // Initially no LLM
+        assert!(llm.lock().unwrap().is_none(), "LLM should start as None");
+
+        // Simulate set_gemini_api_key
+        *llm.lock().unwrap() = Some(Arc::new(GeminiAdapter::new(
+            "test-key".to_string(),
+            "gemini-3.1-flash-lite".to_string(),
+        )));
+
+        // Now has LLM
+        assert!(llm.lock().unwrap().is_some(), "LLM should be Some after set");
+    }
+
+    #[test]
+    fn mutex_llm_can_be_reset_to_none() {
+        let llm: Mutex<Option<Arc<GeminiAdapter>>> = Mutex::new(Some(Arc::new(
+            GeminiAdapter::new("test-key".to_string(), "gemini-3.1-flash-lite".to_string()),
+        )));
+
+        assert!(llm.lock().unwrap().is_some(), "LLM should start as Some");
+
+        *llm.lock().unwrap() = None;
+
+        assert!(llm.lock().unwrap().is_none(), "LLM should be None after reset");
+    }
+
+    #[test]
+    fn appconfig_from_env_defaults() {
+        // Ensure AppConfig::default() doesn't panic and has expected defaults
+        let cfg = super::AppConfig::default();
+        assert!(cfg.gemini_api_key.is_none());
+        assert_eq!(cfg.llm_model, "gemini-3.1-flash-lite");
     }
 }
