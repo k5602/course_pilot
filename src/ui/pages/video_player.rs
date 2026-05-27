@@ -5,7 +5,7 @@ use std::rc::Rc;
 use adw::NavigationPage;
 use adw::prelude::*;
 
-use crate::domain::ports::{ExamRepository, StreamResolver, VideoRepository};
+use crate::domain::ports::StreamResolver;
 use crate::infrastructure::video::VideoPlayer;
 use crate::ui::state::SharedState;
 use crate::ui::toast::Toast;
@@ -50,6 +50,7 @@ pub struct VideoPlayerPage {
     status_page: adw::StatusPage,
     suppress_seek: Rc<Cell<bool>>,
     current_video_source: RefCell<Option<VideoSourceForQuality>>,
+    current_video_id: RefCell<Option<crate::domain::value_objects::VideoId>>,
     suppress_quality: Rc<Cell<bool>>,
     is_playing: Rc<Cell<bool>>,
     summarize_btn: gtk::Button,
@@ -280,7 +281,7 @@ impl VideoPlayerPage {
 
         // Mute / Unmute toggle button handler
         let player_mute = player_rc.clone();
-        let vol_scale_cl = vol_scale.clone();
+        let vol_scale_cl = vol_scale;
         let vol_btn_cl = vol_btn.clone();
         let saved_volume = Rc::new(Cell::new(0.8));
         vol_btn.connect_clicked(move |_| {
@@ -320,7 +321,12 @@ impl VideoPlayerPage {
         let quizzes_title = gtk::Label::new(Some("Associated Challenges & Quizzes"));
         quizzes_title.add_css_class("heading");
         quizzes_title.set_halign(gtk::Align::Start);
-        details_box.append(&quizzes_title);
+
+        let quizzes_header_box = gtk::Box::new(gtk::Orientation::Horizontal, 8);
+        let quizzes_spinner = gtk::Spinner::new();
+        quizzes_header_box.append(&quizzes_title);
+        quizzes_header_box.append(&quizzes_spinner);
+        details_box.append(&quizzes_header_box);
 
         let quizzes_container = gtk::Box::new(gtk::Orientation::Horizontal, 12);
         quizzes_container.set_margin_top(8);
@@ -331,7 +337,12 @@ impl VideoPlayerPage {
         let transcript_title = gtk::Label::new(Some("Video Summary"));
         transcript_title.add_css_class("heading");
         transcript_title.set_halign(gtk::Align::Start);
-        details_box.append(&transcript_title);
+
+        let summary_header_box = gtk::Box::new(gtk::Orientation::Horizontal, 8);
+        let summary_spinner = gtk::Spinner::new();
+        summary_header_box.append(&transcript_title);
+        summary_header_box.append(&summary_spinner);
+        details_box.append(&summary_header_box);
 
         let transcript_frame = gtk::Frame::new(None);
         transcript_frame.add_css_class("card");
@@ -359,6 +370,7 @@ impl VideoPlayerPage {
 
         let sum_state = state.clone();
         let lbl_clone = transcript_lbl.clone();
+        let summary_spinner_cl = summary_spinner.clone();
         summarize_btn.connect_clicked(move |_| {
             let s = sum_state.borrow();
             let video_id_str = match s.current_video_id {
@@ -368,11 +380,17 @@ impl VideoPlayerPage {
             if let Some(ref ctx) = s.backend
                 && let Some(uc) = crate::application::ServiceFactory::summarize_video(ctx)
             {
+                let Ok(video_id) = video_id_str.parse() else {
+                    log::error!("Failed to parse video ID '{}': invalid format", video_id_str);
+                    Toast::show_error("Internal error: invalid video ID");
+                    return;
+                };
                 let input = crate::application::use_cases::SummarizeVideoInput {
-                    video_id: video_id_str.clone().parse().unwrap(),
+                    video_id,
                     force_refresh: true,
                 };
                 Toast::show("Summarization started...");
+                summary_spinner_cl.start();
                 let (tx, rx) = std::sync::mpsc::channel::<Result<String, String>>();
                 crate::infrastructure::tokio_bridge::spawn(async move {
                     let res = match uc.execute(input).await {
@@ -383,19 +401,25 @@ impl VideoPlayerPage {
                 });
 
                 let lbl = lbl_clone.clone();
+                let summary_spinner_cl2 = summary_spinner_cl.clone();
                 glib::idle_add_local(move || match rx.try_recv() {
                     Ok(Ok(summary)) => {
                         lbl.set_text(&summary);
                         Toast::show("Summary generated successfully!");
+                        summary_spinner_cl2.stop();
                         glib::ControlFlow::Break
                     },
                     Ok(Err(e)) => {
                         lbl.set_text(&format!("Error generating summary: {}", e));
                         Toast::show_error(&format!("Summarization failed: {}", e));
+                        summary_spinner_cl2.stop();
                         glib::ControlFlow::Break
                     },
                     Err(std::sync::mpsc::TryRecvError::Empty) => glib::ControlFlow::Continue,
-                    Err(std::sync::mpsc::TryRecvError::Disconnected) => glib::ControlFlow::Break,
+                    Err(std::sync::mpsc::TryRecvError::Disconnected) => {
+                        summary_spinner_cl2.stop();
+                        glib::ControlFlow::Break
+                    },
                 });
             }
         });
@@ -404,6 +428,7 @@ impl VideoPlayerPage {
         let quizzes_container_cl = quizzes_container.clone();
         let nav_pages_cl = nav_pages.clone();
         let scroll_cl = scroll.clone();
+        let quizzes_spinner_cl = quizzes_spinner.clone();
         quiz_btn.connect_clicked(move |_| {
             let s = quiz_state.borrow();
             let video_id_str = match s.current_video_id {
@@ -414,12 +439,18 @@ impl VideoPlayerPage {
                 && let Some(uc) = crate::application::ServiceFactory::take_exam(ctx)
             {
                 use crate::domain::value_objects::ExamDifficulty;
+                let Ok(video_id) = video_id_str.parse() else {
+                    log::error!("Failed to parse video ID '{}': invalid format", video_id_str);
+                    Toast::show_error("Internal error: invalid video ID");
+                    return;
+                };
                 let input = crate::application::use_cases::GenerateExamInput {
-                    video_id: video_id_str.clone().parse().unwrap(),
+                    video_id,
                     num_questions: 5,
                     difficulty: ExamDifficulty::Medium,
                 };
                 Toast::show("Quiz generation started...");
+                quizzes_spinner_cl.start();
                 let (tx, rx) = std::sync::mpsc::channel::<Result<(), String>>();
                 crate::infrastructure::tokio_bridge::spawn(async move {
                     let res = match uc.generate(input).await {
@@ -433,19 +464,29 @@ impl VideoPlayerPage {
                 let quizzes_container_cl2 = quizzes_container_cl.clone();
                 let nav_pages_cl2 = nav_pages_cl.clone();
                 let scroll_cl2 = scroll_cl.clone();
-                let video_id_cl = video_id_str.clone();
+                let video_id_cl = video_id_str;
+                let quizzes_spinner_cl2 = quizzes_spinner_cl.clone();
 
                 glib::idle_add_local(move || match rx.try_recv() {
                     Ok(Ok(())) => {
+                        quizzes_spinner_cl2.stop();
                         Toast::show("Quiz generated successfully!");
                         while let Some(child) = quizzes_container_cl2.first_child() {
                             quizzes_container_cl2.remove(&child);
                         }
 
                         let s = state_cl2.borrow();
+                        let parsed_vid_id = match video_id_cl.parse() {
+                            Ok(id) => id,
+                            Err(e) => {
+                                log::error!("Failed to parse video ID '{}': {}", video_id_cl, e);
+                                Toast::show_error("Internal error: invalid video ID");
+                                return glib::ControlFlow::Break;
+                            }
+                        };
                         if let Some(ref ctx) = s.backend
                             && let Ok(quizzes) =
-                                ctx.exam_repo.find_by_video(&video_id_cl.parse().unwrap())
+                                ctx.exam_repo.find_by_video(&parsed_vid_id)
                             {
                                 if quizzes.is_empty() {
                                     let empty_q_lbl = gtk::Label::new(Some(
@@ -490,11 +531,15 @@ impl VideoPlayerPage {
                         glib::ControlFlow::Break
                     },
                     Ok(Err(e)) => {
+                        quizzes_spinner_cl2.stop();
                         Toast::show_error(&format!("Quiz generation failed: {}", e));
                         glib::ControlFlow::Break
                     },
                     Err(std::sync::mpsc::TryRecvError::Empty) => glib::ControlFlow::Continue,
-                    Err(std::sync::mpsc::TryRecvError::Disconnected) => glib::ControlFlow::Break,
+                    Err(std::sync::mpsc::TryRecvError::Disconnected) => {
+                        quizzes_spinner_cl2.stop();
+                        glib::ControlFlow::Break
+                    },
                 });
             }
         });
@@ -508,13 +553,14 @@ impl VideoPlayerPage {
             seek_bar: seek_bar.clone(),
             pos_label,
             dur_label,
-            quality_selector: quality_selector.clone(),
+            quality_selector,
             timer_source: RefCell::new(None),
             video_title,
             player_frame,
             status_page,
             suppress_seek: Rc::new(Cell::new(false)),
             current_video_source: RefCell::new(None),
+            current_video_id: RefCell::new(None),
             suppress_quality: Rc::new(Cell::new(false)),
             is_playing,
             summarize_btn,
@@ -589,7 +635,7 @@ impl VideoPlayerPage {
             play_btn.set_sensitive(false);
 
             let (tx, rx) = std::sync::mpsc::channel::<String>();
-            let yid_clone = yid.clone();
+            let yid_clone = yid;
             let backend_opt = state.borrow().backend.clone();
 
             if let Some(ctx) = backend_opt {
@@ -748,19 +794,6 @@ impl VideoPlayerPage {
     }
 
     pub fn refresh(&self) {
-        self.stop_timer();
-        if let Some(ref p) = *self.player.borrow() {
-            p.stop();
-        }
-        *self.player.borrow_mut() = None;
-        self.is_playing.set(false);
-        self.play_btn.set_icon_name("media-playback-start-symbolic");
-
-        // Clear associated quizzes
-        while let Some(child) = self.quizzes_container.first_child() {
-            self.quizzes_container.remove(&child);
-        }
-
         // Dynamically check LLM availability so buttons update after key is added in Settings
         let has_llm = self
             .state
@@ -784,6 +817,19 @@ impl VideoPlayerPage {
         let video_id_str = match state.current_video_id {
             Some(ref id) => id.clone(),
             None => {
+                self.stop_timer();
+                if let Some(ref p) = *self.player.borrow() {
+                    p.stop();
+                }
+                *self.player.borrow_mut() = None;
+                *self.current_video_id.borrow_mut() = None;
+                self.is_playing.set(false);
+                self.play_btn.set_icon_name("media-playback-start-symbolic");
+
+                while let Some(child) = self.quizzes_container.first_child() {
+                    self.quizzes_container.remove(&child);
+                }
+
                 self.video_title.set_text("No video selected.");
                 self.player_frame.set_child(Some(&self.status_page));
                 self.transcript_lbl.set_text("No transcript loaded.");
@@ -795,6 +841,19 @@ impl VideoPlayerPage {
             let video_id = match video_id_str.parse::<crate::domain::value_objects::VideoId>() {
                 Ok(id) => id,
                 Err(_) => {
+                    self.stop_timer();
+                    if let Some(ref p) = *self.player.borrow() {
+                        p.stop();
+                    }
+                    *self.player.borrow_mut() = None;
+                    *self.current_video_id.borrow_mut() = None;
+                    self.is_playing.set(false);
+                    self.play_btn.set_icon_name("media-playback-start-symbolic");
+
+                    while let Some(child) = self.quizzes_container.first_child() {
+                        self.quizzes_container.remove(&child);
+                    }
+
                     self.video_title.set_text("Invalid video ID.");
                     self.player_frame.set_child(Some(&self.status_page));
                     return;
@@ -803,109 +862,126 @@ impl VideoPlayerPage {
 
             match ctx.video_repo.find_by_id(&video_id) {
                 Ok(Some(video)) => {
+                    let is_same_video = {
+                        let cached_id = self.current_video_id.borrow();
+                        cached_id.as_ref() == Some(&video_id) && self.player.borrow().is_some()
+                    };
+
                     self.video_title.set_text(video.title());
 
-                    let player = match VideoPlayer::new() {
-                        Ok(p) => p,
-                        Err(e) => {
-                            self.video_title.set_text(&format!("Player error: {}", e));
-                            self.player_frame.set_child(Some(&self.status_page));
-                            return;
-                        },
-                    };
+                    if !is_same_video {
+                        self.stop_timer();
+                        if let Some(ref p) = *self.player.borrow() {
+                            p.stop();
+                        }
+                        *self.player.borrow_mut() = None;
+                        self.is_playing.set(false);
+                        self.play_btn.set_icon_name("media-playback-start-symbolic");
 
-                    let picture = player.widget();
-                    picture.set_vexpand(true);
-                    picture.set_hexpand(true);
+                        *self.current_video_id.borrow_mut() = Some(video_id);
 
-                    self.player_frame.set_child(Some(picture));
+                        let player = match VideoPlayer::new() {
+                            Ok(p) => p,
+                            Err(e) => {
+                                self.video_title.set_text(&format!("Player error: {}", e));
+                                self.player_frame.set_child(Some(&self.status_page));
+                                return;
+                            },
+                        };
 
-                    let dur_ns = (video.duration_secs() as u64) * 1_000_000_000;
-                    self.seek_bar.set_range(0.0, dur_ns as f64);
-                    self.seek_bar.set_value(0.0);
-                    self.pos_label.set_text("00:00");
-                    self.dur_label.set_text(&fmt_ns(dur_ns));
+                        let picture = player.widget();
+                        picture.set_vexpand(true);
+                        picture.set_hexpand(true);
 
-                    let quality = state.session_quality;
-                    match video.source() {
-                        crate::domain::value_objects::VideoSource::YouTube(yid) => {
-                            player.set_volume(0.8);
-                            *self.current_video_source.borrow_mut() =
-                                Some(VideoSourceForQuality::YouTube(yid.as_str().to_string()));
-                            *self.player.borrow_mut() = Some(player);
-                            self.play_btn.set_icon_name("process-working-symbolic");
-                            self.play_btn.set_sensitive(false);
+                        self.player_frame.set_child(Some(picture));
 
-                            self.suppress_quality.set(true);
-                            self.quality_selector.set_quality(quality);
-                            self.suppress_quality.set(false);
+                        let dur_ns = (video.duration_secs() as u64) * 1_000_000_000;
+                        self.seek_bar.set_range(0.0, dur_ns as f64);
+                        self.seek_bar.set_value(0.0);
+                        self.pos_label.set_text("00:00");
+                        self.dur_label.set_text(&fmt_ns(dur_ns));
 
-                            let yid_str = yid.as_str().to_string();
-                            let backend_opt = self.state.borrow().backend.clone();
-                            let (tx, rx) = std::sync::mpsc::channel::<String>();
+                        let quality = state.session_quality;
+                        match video.source() {
+                            crate::domain::value_objects::VideoSource::YouTube(yid) => {
+                                player.set_volume(0.8);
+                                *self.current_video_source.borrow_mut() =
+                                    Some(VideoSourceForQuality::YouTube(yid.as_str().to_string()));
+                                *self.player.borrow_mut() = Some(player);
+                                self.play_btn.set_icon_name("process-working-symbolic");
+                                self.play_btn.set_sensitive(false);
 
-                            if let Some(ctx) = backend_opt {
-                                crate::infrastructure::tokio_bridge::spawn(async move {
-                                    match ctx
-                                        .youtube
-                                        .resolve_youtube_stream(&yid_str, quality)
-                                        .await
-                                    {
-                                        Ok(url) => {
-                                            let _ = tx.send(url);
-                                        },
-                                        Err(e) => {
-                                            let _ = tx.send(format!("ERROR:{}", e));
-                                        },
-                                    }
+                                self.suppress_quality.set(true);
+                                self.quality_selector.set_quality(quality);
+                                self.suppress_quality.set(false);
+
+                                let yid_str = yid.as_str().to_string();
+                                let backend_opt = self.state.borrow().backend.clone();
+                                let (tx, rx) = std::sync::mpsc::channel::<String>();
+
+                                if let Some(ctx) = backend_opt {
+                                    crate::infrastructure::tokio_bridge::spawn(async move {
+                                        match ctx
+                                            .youtube
+                                            .resolve_youtube_stream(&yid_str, quality)
+                                            .await
+                                        {
+                                            Ok(url) => {
+                                                let _ = tx.send(url);
+                                            },
+                                            Err(e) => {
+                                                let _ = tx.send(format!("ERROR:{}", e));
+                                            },
+                                        }
+                                    });
+                                }
+
+                                let player_rc = self.player.clone();
+                                let play_btn_cl = self.play_btn.clone();
+                                let is_playing_cl = self.is_playing.clone();
+
+                                glib::idle_add_local(move || match rx.try_recv() {
+                                    Ok(msg) if msg.starts_with("ERROR:") => {
+                                        let detail = msg
+                                            .strip_prefix("ERROR:")
+                                            .unwrap_or("Stream resolution failed");
+                                        Toast::show_error(detail);
+                                        is_playing_cl.set(false);
+                                        play_btn_cl.set_icon_name("media-playback-start-symbolic");
+                                        play_btn_cl.set_sensitive(true);
+                                        glib::ControlFlow::Break
+                                    },
+                                    Ok(stream_url) => {
+                                        if let Some(ref p) = *player_rc.borrow() {
+                                            p.play_uri(&stream_url);
+                                        }
+                                        is_playing_cl.set(true);
+                                        play_btn_cl.set_icon_name("media-playback-pause-symbolic");
+                                        play_btn_cl.set_sensitive(true);
+                                        glib::ControlFlow::Break
+                                    },
+                                    Err(std::sync::mpsc::TryRecvError::Empty) => {
+                                        glib::ControlFlow::Continue
+                                    },
+                                    Err(std::sync::mpsc::TryRecvError::Disconnected) => {
+                                        glib::ControlFlow::Break
+                                    },
                                 });
-                            }
+                            },
+                            crate::domain::value_objects::VideoSource::LocalPath(path) => {
+                                *self.current_video_source.borrow_mut() =
+                                    Some(VideoSourceForQuality::Local);
+                                player.set_volume(0.8);
+                                let uri = format!("file://{path}");
+                                player.play_uri(&uri);
+                                *self.player.borrow_mut() = Some(player);
+                                self.is_playing.set(true);
+                                self.play_btn.set_icon_name("media-playback-pause-symbolic");
+                            },
+                        };
 
-                            let player_rc = self.player.clone();
-                            let play_btn_cl = self.play_btn.clone();
-                            let is_playing_cl = self.is_playing.clone();
-
-                            glib::idle_add_local(move || match rx.try_recv() {
-                                Ok(msg) if msg.starts_with("ERROR:") => {
-                                    let detail = msg
-                                        .strip_prefix("ERROR:")
-                                        .unwrap_or("Stream resolution failed");
-                                    Toast::show_error(detail);
-                                    is_playing_cl.set(false);
-                                    play_btn_cl.set_icon_name("media-playback-start-symbolic");
-                                    play_btn_cl.set_sensitive(true);
-                                    glib::ControlFlow::Break
-                                },
-                                Ok(stream_url) => {
-                                    if let Some(ref p) = *player_rc.borrow() {
-                                        p.play_uri(&stream_url);
-                                    }
-                                    is_playing_cl.set(true);
-                                    play_btn_cl.set_icon_name("media-playback-pause-symbolic");
-                                    play_btn_cl.set_sensitive(true);
-                                    glib::ControlFlow::Break
-                                },
-                                Err(std::sync::mpsc::TryRecvError::Empty) => {
-                                    glib::ControlFlow::Continue
-                                },
-                                Err(std::sync::mpsc::TryRecvError::Disconnected) => {
-                                    glib::ControlFlow::Break
-                                },
-                            });
-                        },
-                        crate::domain::value_objects::VideoSource::LocalPath(path) => {
-                            *self.current_video_source.borrow_mut() =
-                                Some(VideoSourceForQuality::Local);
-                            player.set_volume(0.8);
-                            let uri = format!("file://{path}");
-                            player.play_uri(&uri);
-                            *self.player.borrow_mut() = Some(player);
-                            self.is_playing.set(true);
-                            self.play_btn.set_icon_name("media-playback-pause-symbolic");
-                        },
-                    };
-
-                    self.start_timer();
+                        self.start_timer();
+                    }
 
                     // Load Summary
                     if let Some(s) = video.summary() {
@@ -964,17 +1040,56 @@ impl VideoPlayerPage {
                     }
                 },
                 Ok(None) => {
+                    self.stop_timer();
+                    if let Some(ref p) = *self.player.borrow() {
+                        p.stop();
+                    }
+                    *self.player.borrow_mut() = None;
+                    *self.current_video_id.borrow_mut() = None;
+                    self.is_playing.set(false);
+                    self.play_btn.set_icon_name("media-playback-start-symbolic");
+
+                    while let Some(child) = self.quizzes_container.first_child() {
+                        self.quizzes_container.remove(&child);
+                    }
+
                     self.video_title.set_text("Video not found.");
                     self.player_frame.set_child(Some(&self.status_page));
                     self.transcript_lbl.set_text("No summary loaded.");
                 },
                 Err(e) => {
+                    self.stop_timer();
+                    if let Some(ref p) = *self.player.borrow() {
+                        p.stop();
+                    }
+                    *self.player.borrow_mut() = None;
+                    *self.current_video_id.borrow_mut() = None;
+                    self.is_playing.set(false);
+                    self.play_btn.set_icon_name("media-playback-start-symbolic");
+
+                    while let Some(child) = self.quizzes_container.first_child() {
+                        self.quizzes_container.remove(&child);
+                    }
+
                     self.video_title.set_text(&format!("Error: {}", e));
                     self.player_frame.set_child(Some(&self.status_page));
                     self.transcript_lbl.set_text("Error loading summary.");
                 },
             }
         } else {
+            self.stop_timer();
+            if let Some(ref p) = *self.player.borrow() {
+                p.stop();
+            }
+            *self.player.borrow_mut() = None;
+            *self.current_video_id.borrow_mut() = None;
+            self.is_playing.set(false);
+            self.play_btn.set_icon_name("media-playback-start-symbolic");
+
+            while let Some(child) = self.quizzes_container.first_child() {
+                self.quizzes_container.remove(&child);
+            }
+
             self.video_title.set_text("No backend connected.");
             self.player_frame.set_child(Some(&self.status_page));
             self.transcript_lbl.set_text("No backend connected.");
@@ -1087,7 +1202,7 @@ impl VideoPlayerPage {
             toggle_btn();
         });
 
-        let toggle_gest = toggle.clone();
+        let toggle_gest = toggle;
         let gesture = gtk::GestureClick::new();
         gesture.set_button(1);
         gesture.connect_pressed(move |gest, n_press, _, _| {
