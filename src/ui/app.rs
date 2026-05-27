@@ -24,8 +24,8 @@ impl CoursePilotApp {
             .build();
 
         window.connect_close_request(move |_| {
-            log::info!("Main window closed. Exiting process.");
-            std::process::exit(0);
+            log::info!("Main window closed.");
+            glib::Propagation::Proceed
         });
 
         let state = new_shared_state();
