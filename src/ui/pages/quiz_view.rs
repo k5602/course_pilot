@@ -168,62 +168,148 @@ impl QuizViewPage {
 
         let score_val = score.unwrap_or(0.0);
         let passed_val = passed.unwrap_or(false);
+        let total = qs.questions.len();
+        let correct_count = (score_val * total as f32).round() as usize;
 
-        let result_label = gtk::Label::new(None);
-        result_label.set_markup(&format!(
-            "<big><b>{} (Score: {:.0}%)</b></big>",
-            if passed_val { "Passed" } else { "Failed" },
-            score_val * 100.0
+        // Score summary card
+        let score_frame = gtk::Frame::new(None);
+        score_frame.add_css_class("card");
+        score_frame.set_margin_bottom(24);
+
+        let score_box = gtk::Box::new(gtk::Orientation::Vertical, 8);
+        score_box.set_margin_start(16);
+        score_box.set_margin_end(16);
+        score_box.set_margin_top(16);
+        score_box.set_margin_bottom(16);
+        score_box.set_halign(gtk::Align::Center);
+
+        let status_icon = gtk::Image::from_icon_name(if passed_val {
+            "emblem-ok-symbolic"
+        } else {
+            "window-close-symbolic"
+        });
+        status_icon.set_pixel_size(64);
+        status_icon.add_css_class(if passed_val { "success" } else { "error" });
+        score_box.append(&status_icon);
+
+        let status_label = gtk::Label::new(None);
+        status_label.set_markup(&format!(
+            "<big><b>Quiz {}</b></big>",
+            if passed_val { "Passed" } else { "Failed" }
         ));
-        result_label.set_margin_top(24);
-        content_box.append(&result_label);
+        status_label.add_css_class(if passed_val { "success" } else { "error" });
+        status_label.add_css_class("heading");
+        score_box.append(&status_label);
+
+        let percent_label = gtk::Label::new(None);
+        percent_label.set_markup(&format!(
+            "Score: <b>{:.0}%</b> ({} of {} questions correct)",
+            score_val * 100.0,
+            correct_count,
+            total
+        ));
+        percent_label.add_css_class("title");
+        score_box.append(&percent_label);
+
+        score_frame.set_child(Some(&score_box));
+        content_box.append(&score_frame);
 
         let parsed_answers: Vec<Option<usize>> = user_answers_json
             .and_then(|j| serde_json::from_str::<Vec<Option<usize>>>(j).ok())
             .unwrap_or_default();
 
+        // Question review cards
         for (i, q) in qs.questions.iter().enumerate() {
-            let q_box = gtk::Box::new(gtk::Orientation::Vertical, 4);
-            q_box.set_margin_start(8);
-            q_box.set_margin_top(8);
+            let card_frame = gtk::Frame::new(None);
+            card_frame.add_css_class("course-progress-card");
+            card_frame.set_margin_bottom(16);
 
+            let q_box = gtk::Box::new(gtk::Orientation::Vertical, 10);
+            q_box.set_margin_start(16);
+            q_box.set_margin_end(16);
+            q_box.set_margin_top(16);
+            q_box.set_margin_bottom(16);
+
+            // Question title
             let q_label = gtk::Label::new(Some(&format!("{}. {}", i + 1, q.question)));
             q_label.set_wrap(true);
             q_label.set_halign(gtk::Align::Start);
+            q_label.add_css_class("title");
             q_box.append(&q_label);
 
             let user_ans = parsed_answers.get(i).copied().flatten();
 
-            if let Some(ua) = user_ans {
-                let ua_label = gtk::Label::new(Some(&format!(
-                    "Your answer: {} {}",
-                    q.options.get(ua).cloned().unwrap_or_default(),
-                    if ua == q.correct_index { "(correct)" } else { "(incorrect)" }
-                )));
-                ua_label.set_halign(gtk::Align::Start);
-                q_box.append(&ua_label);
+            // Options List
+            let list_box = gtk::Box::new(gtk::Orientation::Vertical, 6);
+            for (oi, opt) in q.options.iter().enumerate() {
+                let option_row = gtk::Box::new(gtk::Orientation::Horizontal, 12);
+                option_row.add_css_class("quiz-option");
+
+                // Highlight correct/incorrect answers
+                if oi == q.correct_index {
+                    option_row.add_css_class("quiz-option-correct");
+                } else if Some(oi) == user_ans {
+                    option_row.add_css_class("quiz-option-incorrect");
+                }
+
+                let badge = gtk::Label::new(Some(&format!("{}.", (b'A' + oi as u8) as char)));
+                badge.add_css_class("heading");
+                badge.set_valign(gtk::Align::Center);
+                option_row.append(&badge);
+
+                let opt_text = gtk::Label::new(Some(opt));
+                opt_text.set_wrap(true);
+                opt_text.set_halign(gtk::Align::Start);
+                opt_text.set_valign(gtk::Align::Center);
+                option_row.append(&opt_text);
+
+                // Add indicator badges for student reference
+                if oi == q.correct_index {
+                    let correct_tag = gtk::Label::new(Some("Correct Answer"));
+                    correct_tag.add_css_class("caption");
+                    correct_tag.add_css_class("success");
+                    correct_tag.set_halign(gtk::Align::End);
+                    correct_tag.set_hexpand(true);
+                    option_row.append(&correct_tag);
+                } else if Some(oi) == user_ans {
+                    let incorrect_tag = gtk::Label::new(Some("Your Choice"));
+                    incorrect_tag.add_css_class("caption");
+                    incorrect_tag.add_css_class("error");
+                    incorrect_tag.set_halign(gtk::Align::End);
+                    incorrect_tag.set_hexpand(true);
+                    option_row.append(&incorrect_tag);
+                }
+
+                list_box.append(&option_row);
             }
+            q_box.append(&list_box);
 
-            let correct_label = gtk::Label::new(Some(&format!(
-                "Correct answer: {}",
-                q.options.get(q.correct_index).cloned().unwrap_or_default()
-            )));
-            correct_label.set_halign(gtk::Align::Start);
-            correct_label.add_css_class("subtitle");
-            q_box.append(&correct_label);
+            // Explanation box
+            let expl_box = gtk::Box::new(gtk::Orientation::Vertical, 6);
+            expl_box.add_css_class("explanation-box");
 
-            let expl = gtk::Label::new(Some(&q.explanation));
-            expl.set_wrap(true);
-            expl.set_halign(gtk::Align::Start);
-            expl.add_css_class("caption");
-            q_box.append(&expl);
+            let expl_title = gtk::Label::new(Some("Explanation"));
+            expl_title.add_css_class("title");
+            expl_title.set_halign(gtk::Align::Start);
+            expl_box.append(&expl_title);
 
-            content_box.append(&q_box);
+            let expl_text = gtk::Label::new(Some(&q.explanation));
+            expl_text.set_wrap(true);
+            expl_text.set_halign(gtk::Align::Start);
+            expl_text.add_css_class("subtitle");
+            expl_box.append(&expl_text);
+
+            q_box.append(&expl_box);
+
+            card_frame.set_child(Some(&q_box));
+            content_box.append(&card_frame);
         }
 
         let back_btn = gtk::Button::with_label("Back to Quizzes");
         back_btn.set_halign(gtk::Align::Center);
         back_btn.add_css_class("suggested-action");
+        back_btn.set_margin_top(16);
+        back_btn.set_margin_bottom(16);
         let nav_cl = nav.clone();
         back_btn.connect_clicked(move |_| {
             nav_cl.pop();
@@ -259,34 +345,70 @@ fn show_question_inner(
     let total = qs.questions.len();
     let saved_answer = qs.answers[idx];
 
+    // Progress Bar Indicator
+    let progress_sec = gtk::Box::new(gtk::Orientation::Vertical, 6);
+    progress_sec.set_margin_bottom(12);
+
     let counter = gtk::Label::new(Some(&format!("Question {} of {}", idx + 1, total)));
     counter.add_css_class("subtitle");
     counter.set_halign(gtk::Align::Start);
-    content_box.append(&counter);
+    progress_sec.append(&counter);
 
+    let progress_bar = gtk::ProgressBar::new();
+    progress_bar.set_fraction((idx as f64) / (total as f64));
+    progress_sec.append(&progress_bar);
+
+    content_box.append(&progress_sec);
+
+    // Question
     let q_label = gtk::Label::new(Some(&q.question));
     q_label.set_wrap(true);
     q_label.set_halign(gtk::Align::Start);
     q_label.add_css_class("heading");
+    q_label.set_margin_bottom(16);
     content_box.append(&q_label);
 
-    let option_box = gtk::Box::new(gtk::Orientation::Vertical, 4);
-    option_box.set_margin_start(12);
+    // ListBox for Option Cards
+    let list_box = gtk::ListBox::new();
+    list_box.set_selection_mode(gtk::SelectionMode::Single);
+    list_box.add_css_class("boxed-list");
+    list_box.set_margin_bottom(24);
 
-    let mut radios: Vec<gtk::CheckButton> = Vec::new();
     for (oi, opt) in q.options.iter().enumerate() {
-        let radio = gtk::CheckButton::with_label(opt);
-        if let Some(first) = radios.first() {
-            radio.set_group(Some(first));
-        }
+        let row = gtk::ListBoxRow::new();
+        row.add_css_class("quiz-option");
+
+        let row_box = gtk::Box::new(gtk::Orientation::Horizontal, 12);
+        row_box.set_margin_start(8);
+        row_box.set_margin_end(8);
+        row_box.set_margin_top(4);
+        row_box.set_margin_bottom(4);
+
+        let badge = gtk::Label::new(Some(&format!("{}.", (b'A' + oi as u8) as char)));
+        badge.add_css_class("heading");
+        badge.set_valign(gtk::Align::Center);
+        row_box.append(&badge);
+
+        let opt_text = gtk::Label::new(Some(opt));
+        opt_text.set_wrap(true);
+        opt_text.set_halign(gtk::Align::Start);
+        opt_text.set_valign(gtk::Align::Center);
+        row_box.append(&opt_text);
+
+        row.set_child(Some(&row_box));
+        list_box.append(&row);
+
+        // Pre-select row if already saved
         if saved_answer == Some(oi) {
-            radio.set_active(true);
+            let lb = list_box.clone();
+            let r = row.clone();
+            glib::idle_add_local_once(move || {
+                lb.select_row(Some(&r));
+            });
         }
-        option_box.append(&radio);
-        radios.push(radio);
     }
 
-    content_box.append(&option_box);
+    content_box.append(&list_box);
 
     let btn_box = gtk::Box::new(gtk::Orientation::Horizontal, 8);
     btn_box.set_halign(gtk::Align::End);
@@ -296,24 +418,28 @@ fn show_question_inner(
     next_btn.add_css_class("suggested-action");
 
     let qs = quiz_state.clone();
-    let radios_clone = radios;
+    let list_box_clone = list_box;
     let content_box_clone = content_box.clone();
     let state_clone = state.clone();
     let nav_clone = nav.clone();
 
     next_btn.connect_clicked(move |_| {
+        let selected_row = list_box_clone.selected_row();
+        let selected_idx = selected_row.map(|r| r.index() as usize);
+
+        // Ensure student has selected an option
+        if selected_idx.is_none() {
+            Toast::show("Please select an option before continuing.");
+            return;
+        }
+
         let mut qs_borrow = qs.borrow_mut();
         let qs_ref = match *qs_borrow {
             Some(ref mut qs) => qs,
             None => return,
         };
 
-        for (oi, r) in radios_clone.iter().enumerate() {
-            if r.is_active() {
-                qs_ref.answers[qs_ref.current_index] = Some(oi);
-                break;
-            }
-        }
+        qs_ref.answers[qs_ref.current_index] = selected_idx;
 
         if is_last {
             drop(qs_borrow);
@@ -339,9 +465,9 @@ fn submit_quiz_inner(
         content_box.remove(&child);
     }
 
-    let qs_borrow = quiz_state.borrow_mut();
+    let mut qs_borrow = quiz_state.borrow_mut();
     let qs = match *qs_borrow {
-        Some(ref qs) => qs,
+        Some(ref mut qs) => qs,
         None => return,
     };
 
@@ -356,9 +482,8 @@ fn submit_quiz_inner(
     let score = if total > 0 { correct as f32 / total as f32 } else { 0.0 };
     let passed = score >= crate::domain::entities::PASS_THRESHOLD;
 
-    // Save answers before we drop the borrow
+    // Save answers snapshot before we write to database and reload
     let answers_snapshot = qs.answers.clone();
-    drop(qs_borrow);
 
     let s = state.borrow();
     if let Some(ref ctx) = s.backend {
@@ -371,23 +496,13 @@ fn submit_quiz_inner(
         }
     }
 
-    let result_label = gtk::Label::new(None);
-    result_label.set_markup(&format!(
-        "<big><b>{}</b></big>\n\nScore: {}/{} ({:.0}%)",
-        if passed { "Passed" } else { "Failed" },
-        correct,
-        total,
-        score * 100.0
-    ));
-    result_label.set_margin_top(24);
-    content_box.append(&result_label);
-
-    let back_btn = gtk::Button::with_label("Back to Quizzes");
-    back_btn.set_halign(gtk::Align::Center);
-    back_btn.add_css_class("suggested-action");
-    let nav_cl = nav.clone();
-    back_btn.connect_clicked(move |_| {
-        nav_cl.pop();
-    });
-    content_box.append(&back_btn);
+    // Direct transition to results display for instant visual gratification
+    QuizViewPage::show_results(
+        content_box,
+        nav,
+        qs,
+        Some(score),
+        Some(passed),
+        serde_json::to_string(&answers_snapshot).ok().as_deref(),
+    );
 }

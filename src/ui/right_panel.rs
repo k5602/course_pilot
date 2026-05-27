@@ -1,20 +1,74 @@
+use std::rc::Rc;
+
 use adw::prelude::*;
 
 use crate::application::ServiceFactory;
-use crate::application::use_cases::{AskCompanionInput, LoadNoteInput, SaveNoteInput};
+use crate::application::use_cases::AskCompanionInput;
 use crate::domain::value_objects::VideoId;
-use crate::ui::state::{ChatMessage, ChatRole, SharedState};
-use crate::ui::toast::Toast;
+use crate::ui::state::{ChatMessage, ChatRole, MAX_CHAT_HISTORY_PER_VIDEO, SharedState};
 
 pub struct RightPanel {
     widget: gtk::Box,
-    notes_text: gtk::TextView,
     chat_input: gtk::Entry,
     chat_history_box: gtk::Box,
+    chat_scroll: gtk::ScrolledWindow,
     state: SharedState,
     placeholder: adw::StatusPage,
     content_area: gtk::Box,
     context_text: gtk::TextView,
+}
+
+fn rebuild_chat_history(
+    chat_box: &gtk::Box,
+    state: &SharedState,
+    video_id: &str,
+    scroll: &gtk::ScrolledWindow,
+) {
+    while let Some(child) = chat_box.first_child() {
+        chat_box.remove(&child);
+    }
+
+    let s = state.borrow();
+    let history = s.chat_history_by_video.get(video_id).cloned().unwrap_or_default();
+    for msg in &history {
+        let row_box = gtk::Box::new(gtk::Orientation::Horizontal, 0);
+        row_box.set_hexpand(true);
+
+        let bubble = gtk::Box::new(gtk::Orientation::Vertical, 4);
+        let label = gtk::Label::new(Some(&msg.content));
+        label.set_wrap(true);
+        label.set_xalign(0.0);
+        label.set_selectable(true);
+        bubble.append(&label);
+
+        match msg.role {
+            ChatRole::User => {
+                bubble.add_css_class("chat-bubble-user");
+                let spacer = gtk::Box::new(gtk::Orientation::Horizontal, 0);
+                spacer.set_hexpand(true);
+                row_box.append(&spacer);
+                row_box.append(&bubble);
+            },
+            ChatRole::Assistant => {
+                bubble.add_css_class("chat-bubble-assistant");
+                row_box.append(&bubble);
+                let spacer = gtk::Box::new(gtk::Orientation::Horizontal, 0);
+                spacer.set_hexpand(true);
+                row_box.append(&spacer);
+            },
+        }
+
+        chat_box.append(&row_box);
+    }
+    drop(s);
+
+    // Scroll to the bottom on the next main-loop cycle (after GTK computes size adjustments)
+    let scroll_cl = scroll.clone();
+    glib::idle_add_local(move || {
+        let vadj = scroll_cl.vadjustment();
+        vadj.set_value(vadj.upper() - vadj.page_size());
+        glib::ControlFlow::Break
+    });
 }
 
 impl RightPanel {
@@ -25,51 +79,36 @@ impl RightPanel {
 
         let placeholder = adw::StatusPage::new();
         placeholder.set_title("No Video Selected");
-        placeholder.set_description(Some("Select a video to start taking notes."));
-        placeholder.set_icon_name(Some("edit-note-symbolic"));
+        placeholder
+            .set_description(Some("Select a video to start chatting with your AI Companion."));
+        placeholder.set_icon_name(Some("dialog-question-symbolic"));
         widget.append(&placeholder);
 
         let content_area = gtk::Box::new(gtk::Orientation::Vertical, 0);
         content_area.set_vexpand(true);
 
-        let stack = adw::ViewStack::new();
-        stack.set_vexpand(true);
-
-        let switcher = adw::ViewSwitcher::new();
-        switcher.set_stack(Some(&stack));
-        switcher.set_policy(adw::ViewSwitcherPolicy::Wide);
-
-        let notes_scroll = gtk::ScrolledWindow::new();
-        notes_scroll.set_vexpand(true);
-        let notes_vbox = gtk::Box::new(gtk::Orientation::Vertical, 4);
-        notes_vbox.set_margin_start(8);
-        notes_vbox.set_margin_end(8);
-        notes_vbox.set_margin_top(8);
-        notes_vbox.set_margin_bottom(8);
-
-        let notes_text = gtk::TextView::new();
-        notes_text.set_wrap_mode(gtk::WrapMode::Word);
-        notes_text.set_vexpand(true);
-        notes_text.add_css_class("notes-text-view");
-
-        let save_btn = gtk::Button::with_label("Save");
-        save_btn.add_css_class("suggested-action");
-
-        notes_vbox.append(&notes_text);
-        notes_vbox.append(&save_btn);
-        notes_scroll.set_child(Some(&notes_vbox));
-        stack.add_titled(&notes_scroll, Some("notes"), "Notes");
+        let chat_area = gtk::Box::new(gtk::Orientation::Vertical, 8);
+        chat_area.set_vexpand(true);
+        chat_area.set_margin_start(8);
+        chat_area.set_margin_end(8);
+        chat_area.set_margin_top(8);
+        chat_area.set_margin_bottom(8);
 
         let chat_scroll = gtk::ScrolledWindow::new();
         chat_scroll.set_vexpand(true);
-        let chat_vbox = gtk::Box::new(gtk::Orientation::Vertical, 4);
-        chat_vbox.set_margin_start(8);
-        chat_vbox.set_margin_end(8);
-        chat_vbox.set_margin_top(8);
-        chat_vbox.set_margin_bottom(8);
+        chat_scroll.set_hexpand(true);
 
-        let chat_history_box = gtk::Box::new(gtk::Orientation::Vertical, 4);
+        let chat_history_box = gtk::Box::new(gtk::Orientation::Vertical, 6);
         chat_history_box.set_vexpand(true);
+        chat_scroll.set_child(Some(&chat_history_box));
+
+        let context_expander = gtk::Expander::new(Some("Video Context (optional)"));
+        let context_text = gtk::TextView::new();
+        context_text.set_wrap_mode(gtk::WrapMode::Word);
+        context_text.set_height_request(60);
+        context_text.set_vexpand(false);
+        context_expander.set_child(Some(&context_text));
+        context_expander.set_margin_bottom(4);
 
         let chat_bottom = gtk::Box::new(gtk::Orientation::Horizontal, 4);
         let chat_input = gtk::Entry::new();
@@ -81,73 +120,38 @@ impl RightPanel {
         chat_bottom.append(&chat_input);
         chat_bottom.append(&send_btn);
 
-        chat_vbox.append(&chat_history_box);
+        chat_area.append(&chat_scroll);
+        chat_area.append(&context_expander);
+        chat_area.append(&chat_bottom);
 
-        let context_expander = gtk::Expander::new(Some("Video Context (optional)"));
-        let context_text = gtk::TextView::new();
-        context_text.set_wrap_mode(gtk::WrapMode::Word);
-        context_text.set_height_request(60);
-        context_text.set_vexpand(false);
-        context_expander.set_child(Some(&context_text));
-        context_expander.set_margin_bottom(4);
-        chat_vbox.append(&context_expander);
-
-        chat_vbox.append(&chat_bottom);
-        chat_scroll.set_child(Some(&chat_vbox));
-        stack.add_titled(&chat_scroll, Some("chat"), "AI Chat");
-
-        content_area.append(&switcher);
-        content_area.append(&stack);
-
+        content_area.append(&chat_area);
         widget.append(&content_area);
 
         let result = Self {
             widget,
-            notes_text,
             chat_input,
             chat_history_box,
+            chat_scroll: chat_scroll.clone(),
             state: state.clone(),
             placeholder,
             content_area,
             context_text,
         };
 
-        result.connect_signals(state.clone(), send_btn, save_btn);
-
+        result.connect_signals(state.clone(), send_btn);
         result.refresh();
 
         result
     }
 
-    fn connect_signals(&self, state: SharedState, send_btn: gtk::Button, save_btn: gtk::Button) {
-        let notes_text = self.notes_text.clone();
-        save_btn.connect_clicked(move |_| {
-            let state = state.borrow();
-            let video_id = match &state.current_video_id {
-                Some(id) => id.clone(),
-                None => return,
-            };
-            let text = notes_text
-                .buffer()
-                .text(&notes_text.buffer().start_iter(), &notes_text.buffer().end_iter(), false)
-                .as_str()
-                .to_string();
-            if let Some(ref ctx) = state.backend
-                && let Ok(vid) = video_id.parse::<VideoId>()
-                && let Err(e) = ServiceFactory::notes(ctx)
-                    .save_note(SaveNoteInput { video_id: vid, content: text })
-            {
-                Toast::show_error(&format!("Failed to save note: {}", e));
-            }
-            drop(state);
-        });
-
+    fn connect_signals(&self, _state: SharedState, send_btn: gtk::Button) {
         let chat_history_box = self.chat_history_box.clone();
         let chat_input = self.chat_input.clone();
         let state_clone = self.state.clone();
         let context_text = self.context_text.clone();
+        let chat_scroll = self.chat_scroll.clone();
 
-        send_btn.connect_clicked(move |_| {
+        let perform_send = Rc::new(move || {
             let question = chat_input.text().as_str().to_string();
             if question.trim().is_empty() {
                 return;
@@ -168,16 +172,26 @@ impl RightPanel {
 
             {
                 let mut s = state_clone.borrow_mut();
-                s.chat_history_by_video
-                    .entry(video_id.clone())
-                    .or_default()
-                    .push(ChatMessage { role: ChatRole::User, content: question.clone() });
+                let history = s.chat_history_by_video.entry(video_id.clone()).or_default();
+                history.push(ChatMessage { role: ChatRole::User, content: question.clone() });
+                history.push(ChatMessage {
+                    role: ChatRole::Assistant,
+                    content: "Thinking…".to_string(),
+                });
+                if history.len() > MAX_CHAT_HISTORY_PER_VIDEO {
+                    let excess = history.len() - MAX_CHAT_HISTORY_PER_VIDEO;
+                    history.drain(0..excess);
+                }
             }
+
+            // Immediately show user's question and "Thinking..." bubble
+            rebuild_chat_history(&chat_history_box, &state_clone, &video_id, &chat_scroll);
 
             let chat_box = chat_history_box.clone();
             let state = state_clone.clone();
             let vid_for_spawn = video_id.clone();
             let vid = video_id;
+            let scroll_for_spawn = chat_scroll.clone();
 
             let local_context = {
                 let buffer = context_text.buffer();
@@ -218,39 +232,55 @@ impl RightPanel {
                 Ok(response) => {
                     {
                         let mut s = state.borrow_mut();
-                        s.chat_history_by_video.entry(vid.clone()).or_default().push(ChatMessage {
-                            role: ChatRole::Assistant,
-                            content: response.clone(),
-                        });
+                        let history = s.chat_history_by_video.entry(vid.clone()).or_default();
+                        if let Some(last) = history.last_mut() {
+                            if last.role == ChatRole::Assistant && last.content == "Thinking…" {
+                                last.content = response;
+                            } else {
+                                history.push(ChatMessage {
+                                    role: ChatRole::Assistant,
+                                    content: response,
+                                });
+                            }
+                        } else {
+                            history
+                                .push(ChatMessage { role: ChatRole::Assistant, content: response });
+                        }
+                        if history.len() > MAX_CHAT_HISTORY_PER_VIDEO {
+                            let excess = history.len() - MAX_CHAT_HISTORY_PER_VIDEO;
+                            history.drain(0..excess);
+                        }
                     }
 
-                    while let Some(child) = chat_box.first_child() {
-                        chat_box.remove(&child);
-                    }
-
-                    let s = state.borrow();
-                    let history = s.chat_history_by_video.get(&vid).cloned().unwrap_or_default();
-                    for msg in &history {
-                        let label = gtk::Label::new(None);
-                        label.set_wrap(true);
-                        label.set_xalign(0.0);
-                        label.set_margin_bottom(4);
-                        let prefix = match msg.role {
-                            ChatRole::User => "You: ",
-                            ChatRole::Assistant => "AI: ",
-                        };
-                        label.set_markup(&format!(
-                            "<b>{}</b>{}",
-                            prefix,
-                            glib::markup_escape_text(&msg.content)
-                        ));
-                        chat_box.append(&label);
-                    }
+                    rebuild_chat_history(&chat_box, &state, &vid, &scroll_for_spawn);
                     glib::ControlFlow::Break
                 },
                 Err(std::sync::mpsc::TryRecvError::Empty) => glib::ControlFlow::Continue,
-                Err(std::sync::mpsc::TryRecvError::Disconnected) => glib::ControlFlow::Break,
+                Err(std::sync::mpsc::TryRecvError::Disconnected) => {
+                    {
+                        let mut s = state.borrow_mut();
+                        let history = s.chat_history_by_video.entry(vid.clone()).or_default();
+                        if let Some(last) = history.last_mut()
+                            && last.role == ChatRole::Assistant
+                            && last.content == "Thinking…"
+                        {
+                            last.content = "Failed to receive response.".to_string();
+                        }
+                    }
+                    rebuild_chat_history(&chat_box, &state, &vid, &scroll_for_spawn);
+                    glib::ControlFlow::Break
+                },
             });
+        });
+
+        let perform_send_cl1 = perform_send.clone();
+        self.chat_input.connect_activate(move |_| {
+            perform_send_cl1();
+        });
+
+        let perform_send_cl2 = perform_send;
+        send_btn.connect_clicked(move |_| {
+            perform_send_cl2();
         });
     }
 
@@ -271,50 +301,10 @@ impl RightPanel {
 
         self.placeholder.set_visible(false);
         self.content_area.set_visible(true);
-
         self.context_text.buffer().set_text("");
-
-        let notes_text = self.notes_text.clone();
-        let chat_box = self.chat_history_box.clone();
-
-        if let Some(ref ctx) = state.backend {
-            if let Ok(vid) = video_id.parse::<VideoId>() {
-                match ServiceFactory::notes(ctx).load_note(LoadNoteInput { video_id: vid }) {
-                    Ok(Some(note_view)) => {
-                        notes_text.buffer().set_text(&note_view.content);
-                    },
-                    _ => {
-                        notes_text.buffer().set_text("");
-                    },
-                }
-            }
-        } else {
-            notes_text.buffer().set_text("");
-        }
-
-        let history = state.chat_history_by_video.get(&video_id).cloned().unwrap_or_default();
 
         drop(state);
 
-        while let Some(child) = chat_box.first_child() {
-            chat_box.remove(&child);
-        }
-
-        for msg in &history {
-            let label = gtk::Label::new(None);
-            label.set_wrap(true);
-            label.set_xalign(0.0);
-            label.set_margin_bottom(4);
-            let prefix = match msg.role {
-                ChatRole::User => "You: ",
-                ChatRole::Assistant => "AI: ",
-            };
-            label.set_markup(&format!(
-                "<b>{}</b>{}",
-                prefix,
-                glib::markup_escape_text(&msg.content)
-            ));
-            chat_box.append(&label);
-        }
+        rebuild_chat_history(&self.chat_history_box, &self.state, &video_id, &self.chat_scroll);
     }
 }
