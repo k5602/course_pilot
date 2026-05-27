@@ -5,7 +5,9 @@
 
 use std::collections::{HashMap, HashSet};
 use std::path::{Path, PathBuf};
-use std::process::Command;
+use std::time::Duration;
+use tokio::process::Command;
+use tokio::time::timeout;
 
 use gst_pbutils::Discoverer;
 use walkdir::WalkDir;
@@ -29,7 +31,7 @@ impl LocalMediaScannerAdapter {
         Ok(Self { discoverer })
     }
 
-    fn scan_video_file(
+    async fn scan_video_file(
         &self,
         path: &Path,
         subtitle: Option<&PathBuf>,
@@ -53,7 +55,7 @@ impl LocalMediaScannerAdapter {
             .collect();
 
         if subtitles.is_empty() {
-            let embedded = extract_embedded_subtitles_ffmpeg(path);
+            let embedded = extract_embedded_subtitles_ffmpeg(path).await;
             subtitles = embedded
                 .into_iter()
                 .map(|p| RawSubtitleMetadata { path: p.to_string_lossy().to_string() })
@@ -79,7 +81,7 @@ impl LocalMediaScannerAdapter {
     }
 }
 
-#[allow(async_fn_in_trait)]
+#[async_trait::async_trait]
 impl LocalMediaScanner for LocalMediaScannerAdapter {
     async fn scan(&self, root: &str) -> Result<Vec<RawLocalMediaMetadata>, LocalMediaError> {
         let root_path = Path::new(root);
@@ -94,9 +96,9 @@ impl LocalMediaScanner for LocalMediaScannerAdapter {
 
         if root_abs.is_file() {
             if is_video_file(&root_abs) {
-                video_paths.push(root_abs.clone());
+                video_paths.push(root_abs);
             } else if is_subtitle_file(&root_abs) {
-                subtitle_paths.push(root_abs.clone());
+                subtitle_paths.push(root_abs);
             }
         } else {
             for entry in WalkDir::new(&root_abs)
@@ -118,7 +120,7 @@ impl LocalMediaScanner for LocalMediaScannerAdapter {
 
         let mut results = Vec::new();
         for path in video_paths {
-            if let Some(item) = self.scan_video_file(&path, assignments.get(&path)) {
+            if let Some(item) = self.scan_video_file(&path, assignments.get(&path)).await {
                 results.push(item);
             }
         }
@@ -127,10 +129,14 @@ impl LocalMediaScanner for LocalMediaScannerAdapter {
     }
 }
 
-fn extract_embedded_subtitles_ffmpeg(path: &Path) -> Vec<PathBuf> {
-    let ffmpeg_check = Command::new("ffmpeg").arg("-version").output();
-    if ffmpeg_check.is_err() {
-        return vec![];
+async fn extract_embedded_subtitles_ffmpeg(path: &Path) -> Vec<PathBuf> {
+    let mut ffmpeg_check_cmd = Command::new("ffmpeg");
+    ffmpeg_check_cmd.arg("-version");
+    ffmpeg_check_cmd.kill_on_drop(true);
+    let ffmpeg_check = timeout(Duration::from_secs(60), ffmpeg_check_cmd.output()).await;
+    match ffmpeg_check {
+        Ok(Ok(output)) if output.status.success() => {},
+        _ => return vec![],
     }
 
     let mut paths = Vec::new();
@@ -140,31 +146,32 @@ fn extract_embedded_subtitles_ffmpeg(path: &Path) -> Vec<PathBuf> {
     for stream_idx in 0..10 {
         let output_path = temp_dir.join(format!("{}_{}.srt", base_stem, stream_idx));
 
-        let result = Command::new("ffmpeg")
-            .args([
-                "-i",
-                &path.to_string_lossy(),
-                "-map",
-                &format!("0:s:{}", stream_idx),
-                "-f",
-                "srt",
-                &output_path.to_string_lossy(),
-            ])
-            .output();
+        let mut cmd = Command::new("ffmpeg");
+        cmd.args([
+            "-i",
+            &path.to_string_lossy(),
+            "-map",
+            &format!("0:s:{}", stream_idx),
+            "-f",
+            "srt",
+            &output_path.to_string_lossy(),
+        ]);
+        cmd.kill_on_drop(true);
+
+        let result = timeout(Duration::from_secs(60), cmd.output()).await;
 
         match result {
-            Ok(output) => {
+            Ok(Ok(output))
                 if output.status.success()
                     && output_path.exists()
-                    && output_path.metadata().map(|m| m.len() > 0).unwrap_or(false)
-                {
-                    paths.push(output_path);
-                } else {
-                    let _ = std::fs::remove_file(&output_path);
-                    break;
-                }
+                    && output_path.metadata().map(|m| m.len() > 0).unwrap_or(false) =>
+            {
+                paths.push(output_path);
             },
-            Err(_) => break,
+            _ => {
+                let _ = tokio::fs::remove_file(&output_path).await;
+                break;
+            },
         }
     }
 
@@ -494,9 +501,9 @@ mod tests {
         assert!(!assignments.contains_key(&video));
     }
 
-    #[test]
-    fn ffmpeg_absent_does_not_crash() {
-        let result = extract_embedded_subtitles_ffmpeg(Path::new("/nonexistent/video.mkv"));
+    #[tokio::test]
+    async fn ffmpeg_absent_does_not_crash() {
+        let result = extract_embedded_subtitles_ffmpeg(Path::new("/nonexistent/video.mkv")).await;
         assert!(result.is_empty());
     }
 }

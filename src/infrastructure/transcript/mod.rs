@@ -24,22 +24,34 @@ impl TranscriptAdapter {
         let url = format!("https://www.youtube.com/watch?v={video_id}");
         let output_template = format!("/tmp/cpilot_{video_id}");
 
-        let status = tokio::process::Command::new("yt-dlp")
-            .args([
-                "--write-subs",
-                "--write-auto-subs",
-                "--sub-langs",
-                "en,en-*",
-                "--skip-download",
-                "--sub-format",
-                "vtt",
-                "-o",
-                &output_template,
-                &url,
-            ])
-            .output()
-            .await
-            .map_err(|e| TranscriptError::FetchError(format!("yt-dlp spawn failed: {e}")))?;
+        let mut cmd = tokio::process::Command::new("yt-dlp");
+        cmd.args([
+            "--write-subs",
+            "--write-auto-subs",
+            "--sub-langs",
+            "en,en-*",
+            "--skip-download",
+            "--sub-format",
+            "vtt",
+            "-o",
+            &output_template,
+            &url,
+        ]);
+        cmd.kill_on_drop(true);
+
+        let status_res =
+            tokio::time::timeout(std::time::Duration::from_secs(60), cmd.output()).await;
+
+        let status = match status_res {
+            Ok(res) => {
+                res.map_err(|e| TranscriptError::FetchError(format!("yt-dlp spawn failed: {e}")))?
+            },
+            Err(_) => {
+                return Err(TranscriptError::FetchError(
+                    "yt-dlp transcript fetch timed out after 60 seconds".to_string(),
+                ));
+            },
+        };
 
         if !status.status.success() {
             let stderr = String::from_utf8_lossy(&status.stderr);
@@ -147,7 +159,7 @@ fn strip_vtt_tags(input: &str) -> String {
     out
 }
 
-#[allow(async_fn_in_trait)]
+#[async_trait::async_trait]
 impl TranscriptProvider for TranscriptAdapter {
     async fn fetch_transcript(&self, video_id: &str) -> Result<String, PortTranscriptError> {
         self.fetch_transcript(video_id).await.map_err(|e| match e {
