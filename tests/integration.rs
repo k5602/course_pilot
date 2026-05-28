@@ -7,14 +7,23 @@ use std::sync::Arc;
 use std::sync::Mutex;
 
 use course_pilot::domain::{
-    entities::{Course, Module, Video},
+    entities::{Course, Exam, Module, Video},
     ports::{
-        CourseRepository, FetchError, LocalMediaError, LocalMediaScanner, ModuleRepository,
-        PlaylistFetcher, RawLocalMediaMetadata, RepositoryError, SearchEntry, SearchRepository,
-        VideoRepository,
+        CourseRepository, ExamRepository, ExaminerAI, FetchError, LLMError, LocalMediaError,
+        LocalMediaScanner, MCQuestion, ModuleRepository, PlaylistFetcher, RawLocalMediaMetadata,
+        RepositoryError, SearchEntry, SearchRepository, SummarizerAI, TranscriptError,
+        TranscriptProvider, VideoRepository,
     },
     services::{BoundaryDetector, TranscriptChunker},
-    value_objects::{CourseId, ModuleId, PlaylistUrl, VideoId},
+    value_objects::{
+        CourseId, ExamDifficulty, ExamId, ModuleId, PlaylistUrl, VideoId, VideoSource,
+        YouTubeVideoId,
+    },
+};
+
+use course_pilot::application::use_cases::{
+    GenerateExamInput, SubmitExamInput, SummarizeVideoInput, SummarizeVideoOutput,
+    SummarizeVideoUseCase, TakeExamUseCase,
 };
 
 // ─── Mock Scanner ───────────────────────────────────────────────────────
@@ -29,7 +38,7 @@ impl MockScanner {
     }
 }
 
-#[allow(async_fn_in_trait)]
+#[async_trait::async_trait]
 impl LocalMediaScanner for MockScanner {
     async fn scan(&self, _root: &str) -> Result<Vec<RawLocalMediaMetadata>, LocalMediaError> {
         Ok(self.media.clone())
@@ -53,7 +62,7 @@ impl MockFetcher {
     }
 }
 
-#[allow(async_fn_in_trait)]
+#[async_trait::async_trait]
 impl PlaylistFetcher for MockFetcher {
     async fn fetch_playlist(
         &self,
@@ -181,11 +190,12 @@ impl ModuleRepository for InMemoryModuleRepo {
 
 struct InMemoryVideoRepo {
     videos: Mutex<Vec<Video>>,
+    module_repo: Arc<InMemoryModuleRepo>,
 }
 
 impl InMemoryVideoRepo {
-    fn new() -> Self {
-        Self { videos: Mutex::new(vec![]) }
+    fn new(module_repo: Arc<InMemoryModuleRepo>) -> Self {
+        Self { videos: Mutex::new(vec![]), module_repo }
     }
 }
 
@@ -220,24 +230,56 @@ impl VideoRepository for InMemoryVideoRepo {
         Ok(result)
     }
 
-    fn find_by_course(&self, _course_id: &CourseId) -> Result<Vec<Video>, RepositoryError> {
+    fn find_by_course(&self, course_id: &CourseId) -> Result<Vec<Video>, RepositoryError> {
+        let modules = self.module_repo.find_by_course(course_id)?;
+        let module_map: std::collections::HashMap<ModuleId, u32> =
+            modules.into_iter().map(|m| (*m.id(), m.sort_order())).collect();
+
         let v = self.videos.lock().unwrap();
-        Ok(v.clone())
+        let mut result: Vec<Video> =
+            v.iter().filter(|video| module_map.contains_key(video.module_id())).cloned().collect();
+
+        result.sort_by(|a, b| {
+            let a_mod_order = module_map.get(a.module_id()).copied().unwrap_or(0);
+            let b_mod_order = module_map.get(b.module_id()).copied().unwrap_or(0);
+            match a_mod_order.cmp(&b_mod_order) {
+                std::cmp::Ordering::Equal => a.sort_order().cmp(&b.sort_order()),
+                other => other,
+            }
+        });
+
+        Ok(result)
     }
 
-    fn update_completion(&self, _id: &VideoId, _completed: bool) -> Result<(), RepositoryError> {
+    fn update_completion(&self, id: &VideoId, completed: bool) -> Result<(), RepositoryError> {
+        let mut v = self.videos.lock().unwrap();
+        if let Some(pos) = v.iter().position(|e| e.id() == id) {
+            if completed {
+                v[pos].mark_completed();
+            } else {
+                v[pos].mark_pending();
+            }
+        }
         Ok(())
     }
 
     fn update_transcript(
         &self,
-        _id: &VideoId,
-        _transcript: Option<&str>,
+        id: &VideoId,
+        transcript: Option<&str>,
     ) -> Result<(), RepositoryError> {
+        let mut v = self.videos.lock().unwrap();
+        if let Some(pos) = v.iter().position(|e| e.id() == id) {
+            v[pos].update_transcript(transcript.map(|s| s.to_string()));
+        }
         Ok(())
     }
 
-    fn update_summary(&self, _id: &VideoId, _summary: Option<&str>) -> Result<(), RepositoryError> {
+    fn update_summary(&self, id: &VideoId, summary: Option<&str>) -> Result<(), RepositoryError> {
+        let mut v = self.videos.lock().unwrap();
+        if let Some(pos) = v.iter().position(|e| e.id() == id) {
+            v[pos].update_summary(summary.map(|s| s.to_string()));
+        }
         Ok(())
     }
 
@@ -320,6 +362,105 @@ impl SearchRepository for InMemorySearchRepo {
     }
 }
 
+// ─── Mock Transcript Provider & LLMs ───────────────────────────────────
+
+struct InMemoryExamRepo {
+    exams: Mutex<Vec<Exam>>,
+}
+
+impl InMemoryExamRepo {
+    fn new() -> Self {
+        Self { exams: Mutex::new(vec![]) }
+    }
+}
+
+impl ExamRepository for InMemoryExamRepo {
+    fn save(&self, exam: &Exam) -> Result<(), RepositoryError> {
+        let mut e = self.exams.lock().unwrap();
+        if let Some(pos) = e.iter().position(|r| r.id() == exam.id()) {
+            e[pos] = exam.clone();
+        } else {
+            e.push(exam.clone());
+        }
+        Ok(())
+    }
+
+    fn find_by_id(&self, id: &ExamId) -> Result<Option<Exam>, RepositoryError> {
+        let e = self.exams.lock().unwrap();
+        Ok(e.iter().find(|r| r.id() == id).cloned())
+    }
+
+    fn find_all(&self) -> Result<Vec<Exam>, RepositoryError> {
+        let e = self.exams.lock().unwrap();
+        Ok(e.clone())
+    }
+
+    fn find_by_video(&self, video_id: &VideoId) -> Result<Vec<Exam>, RepositoryError> {
+        let e = self.exams.lock().unwrap();
+        Ok(e.iter().filter(|r| r.video_id() == video_id).cloned().collect())
+    }
+
+    fn update_result(
+        &self,
+        id: &ExamId,
+        score: f32,
+        _passed: bool,
+        user_answers_json: Option<String>,
+    ) -> Result<(), RepositoryError> {
+        let mut e = self.exams.lock().unwrap();
+        if let Some(pos) = e.iter().position(|r| r.id() == id) {
+            e[pos].record_result(score, user_answers_json);
+        } else {
+            return Err(RepositoryError::NotFound { entity: "Exam", id: id.to_string() });
+        }
+        Ok(())
+    }
+}
+
+struct MockTranscriptProvider {
+    transcript: String,
+}
+
+#[async_trait::async_trait]
+impl TranscriptProvider for MockTranscriptProvider {
+    async fn fetch_transcript(&self, _video_id: &str) -> Result<String, TranscriptError> {
+        Ok(self.transcript.clone())
+    }
+}
+
+struct MockSummarizerAI {
+    summary: String,
+}
+
+#[async_trait::async_trait]
+impl SummarizerAI for MockSummarizerAI {
+    async fn summarize_transcript(
+        &self,
+        _transcript: &str,
+        _video_title: &str,
+    ) -> Result<String, LLMError> {
+        Ok(self.summary.clone())
+    }
+}
+
+struct MockExaminerAI {
+    questions: Vec<MCQuestion>,
+}
+
+#[async_trait::async_trait]
+impl ExaminerAI for MockExaminerAI {
+    async fn generate_mcq(
+        &self,
+        _video_title: &str,
+        _video_description: Option<&str>,
+        _video_summary: Option<&str>,
+        _num_questions: u8,
+        _difficulty: ExamDifficulty,
+    ) -> Result<Vec<MCQuestion>, LLMError> {
+        Ok(self.questions.clone())
+    }
+}
+
 // ─── Tests ──────────────────────────────────────────────────────────────
 
 #[test]
@@ -347,7 +488,7 @@ fn ingest_local_with_folder_grouping() {
 
     let course_repo = Arc::new(InMemoryCourseRepo::new());
     let module_repo = Arc::new(InMemoryModuleRepo::new());
-    let video_repo = Arc::new(InMemoryVideoRepo::new());
+    let video_repo = Arc::new(InMemoryVideoRepo::new(module_repo.clone()));
     let search_repo = Arc::new(InMemorySearchRepo);
 
     let use_case = course_pilot::application::use_cases::IngestLocalUseCase::new(
@@ -356,6 +497,7 @@ fn ingest_local_with_folder_grouping() {
         module_repo.clone(),
         video_repo.clone(),
         search_repo,
+        Arc::new(course_pilot::infrastructure::event_bus::InMemoryEventBus::new()),
         None,
         5,
     );
@@ -407,7 +549,7 @@ fn ingest_playlist_with_mock_fetcher() {
 
     let course_repo = Arc::new(InMemoryCourseRepo::new());
     let module_repo = Arc::new(InMemoryModuleRepo::new());
-    let video_repo = Arc::new(InMemoryVideoRepo::new());
+    let video_repo = Arc::new(InMemoryVideoRepo::new(module_repo.clone()));
     let search_repo = Arc::new(InMemorySearchRepo);
 
     let use_case = course_pilot::application::use_cases::IngestPlaylistUseCase::new(
@@ -416,6 +558,7 @@ fn ingest_playlist_with_mock_fetcher() {
         module_repo.clone(),
         video_repo.clone(),
         search_repo,
+        Arc::new(course_pilot::infrastructure::event_bus::InMemoryEventBus::new()),
         None,
         5,
     );
@@ -442,7 +585,7 @@ fn ingest_playlist_failure_returns_error() {
     let fetcher = Arc::new(MockFetcher::with_failure());
     let course_repo = Arc::new(InMemoryCourseRepo::new());
     let module_repo = Arc::new(InMemoryModuleRepo::new());
-    let video_repo = Arc::new(InMemoryVideoRepo::new());
+    let video_repo = Arc::new(InMemoryVideoRepo::new(module_repo.clone()));
     let search_repo = Arc::new(InMemorySearchRepo);
 
     let use_case = course_pilot::application::use_cases::IngestPlaylistUseCase::new(
@@ -451,6 +594,7 @@ fn ingest_playlist_failure_returns_error() {
         module_repo.clone(),
         video_repo.clone(),
         search_repo,
+        Arc::new(course_pilot::infrastructure::event_bus::InMemoryEventBus::new()),
         None,
         5,
     );
@@ -525,7 +669,7 @@ fn ingest_playlist_preserves_labeled_module_boundaries() {
 
     let course_repo = Arc::new(InMemoryCourseRepo::new());
     let module_repo = Arc::new(InMemoryModuleRepo::new());
-    let video_repo = Arc::new(InMemoryVideoRepo::new());
+    let video_repo = Arc::new(InMemoryVideoRepo::new(module_repo.clone()));
     let search_repo = Arc::new(InMemorySearchRepo);
 
     let use_case = course_pilot::application::use_cases::IngestPlaylistUseCase::new(
@@ -534,6 +678,7 @@ fn ingest_playlist_preserves_labeled_module_boundaries() {
         module_repo.clone(),
         video_repo.clone(),
         search_repo,
+        Arc::new(course_pilot::infrastructure::event_bus::InMemoryEventBus::new()),
         None,
         5,
     );
@@ -584,4 +729,208 @@ fn transcript_chunker_integration() {
     assert!(chunks.len() > 1, "Long text should be chunked into {} parts", chunks.len());
 
     assert_eq!(chunker.chunk(&long), chunker.chunk(&long));
+}
+
+#[test]
+fn test_in_memory_video_repo_find_by_course() {
+    let module_repo = Arc::new(InMemoryModuleRepo::new());
+    let video_repo = Arc::new(InMemoryVideoRepo::new(module_repo.clone()));
+
+    let course_id1 = CourseId::new();
+    let course_id2 = CourseId::new();
+
+    let m1 = Module::new(ModuleId::new(), course_id1, "Module 1".to_string(), 2);
+    let m2 = Module::new(ModuleId::new(), course_id1, "Module 2".to_string(), 1);
+    let m3 = Module::new(ModuleId::new(), course_id2, "Module 3".to_string(), 1);
+
+    module_repo.save(&m1).unwrap();
+    module_repo.save(&m2).unwrap();
+    module_repo.save(&m3).unwrap();
+
+    let v1 = Video::new(
+        VideoId::new(),
+        *m1.id(),
+        VideoSource::local_path("/videos/vid1.mp4").unwrap(),
+        "Video 1".to_string(),
+        100,
+        2,
+    );
+    let v2 = Video::new(
+        VideoId::new(),
+        *m1.id(),
+        VideoSource::local_path("/videos/vid2.mp4").unwrap(),
+        "Video 2".to_string(),
+        100,
+        1,
+    );
+    let v3 = Video::new(
+        VideoId::new(),
+        *m2.id(),
+        VideoSource::local_path("/videos/vid3.mp4").unwrap(),
+        "Video 3".to_string(),
+        100,
+        1,
+    );
+    let v4 = Video::new(
+        VideoId::new(),
+        *m3.id(),
+        VideoSource::local_path("/videos/vid4.mp4").unwrap(),
+        "Video 4".to_string(),
+        100,
+        1,
+    );
+
+    video_repo.save(&v1).unwrap();
+    video_repo.save(&v2).unwrap();
+    video_repo.save(&v3).unwrap();
+    video_repo.save(&v4).unwrap();
+
+    // Query for course_id1.
+    // Course 1 has m1 (sort_order 2) and m2 (sort_order 1).
+    // So the videos from m2 should come first, then videos from m1.
+    // Within m1, v2 (sort_order 1) should come before v1 (sort_order 2).
+    // So the expected order is: v3, v2, v1. v4 should be filtered out.
+    let videos = video_repo.find_by_course(&course_id1).unwrap();
+    assert_eq!(videos.len(), 3);
+    assert_eq!(videos[0].id(), v3.id());
+    assert_eq!(videos[1].id(), v2.id());
+    assert_eq!(videos[2].id(), v1.id());
+}
+
+#[test]
+fn test_summarize_video_use_case() {
+    let module_repo = Arc::new(InMemoryModuleRepo::new());
+    let video_repo = Arc::new(InMemoryVideoRepo::new(module_repo.clone()));
+
+    let module_id = ModuleId::new();
+    let course_id = CourseId::new();
+    let module = Module::new(module_id, course_id, "Test Module".to_string(), 1);
+    module_repo.save(&module).unwrap();
+
+    let video_id = VideoId::new();
+    let yt_id = YouTubeVideoId::new("dQw4w9WgXcQ").unwrap();
+    let video = Video::new(
+        video_id,
+        module_id,
+        VideoSource::youtube(yt_id),
+        "Test Video Title".to_string(),
+        600,
+        1,
+    );
+    video_repo.save(&video).unwrap();
+
+    let mock_transcript = "This is a mock transcript of the video.".to_string();
+    let mock_summary = "This is a mock summary.".to_string();
+
+    let transcript_provider =
+        Arc::new(MockTranscriptProvider { transcript: mock_transcript.clone() });
+    let summarizer_ai = Arc::new(MockSummarizerAI { summary: mock_summary.clone() });
+
+    let use_case = SummarizeVideoUseCase::new(
+        summarizer_ai.clone(),
+        transcript_provider.clone(),
+        video_repo.clone(),
+    );
+
+    let input = SummarizeVideoInput { video_id, force_refresh: false };
+
+    let result = tokio::runtime::Runtime::new().unwrap().block_on(use_case.execute(input));
+    assert!(result.is_ok(), "Summarize should succeed, got: {:?}", result.err());
+
+    let output: SummarizeVideoOutput = result.unwrap();
+    assert_eq!(output.summary, mock_summary);
+    assert_eq!(output.transcript_used, mock_transcript);
+    assert!(!output.cached);
+
+    // Verify video in video_repo is updated to include transcript and summary
+    let updated_video = video_repo.find_by_id(&video_id).unwrap().unwrap();
+    assert_eq!(updated_video.transcript(), Some(mock_transcript.as_str()));
+    assert_eq!(updated_video.summary(), Some(mock_summary.as_str()));
+
+    // Running again with force_refresh = false returns cached: true
+    let input_second = SummarizeVideoInput { video_id, force_refresh: false };
+    let result_second =
+        tokio::runtime::Runtime::new().unwrap().block_on(use_case.execute(input_second));
+    assert!(result_second.is_ok());
+    let output_second: SummarizeVideoOutput = result_second.unwrap();
+    assert_eq!(output_second.summary, mock_summary);
+    assert_eq!(output_second.transcript_used, mock_transcript);
+    assert!(output_second.cached);
+}
+
+#[test]
+fn test_take_exam_use_case_flow() {
+    let module_repo = Arc::new(InMemoryModuleRepo::new());
+    let video_repo = Arc::new(InMemoryVideoRepo::new(module_repo.clone()));
+    let exam_repo = Arc::new(InMemoryExamRepo::new());
+
+    let module_id = ModuleId::new();
+    let course_id = CourseId::new();
+    let module = Module::new(module_id, course_id, "Test Module".to_string(), 1);
+    module_repo.save(&module).unwrap();
+
+    let video_id = VideoId::new();
+    let video = Video::new(
+        video_id,
+        module_id,
+        VideoSource::local_path("/videos/test.mp4").unwrap(),
+        "Test Video Title".to_string(),
+        600,
+        1,
+    );
+    video_repo.save(&video).unwrap();
+    assert!(!video.is_completed());
+
+    let q1 = MCQuestion {
+        question: "Question 1".to_string(),
+        options: vec!["Option A".to_string(), "Option B".to_string()],
+        correct_index: 1,
+        explanation: "Explanation 1".to_string(),
+    };
+    let q2 = MCQuestion {
+        question: "Question 2".to_string(),
+        options: vec!["Option A".to_string(), "Option B".to_string()],
+        correct_index: 0,
+        explanation: "Explanation 2".to_string(),
+    };
+
+    let examiner_ai = Arc::new(MockExaminerAI { questions: vec![q1, q2] });
+
+    let use_case = TakeExamUseCase::new(
+        examiner_ai.clone(),
+        video_repo.clone(),
+        exam_repo.clone(),
+        Arc::new(course_pilot::infrastructure::event_bus::InMemoryEventBus::new()),
+    );
+
+    let generate_input =
+        GenerateExamInput { video_id, num_questions: 2, difficulty: ExamDifficulty::Medium };
+
+    let gen_result =
+        tokio::runtime::Runtime::new().unwrap().block_on(use_case.generate(generate_input));
+    assert!(gen_result.is_ok(), "Generate should succeed, got: {:?}", gen_result.err());
+
+    let gen_output = gen_result.unwrap();
+    let exam_id = gen_output.exam_id;
+    assert_eq!(gen_output.questions.len(), 2);
+
+    // Assert that the exam is saved under the correct video ID
+    let exams_by_video = exam_repo.find_by_video(&video_id).unwrap();
+    assert_eq!(exams_by_video.len(), 1);
+    assert_eq!(exams_by_video[0].id(), &exam_id);
+
+    // Call submit with correct answers vec![1, 0]
+    let submit_input = SubmitExamInput { exam_id, answers: vec![1, 0] };
+
+    let submit_result = use_case.submit(submit_input);
+    assert!(submit_result.is_ok(), "Submit should succeed, got: {:?}", submit_result.err());
+
+    let submit_output = submit_result.unwrap();
+    assert_eq!(submit_output.score, 1.0);
+    assert!(submit_output.passed);
+    assert!(submit_output.video_marked_complete);
+
+    // Assert: The video in video_repo is now marked as completed!
+    let updated_video = video_repo.find_by_id(&video_id).unwrap().unwrap();
+    assert!(updated_video.is_completed());
 }
