@@ -128,7 +128,6 @@ impl TitleSanitizer {
         let mut result = String::with_capacity(text.len());
         let mut prev_was_space = true; // trim leading whitespace
         let mut last_punct_char = '\0';
-        let mut punct_run = 0u32;
 
         for c in text.chars() {
             // 1. Emoji filter - skip entirely
@@ -142,25 +141,15 @@ impl TitleSanitizer {
                     result.push(' ');
                     prev_was_space = true;
                 }
-                punct_run = 0;
                 last_punct_char = ' ';
                 continue;
             }
 
             // 3. Clickbait punctuation reduction
-            //    Track consecutive runs of same punctuation character.
-            //    Only the first in a run is emitted; subsequent same chars are dropped.
-            if c == '!' || c == '?' {
-                if last_punct_char == c {
-                    punct_run += 1;
-                    if punct_run >= 2 {
-                        continue;
-                    }
-                } else {
-                    punct_run = 1;
-                }
-            } else {
-                punct_run = 0;
+            //    Track consecutive runs of clickbait punctuation ('!' or '?').
+            //    Only the first in a run is emitted; subsequent chars are dropped.
+            if (c == '!' || c == '?') && (last_punct_char == '!' || last_punct_char == '?') {
+                continue;
             }
 
             result.push(c);
@@ -274,5 +263,45 @@ mod tests {
             let result = sanitizer.sanitize(title);
             assert!(result.chars().all(|c| c != '\u{FFFD}'));
         }
+    }
+
+    #[test]
+    fn test_remove_clickbait_trailing_punctuation() {
+        let sanitizer = TitleSanitizer::new();
+        assert_eq!(sanitizer.sanitize("Title!!!"), "Title!");
+        assert_eq!(sanitizer.sanitize("Title???"), "Title?");
+        assert_eq!(sanitizer.sanitize("Title!?!?"), "Title!");
+    }
+
+    #[test]
+    fn test_is_emoji_all_ranges() {
+        // Emojis in range 0x1F300..=0x1FAFF
+        assert!(is_emoji('🦀'));
+        assert!(is_emoji('🚀'));
+
+        // Emojis in range 0x2600..=0x27BF
+        assert!(is_emoji('☀'));
+        assert!(is_emoji('⚡'));
+
+        // Non-emojis
+        assert!(!is_emoji('A'));
+        assert!(!is_emoji('1'));
+        assert!(!is_emoji(' '));
+    }
+
+    #[test]
+    fn test_remove_bare_year_in_brackets() {
+        let sanitizer = TitleSanitizer::new();
+        assert_eq!(sanitizer.sanitize("Rust Programming (2024)"), "Rust Programming");
+        assert_eq!(sanitizer.sanitize("Python Programming [2025]"), "Python Programming");
+    }
+
+    #[test]
+    fn test_preserve_brackets_non_years() {
+        let sanitizer = TitleSanitizer::new();
+        assert_eq!(
+            sanitizer.sanitize("Rust Programming (Advanced Concepts)"),
+            "Rust Programming (Advanced Concepts)"
+        );
     }
 }
