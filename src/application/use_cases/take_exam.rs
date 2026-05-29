@@ -6,17 +6,16 @@ use std::sync::Arc;
 
 use crate::domain::{
     entities::Exam,
-    ports::{ExamRepository, ExaminerAI, LLMError, MCQuestion, RepositoryError, VideoRepository},
+    ports::{
+        DomainEvent, EventBus, ExamRepository, ExaminerAI, LLMError, MCQuestion, RepositoryError,
+        VideoRepository,
+    },
     value_objects::{ExamDifficulty, ExamId, VideoId},
 };
 
 /// Error type for exam operations.
 #[derive(Debug, thiserror::Error)]
 pub enum ExamError {
-    #[error("Video not found")]
-    VideoNotFound,
-    #[error("Exam not found")]
-    ExamNotFound,
     #[error(transparent)]
     AI(#[from] LLMError),
     #[error(transparent)]
@@ -51,25 +50,21 @@ pub struct SubmitExamOutput {
 }
 
 /// Use case for taking exams.
-pub struct TakeExamUseCase<AI, VR, ER>
-where
-    AI: ExaminerAI,
-    VR: VideoRepository,
-    ER: ExamRepository,
-{
-    examiner: Arc<AI>,
-    video_repo: Arc<VR>,
-    exam_repo: Arc<ER>,
+pub struct TakeExamUseCase {
+    examiner: Arc<dyn ExaminerAI>,
+    video_repo: Arc<dyn VideoRepository>,
+    exam_repo: Arc<dyn ExamRepository>,
+    event_bus: Arc<dyn EventBus>,
 }
 
-impl<AI, VR, ER> TakeExamUseCase<AI, VR, ER>
-where
-    AI: ExaminerAI,
-    VR: VideoRepository,
-    ER: ExamRepository,
-{
-    pub fn new(examiner: Arc<AI>, video_repo: Arc<VR>, exam_repo: Arc<ER>) -> Self {
-        Self { examiner, video_repo, exam_repo }
+impl TakeExamUseCase {
+    pub fn new(
+        examiner: Arc<dyn ExaminerAI>,
+        video_repo: Arc<dyn VideoRepository>,
+        exam_repo: Arc<dyn ExamRepository>,
+        event_bus: Arc<dyn EventBus>,
+    ) -> Self {
+        Self { examiner, video_repo, exam_repo, event_bus }
     }
 
     /// Generates an exam for a video.
@@ -78,7 +73,9 @@ where
         input: GenerateExamInput,
     ) -> Result<GenerateExamOutput, ExamError> {
         // Get video
-        let video = self.video_repo.find_by_id(&input.video_id)?.ok_or(ExamError::VideoNotFound)?;
+        let video = self.video_repo.find_by_id(&input.video_id)?.ok_or_else(|| {
+            RepositoryError::NotFound { entity: "Video", id: input.video_id.to_string() }
+        })?;
 
         // Generate questions via AI
         let questions = self
@@ -101,12 +98,17 @@ where
         let exam = Exam::new(exam_id, input.video_id, question_json);
         self.exam_repo.save(&exam)?;
 
+        self.event_bus.publish(DomainEvent::QuizGenerated { exam_id, video_id: input.video_id });
+
         Ok(GenerateExamOutput { exam_id, questions })
     }
 
     /// Retrieves an exam and its questions.
     pub fn get_exam(&self, exam_id: &ExamId) -> Result<(Exam, Vec<MCQuestion>), ExamError> {
-        let exam = self.exam_repo.find_by_id(exam_id)?.ok_or(ExamError::ExamNotFound)?;
+        let exam = self
+            .exam_repo
+            .find_by_id(exam_id)?
+            .ok_or_else(|| RepositoryError::NotFound { entity: "Exam", id: exam_id.to_string() })?;
 
         let questions: Vec<MCQuestion> =
             serde_json::from_str(exam.question_json()).map_err(|e| {
@@ -145,6 +147,10 @@ where
         if passed {
             self.video_repo.update_completion(exam.video_id(), true)?;
             video_marked_complete = true;
+            self.event_bus.publish(DomainEvent::VideoCompleted {
+                video_id: *exam.video_id(),
+                completed: true,
+            });
         }
 
         Ok(SubmitExamOutput { score, passed, video_marked_complete })

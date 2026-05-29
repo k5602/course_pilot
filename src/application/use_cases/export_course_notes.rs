@@ -26,36 +26,22 @@ pub enum ExportCourseNotesError {
 }
 
 /// Use case to export all notes for a course as Markdown.
-pub struct ExportCourseNotesUseCase<CR, MR, VR, NR, TR>
-where
-    CR: CourseRepository,
-    MR: ModuleRepository,
-    VR: VideoRepository,
-    NR: NoteRepository,
-    TR: TagRepository,
-{
-    course_repo: Arc<CR>,
-    module_repo: Arc<MR>,
-    video_repo: Arc<VR>,
-    note_repo: Arc<NR>,
-    tag_repo: Arc<TR>,
+pub struct ExportCourseNotesUseCase {
+    course_repo: Arc<dyn CourseRepository>,
+    module_repo: Arc<dyn ModuleRepository>,
+    video_repo: Arc<dyn VideoRepository>,
+    note_repo: Arc<dyn NoteRepository>,
+    tag_repo: Arc<dyn TagRepository>,
 }
 
-impl<CR, MR, VR, NR, TR> ExportCourseNotesUseCase<CR, MR, VR, NR, TR>
-where
-    CR: CourseRepository,
-    MR: ModuleRepository,
-    VR: VideoRepository,
-    NR: NoteRepository,
-    TR: TagRepository,
-{
+impl ExportCourseNotesUseCase {
     /// Creates a new export use case.
     pub fn new(
-        course_repo: Arc<CR>,
-        module_repo: Arc<MR>,
-        video_repo: Arc<VR>,
-        note_repo: Arc<NR>,
-        tag_repo: Arc<TR>,
+        course_repo: Arc<dyn CourseRepository>,
+        module_repo: Arc<dyn ModuleRepository>,
+        video_repo: Arc<dyn VideoRepository>,
+        note_repo: Arc<dyn NoteRepository>,
+        tag_repo: Arc<dyn TagRepository>,
     ) -> Self {
         Self { course_repo, module_repo, video_repo, note_repo, tag_repo }
     }

@@ -24,18 +24,12 @@ pub struct ReorderVideoInput {
 }
 
 /// Use case for changing a video's sort order.
-pub struct ReorderVideoUseCase<VR>
-where
-    VR: VideoRepository,
-{
-    video_repo: Arc<VR>,
+pub struct ReorderVideoUseCase {
+    video_repo: Arc<dyn VideoRepository>,
 }
 
-impl<VR> ReorderVideoUseCase<VR>
-where
-    VR: VideoRepository,
-{
-    pub fn new(video_repo: Arc<VR>) -> Self {
+impl ReorderVideoUseCase {
+    pub fn new(video_repo: Arc<dyn VideoRepository>) -> Self {
         Self { video_repo }
     }
 

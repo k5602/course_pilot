@@ -34,22 +34,17 @@ pub struct UpdateCourseOutput {
 }
 
 /// Use case for updating course metadata and search index.
-pub struct UpdateCourseUseCase<CR, SR>
-where
-    CR: CourseRepository,
-    SR: SearchRepository,
-{
-    course_repo: Arc<CR>,
-    search_repo: Arc<SR>,
+pub struct UpdateCourseUseCase {
+    course_repo: Arc<dyn CourseRepository>,
+    search_repo: Arc<dyn SearchRepository>,
 }
 
-impl<CR, SR> UpdateCourseUseCase<CR, SR>
-where
-    CR: CourseRepository,
-    SR: SearchRepository,
-{
+impl UpdateCourseUseCase {
     /// Creates a new use case with injected repositories.
-    pub fn new(course_repo: Arc<CR>, search_repo: Arc<SR>) -> Self {
+    pub fn new(
+        course_repo: Arc<dyn CourseRepository>,
+        search_repo: Arc<dyn SearchRepository>,
+    ) -> Self {
         Self { course_repo, search_repo }
     }
 

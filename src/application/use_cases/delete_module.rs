@@ -26,21 +26,16 @@ pub struct DeleteModuleInput {
 }
 
 /// Use case for deleting an empty module.
-pub struct DeleteModuleUseCase<MR, VR>
-where
-    MR: ModuleRepository,
-    VR: VideoRepository,
-{
-    module_repo: Arc<MR>,
-    video_repo: Arc<VR>,
+pub struct DeleteModuleUseCase {
+    module_repo: Arc<dyn ModuleRepository>,
+    video_repo: Arc<dyn VideoRepository>,
 }
 
-impl<MR, VR> DeleteModuleUseCase<MR, VR>
-where
-    MR: ModuleRepository,
-    VR: VideoRepository,
-{
-    pub fn new(module_repo: Arc<MR>, video_repo: Arc<VR>) -> Self {
+impl DeleteModuleUseCase {
+    pub fn new(
+        module_repo: Arc<dyn ModuleRepository>,
+        video_repo: Arc<dyn VideoRepository>,
+    ) -> Self {
         Self { module_repo, video_repo }
     }
 

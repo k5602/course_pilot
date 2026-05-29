@@ -7,8 +7,8 @@ use std::sync::Arc;
 use crate::domain::{
     entities::{Note, Tag},
     ports::{
-        CourseRepository, ModuleRepository, NoteRepository, RepositoryError, SearchRepository,
-        TagRepository, VideoRepository,
+        CourseRepository, DomainEvent, EventBus, ModuleRepository, NoteRepository, RepositoryError,
+        SearchRepository, TagRepository, VideoRepository,
     },
     value_objects::{CourseId, VideoId},
 };
@@ -16,12 +16,6 @@ use crate::domain::{
 /// Error type for note operations.
 #[derive(Debug, thiserror::Error)]
 pub enum NotesError {
-    #[error("Video not found")]
-    VideoNotFound,
-    #[error("Module not found")]
-    ModuleNotFound,
-    #[error("Course not found")]
-    CourseNotFound,
     #[error(transparent)]
     Repository(#[from] RepositoryError),
 }
@@ -53,41 +47,27 @@ pub struct DeleteNoteInput {
 }
 
 /// Use case for note CRUD with tag and search integrations.
-pub struct NotesUseCase<NR, VR, MR, CR, TR, SR>
-where
-    NR: NoteRepository,
-    VR: VideoRepository,
-    MR: ModuleRepository,
-    CR: CourseRepository,
-    TR: TagRepository,
-    SR: SearchRepository,
-{
-    note_repo: Arc<NR>,
-    video_repo: Arc<VR>,
-    module_repo: Arc<MR>,
-    course_repo: Arc<CR>,
-    tag_repo: Arc<TR>,
-    search_repo: Arc<SR>,
+pub struct NotesUseCase {
+    note_repo: Arc<dyn NoteRepository>,
+    video_repo: Arc<dyn VideoRepository>,
+    module_repo: Arc<dyn ModuleRepository>,
+    course_repo: Arc<dyn CourseRepository>,
+    tag_repo: Arc<dyn TagRepository>,
+    search_repo: Arc<dyn SearchRepository>,
+    event_bus: Arc<dyn EventBus>,
 }
 
-impl<NR, VR, MR, CR, TR, SR> NotesUseCase<NR, VR, MR, CR, TR, SR>
-where
-    NR: NoteRepository,
-    VR: VideoRepository,
-    MR: ModuleRepository,
-    CR: CourseRepository,
-    TR: TagRepository,
-    SR: SearchRepository,
-{
+impl NotesUseCase {
     pub fn new(
-        note_repo: Arc<NR>,
-        video_repo: Arc<VR>,
-        module_repo: Arc<MR>,
-        course_repo: Arc<CR>,
-        tag_repo: Arc<TR>,
-        search_repo: Arc<SR>,
+        note_repo: Arc<dyn NoteRepository>,
+        video_repo: Arc<dyn VideoRepository>,
+        module_repo: Arc<dyn ModuleRepository>,
+        course_repo: Arc<dyn CourseRepository>,
+        tag_repo: Arc<dyn TagRepository>,
+        search_repo: Arc<dyn SearchRepository>,
+        event_bus: Arc<dyn EventBus>,
     ) -> Self {
-        Self { note_repo, video_repo, module_repo, course_repo, tag_repo, search_repo }
+        Self { note_repo, video_repo, module_repo, course_repo, tag_repo, search_repo, event_bus }
     }
 
     /// Saves a note (create/update) and updates the search index.
@@ -110,6 +90,8 @@ where
             note.content(),
             &course_id,
         )?;
+
+        self.event_bus.publish(DomainEvent::NotesUpdated(input.video_id));
 
         Ok(NoteView {
             note_id: note.id().as_uuid().to_string(),
@@ -156,19 +138,25 @@ where
             self.note_repo.delete(&input.video_id)?;
 
             self.search_repo.remove_from_index(&note.id().as_uuid().to_string())?;
+
+            self.event_bus.publish(DomainEvent::NotesUpdated(input.video_id));
         }
 
         Ok(())
     }
 
     fn load_context(&self, video_id: &VideoId) -> Result<(String, CourseId, Vec<Tag>), NotesError> {
-        let video = self.video_repo.find_by_id(video_id)?.ok_or(NotesError::VideoNotFound)?;
+        let video = self.video_repo.find_by_id(video_id)?.ok_or_else(|| {
+            RepositoryError::NotFound { entity: "Video", id: video_id.to_string() }
+        })?;
 
-        let module =
-            self.module_repo.find_by_id(video.module_id())?.ok_or(NotesError::ModuleNotFound)?;
+        let module = self.module_repo.find_by_id(video.module_id())?.ok_or_else(|| {
+            RepositoryError::NotFound { entity: "Module", id: video.module_id().to_string() }
+        })?;
 
-        let course =
-            self.course_repo.find_by_id(module.course_id())?.ok_or(NotesError::CourseNotFound)?;
+        let course = self.course_repo.find_by_id(module.course_id())?.ok_or_else(|| {
+            RepositoryError::NotFound { entity: "Course", id: module.course_id().to_string() }
+        })?;
 
         let tags = self.tag_repo.find_by_course(course.id())?;
 

@@ -7,25 +7,19 @@ use crate::domain::ports::{CourseRepository, ModuleRepository, RepositoryError, 
 
 /// Use case for loading dashboard analytics.
 /// Aggregates counts and durations across all courses.
-pub struct LoadDashboardUseCase<CR, MR, VR>
-where
-    CR: CourseRepository,
-    MR: ModuleRepository,
-    VR: VideoRepository,
-{
-    course_repo: Arc<CR>,
-    module_repo: Arc<MR>,
-    video_repo: Arc<VR>,
+pub struct LoadDashboardUseCase {
+    course_repo: Arc<dyn CourseRepository>,
+    module_repo: Arc<dyn ModuleRepository>,
+    video_repo: Arc<dyn VideoRepository>,
 }
 
-impl<CR, MR, VR> LoadDashboardUseCase<CR, MR, VR>
-where
-    CR: CourseRepository,
-    MR: ModuleRepository,
-    VR: VideoRepository,
-{
+impl LoadDashboardUseCase {
     /// Creates a new dashboard analytics use case.
-    pub fn new(course_repo: Arc<CR>, module_repo: Arc<MR>, video_repo: Arc<VR>) -> Self {
+    pub fn new(
+        course_repo: Arc<dyn CourseRepository>,
+        module_repo: Arc<dyn ModuleRepository>,
+        video_repo: Arc<dyn VideoRepository>,
+    ) -> Self {
         Self { course_repo, module_repo, video_repo }
     }
 

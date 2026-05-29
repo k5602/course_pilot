@@ -47,24 +47,18 @@ pub struct SummarizeVideoOutput {
 }
 
 /// Use case for summarizing a video with caching.
-pub struct SummarizeVideoUseCase<AI, TR, VR>
-where
-    AI: SummarizerAI,
-    TR: TranscriptProvider,
-    VR: VideoRepository,
-{
-    llm: Arc<AI>,
-    transcript_provider: Arc<TR>,
-    video_repo: Arc<VR>,
+pub struct SummarizeVideoUseCase {
+    llm: Arc<dyn SummarizerAI>,
+    transcript_provider: Arc<dyn TranscriptProvider>,
+    video_repo: Arc<dyn VideoRepository>,
 }
 
-impl<AI, TR, VR> SummarizeVideoUseCase<AI, TR, VR>
-where
-    AI: SummarizerAI,
-    TR: TranscriptProvider,
-    VR: VideoRepository,
-{
-    pub fn new(llm: Arc<AI>, transcript_provider: Arc<TR>, video_repo: Arc<VR>) -> Self {
+impl SummarizeVideoUseCase {
+    pub fn new(
+        llm: Arc<dyn SummarizerAI>,
+        transcript_provider: Arc<dyn TranscriptProvider>,
+        video_repo: Arc<dyn VideoRepository>,
+    ) -> Self {
         Self { llm, transcript_provider, video_repo }
     }
 
