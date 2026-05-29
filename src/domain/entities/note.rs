@@ -100,7 +100,7 @@ mod tests {
     #[test]
     fn new_with_content() {
         let vid = VideoId::new();
-        let note = Note::new(NoteId::new(), vid.clone(), "My notes".to_string());
+        let note = Note::new(NoteId::new(), vid, "My notes".to_string());
         assert_eq!(note.content(), "My notes");
         assert_eq!(note.video_id(), &vid);
     }
