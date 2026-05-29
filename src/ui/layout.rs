@@ -21,14 +21,77 @@ use crate::ui::pages;
 use crate::ui::right_panel;
 use crate::ui::state::SharedState;
 use crate::ui::toast::Toast;
+use crate::ui::types::RefreshCallback;
 
 fn wrap_page(
     widget: &impl IsA<gtk::Widget>,
     title: &str,
     tag: &'static str,
+    state: SharedState,
+    parent_window: adw::ApplicationWindow,
+    import_refresh_cb: RefreshCallback,
 ) -> adw::NavigationPage {
     let toolbar = adw::ToolbarView::new();
     let header = adw::HeaderBar::new();
+
+    // Create a beautiful "+" MenuButton in the header bar for direct ingest options
+    let plus_btn = gtk::MenuButton::new();
+    plus_btn.set_icon_name("list-add-symbolic");
+    plus_btn.add_css_class("flat");
+    plus_btn.set_tooltip_text(Some("Import Course"));
+
+    let popover = gtk::Popover::new();
+    let popover_box = gtk::Box::new(gtk::Orientation::Vertical, 6);
+    popover_box.set_margin_start(8);
+    popover_box.set_margin_end(8);
+    popover_box.set_margin_top(8);
+    popover_box.set_margin_bottom(8);
+
+    let yt_btn = gtk::Button::with_label("Import YouTube Playlist");
+    yt_btn.set_icon_name("network-wired-symbolic");
+    yt_btn.add_css_class("flat");
+    yt_btn.set_halign(gtk::Align::Fill);
+
+    let state_yt = state.clone();
+    let pw_yt = parent_window.clone();
+    let refresh_yt = import_refresh_cb.clone();
+    let popover_yt = popover.clone();
+    yt_btn.connect_clicked(move |_| {
+        popover_yt.popdown();
+        let cb = refresh_yt.borrow().clone();
+        dialogs::import_dialog::show_import_playlist_dialog(
+            state_yt.clone(),
+            Some(pw_yt.upcast_ref::<gtk::Window>()),
+            cb,
+        );
+    });
+
+    let local_btn = gtk::Button::with_label("Import Local Folder");
+    local_btn.set_icon_name("folder-open-symbolic");
+    local_btn.add_css_class("flat");
+    local_btn.set_halign(gtk::Align::Fill);
+
+    let state_local = state.clone();
+    let pw_local = parent_window.clone();
+    let refresh_local = import_refresh_cb.clone();
+    let popover_local = popover.clone();
+    local_btn.connect_clicked(move |_| {
+        popover_local.popdown();
+        let cb = refresh_local.borrow().clone();
+        dialogs::import_local_dialog::show_import_local_dialog(
+            state_local.clone(),
+            Some(pw_local.upcast_ref::<gtk::Window>()),
+            cb,
+        );
+    });
+
+    popover_box.append(&yt_btn);
+    popover_box.append(&local_btn);
+    popover.set_child(Some(&popover_box));
+    plus_btn.set_popover(Some(&popover));
+
+    header.pack_end(&plus_btn);
+
     toolbar.add_top_bar(&header);
     toolbar.set_content(Some(widget));
     let page = adw::NavigationPage::new(&toolbar, title);
@@ -43,9 +106,8 @@ fn build_sidebar(
     nav_pages: Rc<HashMap<&'static str, adw::NavigationPage>>,
     tag_to_button: Rc<RefCell<HashMap<&'static str, gtk::ToggleButton>>>,
     _right_panel_widget: &gtk::Box,
-    parent_window: Option<adw::ApplicationWindow>,
+    _parent_window: Option<adw::ApplicationWindow>,
     overlay: &adw::OverlaySplitView,
-    on_import_refresh: Rc<dyn Fn()>,
 ) -> gtk::Box {
     let sidebar = gtk::Box::new(gtk::Orientation::Vertical, 4);
     sidebar.set_width_request(220);
@@ -151,58 +213,21 @@ fn build_sidebar(
 
     sidebar.append(&nav_box);
 
-    let import_section = gtk::Box::new(gtk::Orientation::Vertical, 2);
-    import_section.set_margin_start(8);
-    import_section.set_margin_end(8);
-    import_section.set_margin_bottom(8);
-
-    let pw_yt: Option<gtk::Window> = parent_window.clone().map(|w| w.upcast());
-    let state_cl_yt = state.clone();
-    let refresh_yt = on_import_refresh.clone();
-    let yt_btn = gtk::Button::with_label("Import YouTube Playlist");
-    yt_btn.add_css_class("flat");
-    yt_btn.set_halign(gtk::Align::Fill);
-    yt_btn.connect_clicked(move |_| {
-        dialogs::import_dialog::show_import_playlist_dialog(
-            state_cl_yt.clone(),
-            pw_yt.as_ref(),
-            Some(refresh_yt.clone()),
-        );
-    });
-    import_section.append(&yt_btn);
-
-    let pw_local: Option<gtk::Window> = parent_window.clone().map(|w| w.upcast());
-    let state_cl_local = state.clone();
-    let refresh_local = on_import_refresh;
-    let local_btn = gtk::Button::with_label("Import Local Media");
-    local_btn.add_css_class("flat");
-    local_btn.set_halign(gtk::Align::Fill);
-    local_btn.connect_clicked(move |_| {
-        dialogs::import_local_dialog::show_import_local_dialog(
-            state_cl_local.clone(),
-            pw_local.as_ref(),
-            Some(refresh_local.clone()),
-        );
-    });
-    import_section.append(&local_btn);
-
-    sidebar.append(&import_section);
-
-    let notes_toggle = gtk::ToggleButton::new();
-    notes_toggle.add_css_class("flat");
-    notes_toggle.set_halign(gtk::Align::Fill);
-    let toggle_label = gtk::Label::new(Some("Notes"));
+    let chat_toggle = gtk::ToggleButton::new();
+    chat_toggle.add_css_class("flat");
+    chat_toggle.set_halign(gtk::Align::Fill);
+    let toggle_label = gtk::Label::new(Some("AI Chat"));
     toggle_label.set_halign(gtk::Align::Start);
-    notes_toggle.set_child(Some(&toggle_label));
-    notes_toggle.set_tooltip_text(Some("Toggle Notes & AI Chat panel"));
-    notes_toggle.set_active({
+    chat_toggle.set_child(Some(&toggle_label));
+    chat_toggle.set_tooltip_text(Some("Toggle AI Chat companion panel"));
+    chat_toggle.set_active({
         let s = state.borrow();
         s.right_panel_visible
     });
 
     let state_clone = state.clone();
     let overlay_clone = overlay.clone();
-    notes_toggle.connect_toggled(move |btn| {
+    chat_toggle.connect_toggled(move |btn| {
         let visible = btn.is_active();
         {
             let mut s = state_clone.borrow_mut();
@@ -211,7 +236,23 @@ fn build_sidebar(
         overlay_clone.set_show_sidebar(visible);
     });
 
-    sidebar.append(&notes_toggle);
+    sidebar.append(&chat_toggle);
+
+    // Dedicated Course Notes Popup editor button
+    let notes_btn = gtk::Button::new();
+    notes_btn.add_css_class("flat");
+    notes_btn.set_halign(gtk::Align::Fill);
+    let notes_lbl = gtk::Label::new(Some("Course Notes (Ctrl+N)"));
+    notes_lbl.set_halign(gtk::Align::Start);
+    notes_btn.set_child(Some(&notes_lbl));
+    notes_btn.set_tooltip_text(Some("Open dynamic floating Notes editor"));
+
+    let state_notes = state.clone();
+    notes_btn.connect_clicked(move |_| {
+        crate::ui::notes_window::open_notes_window(state_notes.clone());
+    });
+
+    sidebar.append(&notes_btn);
 
     sidebar
 }
@@ -220,12 +261,28 @@ pub struct MainLayout;
 
 impl MainLayout {
     pub fn build(state: SharedState, parent_window: &adw::ApplicationWindow) -> adw::ToastOverlay {
+        let key_controller = gtk::EventControllerKey::new();
+        let state_key = state.clone();
+        key_controller.connect_key_pressed(move |_, keyval, _code, state_flag| {
+            if state_flag.contains(gtk::gdk::ModifierType::CONTROL_MASK)
+                && (keyval == gtk::gdk::Key::n || keyval == gtk::gdk::Key::N)
+            {
+                crate::ui::notes_window::open_notes_window(state_key.clone());
+                glib::Propagation::Stop
+            } else {
+                glib::Propagation::Proceed
+            }
+        });
+        parent_window.add_controller(key_controller);
+
         let nav_view = adw::NavigationView::new();
         nav_view.set_hexpand(true);
         nav_view.set_vexpand(true);
         nav_view.set_pop_on_escape(true);
 
         let nav_view_rc = Rc::new(nav_view);
+
+        let import_refresh_cb: RefreshCallback = Rc::new(RefCell::new(None));
 
         // Step 1: Create all page widgets first (they don't need nav_pages yet)
         let dashboard =
@@ -237,10 +294,38 @@ impl MainLayout {
             Rc::new(pages::settings::SettingsPage::new(state.clone(), nav_view_rc.clone()));
 
         // Step 2: Create NavigationPages from widgets of pages that don't depend on nav_pages
-        let dash_nav = Rc::new(wrap_page(dashboard.widget(), "Dashboard", PAGE_DASHBOARD));
-        let vp_nav = Rc::new(wrap_page(video_player.widget(), "Video Player", PAGE_VIDEO_PLAYER));
-        let qv_nav = Rc::new(wrap_page(quiz_view.widget(), "Quiz", PAGE_QUIZ_VIEW));
-        let st_nav = Rc::new(wrap_page(settings.widget(), "Settings", PAGE_SETTINGS));
+        let dash_nav = Rc::new(wrap_page(
+            dashboard.widget(),
+            "Dashboard",
+            PAGE_DASHBOARD,
+            state.clone(),
+            parent_window.clone(),
+            import_refresh_cb.clone(),
+        ));
+        let vp_nav = Rc::new(wrap_page(
+            video_player.widget(),
+            "Video Player",
+            PAGE_VIDEO_PLAYER,
+            state.clone(),
+            parent_window.clone(),
+            import_refresh_cb.clone(),
+        ));
+        let qv_nav = Rc::new(wrap_page(
+            quiz_view.widget(),
+            "Quiz",
+            PAGE_QUIZ_VIEW,
+            state.clone(),
+            parent_window.clone(),
+            import_refresh_cb.clone(),
+        ));
+        let st_nav = Rc::new(wrap_page(
+            settings.widget(),
+            "Settings",
+            PAGE_SETTINGS,
+            state.clone(),
+            parent_window.clone(),
+            import_refresh_cb.clone(),
+        ));
 
         // Step 3: Create pages that need nav_pages (constructor accepts empty placeholder)
         let course_list =
@@ -251,9 +336,30 @@ impl MainLayout {
             Rc::new(pages::quiz_list::QuizListPage::new(state.clone(), nav_view_rc.clone()));
 
         // Step 4: Create their NavigationPages
-        let cl_nav = Rc::new(wrap_page(course_list.widget(), "Courses", PAGE_COURSE_LIST));
-        let cv_nav = Rc::new(wrap_page(course_view.widget(), "Course", PAGE_COURSE_VIEW));
-        let ql_nav = Rc::new(wrap_page(quiz_list.widget(), "Quizzes", PAGE_QUIZ_LIST));
+        let cl_nav = Rc::new(wrap_page(
+            course_list.widget(),
+            "Courses",
+            PAGE_COURSE_LIST,
+            state.clone(),
+            parent_window.clone(),
+            import_refresh_cb.clone(),
+        ));
+        let cv_nav = Rc::new(wrap_page(
+            course_view.widget(),
+            "Course",
+            PAGE_COURSE_VIEW,
+            state.clone(),
+            parent_window.clone(),
+            import_refresh_cb.clone(),
+        ));
+        let ql_nav = Rc::new(wrap_page(
+            quiz_list.widget(),
+            "Quizzes",
+            PAGE_QUIZ_LIST,
+            state.clone(),
+            parent_window.clone(),
+            import_refresh_cb.clone(),
+        ));
 
         // Step 5: Build the full nav_pages map and inject into pages that need it
         let mut pages_map: HashMap<&'static str, adw::NavigationPage> = HashMap::new();
@@ -267,9 +373,11 @@ impl MainLayout {
         let nav_pages = Rc::new(pages_map);
 
         // Inject nav_pages into pages that need it
+        dashboard.set_nav_pages(nav_pages.clone());
         course_list.set_nav_pages(nav_pages.clone());
         course_view.set_nav_pages(nav_pages.clone());
         quiz_list.set_nav_pages(nav_pages.clone());
+        video_player.set_nav_pages(nav_pages.clone());
 
         // Step 6: Initialize nav view with dashboard as the root
         nav_view_rc.push(dash_nav.as_ref());
@@ -307,6 +415,7 @@ impl MainLayout {
                 cl.refresh();
             })
         };
+        *import_refresh_cb.borrow_mut() = Some(on_import_refresh.clone());
 
         let sidebar_box = build_sidebar(
             state.clone(),
@@ -316,7 +425,6 @@ impl MainLayout {
             right_panel.widget(),
             Some(parent_window.clone()),
             &outer_split,
-            on_import_refresh,
         );
 
         let sidebar_nav_page = adw::NavigationPage::new(&sidebar_box, "Sidebar");
@@ -390,6 +498,13 @@ impl MainLayout {
                 vp.stop();
             }
 
+            // When navigating away from Settings, refresh pages that depend on LLM state
+            // so they re-evaluate has_llm (e.g. video player action buttons).
+            if old == PAGE_SETTINGS && new_tag != PAGE_SETTINGS {
+                cv.refresh();
+                cl.refresh();
+            }
+
             *old_page.borrow_mut() = new_tag.clone();
 
             // Update sidebar toggle buttons to match current page
@@ -400,8 +515,8 @@ impl MainLayout {
                 }
             }
 
-            let s = nav_state.borrow();
-            if let Some(ref ctx) = s.backend {
+            let backend = nav_state.borrow().backend.clone();
+            if let Some(ref ctx) = backend {
                 let presence = ServiceFactory::update_presence(ctx);
                 let activity = match new_tag.as_str() {
                     PAGE_DASHBOARD => Activity::Dashboard,
@@ -421,7 +536,6 @@ impl MainLayout {
                 };
                 presence.execute(UpdatePresenceInput { activity });
             }
-            drop(s);
 
             match new_tag.as_str() {
                 PAGE_DASHBOARD => db.refresh(),

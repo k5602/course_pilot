@@ -23,6 +23,11 @@ impl CoursePilotApp {
             .default_height(800)
             .build();
 
+        window.connect_close_request(move |_| {
+            log::info!("Main window closed. Exiting process.");
+            std::process::exit(0);
+        });
+
         let state = new_shared_state();
         let layout = MainLayout::build(state.clone(), &window);
         window.set_content(Some(&layout));
