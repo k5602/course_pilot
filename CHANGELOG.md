@@ -5,6 +5,7 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/)
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+
 ## [0.2.0] - 2026-05-29
 
 ### Added
@@ -18,6 +19,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - CSS rules for `.right-panel` and `.notes-text-view` classes.
 - macOS keyring support via `apple-native` feature.
 
+- **Redesigned Interactive Quiz System & University-Grade MCQ Prompts**: Includes university-grade MCQs featuring plausible distractor fallacies, deep conceptual testing, and thorough refutations. Equipped with user interface additions such as selected option highlighting, correct/incorrect status badges, and expandable explanation drawers.
+- **Dynamic Floating Popup Notes Window**: A globally accessible notes popup triggered via `Ctrl+N` featuring a dual-mode setup: Type Mode (text editor) and Preview Mode (supporting Pango-compiled rich markdown, LaTeX rendering for inline and block mathematical equations, and built-in Pango safety escaping). Includes an "Insert Video Reference" shortcut.
+- **Upgraded Default Model**: Upgraded the default AI backend model to Gemini 3.1 Flash Lite.
+- **Dynamic Duration Format**: Implemented consistent H:MM:SS formatting for video durations across the user interface.
+- **Resume Study Dashboard**: A redesigned dashboard featuring a gradient hero banner, glassmorphic stat cards, overall course completion levelbars, and interactive progress cards for enrolled courses with direct resume-study navigation.
+- **Scroll-Down Video Sub-panels**: Positioned below the video player, adding a fullscreen video toggle button, double-click gestures, and `F`/`F11` shortcuts. Features sections for Associated Quizzes, Video Summary, and Video Transcript reader.
+- **AI Chat UI Enhancements**: Refactored the chat interface into clear speech bubbles, aligning User messages to the right and Assistant responses to the left. Supports immediate rendering of sent messages and sending on pressing the `Enter` key.
 ### Changed
 
 - Refactored ingest use cases to remove direct diesel imports from the application layer (hexagonal architecture compliance).
@@ -32,6 +40,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Rewrote `ARCHITECTURE.md` to accurately describe the GTK4/GStreamer/Diesel stack.
 - Quiz question rendering deduplicated into a single function.
 - Pass threshold uses `Exam::PASS_THRESHOLD` constant instead of hardcoded `0.7`.
+- **AI Chat & Quiz Context Optimization**: Refactored the LLM context pipeline to no longer pass noisy raw transcripts to the AI chat or quiz generator. The pipeline now utilizes high-fidelity AI-extracted Video Summaries to deliver dense, high-performance, and cost-effective context.
+- **UI Video Summary Display**: Configured the dashboard sub-panel below the video player to display the clean, high-fidelity Video Summary instead of raw transcripts.
 
 ### Fixed
 
@@ -120,21 +130,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Release workflow improvements and artifact handling.
 - Dioxus CLI caching and release bundle simplifications.
 
-### Fixed
-
-- Subtitle matching test fixes in local media handling.
-
-### Deprecated
-
-- TBA
-
-### Removed
-
-- TBA
-
-### Security
-
-- TBA
 
 ## [0.1.0] - 2026-01-17
 

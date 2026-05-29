@@ -33,13 +33,14 @@ The application stores all user data locally with strong relational integrity.
 
 ### C. Cloud LLM (The Companion/Examiner)
 
-- **Engine**: Gemini via `genai` crate (BYOK - Bring Your Own Key).
+- **Engine**: Gemini 3.1 Flash Lite (upgraded default model) via `genai` crate (BYOK - Bring Your Own Key).
 - **Adapters**: `GeminiAdapter` implementing `LLMProvider`, `ModuleTitleGenerator`.
 - **Tasks**:
   - Contextual Q&A (Companion mode).
   - MCQ generation (Examiner mode).
   - Video summarization.
   - Module title generation.
+- **Context Optimization**: Restructured pipeline that exclusively passes dense, high-fidelity AI-extracted Video Summaries to the AI chat and quiz systems, bypassing raw noisy transcripts to improve response speeds, reduce API costs, and maximize context concentration.
 
 ## 3. Ingestion Pipeline
 
@@ -64,6 +65,14 @@ The application stores all user data locally with strong relational integrity.
 - **GTK4** with **libadwaita** for adaptive, native-feeling UI.
 - **State**: `Rc<RefCell<AppState>>` shared across widgets.
 - **Navigation**: `gtk::Stack` with string-named pages, sidebar toggle buttons.
+- **Duration Format**: Consistent, dynamic `H:MM:SS` duration rendering across pages.
+
+### Key UI Subsystems
+
+- **Resume Study Dashboard**: Visual homepage layout with gradient hero banner, glassmorphic stat cards, completion levelbars, and interactive progress cards supporting direct study resume shortcuts.
+- **Scroll-Down Video Sub-panels**: Positioned below the video player. Consists of Associated Quizzes, clean Video Summary, and Video Transcript reader. Video player enhanced with fullscreen toggle button, double-click gestures, and `F`/`F11` shortcuts.
+- **Interactive Quiz System**: University-grade MCQ presentation with selected option highlighting, correct/incorrect status badges, and expandable explanation drawers showing step-by-step refutations.
+- **Dynamic Floating Popup Notes Window**: A globally accessible overlay window triggered via `Ctrl+N` with two states: **Type Mode** (markdown text editor with "Insert Video Reference" hotkey) and **Preview Mode** (Pango-compiled markdown and LaTeX rendering for inline and block mathematical equations), including robust Pango safety escaping.
 
 ### Page Pattern
 
@@ -98,8 +107,8 @@ Orchestration. Use cases pull ports from `AppContext` and execute business logic
 Adapters implementing domain ports.
 
 - **Persistence**: SQLite repositories + FTS5 search.
-- **LLM**: Gemini adapter via `genai` crate.
-- **Video**: GStreamer player with `playbin` pipeline.
+- **LLM**: Gemini adapter (using **Gemini 3.1 Flash Lite** by default) via `genai` crate.
+- **Video**: GStreamer player with `playbin` pipeline, enhanced with custom gestures (double-click fullscreen), dedicated fullscreen toggles, and `F`/`F11` key bindings.
 - **Discord**: Rich Presence adapter.
 - **Transcript**: YouTube subtitle fetching via `yt-transcript-rs`.
 - **Keystore**: OS keyring via `keyring` crate.

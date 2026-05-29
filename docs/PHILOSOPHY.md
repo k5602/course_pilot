@@ -31,10 +31,10 @@ Raw playlists are often overwhelming. Course Pilot imposes order without breakin
 
 ### 4. The Human-AI Partnership
 
-We use AI (Gemini) not to replace the student, but to challenge them.
+We use AI (Gemini) not to replace the student, but to challenge and guide them.
 
-- **The Companion**: A sidecar assistant that understands the current context to answer deep questions during playback.
-- **The Examiner**: Moving beyond passive watching. The AI acts as a validator, generating structured exams upon user request to verify retention.
+- **The Companion**: A sidecar assistant that understands the current video through dense, high-fidelity AI-extracted Video Summaries (bypassing raw noisy transcripts) to answer deep conceptual questions during playback.
+- **The Examiner**: Moving beyond passive watching. The AI acts as a rigorous validator, generating university-grade MCQ exams containing plausible distractor fallacies, deep conceptual testing, and thorough refutations to verify and reinforce actual retention.
 
 ## The Completion Mindset
 
