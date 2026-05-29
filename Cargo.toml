@@ -14,6 +14,7 @@ gtk = { package = "gtk4", version = "0.11", features = ["v4_14"] }
 
 # GStreamer video
 gst = { package = "gstreamer", version = "0.25", features = ["v1_22"] }
+gst-app = { package = "gstreamer-app", version = "0.25" }
 gst-video = { package = "gstreamer-video", version = "0.25" }
 
 dotenvy = "0.15"
@@ -45,11 +46,7 @@ discord-rich-presence = "1.1.0"
 # LLM (Gemini)
 genai = "0.5"
 
-# YouTube Transcripts
-yt-transcript-rs = "0.1"
-
 # Secure Storage
-gst-app = { package = "gstreamer-app", version = "0.25" }
 url = "2.5"
 
 [build-dependencies]

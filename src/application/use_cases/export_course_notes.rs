@@ -21,8 +21,8 @@ pub struct ExportCourseNotesInput {
 pub enum ExportCourseNotesError {
     #[error("Course not found")]
     CourseNotFound,
-    #[error("Repository error: {0}")]
-    Repository(String),
+    #[error(transparent)]
+    Repository(#[from] RepositoryError),
 }
 
 /// Use case to export all notes for a course as Markdown.
@@ -64,38 +64,33 @@ where
     pub fn execute(&self, input: ExportCourseNotesInput) -> Result<String, ExportCourseNotesError> {
         let course = self
             .course_repo
-            .find_by_id(&input.course_id)
-            .map_err(map_repo_error)?
+            .find_by_id(&input.course_id)?
             .ok_or(ExportCourseNotesError::CourseNotFound)?;
 
-        let modules = self.module_repo.find_by_course(&input.course_id).map_err(map_repo_error)?;
+        let modules = self.module_repo.find_by_course(&input.course_id)?;
 
-        let videos = self.video_repo.find_by_course(&input.course_id).map_err(map_repo_error)?;
+        let videos = self.video_repo.find_by_course(&input.course_id)?;
 
-        let tags = self.tag_repo.find_by_course(&input.course_id).map_err(map_repo_error)?;
+        let tags = self.tag_repo.find_by_course(&input.course_id)?;
 
         let markdown = build_markdown(
             course.name(),
             course.description(),
             &tags,
-            &modules,
+            modules,
             &videos,
-            |video| self.note_repo.find_by_video(video.id()).map_err(map_repo_error),
+            |video| Ok(self.note_repo.find_by_video(video.id())?),
         )?;
 
         Ok(markdown)
     }
 }
 
-fn map_repo_error(err: RepositoryError) -> ExportCourseNotesError {
-    ExportCourseNotesError::Repository(err.to_string())
-}
-
 fn build_markdown<F>(
     course_name: &str,
     course_description: Option<&str>,
     tags: &[Tag],
-    modules: &[Module],
+    modules: Vec<Module>,
     videos: &[Video],
     mut note_loader: F,
 ) -> Result<String, ExportCourseNotesError>
@@ -124,26 +119,30 @@ where
         return Ok(output);
     }
 
-    let mut sorted_modules = modules.to_vec();
+    let mut sorted_modules = modules; // move, no clone
     sorted_modules.sort_by_key(|m| m.sort_order());
 
     for module in sorted_modules {
         output.push_str(&format!("## Module: {}\n\n", module.title()));
 
-        let mut module_videos =
-            videos.iter().filter(|v| v.module_id() == module.id()).cloned().collect::<Vec<_>>();
+        let mut indices: Vec<usize> = videos
+            .iter()
+            .enumerate()
+            .filter(|(_, v)| v.module_id() == module.id())
+            .map(|(i, _)| i)
+            .collect();
+        indices.sort_by_key(|&i| videos[i].sort_order());
 
-        module_videos.sort_by_key(|v| v.sort_order());
-
-        if module_videos.is_empty() {
+        if indices.is_empty() {
             output.push_str("_No videos in this module._\n\n");
             continue;
         }
 
-        for video in module_videos {
+        for idx in indices {
+            let video = &videos[idx];
             output.push_str(&format!("### {}\n\n", video.title()));
 
-            match note_loader(&video)? {
+            match note_loader(video)? {
                 Some(note) => {
                     let content = note.content().trim();
                     if content.is_empty() {

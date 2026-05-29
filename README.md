@@ -16,24 +16,28 @@ A modern Rust desktop application that automatically analyzes video-based course
 
 ### Core Functionality
 
-- **Playlist Import** - Import YouTube playlists with automatic metadata extraction
-- **Smart Modules** - Automatic grouping of videos into logical modules
-- **Progress Tracking** - Track video completion with visual progress bars
-- **Video Navigation** - Previous/next video links for seamless learning flow
+- **Playlist Import** - Import YouTube playlists with automatic metadata extraction and parsing.
+- **Smart Modules** - Automatic ordering-preserved grouping of videos into logical modules based on title patterns.
+- **Progress Tracking** - Track video completion with persisted visual progress bars and completions.
+- **Video Navigation** - Previous/next video links for seamless, sequential learning flow.
+- **Dynamic Duration Formats** - High-fidelity H:MM:SS formatted duration displays standard across all UI elements.
 
 ### Learning Tools
 
-- **Session Planning** - Plan study sessions based on your cognitive limit (15-120 min/day)
-- **AI Companion** - Ask questions about video content (requires Gemini API)
-- **Quiz Generation** - Auto-generated MCQ quizzes from video context
-- **Per-Video Notes** - Take and persist notes for each video
+- **Resume Study Dashboard** - An immersive learning homepage with a gradient hero banner, glassmorphic stat cards, overall course completion levelbars, and interactive progress cards for quick resume-study navigation.
+- **Redesigned Interactive Quiz System** - Deep university-grade MCQ assessments featuring plausible distractor fallacies and comprehensive refutations. Features interactive elements like selected option highlighting, correct/incorrect visual status badges, and slide-out explanation drawers.
+- **AI Chat Companion** - Ask dense, context-aware questions during playback. Chat responses are optimized via Gemini 3.1 Flash Lite.
+- **AI Chat & Quiz Context Optimization** - Optimized context pipeline that utilizes dense, high-fidelity AI-extracted summaries rather than noisy raw transcripts. This ensures high-performance, cost-effective, and rapid generation.
+- **Dynamic Floating Popup Notes Window** - Globally accessible via a `Ctrl+N` hotkey. Features a dual-mode workflow: **Type Mode** (markdown editor) and **Preview Mode** (compiled Pango rich markdown & LaTeX rendering supporting inline and block mathematical equations). Includes an "Insert Video Reference" hotkey and robust Pango safety escaping.
 
-### User Experience
+### User Experience & Media Player
 
-- **Dark Theme** - Eye-friendly dark theme (libadwaita)
-- **Settings Persistence** - Preferences saved to database
-- **Course Management** - Delete courses with confirmation dialog
-- **Loading States** - Skeleton loaders and spinners throughout
+- **Scroll-Down Video Sub-panels** - Rich sections placed directly below the player comprising Associated Quizzes, high-fidelity Video Summaries, and a Video Transcript reader.
+- **Advanced Media Controls** - Support for a fullscreen video toggle button, double-click gestures for fullscreen, and `F`/`F11` hotkey actions.
+- **AI Chat UI Enhancements** - Fluid conversation flow displaying User right-aligned and Assistant left-aligned speech bubbles, immediate local rendering of sent messages, and input submission mapped to the `Enter` key.
+- **Dark Theme** - Sleek, eye-friendly dark styling natively integrated via libadwaita.
+- **Settings Persistence** - User preferences, including model configurations, are saved securely in the SQLite database and OS keyring.
+- **Loading States** - Fluid UX using skeleton loaders and loading spinners throughout the application.
 
 ## Quick Start
 

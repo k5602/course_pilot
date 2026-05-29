@@ -123,8 +123,10 @@ async fn run_yt_dlp(
         }
     })?;
 
-    let stdout = String::from_utf8_lossy(&output.stdout);
-    let stderr = String::from_utf8_lossy(&output.stderr);
+    let stdout = String::from_utf8(output.stdout)
+        .unwrap_or_else(|e| String::from_utf8_lossy(e.as_bytes()).into_owned());
+    let stderr = String::from_utf8(output.stderr)
+        .unwrap_or_else(|e| String::from_utf8_lossy(e.as_bytes()).into_owned());
 
     if !output.status.success() {
         return classify_error(&stderr, &stdout);
@@ -228,8 +230,10 @@ pub(crate) async fn resolve_youtube_stream_inner(
             }
         })?;
 
-    let stdout = String::from_utf8_lossy(&output.stdout).to_string();
-    let stderr = String::from_utf8_lossy(&output.stderr);
+    let stdout = String::from_utf8(output.stdout)
+        .unwrap_or_else(|e| String::from_utf8_lossy(e.as_bytes()).into_owned());
+    let stderr = String::from_utf8(output.stderr)
+        .unwrap_or_else(|e| String::from_utf8_lossy(e.as_bytes()).into_owned());
 
     if !output.status.success() {
         let err = match classify_error(&stderr, &stdout) {

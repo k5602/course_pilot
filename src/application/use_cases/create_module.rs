@@ -6,15 +6,15 @@ use std::sync::Arc;
 
 use crate::domain::{
     entities::Module,
-    ports::ModuleRepository,
+    ports::{ModuleRepository, RepositoryError},
     value_objects::{CourseId, ModuleId},
 };
 
 /// Error type for module creation.
 #[derive(Debug, thiserror::Error)]
 pub enum CreateModuleError {
-    #[error("Repository error: {0}")]
-    Repository(String),
+    #[error(transparent)]
+    Repository(#[from] RepositoryError),
 }
 
 /// Input for creating a new module.
@@ -42,8 +42,8 @@ where
 
     pub fn execute(&self, input: CreateModuleInput) -> Result<ModuleId, CreateModuleError> {
         let id = ModuleId::new();
-        let module = Module::new(id.clone(), input.course_id, input.title, input.sort_order);
-        self.module_repo.save(&module).map_err(|e| CreateModuleError::Repository(e.to_string()))?;
+        let module = Module::new(id, input.course_id, input.title, input.sort_order);
+        self.module_repo.save(&module)?;
         Ok(id)
     }
 }

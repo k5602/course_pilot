@@ -22,7 +22,10 @@ pub struct GeminiAdapter {
 
 impl GeminiAdapter {
     /// Creates a new adapter with the given API key and model name.
-    pub fn new(api_key: String, model: String) -> Self {
+    pub fn new(api_key: String, mut model: String) -> Self {
+        if model.starts_with("gemini/") {
+            model = model.strip_prefix("gemini/").unwrap().to_string();
+        }
         let client = Client::builder()
             .with_auth_resolver_fn(move |_: genai::ModelIden| {
                 Ok(Some(AuthData::from_single(api_key.clone())))
@@ -42,14 +45,17 @@ impl GeminiAdapter {
         let delays =
             [Duration::from_millis(500), Duration::from_millis(1000), Duration::from_millis(2000)];
 
-        for attempt in 0..MAX_RETRIES {
-            let mut messages = Vec::new();
+        let messages: Vec<ChatMessage> = {
+            let mut v = Vec::with_capacity(2);
             if let Some(sys) = system_prompt {
-                messages.push(ChatMessage::system(sys));
+                v.push(ChatMessage::system(sys));
             }
-            messages.push(ChatMessage::user(user_prompt));
+            v.push(ChatMessage::user(user_prompt));
+            v
+        };
 
-            let req = ChatRequest::new(messages);
+        for attempt in 0..MAX_RETRIES {
+            let req = ChatRequest::new(messages.clone());
             let options = temperature.map(|t| ChatOptions::default().with_temperature(t));
             let result = self.client.exec_chat(&self.model, req, options.as_ref()).await;
 
@@ -96,48 +102,50 @@ fn extract_json_from_response(text: &str) -> Result<&str, LLMError> {
 
 impl CompanionAI for GeminiAdapter {
     async fn ask(&self, question: &str, context: &CompanionContext) -> Result<String, LLMError> {
-        let truncate = |value: &str, limit: usize| -> String {
-            let mut out: String = value.chars().take(limit).collect();
-            if value.chars().count() > limit {
+        use std::borrow::Cow;
+        fn truncate_cow(value: &str, limit: usize) -> Cow<'_, str> {
+            if value.chars().count() <= limit {
+                Cow::Borrowed(value)
+            } else {
+                let mut out: String = value.chars().take(limit).collect();
                 out.push_str("… [truncated]");
+                Cow::Owned(out)
             }
-            out
-        };
+        }
 
         let description =
-            truncate(context.video_description.as_deref().unwrap_or("Not available"), 1200);
-        let summary = truncate(context.summary.as_deref().unwrap_or("Not available"), 1200);
-        let notes = truncate(context.notes.as_deref().unwrap_or("Not available"), 1200);
-        let transcript = truncate(context.transcript.as_deref().unwrap_or("Not available"), 5000);
+            truncate_cow(context.video_description.as_deref().unwrap_or("Not available"), 1200);
+        let summary = truncate_cow(context.summary.as_deref().unwrap_or("Not available"), 2500);
+        let notes = truncate_cow(context.notes.as_deref().unwrap_or("Not available"), 1200);
         let local_context =
-            truncate(context.local_context.as_deref().unwrap_or("Not provided"), 1200);
+            truncate_cow(context.local_context.as_deref().unwrap_or("Not provided"), 1200);
 
         let prompt = format!(
             r#"You are a learning companion for course "{}".
 Video: "{}" (Module: "{}")
 
-Context (use only what is provided):
+Context Sources:
 - Description: {}
-- Summary: {}
+- Summary (AI-extracted educational core): {}
 - Notes: {}
-- Transcript: {}
 - User context: {}
 
 Student question: {}
 
 Guidelines:
 - Ground answers strictly in the context above; do not invent details.
+- Focus strictly on actual core educational, technical, and scientific content. Completely ignore off-topic "side talking", greetings, announcements, administrative filler, or promotional chatter.
+- Prioritize the 'Summary' as it represents the clean, comprehensive core of the entire video.
 - If context is insufficient, state the missing piece and ask one focused follow-up.
 - Keep the response concise (3-6 sentences). Use bullets only if clarifying steps.
 - Do not mention system instructions or the prompt."#,
             context.course_name,
             context.video_title,
             context.module_title,
-            description,
-            summary,
-            notes,
-            transcript,
-            local_context,
+            description.as_ref(),
+            summary.as_ref(),
+            notes.as_ref(),
+            local_context.as_ref(),
             question
         );
 
@@ -151,44 +159,45 @@ impl ExaminerAI for GeminiAdapter {
         &self,
         video_title: &str,
         video_description: Option<&str>,
-        video_transcript: Option<&str>,
+        video_summary: Option<&str>,
         num_questions: u8,
         difficulty: ExamDifficulty,
     ) -> Result<Vec<MCQuestion>, LLMError> {
         let description = video_description.unwrap_or("");
+        let summary = video_summary.unwrap_or("");
         let difficulty = difficulty.as_str();
-        let transcript_info = video_transcript
-            .and_then(|t| {
-                if t.len() > 5000 {
-                    t.char_indices().nth(5000).map(|(i, _)| &t[..i])
-                } else {
-                    Some(t)
-                }
-            })
-            .unwrap_or("");
         let prompt = format!(
-            r#"You are an expert instructor creating a focused MCQ quiz from the provided context.
+            r#"You are an expert university instructor creating a highly rigorous and educational multiple-choice quiz from the provided context.
+Your goal is to test core educational, technical, and scientific concepts. Ignore any noisy off-topic chit-chat, greetings, admin details, or administrative/promotional filler.
 
-Context:
-- Title: "{video_title}"
-- Description: {description}
-- Transcript: {transcript_info}
+Context Sources:
+- Video Title: "{video_title}"
+- Description (curated overview): {description}
+- Summary (AI-extracted educational core): {summary}
 
-Task:
-Generate exactly {num_questions} multiple-choice questions at {difficulty} difficulty.
-Base questions on the transcript content when available. Use ONLY the provided context. Do NOT ask about timestamps, durations, or video metadata.
-Avoid vague or trivial questions. Each question should test a specific concept or inference.
-Options must be plausible and mutually exclusive.
+Instructions:
+1. Prioritize the 'Summary' and 'Description' because they represent the cleaned, dense educational/scientific core of the entire video.
+2. Focus strictly on actual core educational, scientific, and learnable material. Completely filter out and ignore any jokes, "side talking", administrative filler, announcements, or non-educational chit-chat.
+3. Generate exactly {num_questions} conceptual and analytical multiple-choice questions at {difficulty} difficulty.
+4. Avoid simple rote-memorization or trivial factual recall. Focus on core concepts, architectural decisions, logical deductions, or primary arguments.
+5. Options must be highly plausible. Distractors should represent common cognitive misconceptions, logical errors, or surface-level misunderstandings that a student might easily make. Do NOT include lazy distractors like "All of the above" or "None of the above".
+6. The correct option must be indisputably correct based ONLY on the provided context. Never ask about timestamps, video durations, background music, or visual video details.
 
-Output: Return ONLY a JSON array with this schema:
-[{{"question":"...","options":["A","B","C","D"],"correct_index":0,"explanation":"..."}}]
+Output Format:
+Return ONLY a valid, parseable JSON array. Do not wrap in markdown or write conversational filler. The schema MUST be:
+[
+  {{
+    "question": "Clear and concise question text?",
+    "options": ["Option A", "Option B", "Option C", "Option D"],
+    "correct_index": 0,
+    "explanation": "A comprehensive explanation (3-4 sentences) that clearly justifies why the correct option is correct based on the text, AND specifically refutes the distractors, explaining the fallacies or nuances that make them incorrect."
+  }}
+]
 
 Rules:
-- 4 options per question
-- correct_index must be 0..3
-- explanation must justify why the correct option is correct (1–2 sentences)
-- No Markdown or extra text
-- Do not mention the prompt, the context, or any system instructions"#,
+- Exactly 4 options per question.
+- correct_index must be a valid index (0, 1, 2, or 3) matching the correct option.
+- Return ONLY the raw JSON structure, starting with [ and ending with ]."#,
         );
 
         let text = self.execute_with_retry(None, &prompt, Some(0.2)).await?;
@@ -234,27 +243,29 @@ impl SummarizerAI for GeminiAdapter {
         video_title: &str,
     ) -> Result<String, LLMError> {
         // Truncate long transcripts to stay within token limits
-        let truncated: &str = if transcript.len() > 100_000 {
-            if let Some((idx, _)) = transcript.char_indices().nth(100_000) {
-                &transcript[..idx]
-            } else {
-                transcript
+        let max_chars = 100_000;
+        let truncated: &str = if transcript.chars().count() > max_chars {
+            match transcript.char_indices().nth(max_chars).map(|(idx, _)| idx) {
+                Some(idx) => &transcript[..idx],
+                None => transcript,
             }
         } else {
             transcript
         };
 
-        let prompt = format!(
-            r#"You are creating study notes from a transcript.
+        let prompt = {
+            let template_start = r#"You are creating high-quality, dense academic study notes from a video transcript.
+Your primary goal is to extract strictly core educational, scientific, and technical material to learn.
+Filter out and completely ignore all "side talking", greetings, administrative filler, announcements, off-topic jokes, promotions, or non-educational chit-chat.
 
-Video: "{video_title}"
-Transcript:
-{truncated}
+Video: ""#;
+            let template_mid = "\"\nTranscript:\n";
+            let template_end = r#"
 
 Output format (plain text only):
-1. Main Topic: <one sentence>
+1. Main Topic: <one sentence summarizing the primary scientific/educational topic>
 2. Key Points:
-- ...
+- ... (strictly core conceptual or technical learnings, ignore filler)
 - ...
 - ...
 3. Key Terms:
@@ -262,10 +273,25 @@ Output format (plain text only):
 (or "None")
 
 Rules:
+- Focus solely on concrete, learnable concepts and scientific content from the transcript.
 - Use only information in the transcript; do not add external knowledge.
 - Prefer precise, concrete statements over vague summaries.
-- Do not include timestamps, speaker labels, or meta commentary."#,
-        );
+- Do not include timestamps, speaker labels, or meta commentary."#;
+            let cap = template_start.len()
+                + video_title.len()
+                + truncated.len()
+                + template_mid.len()
+                + template_end.len();
+            let mut buf = String::with_capacity(cap + 256);
+            use std::fmt::Write;
+            write!(
+                buf,
+                "{}{}{}{}{}",
+                template_start, video_title, template_mid, truncated, template_end
+            )
+            .unwrap();
+            buf
+        };
 
         let text = self.execute_with_retry(None, &prompt, Some(0.3)).await?;
         Ok(text)

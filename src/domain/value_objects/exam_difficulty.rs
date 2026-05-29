@@ -42,12 +42,11 @@ impl FromStr for ExamDifficulty {
     type Err = ExamDifficultyParseError;
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
-        let normalized = s.trim().to_ascii_lowercase();
-        match normalized.as_str() {
-            "easy" => Ok(Self::Easy),
-            "medium" => Ok(Self::Medium),
-            "hard" => Ok(Self::Hard),
-            _ => Err(ExamDifficultyParseError::Invalid(s.to_string())),
+        match s.trim().as_bytes() {
+            b"easy" | b"Easy" | b"EASY" => Ok(Self::Easy),
+            b"medium" | b"Medium" | b"MEDIUM" => Ok(Self::Medium),
+            b"hard" | b"Hard" | b"HARD" => Ok(Self::Hard),
+            _ => Err(ExamDifficultyParseError::Invalid(s.trim().to_string())),
         }
     }
 }

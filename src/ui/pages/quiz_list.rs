@@ -107,13 +107,16 @@ impl QuizListPage {
 
             let item = list_item.item();
             if let Some(quiz) = item.as_ref().and_then(|i| i.downcast_ref::<QuizObject>()) {
-                title.set_text(&quiz.title());
+                let quiz_title = quiz.title();
+                title.set_text(&quiz_title);
 
                 if quiz.is_taken() {
+                    let quiz_score = quiz.score().unwrap_or(0.0) * 100.0;
+                    let quiz_passed = quiz.passed().unwrap_or(false);
                     let score_text = format!(
                         "Score: {:.0}% {}",
-                        quiz.score().unwrap_or(0.0) * 100.0,
-                        if quiz.passed().unwrap_or(false) { "[PASS]" } else { "[FAIL]" }
+                        quiz_score,
+                        if quiz_passed { "[PASS]" } else { "[FAIL]" }
                     );
                     status_label.set_text(&score_text);
                     start_btn.set_label("Review");

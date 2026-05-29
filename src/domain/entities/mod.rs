@@ -10,6 +10,7 @@ mod tag;
 mod user_preferences;
 mod video;
 
+pub use crate::domain::value_objects::UserId;
 pub use analytics::AppAnalytics;
 pub use course::Course;
 pub use exam::{Exam, PASS_THRESHOLD, QuizQuestion};
@@ -17,5 +18,5 @@ pub use module::Module;
 pub use note::{Note, NoteId};
 pub use search::{SearchResult, SearchResultType};
 pub use tag::{TAG_COLORS, Tag};
-pub use user_preferences::UserPreferences;
+pub use user_preferences::{UserPreferences, UserPreferencesConfig};
 pub use video::Video;

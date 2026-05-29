@@ -1,14 +1,14 @@
 //! Ingest Playlist Use Case
 //!
-//! Orchestrates: Fetch -> Sanitize -> Group -> Persist
+//! Orchestrates: Fetch -> Group -> Sanitize -> Persist
 
 use std::sync::Arc;
 
 use crate::domain::{
     entities::{Course, Module, Video},
     ports::{
-        CourseRepository, ModuleRepository, ModuleTitleGenerator, PlaylistFetcher, SearchEntry,
-        SearchRepository, VideoRepository,
+        CourseRepository, FetchError, ModuleRepository, ModuleTitleGenerator, PlaylistFetcher,
+        SearchEntry, SearchRepository, VideoRepository,
     },
     services::{BoundaryDetector, TitleSanitizer},
     value_objects::{CourseId, ModuleId, PlaylistUrl, VideoId, VideoSource, YouTubeVideoId},
@@ -20,8 +20,8 @@ use crate::infrastructure::media_hash;
 pub enum IngestError {
     #[error("Invalid playlist URL: {0}")]
     InvalidUrl(String),
-    #[error("Failed to fetch playlist: {0}")]
-    FetchFailed(String),
+    #[error(transparent)]
+    FetchFailed(#[from] FetchError),
     #[error("Failed to persist: {0}")]
     PersistFailed(String),
     #[error("Course already exists: {0}")]
@@ -58,7 +58,7 @@ where
     video_repo: Arc<VR>,
     search_repo: Arc<SR>,
     sanitizer: TitleSanitizer,
-    boundary_detector: BoundaryDetector,
+    boundary_batch_size: usize,
     title_generator: Option<Arc<dyn ModuleTitleGenerator>>,
 }
 
@@ -94,6 +94,7 @@ where
         video_repo: Arc<VR>,
         search_repo: Arc<SR>,
         title_generator: Option<Arc<dyn ModuleTitleGenerator>>,
+        boundary_batch_size: usize,
     ) -> Self {
         Self {
             fetcher,
@@ -102,7 +103,7 @@ where
             video_repo,
             search_repo,
             sanitizer: TitleSanitizer::new(),
-            boundary_detector: BoundaryDetector::new(),
+            boundary_batch_size,
             title_generator,
         }
     }
@@ -123,32 +124,30 @@ where
         }
 
         // 3. Fetch playlist metadata
-        let raw_videos = self
-            .fetcher
-            .fetch_playlist(&playlist_url)
-            .await
-            .map_err(|e| IngestError::FetchFailed(e.to_string()))?;
+        let raw_videos = self.fetcher.fetch_playlist(&playlist_url).await?;
 
         if raw_videos.is_empty() {
-            return Err(IngestError::FetchFailed("Playlist is empty".to_string()));
+            return Err(IngestError::FetchFailed(FetchError::NotFound(
+                "Playlist is empty".to_string(),
+            )));
         }
 
-        // 3. Sanitize titles
+        // 3. Group videos into modules on raw titles (preserves "Module", "Chapter", etc.)
+        let raw_title_refs: Vec<&str> = raw_videos.iter().map(|v| v.title.as_str()).collect();
+        let detector = BoundaryDetector::with_batch_size(self.boundary_batch_size);
+        let module_groups = detector.group_by_titles(&raw_title_refs);
+
+        // 4. Sanitize titles for storage only
         let sanitized_titles: Vec<String> =
             raw_videos.iter().map(|v| self.sanitizer.sanitize(&v.title)).collect();
 
-        // 4. Group videos into modules (title-aware with batch fallback)
-        let sanitized_titles_refs: Vec<&str> =
-            sanitized_titles.iter().map(|s| s.as_str()).collect();
-        let module_groups = self.boundary_detector.group_by_titles(&sanitized_titles_refs);
-
         // 5. Create course
-        let course_name = input
-            .course_name
-            .unwrap_or_else(|| sanitized_titles.first().cloned().unwrap_or_default());
+        let mut title_iter = sanitized_titles.into_iter();
+        let course_name =
+            input.course_name.unwrap_or_else(|| title_iter.next().unwrap_or_default());
         let course_id = CourseId::new();
         let course = Course::new(
-            course_id.clone(),
+            course_id,
             course_name.clone(),
             playlist_url.clone(),
             playlist_url.playlist_id().to_string(),
@@ -176,7 +175,7 @@ where
             let module_id = ModuleId::new();
 
             let module_video_titles: Vec<String> =
-                video_indices.iter().map(|&i| sanitized_titles[i].clone()).collect();
+                video_indices.iter().map(|&i| raw_videos[i].title.clone()).collect();
             let module_title =
                 self.generate_module_title(&module_video_titles, &course_name, module_idx).await;
 
@@ -186,7 +185,7 @@ where
                     let raw = &raw_videos[i];
                     PendingVideo {
                         youtube_id: raw.youtube_id.clone(),
-                        title: sanitized_titles[i].clone(),
+                        title: title_iter.next().unwrap(),
                         description: raw.description.clone(),
                         duration_secs: raw.duration_secs,
                     }
@@ -208,12 +207,7 @@ where
         let mut video_search_entries = Vec::with_capacity(total_videos);
 
         for (module_idx, pm) in pending_modules.iter().enumerate() {
-            let module = Module::new(
-                pm.module_id.clone(),
-                course_id.clone(),
-                pm.title.clone(),
-                module_idx as u32,
-            );
+            let module = Module::new(pm.module_id, course_id, pm.title.clone(), module_idx as u32);
             all_modules.push(module);
 
             for (sort_order, video_data) in pm.videos.iter().enumerate() {
@@ -222,7 +216,7 @@ where
                 let source = VideoSource::youtube(youtube_id);
                 let video = Video::with_description(
                     VideoId::new(),
-                    pm.module_id.clone(),
+                    pm.module_id,
                     source,
                     video_data.title.clone(),
                     video_data.description.clone(),

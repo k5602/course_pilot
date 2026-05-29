@@ -5,15 +5,15 @@
 use std::sync::Arc;
 
 use crate::domain::{
-    ports::{ModuleRepository, VideoRepository},
+    ports::{ModuleRepository, RepositoryError, VideoRepository},
     value_objects::ModuleId,
 };
 
 /// Error type for module deletion.
 #[derive(Debug, thiserror::Error)]
 pub enum DeleteModuleError {
-    #[error("Repository error: {0}")]
-    Repository(String),
+    #[error(transparent)]
+    Repository(#[from] RepositoryError),
     #[error("Module has videos: remove or move them first")]
     HasVideos,
 }
@@ -21,6 +21,8 @@ pub enum DeleteModuleError {
 /// Input for deleting a module.
 pub struct DeleteModuleInput {
     pub module_id: ModuleId,
+    /// When true, skip the has-videos safety check and delete even if videos exist.
+    pub force: bool,
 }
 
 /// Use case for deleting an empty module.
@@ -43,15 +45,13 @@ where
     }
 
     pub fn execute(&self, input: DeleteModuleInput) -> Result<(), DeleteModuleError> {
-        let videos = self
-            .video_repo
-            .find_by_module(&input.module_id)
-            .map_err(|e| DeleteModuleError::Repository(e.to_string()))?;
-        if !videos.is_empty() {
-            return Err(DeleteModuleError::HasVideos);
+        if !input.force {
+            let videos = self.video_repo.find_by_module(&input.module_id)?;
+            if !videos.is_empty() {
+                return Err(DeleteModuleError::HasVideos);
+            }
         }
-        self.module_repo
-            .delete(&input.module_id)
-            .map_err(|e| DeleteModuleError::Repository(e.to_string()))
+        self.module_repo.delete(&input.module_id)?;
+        Ok(())
     }
 }

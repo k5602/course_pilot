@@ -14,7 +14,7 @@ pub struct Note {
 }
 
 /// Unique identifier for a Note.
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub struct NoteId(Uuid);
 
 impl NoteId {

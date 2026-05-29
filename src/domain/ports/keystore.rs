@@ -3,12 +3,8 @@
 /// Error type for keystore operations.
 #[derive(Debug, thiserror::Error)]
 pub enum KeystoreError {
-    #[error("Key not found: {0}")]
-    NotFound(String),
     #[error("Storage error: {0}")]
     Storage(String),
-    #[error("Platform not supported")]
-    Unsupported,
 }
 
 /// Port for secure credential storage.

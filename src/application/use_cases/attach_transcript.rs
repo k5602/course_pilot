@@ -17,8 +17,8 @@ pub enum AttachTranscriptError {
     VideoNotFound,
     #[error("Transcript is empty after cleaning")]
     EmptyTranscript,
-    #[error("Repository error: {0}")]
-    Repository(String),
+    #[error(transparent)]
+    Repository(#[from] RepositoryError),
 }
 
 /// Input for attaching a transcript to a video.
@@ -60,8 +60,7 @@ where
     ) -> Result<AttachTranscriptOutput, AttachTranscriptError> {
         let video = self
             .video_repo
-            .find_by_id(&input.video_id)
-            .map_err(map_repo_err)?
+            .find_by_id(&input.video_id)?
             .ok_or(AttachTranscriptError::VideoNotFound)?;
 
         let cleaned = self.cleaner.clean(&input.transcript_text);
@@ -69,12 +68,8 @@ where
             return Err(AttachTranscriptError::EmptyTranscript);
         }
 
-        self.video_repo.update_transcript(video.id(), Some(&cleaned)).map_err(map_repo_err)?;
+        self.video_repo.update_transcript(video.id(), Some(&cleaned))?;
 
         Ok(AttachTranscriptOutput { cleaned_length: cleaned.len() })
     }
-}
-
-fn map_repo_err(err: RepositoryError) -> AttachTranscriptError {
-    AttachTranscriptError::Repository(err.to_string())
 }

@@ -8,7 +8,7 @@ use super::connection::DbPool;
 use super::models::{NewUserPreferences, UserPreferencesRow};
 use crate::domain::entities::UserPreferences;
 use crate::domain::ports::{RepositoryError, UserPreferencesRepository};
-use crate::domain::value_objects::VideoQuality;
+use crate::domain::value_objects::{UserId, VideoQuality};
 use crate::schema::user_preferences;
 
 /// SQLite-backed user preferences repository.
@@ -23,11 +23,11 @@ impl SqliteUserPreferencesRepository {
 }
 
 impl UserPreferencesRepository for SqliteUserPreferencesRepository {
-    fn load(&self, id: &str) -> Result<Option<UserPreferences>, RepositoryError> {
+    fn load(&self, id: &UserId) -> Result<Option<UserPreferences>, RepositoryError> {
         let mut conn = self.pool.get().map_err(|e| RepositoryError::Database(e.to_string()))?;
 
         let row = user_preferences::table
-            .find(id)
+            .find(id.as_str())
             .first::<UserPreferencesRow>(&mut conn)
             .optional()
             .map_err(|e| RepositoryError::Database(e.to_string()))?;
@@ -47,6 +47,7 @@ impl UserPreferencesRepository for SqliteUserPreferencesRepository {
             right_panel_width: prefs.right_panel_width() as i32,
             onboarding_completed: bool_to_i32(prefs.onboarding_completed()),
             preferred_quality: &quality_str,
+            boundary_batch_size: prefs.boundary_batch_size() as i32,
         };
 
         diesel::replace_into(user_preferences::table)
@@ -59,14 +60,19 @@ impl UserPreferencesRepository for SqliteUserPreferencesRepository {
 }
 
 fn row_to_preferences(row: UserPreferencesRow) -> UserPreferences {
+    use crate::domain::entities::UserPreferencesConfig;
+
     UserPreferences::new(
         row.id,
-        row.ml_boundary_enabled != 0,
-        row.cognitive_limit_minutes as u32,
-        row.right_panel_visible != 0,
-        row.right_panel_width as u32,
-        row.onboarding_completed != 0,
-        str_to_quality(&row.preferred_quality),
+        UserPreferencesConfig {
+            ml_boundary_enabled: row.ml_boundary_enabled != 0,
+            cognitive_limit_minutes: row.cognitive_limit_minutes as u32,
+            right_panel_visible: row.right_panel_visible != 0,
+            right_panel_width: row.right_panel_width as u32,
+            onboarding_completed: row.onboarding_completed != 0,
+            preferred_quality: str_to_quality(&row.preferred_quality),
+            boundary_batch_size: row.boundary_batch_size as u32,
+        },
     )
 }
 
@@ -154,6 +160,7 @@ mod tests {
             onboarding_completed: 0,
             right_panel_width: 320,
             preferred_quality: "p1080".to_string(),
+            boundary_batch_size: 5,
         };
         let prefs = row_to_preferences(row);
         assert_eq!(prefs.preferred_quality(), VideoQuality::P1080);

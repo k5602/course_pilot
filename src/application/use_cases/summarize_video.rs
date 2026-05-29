@@ -9,7 +9,10 @@
 use std::sync::Arc;
 
 use crate::domain::{
-    ports::{RepositoryError, SummarizerAI, TranscriptError, TranscriptProvider, VideoRepository},
+    ports::{
+        LLMError, RepositoryError, SummarizerAI, TranscriptError, TranscriptProvider,
+        VideoRepository,
+    },
     services::TranscriptChunker,
     value_objects::VideoId,
 };
@@ -19,12 +22,12 @@ use crate::domain::{
 pub enum SummarizeVideoError {
     #[error("Video not found")]
     VideoNotFound,
-    #[error("Repository error: {0}")]
-    Repository(String),
-    #[error("Transcript error: {0}")]
-    Transcript(String),
-    #[error("AI error: {0}")]
-    AI(String),
+    #[error(transparent)]
+    Repository(#[from] RepositoryError),
+    #[error(transparent)]
+    Transcript(#[from] TranscriptError),
+    #[error(transparent)]
+    AI(#[from] LLMError),
 }
 
 /// Input for the summarize video use case.
@@ -72,8 +75,7 @@ where
     ) -> Result<SummarizeVideoOutput, SummarizeVideoError> {
         let video = self
             .video_repo
-            .find_by_id(&input.video_id)
-            .map_err(map_repo_err)?
+            .find_by_id(&input.video_id)?
             .ok_or(SummarizeVideoError::VideoNotFound)?;
 
         if !input.force_refresh
@@ -91,19 +93,14 @@ where
             Some(t) if !t.trim().is_empty() => t.to_string(),
             _ => {
                 let youtube_id = video.youtube_id().ok_or_else(|| {
-                    SummarizeVideoError::Transcript(
+                    SummarizeVideoError::Transcript(TranscriptError::Provider(
                         "No subtitles found for this local video. Add an SRT or VTT file next to the video file and re-import.".to_string(),
-                    )
+                    ))
                 })?;
-                let fetched = self
-                    .transcript_provider
-                    .fetch_transcript(youtube_id.as_str())
-                    .await
-                    .map_err(map_transcript_err)?;
+                let fetched =
+                    self.transcript_provider.fetch_transcript(youtube_id.as_str()).await?;
 
-                self.video_repo
-                    .update_transcript(&input.video_id, Some(&fetched))
-                    .map_err(map_repo_err)?;
+                self.video_repo.update_transcript(&input.video_id, Some(&fetched))?;
 
                 fetched
             },
@@ -116,11 +113,9 @@ where
                 .llm
                 .summarize_transcript(&transcript, video.title())
                 .await
-                .map_err(|e| SummarizeVideoError::AI(e.to_string()))?;
+                .map_err(SummarizeVideoError::from)?;
 
-            self.video_repo
-                .update_summary(&input.video_id, Some(&summary))
-                .map_err(map_repo_err)?;
+            self.video_repo.update_summary(&input.video_id, Some(&summary))?;
 
             Ok(SummarizeVideoOutput { summary, transcript_used: transcript, cached: false })
         } else {
@@ -134,7 +129,7 @@ where
                     .llm
                     .summarize_transcript(chunk, &part_title)
                     .await
-                    .map_err(|e| SummarizeVideoError::AI(e.to_string()))?;
+                    .map_err(SummarizeVideoError::from)?;
                 part_summaries.push(format!(
                     "--- Part {} of {} ---\n{}",
                     i + 1,
@@ -149,21 +144,11 @@ where
                 .llm
                 .summarize_transcript(&merged_transcript, video.title())
                 .await
-                .map_err(|e| SummarizeVideoError::AI(e.to_string()))?;
+                .map_err(SummarizeVideoError::from)?;
 
-            self.video_repo
-                .update_summary(&input.video_id, Some(&summary))
-                .map_err(map_repo_err)?;
+            self.video_repo.update_summary(&input.video_id, Some(&summary))?;
 
             Ok(SummarizeVideoOutput { summary, transcript_used: transcript, cached: false })
         }
     }
-}
-
-fn map_repo_err(err: RepositoryError) -> SummarizeVideoError {
-    SummarizeVideoError::Repository(err.to_string())
-}
-
-fn map_transcript_err(err: TranscriptError) -> SummarizeVideoError {
-    SummarizeVideoError::Transcript(err.to_string())
 }

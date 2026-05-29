@@ -42,11 +42,12 @@ impl SearchRepository for SqliteSearchRepository {
         let mut conn = self.pool.get().map_err(|e| RepositoryError::Database(e.to_string()))?;
 
         // FTS5 match query with snippet extraction
-        let search_query = format!("{}*", query.replace('"', ""));
+        let sanitized: String = query.chars().filter(|&c| c != '"').collect();
+        let search_query = format!("{sanitized}*");
 
         let rows: Vec<SearchRow> = sql_query(
             r#"
-            SELECT entity_type, entity_id, title, 
+            SELECT entity_type, entity_id, title,
                    snippet(search_index, 3, '<b>', '</b>', '...', 20) as content,
                    course_id
             FROM search_index

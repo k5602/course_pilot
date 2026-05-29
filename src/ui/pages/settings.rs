@@ -10,6 +10,10 @@ use crate::ui::state::SharedState;
 use crate::ui::toast::Toast;
 use crate::ui::widgets::QualitySelector;
 
+/// Placeholder shown in the API-key entry when a key is already stored.
+/// If the user submits this exact string, the key is left unchanged.
+const MASKED_KEY: &str = "●●●●●●●●";
+
 pub struct SettingsPage {
     widget: gtk::Box,
     state: SharedState,
@@ -21,6 +25,8 @@ pub struct SettingsPage {
     cookie_entry: adw::EntryRow,
     theme_switch: adw::SwitchRow,
     quality_selector: QualitySelector,
+    cognitive_limit_row: adw::SpinRow,
+    batch_size_row: adw::SpinRow,
     save_status_label: gtk::Label,
     save_btn: gtk::Button,
 }
@@ -96,6 +102,28 @@ impl SettingsPage {
 
         prefs_box.append(&youtube_group);
 
+        let learning_group = adw::PreferencesGroup::new();
+        learning_group.set_title("Learning");
+        learning_group.set_description(Some("Module grouping and session planning."));
+
+        let cognitive_limit_row = adw::SpinRow::new(None::<&gtk::Adjustment>, 1.0, 0);
+        cognitive_limit_row.set_title("Daily Study Limit");
+        cognitive_limit_row.set_subtitle("Maximum minutes per day for study sessions.");
+        cognitive_limit_row.set_range(10.0, 180.0);
+        cognitive_limit_row.set_value(45.0);
+        cognitive_limit_row.set_digits(0);
+        learning_group.add(&cognitive_limit_row);
+
+        let batch_size_row = adw::SpinRow::new(None::<&gtk::Adjustment>, 1.0, 0);
+        batch_size_row.set_title("Module Batch Size");
+        batch_size_row.set_subtitle("Videos per module when no labeled boundaries detected.");
+        batch_size_row.set_range(1.0, 20.0);
+        batch_size_row.set_value(5.0);
+        batch_size_row.set_digits(0);
+        learning_group.add(&batch_size_row);
+
+        prefs_box.append(&learning_group);
+
         let theme_group = adw::PreferencesGroup::new();
         theme_group.set_title("Appearance");
 
@@ -130,6 +158,8 @@ impl SettingsPage {
             cookie_entry,
             theme_switch,
             quality_selector,
+            cognitive_limit_row,
+            batch_size_row,
             save_status_label,
             save_btn,
         };
@@ -141,14 +171,37 @@ impl SettingsPage {
         let theme_sw = page.theme_switch.clone();
         let status = page.save_status_label.clone();
         let quality_sel = page.quality_selector.widget().clone();
+        let cognitive_limit_row_cl = page.cognitive_limit_row.clone();
+        let batch_size_row_cl = page.batch_size_row.clone();
+
+        // When user starts typing in the API key entry, clear the masked placeholder
+        // so the real key can be entered fresh.
+        let api_entry_change = page.api_key_entry.clone();
+        api_entry_change.connect_changed(move |entry| {
+            let text = entry.text();
+            // If the text still equals the placeholder AND has the placeholder length,
+            // it means the user hasn't modified it yet — do nothing.
+            // Once it differs (user added/removed a char) the natural text is in place.
+            if text.as_str() != MASKED_KEY && text.as_str().contains('●') {
+                // User started editing inside the masked value — clear the field so they
+                // can enter the new key cleanly.
+                entry.set_text("");
+            }
+        });
 
         page.save_btn.connect_clicked(move |_| {
             let s = state_cl.borrow();
             if let Some(ref ctx) = s.backend {
-                let key = api_entry.text().as_str().to_string();
-                if !key.is_empty() {
+                let key = api_entry.text().as_str().trim().to_string();
+                // Only save if the user actually typed a new key (not the masked placeholder).
+                if !key.is_empty() && key != MASKED_KEY {
                     match ctx.keystore.store("gemini_api_key", &key) {
                         Ok(_) => {
+                            // Hot-swap the LLM so summarize/quiz buttons become active
+                            // immediately without requiring an app restart.
+                            if let Err(e) = ctx.reload_llm() {
+                                log::warn!("reload_llm failed after API key save: {e}");
+                            }
                             status.set_text("API key saved.");
                         },
                         Err(e) => {
@@ -189,7 +242,8 @@ impl SettingsPage {
                 let uc = ServiceFactory::preferences(ctx);
                 let input = UpdatePreferencesInput {
                     ml_boundary_enabled: false,
-                    cognitive_limit_minutes: 45,
+                    cognitive_limit_minutes: cognitive_limit_row_cl.value() as u32,
+                    boundary_batch_size: batch_size_row_cl.value() as u32,
                     right_panel_visible: s.right_panel_visible,
                     right_panel_width: s.right_panel_width as u32,
                     onboarding_completed: s.onboarding_completed,
@@ -201,6 +255,7 @@ impl SettingsPage {
                         let mut s2 = state_cl.borrow_mut();
                         s2.preferred_quality = prefs.preferred_quality();
                         s2.session_quality = prefs.preferred_quality();
+                        s2.cognitive_limit_minutes = prefs.cognitive_limit_minutes();
                         status.set_text("Settings saved.");
                     },
                     Err(e) => {
@@ -233,9 +288,13 @@ impl SettingsPage {
 
             match ctx.keystore.retrieve("gemini_api_key") {
                 Ok(Some(_)) => {
+                    // Show a visual placeholder to indicate a key is stored,
+                    // without exposing the actual key value.
+                    self.api_key_entry.set_text(MASKED_KEY);
                     self.api_status_label.set_text("API key is set");
                 },
                 _ => {
+                    self.api_key_entry.set_text("");
                     self.api_status_label.set_text("No API key set");
                 },
             }
@@ -249,6 +308,9 @@ impl SettingsPage {
             }
 
             self.quality_selector.set_quality(state.preferred_quality);
+
+            self.batch_size_row.set_value(state.boundary_batch_size as f64);
+            self.cognitive_limit_row.set_value(state.cognitive_limit_minutes as f64);
 
             let is_dark =
                 matches!(adw::StyleManager::default().color_scheme(), adw::ColorScheme::ForceDark);

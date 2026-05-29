@@ -14,8 +14,8 @@ use crate::domain::{
 pub enum MoveVideoError {
     #[error("Invalid input: {0}")]
     InvalidInput(String),
-    #[error("Failed to move video: {0}")]
-    PersistFailed(String),
+    #[error(transparent)]
+    PersistFailed(#[from] RepositoryError),
 }
 
 /// Input for moving a video.
@@ -46,25 +46,14 @@ where
     /// Executes the move operation.
     pub fn execute(&self, input: MoveVideoInput) -> Result<(), MoveVideoError> {
         let sort_order = if input.sort_order == 0 {
-            let existing = self
-                .video_repo
-                .find_by_module(&input.target_module_id)
-                .map_err(|e| MoveVideoError::PersistFailed(format!("{e}")))?;
+            let existing = self.video_repo.find_by_module(&input.target_module_id)?;
             existing.iter().map(|video| video.sort_order()).max().unwrap_or(0).saturating_add(1)
         } else {
             input.sort_order
         };
 
-        self.video_repo
-            .update_module(&input.video_id, &input.target_module_id, sort_order)
-            .map_err(|e| MoveVideoError::PersistFailed(format!("{e}")))?;
+        self.video_repo.update_module(&input.video_id, &input.target_module_id, sort_order)?;
 
         Ok(())
-    }
-}
-
-impl From<RepositoryError> for MoveVideoError {
-    fn from(err: RepositoryError) -> Self {
-        MoveVideoError::PersistFailed(err.to_string())
     }
 }

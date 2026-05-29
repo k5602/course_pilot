@@ -69,32 +69,43 @@ The database is designed to enforce a structured learning path. Every entity rel
 ### 2.3 The Sidecar Companion (AI-B)
 
 - **Trigger**: Active whenever a video is playing.
-- **Context**: The LLM is fed the current video title, description, and the module structure.
-- **Behavior**: User can ask for clarifications without leaving the player. Response must be concise and academic.
+- **Context**: The LLM is fed the current video title, description, and module structure. To ensure cost-effective, high-performance execution, the pipeline completely bypasses noisy raw transcripts, utilizing dense, high-fidelity AI-extracted Video Summaries instead.
+- **Behavior & UI**: Users can ask for clarifications inside the Right Panel's AI Chat tab. The chat UI uses right-aligned User speech bubbles and left-aligned Assistant bubbles, instantly rendering user messages upon submission via the `Enter` key or send button.
 
 ### 2.4 The Manual Examiner (AI-C)
 
-- **Trigger**: User clicks "I have mastered this video."
-- **Generation**: Gemini generates 3–5 Multiple Choice Questions (MCQ) in a strict JSON format.
-- **Validation**:
+- **Trigger**: User clicks "I have mastered this video" or navigates to the quiz view.
+- **Generation & Context**: Gemini generates 3–5 Multiple Choice Questions (MCQ) in a strict JSON format based on the high-fidelity AI-extracted Video Summary instead of noisy raw transcripts. Prompts enforce university-grade MCQ rigor featuring plausible distractor fallacies, deep conceptual testing, and thorough refutations.
+- **Validation & UI**:
+  - Highlights selected options with clear visual correct/incorrect status badges.
+  - Interactive sliding drawer displaying detailed explanations and rationale.
   - If the user passes: `is_completed` is set to `true`.
   - If the user fails: The video remains "Pending" and a review session is suggested.
 
 ---
 
-## 3. UI Requirements (Dioxus Desktop)
+## 3. UI Requirements (GTK4 / libadwaita)
 
-### Dashboard (The Library)
+### Resume Study Dashboard (The Home Hub)
 
-- High-level view of all courses.
-- Progress indicated by "Modules Completed / Total Modules."
-- Visual emphasis on "Distance to Finish" rather than "Time Spent."
+- Sophisticated home interface with a gradient hero banner, glassmorphic stat cards, and overall course completion levelbars.
+- Interactive progress cards for enrolled courses supporting direct study navigation to resume course study.
+- High-level progress indicating completed modules and lessons with visual duration tracking in `H:MM:SS` format.
 
-### Sanctuary Player
+### Sanctuary Player & Sub-panels
 
-- **Main View**: YouTube iFrame using the `youtube-nocookie.com` domain.
-- **CSS Injection**: Disable "More Videos" and "YouTube Logo" overlays to prevent click-out.
-- **Sidebar**: Toggleable view between "Course Roadmap" and "AI Companion."
+- **Main View**: Embedded GStreamer media player with custom video control handlers.
+- **Fullscreen Mode**: Toggle button, double-click gesture support, and `F` / `F11` hotkey actions for immersive study.
+- **Scroll-Down Video Sub-panels**: Positioned below the video player. Comprises:
+  - **Associated Quizzes**: Quick access to saved and generated MCQ quizzes.
+  - **Video Summary**: High-fidelity AI-extracted Video Summary displaying key concepts (replacing noisy raw transcripts).
+  - **Video Transcript**: Interactive clean transcript reader for standard reference.
+
+### Dynamic Floating Popup Notes Window
+
+- **Trigger**: Globally accessible floating editor window invoked via `Ctrl+N`.
+- **Type Mode**: Fully-functional text editor with "Insert Video Reference" hotkey.
+- **Preview Mode**: Dual-pane rendering using Pango-compiled rich markdown and LaTeX support for inline and block mathematical equations. Implements strict Pango safety escaping to prevent markup parser crashes.
 
 ---
 
@@ -116,8 +127,8 @@ The database is designed to enforce a structured learning path. Every entity rel
 
 ### 5.2 Provider Support
 
-- **Initial Provider**: Google Gemini (1.5 Flash).
-- **Configuration**: Users must be able to input, validate, and rotate their API keys via a "Settings" modal.
+- **Initial Provider**: Google Gemini (upgraded to **Gemini 3.1 Flash Lite**).
+- **Configuration**: Users must be able to input, validate, and rotate their API keys via a "Settings" page.
 
 ### 5.3 Validation Workflow
 

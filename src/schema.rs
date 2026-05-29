@@ -65,6 +65,7 @@ diesel::table! {
         onboarding_completed -> Integer,
         right_panel_width -> Integer,
         preferred_quality -> Text,
+        boundary_batch_size -> Integer,
     }
 }
 

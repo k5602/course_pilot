@@ -2,7 +2,6 @@ use crate::domain::ports::FetchError;
 use crate::domain::value_objects::VideoQuality;
 
 /// Port for resolving a streaming URL from a video source identifier.
-///
 /// Implementations use yt-dlp (or equivalent) to get a direct,
 /// playable stream URL respecting the requested quality.
 #[allow(async_fn_in_trait)]

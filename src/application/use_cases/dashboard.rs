@@ -6,7 +6,6 @@ use crate::domain::entities::AppAnalytics;
 use crate::domain::ports::{CourseRepository, ModuleRepository, RepositoryError, VideoRepository};
 
 /// Use case for loading dashboard analytics.
-///
 /// Aggregates counts and durations across all courses.
 pub struct LoadDashboardUseCase<CR, MR, VR>
 where

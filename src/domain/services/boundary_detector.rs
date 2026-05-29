@@ -29,11 +29,18 @@ impl BoundaryDetector {
             return vec![];
         }
 
-        (0..video_count)
-            .collect::<Vec<_>>()
-            .chunks(self.batch_size)
-            .map(|chunk| chunk.to_vec())
-            .collect()
+        let mut groups = Vec::with_capacity(video_count.div_ceil(self.batch_size));
+        let mut current = Vec::with_capacity(self.batch_size);
+        for i in 0..video_count {
+            current.push(i);
+            if current.len() == self.batch_size {
+                groups.push(std::mem::take(&mut current));
+            }
+        }
+        if !current.is_empty() {
+            groups.push(current);
+        }
+        groups
     }
 
     /// Groups videos into modules using title-aware boundary detection.

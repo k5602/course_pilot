@@ -6,7 +6,7 @@ use std::sync::Arc;
 
 use crate::domain::{
     entities::Exam,
-    ports::{ExamRepository, ExaminerAI, MCQuestion, VideoRepository},
+    ports::{ExamRepository, ExaminerAI, LLMError, MCQuestion, RepositoryError, VideoRepository},
     value_objects::{ExamDifficulty, ExamId, VideoId},
 };
 
@@ -17,10 +17,10 @@ pub enum ExamError {
     VideoNotFound,
     #[error("Exam not found")]
     ExamNotFound,
-    #[error("AI error: {0}")]
-    AI(String),
-    #[error("Repository error: {0}")]
-    Repository(String),
+    #[error(transparent)]
+    AI(#[from] LLMError),
+    #[error(transparent)]
+    Repository(#[from] RepositoryError),
 }
 
 /// Input for generating an exam.
@@ -78,11 +78,7 @@ where
         input: GenerateExamInput,
     ) -> Result<GenerateExamOutput, ExamError> {
         // Get video
-        let video = self
-            .video_repo
-            .find_by_id(&input.video_id)
-            .map_err(|e| ExamError::Repository(e.to_string()))?
-            .ok_or(ExamError::VideoNotFound)?;
+        let video = self.video_repo.find_by_id(&input.video_id)?.ok_or(ExamError::VideoNotFound)?;
 
         // Generate questions via AI
         let questions = self
@@ -90,34 +86,35 @@ where
             .generate_mcq(
                 video.title(),
                 video.description(),
-                video.transcript(),
+                video.summary(),
                 input.num_questions,
                 input.difficulty,
             )
             .await
-            .map_err(|e| ExamError::AI(e.to_string()))?;
+            .map_err(ExamError::from)?;
 
         // Create and save exam
         let exam_id = ExamId::new();
-        let question_json =
-            serde_json::to_string(&questions).map_err(|e| ExamError::AI(e.to_string()))?;
+        let question_json = serde_json::to_string(&questions)
+            .map_err(|e| ExamError::AI(LLMError::InvalidResponse(e.to_string())))?;
 
-        let exam = Exam::new(exam_id.clone(), input.video_id, question_json);
-        self.exam_repo.save(&exam).map_err(|e| ExamError::Repository(e.to_string()))?;
+        let exam = Exam::new(exam_id, input.video_id, question_json);
+        self.exam_repo.save(&exam)?;
 
         Ok(GenerateExamOutput { exam_id, questions })
     }
 
     /// Retrieves an exam and its questions.
     pub fn get_exam(&self, exam_id: &ExamId) -> Result<(Exam, Vec<MCQuestion>), ExamError> {
-        let exam = self
-            .exam_repo
-            .find_by_id(exam_id)
-            .map_err(|e| ExamError::Repository(e.to_string()))?
-            .ok_or(ExamError::ExamNotFound)?;
+        let exam = self.exam_repo.find_by_id(exam_id)?.ok_or(ExamError::ExamNotFound)?;
 
-        let questions: Vec<MCQuestion> = serde_json::from_str(exam.question_json())
-            .map_err(|e| ExamError::AI(format!("Failed to parse exam questions: {}", e)))?;
+        let questions: Vec<MCQuestion> =
+            serde_json::from_str(exam.question_json()).map_err(|e| {
+                ExamError::AI(LLMError::InvalidResponse(format!(
+                    "Failed to parse exam questions: {}",
+                    e
+                )))
+            })?;
 
         Ok((exam, questions))
     }
@@ -141,16 +138,12 @@ where
         let user_answers_json = serde_json::to_string(&input.answers).ok();
 
         // Update exam with result
-        self.exam_repo
-            .update_result(&input.exam_id, score, passed, user_answers_json)
-            .map_err(|e| ExamError::Repository(e.to_string()))?;
+        self.exam_repo.update_result(&input.exam_id, score, passed, user_answers_json)?;
 
         // Mark video as complete if passed
         let mut video_marked_complete = false;
         if passed {
-            self.video_repo
-                .update_completion(exam.video_id(), true)
-                .map_err(|e| ExamError::Repository(e.to_string()))?;
+            self.video_repo.update_completion(exam.video_id(), true)?;
             video_marked_complete = true;
         }
 

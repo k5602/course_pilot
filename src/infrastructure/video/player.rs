@@ -4,9 +4,10 @@ use gtk::prelude::WidgetExt;
 use std::sync::mpsc;
 
 struct FrameData {
-    pixels: Vec<u8>,
+    mapped: gst::MappedBuffer<gst::buffer::Readable>,
     width: i32,
     height: i32,
+    stride: usize,
 }
 
 pub struct VideoPlayer {
@@ -30,6 +31,8 @@ impl VideoPlayer {
         let picture = gtk::Picture::new();
         picture.set_hexpand(true);
         picture.set_vexpand(true);
+        picture.set_can_shrink(false);
+        picture.set_content_fit(gtk::ContentFit::Contain);
 
         // --- Video frame rendering via appsink ---
         let appsink_elem = gst::ElementFactory::make("appsink")
@@ -59,14 +62,14 @@ impl VideoPlayer {
                 let info =
                     gst_video::VideoInfo::from_caps(caps).map_err(|_| gst::FlowError::Error)?;
 
-                let frame = gst_video::VideoFrame::from_buffer_readable(buffer, &info)
-                    .map_err(|_| gst::FlowError::Error)?;
-                let plane0 = frame.plane_data(0).map_err(|_| gst::FlowError::Error)?;
+                let mapped =
+                    buffer.into_mapped_buffer_readable().map_err(|_| gst::FlowError::Error)?;
 
                 let data = FrameData {
-                    pixels: plane0.to_vec(),
+                    mapped,
                     width: info.width() as i32,
                     height: info.height() as i32,
+                    stride: (info.width() as usize) * 4,
                 };
                 let _ = frame_tx_cb.send(data);
                 Ok(gst::FlowSuccess::Ok)
@@ -78,19 +81,18 @@ impl VideoPlayer {
         // Idle callback on main thread: render most recent frame only
         let picture_idle = picture.clone();
         glib::idle_add_local(move || {
-            // Drain to the latest frame only (skip stale frames)
             let mut latest: Option<FrameData> = None;
             while let Ok(data) = frame_rx.try_recv() {
                 latest = Some(data);
             }
             if let Some(data) = latest {
-                let bytes = glib::Bytes::from_owned(data.pixels);
+                let bytes = glib::Bytes::from_owned(data.mapped);
                 let texture = gtk::gdk::MemoryTexture::new(
                     data.width,
                     data.height,
                     gtk::gdk::MemoryFormat::R8g8b8a8,
                     &bytes,
-                    data.width as usize * 4,
+                    data.stride,
                 );
                 picture_idle.set_paintable(Some(&texture));
             }
