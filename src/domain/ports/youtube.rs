@@ -28,7 +28,7 @@ pub enum FetchError {
 }
 
 /// Port for fetching YouTube playlist data.
-#[allow(async_fn_in_trait)]
+#[async_trait::async_trait]
 pub trait PlaylistFetcher: Send + Sync {
     /// Fetches all videos from a playlist.
     async fn fetch_playlist(&self, url: &PlaylistUrl) -> Result<Vec<RawVideoMetadata>, FetchError>;

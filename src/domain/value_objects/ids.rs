@@ -4,7 +4,7 @@ use std::str::FromStr;
 use uuid::Uuid;
 
 /// Unique identifier for a Course.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, serde::Serialize, serde::Deserialize)]
 pub struct CourseId(Uuid);
 
 impl CourseId {
@@ -42,7 +42,7 @@ impl std::fmt::Display for CourseId {
 }
 
 /// Unique identifier for a Module.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, serde::Serialize, serde::Deserialize)]
 pub struct ModuleId(Uuid);
 
 impl ModuleId {
@@ -80,7 +80,7 @@ impl std::fmt::Display for ModuleId {
 }
 
 /// Unique identifier for a Video.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, serde::Serialize, serde::Deserialize)]
 pub struct VideoId(Uuid);
 
 impl VideoId {
@@ -118,7 +118,7 @@ impl std::fmt::Display for VideoId {
 }
 
 /// Unique identifier for an Exam.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, serde::Serialize, serde::Deserialize)]
 pub struct ExamId(Uuid);
 
 impl ExamId {
@@ -156,7 +156,7 @@ impl std::fmt::Display for ExamId {
 }
 
 /// User identifier (non-UUID, arbitrary string).
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash, serde::Serialize, serde::Deserialize)]
 pub struct UserId(pub String);
 
 impl UserId {
