@@ -5,6 +5,85 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/)
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.2.0] - 2026-05-29
+
+### Added
+
+- Error toasts for all user-initiated mutations (module create, note save, quiz results, credential storage).
+- Video completion checkbox now persists state to the database.
+- Stream resolution timeout/recovery with user-facing error messages.
+- Batch repository methods (`save_batch`, `index_batch`) for atomic ingestion.
+- Unit tests for domain entities (analytics, exam, video, note) and value objects (video_source, exam_difficulty).
+- `DiscoveryFailed` error variant for GStreamer unavailability.
+- CSS rules for `.right-panel` and `.notes-text-view` classes.
+- macOS keyring support via `apple-native` feature.
+
+### Changed
+
+- Refactored ingest use cases to remove direct diesel imports from the application layer (hexagonal architecture compliance).
+- Replaced all `expect()` panics in `connection.rs` with `Result` propagation.
+- Replaced `catch_unwind` anti-pattern in settings with direct `Result` handling.
+- Replaced GTK widget `unwrap()` chains with safe `Option` patterns in course/quiz list factories.
+- Replaced fragile string-comparison play/pause state with `Cell<bool>`.
+- Tokio runtime initialization now degrades gracefully instead of panicking.
+- GStreamer `set_state()` errors are now logged instead of silently discarded.
+- Chat panel now displays per-video history instead of mixing all videos.
+- Centralized default LLM model into a single constant.
+- Rewrote `ARCHITECTURE.md` to accurately describe the GTK4/GStreamer/Diesel stack.
+- Quiz question rendering deduplicated into a single function.
+- Pass threshold uses `Exam::PASS_THRESHOLD` constant instead of hardcoded `0.7`.
+
+### Fixed
+
+- Chat history bug: navigating between videos would show messages from all videos mixed together.
+- Video completion checkbox had no signal handler - checking it did nothing.
+- Silent data loss on module create, note save, video reorder, quiz result persistence, and credential storage.
+- Stream resolution failure left UI stuck "Loading..." with no recovery.
+- Duplicate `keyring` dependency declarations in `Cargo.toml`.
+- Stale `.gitignore` entries from removed Dioxus/Python/Node.js tooling.
+- CSS dark mode shadows invisible against dark backgrounds.
+- Duplicate `expander` CSS selector blocks.
+
+### Removed
+
+- Dead code: `NoopPresenceProvider`, `FallbackTitleGenerator`, `module_title_for()`.
+- Redundant `chat_history` field from `AppState` (replaced by `chat_history_by_video`).
+- Dead `shortcuts.rs` module.
+- Stale Dioxus/Python/Node.js `.gitignore` entries.
+
+## [0.1.4] - 2026-05-12
+
+### Added
+
+- Migrated entire UI from Dioxus to GTK4/libadwaita with responsive NavigationView.
+- Quiz system: MCQ generation, quiz list, quiz view with pass/fail scoring.
+- Video quality selector with preferred quality persistence in settings.
+- Custom LLM model configuration via builder and `LLM_MODEL` env var.
+- Transcript context for AI companion and MCQ generation.
+- Session planner respects `week_study_days` schedule.
+- HTTP relay servers for local video and YouTube embed proxy.
+- Async yt-dlp execution with direct stream URL resolution.
+- Right panel width preference.
+
+### Changed
+
+- Adopted NavigationView and ListView for navigation and list rendering.
+- Persisted courses, modules, and videos in a single database transaction.
+- Precomputed normalized names and tokens for faster subtitle matching.
+- Streamlined CI and release workflows.
+
+### Fixed
+
+- Single-stream yt-dlp formats for reliable video playback.
+- Proper file URL encoding for local video paths.
+- Sanitizer infinite loops and edge-case handling.
+- Multi-byte UTF-8 character handling in transcript chunking.
+
+### Removed
+
+- Dioxus frontend framework and all Dioxus-specific files.
+
+
 ## [0.1.3] - 2026-01-27
 
 ### Added

@@ -32,7 +32,6 @@ Business logic stays separate from infrastructure:
   - `right_panel.rs`: Notes tab + AI Chat tab.
   - `state.rs`: AppState (Rc<RefCell<AppState>>).
   - `toast.rs`: Non-blocking toast notifications.
-  - `shortcuts.rs`: Escape key navigation (back buttons).
   - `dialogs/`: Import playlist dialog, import local media dialog.
 
 ## DI & Use Cases
@@ -114,4 +113,17 @@ Available repositories: Course, Module, Video, Exam, Note, Tag, UserPreferences,
 
 ## Error Handling
 
-Use `thiserror` for application and infrastructure errors. Domain errors use `RepositoryError`. UI code should catch errors from use cases and surface them through `Toast::show_error()` -- never silently ignore a `Result`.
+Use `thiserror` for application and infrastructure errors. Domain errors use `RepositoryError`. UI code should catch errors from use cases and surface them through `Toast::show_error()` -- never silently ignore a `Result`. Use `if let Err(e) = ... { Toast::show_error(...); }` for user-initiated mutations.
+
+## Repository Batch Methods
+
+For operations that need transactional atomicity (e.g., ingestion), use batch repository methods instead of direct diesel queries:
+
+```rust
+course_repo.save_batch(&courses)?;
+module_repo.save_batch(&modules)?;
+video_repo.save_batch(&videos)?;
+search_repo.index_batch(&entries)?;
+```
+
+Each method runs in its own diesel transaction. The application layer should never import diesel directly -- always go through port traits.
