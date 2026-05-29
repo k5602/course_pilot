@@ -1,5 +1,7 @@
 //! Session Planner - Calculates daily study sessions based on cognitive limit.
 
+use std::collections::HashSet;
+
 use crate::domain::value_objects::{CognitiveLimit, SessionPlan};
 
 /// Plans study sessions based on video durations and user's cognitive limit.
@@ -45,7 +47,8 @@ impl SessionPlanner {
 
         let week_study_days = week_study_days.max(1);
         let limit_secs = self.cognitive_limit.seconds();
-        let boundaries: Vec<usize> = module_boundaries.map(|b| b.to_vec()).unwrap_or_default();
+        let boundaries: HashSet<usize> =
+            module_boundaries.map(|b| b.iter().copied().collect()).unwrap_or_default();
 
         let mut sessions = Vec::new();
         let mut current_session_videos = Vec::new();
@@ -64,12 +67,12 @@ impl SessionPlanner {
 
             if should_split {
                 session_num += 1;
+                let videos = std::mem::take(&mut current_session_videos);
                 sessions.push(SessionPlan::new(
                     Self::session_to_calendar_day(session_num, week_study_days),
-                    current_session_videos.clone(),
+                    videos,
                     current_session_duration,
                 ));
-                current_session_videos.clear();
                 current_session_duration = 0;
             }
 

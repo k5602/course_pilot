@@ -4,7 +4,7 @@ use std::sync::Arc;
 
 use crate::domain::entities::UserPreferences;
 use crate::domain::ports::{RepositoryError, UserPreferencesRepository};
-use crate::domain::value_objects::VideoQuality;
+use crate::domain::value_objects::{UserId, VideoQuality};
 
 /// Input for updating user preferences.
 #[derive(Debug, Clone)]
@@ -15,6 +15,7 @@ pub struct UpdatePreferencesInput {
     pub right_panel_width: u32,
     pub onboarding_completed: bool,
     pub preferred_quality: VideoQuality,
+    pub boundary_batch_size: u32,
 }
 
 /// Use case for loading and updating user preferences.
@@ -23,7 +24,7 @@ where
     PR: UserPreferencesRepository,
 {
     prefs_repo: Arc<PR>,
-    default_id: String,
+    default_id: UserId,
 }
 
 impl<PR> PreferencesUseCase<PR>
@@ -32,7 +33,7 @@ where
 {
     /// Creates a new preferences use case.
     pub fn new(prefs_repo: Arc<PR>) -> Self {
-        Self { prefs_repo, default_id: "default".to_string() }
+        Self { prefs_repo, default_id: UserId::new("default") }
     }
 
     /// Loads preferences or returns defaults if not found.
@@ -55,6 +56,7 @@ where
         prefs.set_right_panel_width(input.right_panel_width);
         prefs.set_onboarding_completed(input.onboarding_completed);
         prefs.set_preferred_quality(input.preferred_quality);
+        prefs.set_boundary_batch_size(input.boundary_batch_size);
         self.prefs_repo.save(&prefs)?;
         Ok(prefs)
     }
@@ -77,7 +79,7 @@ mod tests {
     }
 
     impl UserPreferencesRepository for MockPrefsRepo {
-        fn load(&self, _id: &str) -> Result<Option<UserPreferences>, RepositoryError> {
+        fn load(&self, _id: &UserId) -> Result<Option<UserPreferences>, RepositoryError> {
             Ok(self.stored.lock().unwrap().clone())
         }
         fn save(&self, prefs: &UserPreferences) -> Result<(), RepositoryError> {
@@ -98,6 +100,7 @@ mod tests {
             right_panel_width: 400,
             onboarding_completed: true,
             preferred_quality: VideoQuality::P1080,
+            boundary_batch_size: 5,
         };
 
         let result = uc.update(input).unwrap();

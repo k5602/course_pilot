@@ -112,7 +112,8 @@ impl CourseListPage {
 
             let item = list_item.item();
             if let Some(course) = item.as_ref().and_then(|i| i.downcast_ref::<CourseObject>()) {
-                title.set_text(&course.title());
+                let course_title = course.title();
+                title.set_text(&course_title);
                 match course.description() {
                     Some(ref d) => {
                         desc_label.set_text(d);

@@ -145,4 +145,161 @@ separator {
     padding: 8px;
 }
 
+.dragging {
+    opacity: 0.5;
+}
+
+.drop-above {
+    border-top: 2px solid @theme_selected_bg_color;
+}
+
+.drop-below {
+    border-bottom: 2px solid @theme_selected_bg_color;
+}
+
+/* Redesigned Quiz System */
+.quiz-option {
+    border: 1.5px solid @borders;
+    border-radius: 10px;
+    padding: 14px 18px;
+    background-color: @theme_base_color;
+    margin-bottom: 4px;
+}
+
+.quiz-option:hover {
+    background-color: alpha(@theme_selected_bg_color, 0.08);
+    border-color: @theme_selected_bg_color;
+    transition: all 150ms ease;
+}
+
+.quiz-option-selected, .quiz-option:selected {
+    background-color: alpha(@theme_selected_bg_color, 0.15);
+    border-color: @theme_selected_bg_color;
+    border-width: 2px;
+}
+
+.quiz-option-correct {
+    background-color: alpha(@success_color, 0.12) !important;
+    border-color: @success_color !important;
+}
+
+.quiz-option-incorrect {
+    background-color: alpha(@error_color, 0.12) !important;
+    border-color: @error_color !important;
+}
+
+.explanation-box {
+    background-color: alpha(@info_color, 0.08);
+    border-left: 4px solid @info_color;
+    border-radius: 8px;
+    padding: 16px;
+    margin-top: 12px;
+}
+
+/* Redesigned Meaningful Dashboard */
+.dashboard-hero {
+    background: linear-gradient(135deg, alpha(@theme_selected_bg_color, 0.85) 0%, alpha(@info_color, 0.85) 100%);
+    color: @theme_selected_fg_color;
+    border-radius: 16px;
+    padding: 32px;
+    box-shadow: 0 4px 20px alpha(@theme_selected_bg_color, 0.25);
+    margin-bottom: 12px;
+}
+
+.dashboard-hero label.heading {
+    color: @theme_selected_fg_color;
+    font-size: 28px;
+    font-weight: 800;
+}
+
+.dashboard-hero label.subtitle {
+    color: alpha(@theme_selected_fg_color, 0.8);
+    font-size: 15px;
+}
+
+.stat-card {
+    background-color: @theme_base_color;
+    border: 1px solid @borders;
+    border-radius: 14px;
+    box-shadow: 0 2px 6px alpha(@theme_fg_color, 0.04);
+    padding: 24px;
+    transition: all 200ms ease;
+}
+
+.stat-card:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 8px 24px alpha(@theme_fg_color, 0.08);
+    border-color: alpha(@theme_selected_bg_color, 0.4);
+}
+
+.course-progress-card {
+    background-color: @theme_base_color;
+    border: 1.5px solid @borders;
+    border-radius: 14px;
+    padding: 20px;
+    transition: all 200ms ease;
+}
+
+.course-progress-card:hover {
+    border-color: @theme_selected_bg_color;
+    box-shadow: 0 4px 16px alpha(@theme_fg_color, 0.06);
+}
+
+/* Dynamic Popup Notes Window */
+.notes-window {
+    background-color: @theme_bg_color;
+    padding: 16px;
+}
+
+.notes-editor-panel {
+    background-color: @theme_base_color;
+    border: 1px solid @borders;
+    border-radius: 10px;
+    padding: 12px;
+}
+
+.notes-preview-panel {
+    background-color: shade(@theme_base_color, 0.98);
+    border: 1px solid @borders;
+    border-radius: 10px;
+    padding: 16px;
+}
+
+.reference-badge {
+    background-color: alpha(@theme_selected_bg_color, 0.12);
+    color: @theme_selected_bg_color;
+    border-radius: 9999px;
+    padding: 2px 10px;
+    font-weight: 600;
+}
+
+/* Premium Speech Bubbles for AI Chat */
+.chat-bubble-user {
+    background-color: @theme_selected_bg_color;
+    color: @theme_selected_fg_color;
+    border-radius: 12px 12px 0 12px;
+    padding: 10px 14px;
+    margin-bottom: 8px;
+    margin-left: 40px;
+    font-size: 13px;
+}
+
+.chat-bubble-user label {
+    color: @theme_selected_fg_color;
+}
+
+.chat-bubble-assistant {
+    background-color: shade(@theme_base_color, 0.94);
+    color: @theme_text_color;
+    border-radius: 12px 12px 12px 0;
+    padding: 10px 14px;
+    margin-bottom: 8px;
+    margin-right: 40px;
+    font-size: 13px;
+}
+
+.chat-bubble-assistant label {
+    color: @theme_text_color;
+}
+
 
