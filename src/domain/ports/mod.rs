@@ -21,7 +21,7 @@ pub use local_media::{
 pub use presence::{Activity, PresenceProvider};
 pub use repository::{
     CourseRepository, ExamRepository, ModuleRepository, NoteRepository, RepositoryError,
-    SearchRepository, TagRepository, UserPreferencesRepository, VideoRepository,
+    SearchEntry, SearchRepository, TagRepository, UserPreferencesRepository, VideoRepository,
 };
 pub use stream::StreamResolver;
 pub use transcript::{TranscriptError, TranscriptProvider};

@@ -1,21 +1,7 @@
-# Dioxus build artifacts
+# Rust/Cargo build artifacts
 /target
 /dist
 /build
-*.wasm
-*.wasm.d.ts
-
-# CSS/Tailwind artifacts
-/css/target
-*.css.map
-
-# Node.js/npm artifacts
-/node_modules
-node_modules/
-# package-lock.json should be committed for reproducible builds
-pnpm-lock.yaml
-yarn.lock
-*.npmrc
 
 # Environment files
 *.env
@@ -32,13 +18,14 @@ yarn.lock
 *.sublime-workspace
 *.sublime-project
 *.code-workspace
-/.kiro
+
 
 # OS files
 *.DS_Store
 .DS_Store
 Thumbs.db
 course_pilot.db
+
 # Temporary files
 **/*.swp
 **/*.swo
@@ -51,21 +38,6 @@ course_pilot.db
 *.out
 *.test
 
-# Python cache (if using Python tooling)
-/.pytest_cache
-/.mypy_cache
-/.coverage
-/.cache
-/.eggs
-*.egg-info
-__pycache__/
-*.pyc
-*.pyo
-
-# Virtual environments
-/.venv
-env/
-
 # Archives
 *.gz
 *.zip
@@ -75,12 +47,7 @@ env/
 *.7z
 *.rar
 
-# Documentation
-Readme.pdf
-
 # Test coverage
 *.coverage
 *.lcov
-# Misc
-/.theme_config.toml
-/.fastembed_cache/
+

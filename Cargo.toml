@@ -1,49 +1,46 @@
 [package]
 name = "course_pilot"
-description = "Transform YouTube playlists into structured, intelligent study plans"
-authors = ["k5602"]
-version = "0.1.4"
+version = "0.2.0"
 edition = "2024"
+description = "Transform YouTube playlists into structured, intelligent study plans"
 readme = "README.md"
 
 [dependencies]
-
+adw = { package = "libadwaita", version = "0.9", features = ["v1_5"] }
+gio = "0.22"
+glib = "0.22"
 # GTK4 UI
 gtk = { package = "gtk4", version = "0.11", features = ["v4_14"] }
-adw = { package = "libadwaita", version = "0.9", features = ["v1_5"] }
-glib = "0.22"
-gio = "0.22"
 
 # GStreamer video
 gst = { package = "gstreamer", version = "0.25", features = ["v1_22"] }
 gst-video = { package = "gstreamer-video", version = "0.25" }
 
+dotenvy = "0.15"
+rustls = { version = "0.23", features = ["ring"] }
 # Utilities
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
 sha2 = "0.10"
 walkdir = "2.5.0"
-dotenvy = "0.15"
-rustls = { version = "0.23", features = ["ring"] }
 
 # Async Runtime & Utilities
-tokio = { version = "1", features = ["rt-multi-thread", "macros", "process"] }
+tokio = { version = "1", features = ["macros", "process", "rt-multi-thread"] }
 
-# Data Handling & Serialization
-diesel = { version = "2.3", features = ["sqlite", "r2d2"] }
-diesel_migrations = "2.3"
-uuid = { version = "1", features = ["v4", "serde"] }
 chrono = { version = "0.4", features = ["serde"] }
+# Data Handling & Serialization
+diesel = { version = "2.3", features = ["r2d2", "sqlite"] }
+diesel_migrations = "2.3"
 gst-pbutils = { package = "gstreamer-pbutils", version = "0.25" }
+uuid = { version = "1", features = ["serde", "v4"] }
 
+env_logger = "0.11"
+log = "0.4"
 # Error Handling & Logging
 thiserror = "2.0"
-log = "0.4"
-env_logger = "0.11"
 
 # App-specific Logic
 discord-rich-presence = "1.1.0"
-
 
 # LLM (Gemini)
 genai = "0.5"
@@ -52,31 +49,33 @@ genai = "0.5"
 yt-transcript-rs = "0.1"
 
 # Secure Storage
-keyring = { version = "3", features = ["linux-native"] }
 gst-app = { package = "gstreamer-app", version = "0.25" }
 url = "2.5"
-
-[target.'cfg(windows)'.dependencies]
-keyring = { version = "3", features = ["windows-native"] }
-
-[target.'cfg(target_os = "linux")'.dependencies]
-keyring = { version = "3", features = ["linux-native"] }
 
 [build-dependencies]
 glib-build-tools = "0.22"
 
-[profile.dev]
-debug = 1
+[target.'cfg(target_os = "linux")'.dependencies]
+keyring = { version = "3", features = ["linux-native"] }
 
-[profile.test]
+[target.'cfg(target_os = "macos")'.dependencies]
+keyring = { version = "3", features = ["apple-native"] }
+
+[target.'cfg(windows)'.dependencies]
+keyring = { version = "3", features = ["windows-native"] }
+
+[profile.dev]
 debug = 1
 
 [profile.release]
 opt-level = "z"
-lto = "thin"
-codegen-units = 1
-panic = "abort"
 strip = true
+lto = "thin"
+panic = "abort"
+codegen-units = 1
+
+[profile.test]
+debug = 1
 
 [profile.ci]
 inherits = "dev"

@@ -7,6 +7,7 @@ use crate::application::ServiceFactory;
 use crate::domain::ports::SecretStore;
 use crate::domain::value_objects::VideoQuality;
 use crate::ui::state::SharedState;
+use crate::ui::toast::Toast;
 use crate::ui::widgets::QualitySelector;
 
 pub struct SettingsPage {
@@ -157,13 +158,17 @@ impl SettingsPage {
                 }
 
                 let discord_id = discord_entry_cl.text().as_str().to_string();
-                if !discord_id.is_empty() {
-                    let _ = ctx.keystore.store("discord_client_id", &discord_id);
+                if !discord_id.is_empty()
+                    && let Err(e) = ctx.keystore.store("discord_client_id", &discord_id)
+                {
+                    Toast::show_error(&format!("Failed to save Discord client ID: {}", e));
                 }
 
                 let cookie_path = cookie_entry_cl.text().as_str().to_string();
-                if !cookie_path.is_empty() {
-                    let _ = ctx.keystore.store("youtube_cookies", &cookie_path);
+                if !cookie_path.is_empty()
+                    && let Err(e) = ctx.keystore.store("youtube_cookies", &cookie_path)
+                {
+                    Toast::show_error(&format!("Failed to save cookies path: {}", e));
                 }
 
                 let selected = quality_sel.selected();
@@ -181,31 +186,26 @@ impl SettingsPage {
                 .unwrap_or(VideoQuality::P720);
 
                 use crate::application::use_cases::UpdatePreferencesInput;
-                if let Ok(uc) = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
-                    ServiceFactory::preferences(ctx)
-                })) {
-                    let input = UpdatePreferencesInput {
-                        ml_boundary_enabled: false,
-                        cognitive_limit_minutes: 45,
-                        right_panel_visible: s.right_panel_visible,
-                        right_panel_width: s.right_panel_width as u32,
-                        onboarding_completed: s.onboarding_completed,
-                        preferred_quality: quality,
-                    };
-                    match uc.update(input) {
-                        Ok(prefs) => {
-                            drop(s);
-                            let mut s2 = state_cl.borrow_mut();
-                            s2.preferred_quality = prefs.preferred_quality();
-                            s2.session_quality = prefs.preferred_quality();
-                            status.set_text("Settings saved.");
-                        },
-                        Err(e) => {
-                            status.set_text(&format!("Failed to save: {e}"));
-                        },
-                    }
-                } else {
-                    status.set_text("Failed to save preferences.");
+                let uc = ServiceFactory::preferences(ctx);
+                let input = UpdatePreferencesInput {
+                    ml_boundary_enabled: false,
+                    cognitive_limit_minutes: 45,
+                    right_panel_visible: s.right_panel_visible,
+                    right_panel_width: s.right_panel_width as u32,
+                    onboarding_completed: s.onboarding_completed,
+                    preferred_quality: quality,
+                };
+                match uc.update(input) {
+                    Ok(prefs) => {
+                        drop(s);
+                        let mut s2 = state_cl.borrow_mut();
+                        s2.preferred_quality = prefs.preferred_quality();
+                        s2.session_quality = prefs.preferred_quality();
+                        status.set_text("Settings saved.");
+                    },
+                    Err(e) => {
+                        status.set_text(&format!("Failed to save: {e}"));
+                    },
                 }
             } else {
                 status.set_text("No backend connected.");

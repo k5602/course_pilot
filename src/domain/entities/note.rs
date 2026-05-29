@@ -78,3 +78,38 @@ impl Note {
         self.updated_at = Utc::now();
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn empty_for_video_has_empty_content() {
+        let note = Note::empty_for_video(VideoId::new());
+        assert!(note.content().is_empty());
+        assert_eq!(note.video_id(), note.video_id());
+    }
+
+    #[test]
+    fn update_content() {
+        let mut note = Note::empty_for_video(VideoId::new());
+        note.update_content("Test notes".to_string());
+        assert_eq!(note.content(), "Test notes");
+    }
+
+    #[test]
+    fn new_with_content() {
+        let vid = VideoId::new();
+        let note = Note::new(NoteId::new(), vid.clone(), "My notes".to_string());
+        assert_eq!(note.content(), "My notes");
+        assert_eq!(note.video_id(), &vid);
+    }
+
+    #[test]
+    fn update_refreshes_timestamp() {
+        let mut note = Note::empty_for_video(VideoId::new());
+        let before = note.updated_at();
+        note.update_content("updated".to_string());
+        assert!(note.updated_at() >= before);
+    }
+}

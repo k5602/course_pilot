@@ -355,14 +355,3 @@ impl Drop for DiscordPresenceAdapter {
         let _ = self.tx.send(PresenceMsg::Shutdown);
     }
 }
-
-/// No-op provider for when Discord is disabled or unsupported.
-pub struct NoopPresenceProvider;
-
-impl PresenceProvider for NoopPresenceProvider {
-    fn update_activity(&self, _activity: Activity) {}
-    fn clear_activity(&self) {}
-    fn is_connected(&self) -> bool {
-        false
-    }
-}

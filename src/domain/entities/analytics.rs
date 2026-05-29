@@ -88,3 +88,52 @@ impl AppAnalytics {
         self.completed_duration_secs / 60
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn completion_percent_zero_total() {
+        let analytics = AppAnalytics::new(0, 0, 0, 0, 0, 0, 0);
+        assert_eq!(analytics.completion_percent(), 0.0);
+    }
+
+    #[test]
+    fn completion_percent_with_values() {
+        let analytics = AppAnalytics::new(1, 1, 10, 5, 0, 0, 0);
+        assert_eq!(analytics.completion_percent(), 50.0);
+    }
+
+    #[test]
+    fn completion_percent_all_completed() {
+        let analytics = AppAnalytics::new(1, 1, 8, 8, 0, 0, 0);
+        assert_eq!(analytics.completion_percent(), 100.0);
+    }
+
+    #[test]
+    fn summary_coverage_percent_zero_total() {
+        let analytics = AppAnalytics::new(0, 0, 0, 0, 0, 0, 0);
+        assert_eq!(analytics.summary_coverage_percent(), 0.0);
+    }
+
+    #[test]
+    fn summary_coverage_percent_with_values() {
+        let analytics = AppAnalytics::new(1, 1, 10, 0, 0, 0, 8);
+        assert_eq!(analytics.summary_coverage_percent(), 80.0);
+    }
+
+    #[test]
+    fn duration_minutes_rounds_down() {
+        let analytics = AppAnalytics::new(0, 0, 0, 0, 125, 65, 0);
+        assert_eq!(analytics.total_duration_minutes(), 2);
+        assert_eq!(analytics.completed_duration_minutes(), 1);
+    }
+
+    #[test]
+    fn default_is_zeroed() {
+        let analytics = AppAnalytics::default();
+        assert_eq!(analytics.total_courses(), 0);
+        assert_eq!(analytics.completion_percent(), 0.0);
+    }
+}

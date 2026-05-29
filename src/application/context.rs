@@ -25,6 +25,9 @@ use crate::infrastructure::{
     youtube::RustyYtdlAdapter,
 };
 
+/// Default LLM model used when none is configured.
+const DEFAULT_LLM_MODEL: &str = "gemini/gemini-2.5-flash";
+
 /// Configuration for the application.
 ///
 /// Load from environment with `AppConfig::from_env()`.
@@ -46,7 +49,7 @@ impl Default for AppConfig {
             database_url: "course_pilot.db".to_string(),
             gemini_api_key: None,
             discord_client_id: None,
-            llm_model: "gemini/gemini-2.5-flash".to_string(),
+            llm_model: DEFAULT_LLM_MODEL.to_string(),
         }
     }
 }
@@ -60,8 +63,7 @@ impl AppConfig {
                 .unwrap_or_else(|_| "course_pilot.db".to_string()),
             gemini_api_key: std::env::var("GEMINI_API_KEY").ok().filter(|s| !s.is_empty()),
             discord_client_id: std::env::var("DISCORD_CLIENT_ID").ok().filter(|s| !s.is_empty()),
-            llm_model: std::env::var("LLM_MODEL")
-                .unwrap_or_else(|_| "gemini/gemini-2.5-flash".to_string()),
+            llm_model: std::env::var("LLM_MODEL").unwrap_or_else(|_| DEFAULT_LLM_MODEL.to_string()),
         }
     }
 
@@ -136,7 +138,7 @@ impl AppContext {
         // Initialize database pool
         let db_pool = Arc::new(crate::infrastructure::persistence::establish_connection(
             &config.database_url,
-        ));
+        )?);
 
         // Create repositories
         let course_repo = Arc::new(SqliteCourseRepository::new(db_pool.clone()));
@@ -152,7 +154,10 @@ impl AppContext {
         let keystore = Arc::new(NativeKeystore::new());
 
         // Local media scanner (filesystem)
-        let local_media = Arc::new(LocalMediaScannerAdapter::new());
+        let local_media = Arc::new(
+            LocalMediaScannerAdapter::new()
+                .map_err(|e| AppContextError::Database(format!("Local media init failed: {e}")))?,
+        );
 
         // YouTube adapter (always available - no API key needed)
         let cookie_path = keystore.retrieve("youtube_cookies").ok().flatten();
@@ -262,7 +267,6 @@ impl ServiceFactory {
             ctx.video_repo.clone(),
             ctx.search_repo.clone(),
             ctx.llm.clone().map(|a| a as Arc<dyn ModuleTitleGenerator>),
-            Some(ctx.db_pool.clone()),
         )
     }
 
@@ -283,7 +287,6 @@ impl ServiceFactory {
             ctx.video_repo.clone(),
             ctx.search_repo.clone(),
             ctx.llm.clone().map(|a| a as Arc<dyn ModuleTitleGenerator>),
-            Some(ctx.db_pool.clone()),
         )
     }
 

@@ -20,19 +20,13 @@ pub struct LocalMediaScannerAdapter {
     discoverer: Discoverer,
 }
 
-impl Default for LocalMediaScannerAdapter {
-    fn default() -> Self {
-        Self::new()
-    }
-}
-
 impl LocalMediaScannerAdapter {
     /// Creates a new adapter with a GStreamer discoverer (5-second timeout).
-    pub fn new() -> Self {
+    pub fn new() -> Result<Self, LocalMediaError> {
         gst::init().ok();
         let discoverer = Discoverer::new(5 * gst::ClockTime::SECOND)
-            .expect("Failed to create GStreamer discoverer");
-        Self { discoverer }
+            .map_err(|e| LocalMediaError::DiscoveryFailed(e.to_string()))?;
+        Ok(Self { discoverer })
     }
 
     fn scan_video_file(

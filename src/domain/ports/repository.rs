@@ -17,6 +17,7 @@ pub enum RepositoryError {
 /// Repository for Course entities.
 pub trait CourseRepository: Send + Sync {
     fn save(&self, course: &Course) -> Result<(), RepositoryError>;
+    fn save_batch(&self, courses: &[Course]) -> Result<(), RepositoryError>;
     fn find_by_id(&self, id: &CourseId) -> Result<Option<Course>, RepositoryError>;
     fn find_by_source_hash(&self, hash: &str) -> Result<Option<Course>, RepositoryError>;
     fn find_all(&self) -> Result<Vec<Course>, RepositoryError>;
@@ -32,6 +33,7 @@ pub trait CourseRepository: Send + Sync {
 /// Repository for Module entities.
 pub trait ModuleRepository: Send + Sync {
     fn save(&self, module: &Module) -> Result<(), RepositoryError>;
+    fn save_batch(&self, modules: &[Module]) -> Result<(), RepositoryError>;
     fn find_by_id(&self, id: &ModuleId) -> Result<Option<Module>, RepositoryError>;
     fn find_by_course(&self, course_id: &CourseId) -> Result<Vec<Module>, RepositoryError>;
     fn update_title(&self, id: &ModuleId, title: &str) -> Result<(), RepositoryError>;
@@ -41,6 +43,7 @@ pub trait ModuleRepository: Send + Sync {
 /// Repository for Video entities.
 pub trait VideoRepository: Send + Sync {
     fn save(&self, video: &Video) -> Result<(), RepositoryError>;
+    fn save_batch(&self, videos: &[Video]) -> Result<(), RepositoryError>;
     fn find_by_id(&self, id: &VideoId) -> Result<Option<Video>, RepositoryError>;
     fn find_by_module(&self, module_id: &ModuleId) -> Result<Vec<Video>, RepositoryError>;
     fn find_by_course(&self, course_id: &CourseId) -> Result<Vec<Video>, RepositoryError>;
@@ -117,6 +120,15 @@ pub trait UserPreferencesRepository: Send + Sync {
     -> Result<(), RepositoryError>;
 }
 
+/// A single search index entry for batch insertion.
+pub struct SearchEntry {
+    pub entity_type: String,
+    pub entity_id: String,
+    pub title: String,
+    pub content: String,
+    pub course_id: String,
+}
+
 /// Repository for full-text search.
 pub trait SearchRepository: Send + Sync {
     /// Searches across courses, videos, and notes.
@@ -152,6 +164,9 @@ pub trait SearchRepository: Send + Sync {
         content: &str,
         course_id: &CourseId,
     ) -> Result<(), RepositoryError>;
+
+    /// Batch-indexes entries in a single transaction.
+    fn index_batch(&self, entries: &[SearchEntry]) -> Result<(), RepositoryError>;
 
     /// Removes an entity from the search index.
     fn remove_from_index(&self, entity_id: &str) -> Result<(), RepositoryError>;

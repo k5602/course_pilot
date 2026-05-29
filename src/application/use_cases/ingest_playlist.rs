@@ -1,22 +1,19 @@
 //! Ingest Playlist Use Case
 //!
-//! Orchestrates: Fetch → Sanitize → Group → Persist
+//! Orchestrates: Fetch -> Sanitize -> Group -> Persist
 
 use std::sync::Arc;
-
-use diesel::ExpressionMethods;
-use diesel::RunQueryDsl;
 
 use crate::domain::{
     entities::{Course, Module, Video},
     ports::{
-        CourseRepository, ModuleRepository, ModuleTitleGenerator, PlaylistFetcher,
+        CourseRepository, ModuleRepository, ModuleTitleGenerator, PlaylistFetcher, SearchEntry,
         SearchRepository, VideoRepository,
     },
     services::{BoundaryDetector, TitleSanitizer},
     value_objects::{CourseId, ModuleId, PlaylistUrl, VideoId, VideoSource, YouTubeVideoId},
 };
-use crate::infrastructure::{media_hash, persistence::DbPool};
+use crate::infrastructure::media_hash;
 
 /// Error type for playlist ingestion.
 #[derive(Debug, thiserror::Error)]
@@ -29,12 +26,6 @@ pub enum IngestError {
     PersistFailed(String),
     #[error("Course already exists: {0}")]
     AlreadyExists(String),
-}
-
-impl From<diesel::result::Error> for IngestError {
-    fn from(e: diesel::result::Error) -> Self {
-        IngestError::PersistFailed(e.to_string())
-    }
 }
 
 /// Input for the ingest playlist use case.
@@ -69,7 +60,6 @@ where
     sanitizer: TitleSanitizer,
     boundary_detector: BoundaryDetector,
     title_generator: Option<Arc<dyn ModuleTitleGenerator>>,
-    pool: Option<Arc<DbPool>>,
 }
 
 impl<F, CR, MR, VR, SR> IngestPlaylistUseCase<F, CR, MR, VR, SR>
@@ -104,7 +94,6 @@ where
         video_repo: Arc<VR>,
         search_repo: Arc<SR>,
         title_generator: Option<Arc<dyn ModuleTitleGenerator>>,
-        pool: Option<Arc<DbPool>>,
     ) -> Self {
         Self {
             fetcher,
@@ -115,7 +104,6 @@ where
             sanitizer: TitleSanitizer::new(),
             boundary_detector: BoundaryDetector::new(),
             title_generator,
-            pool,
         }
     }
 
@@ -209,157 +197,58 @@ where
             pending_modules.push(PendingModule { module_id, title: module_title, videos });
         }
 
-        // 7. Persist everything atomically in a single transaction
-        if let Some(ref pool) = self.pool {
-            use crate::infrastructure::persistence::models::{NewCourse, NewModule, NewVideo};
-            use crate::schema::{courses, modules, videos};
-            use diesel::connection::Connection;
-            use diesel::sql_types::Text;
+        // 7. Persist using repository batch methods
+        self.course_repo.save(&course).map_err(|e| IngestError::PersistFailed(e.to_string()))?;
+        self.search_repo
+            .index_course(course.id(), course.name(), course.description())
+            .map_err(|e| IngestError::PersistFailed(e.to_string()))?;
 
-            let course_id_str = course_id.as_uuid().to_string();
+        let mut all_modules = Vec::with_capacity(pending_modules.len());
+        let mut all_videos = Vec::with_capacity(total_videos);
+        let mut video_search_entries = Vec::with_capacity(total_videos);
 
-            let mut conn = pool.get().map_err(|e| IngestError::PersistFailed(e.to_string()))?;
+        for (module_idx, pm) in pending_modules.iter().enumerate() {
+            let module = Module::new(
+                pm.module_id.clone(),
+                course_id.clone(),
+                pm.title.clone(),
+                module_idx as u32,
+            );
+            all_modules.push(module);
 
-            conn.transaction::<_, IngestError, _>(|tx| {
-                let new_course = NewCourse {
-                    id: &course_id_str,
-                    name: course.name(),
-                    source_url: course.source_url().raw(),
-                    playlist_id: course.playlist_id(),
-                    description: course.description(),
-                    source_hash: course.source_hash(),
-                };
-                diesel::insert_into(courses::table)
-                    .values(&new_course)
-                    .on_conflict(courses::id)
-                    .do_update()
-                    .set((
-                        courses::name.eq(course.name()),
-                        courses::description.eq(course.description()),
-                    ))
-                    .execute(tx)?;
-
-                diesel::sql_query(
-                    "INSERT INTO search_index (entity_type, entity_id, title, content, course_id) VALUES ('course', ?, ?, ?, ?)",
-                )
-                .bind::<Text, _>(&course_id_str)
-                .bind::<Text, _>(course.name())
-                .bind::<Text, _>("")
-                .bind::<Text, _>(&course_id_str)
-                .execute(tx)?;
-
-                for (module_idx, pm) in pending_modules.iter().enumerate() {
-                    let module_id_str = pm.module_id.as_uuid().to_string();
-
-                    let new_module = NewModule {
-                        id: &module_id_str,
-                        course_id: &course_id_str,
-                        title: &pm.title,
-                        sort_order: module_idx as i32,
-                    };
-                    diesel::insert_into(modules::table)
-                        .values(&new_module)
-                        .on_conflict(modules::id)
-                        .do_update()
-                        .set((
-                            modules::title.eq(&pm.title),
-                            modules::sort_order.eq(module_idx as i32),
-                        ))
-                        .execute(tx)?;
-
-                    for (sort_order, video) in pm.videos.iter().enumerate() {
-                        let video_id = VideoId::new();
-                        let video_id_str = video_id.as_uuid().to_string();
-
-                        let new_video = NewVideo {
-                            id: &video_id_str,
-                            module_id: &module_id_str,
-                            youtube_id: Some(&video.youtube_id),
-                            title: &video.title,
-                            duration_secs: video.duration_secs as i32,
-                            is_completed: false,
-                            sort_order: sort_order as i32,
-                            description: video.description.as_deref(),
-                            transcript: None,
-                            summary: None,
-                            source_type: "youtube",
-                            source_ref: &video.youtube_id,
-                            key_points: None,
-                            key_terms: None,
-                        };
-                        diesel::insert_into(videos::table)
-                            .values(&new_video)
-                            .on_conflict(videos::id)
-                            .do_update()
-                            .set((
-                                videos::title.eq(&video.title),
-                                videos::duration_secs.eq(video.duration_secs as i32),
-                                videos::is_completed.eq(false),
-                                videos::sort_order.eq(sort_order as i32),
-                                videos::description.eq(video.description.as_deref()),
-                                videos::transcript.eq::<Option<&str>>(None),
-                                videos::summary.eq::<Option<&str>>(None),
-                                videos::module_id.eq(&module_id_str),
-                            ))
-                            .execute(tx)?;
-
-                        diesel::sql_query(
-                            "INSERT INTO search_index (entity_type, entity_id, title, content, course_id) VALUES ('video', ?, ?, ?, ?)",
-                        )
-                        .bind::<Text, _>(&video_id_str)
-                        .bind::<Text, _>(&video.title)
-                        .bind::<Text, _>(video.description.as_deref().unwrap_or(""))
-                        .bind::<Text, _>(&course_id_str)
-                        .execute(tx)?;
-                    }
-                }
-
-                Ok(())
-            })?;
-        } else {
-            self.course_repo
-                .save(&course)
-                .map_err(|e| IngestError::PersistFailed(e.to_string()))?;
-            self.search_repo
-                .index_course(course.id(), course.name(), course.description())
-                .map_err(|e| IngestError::PersistFailed(e.to_string()))?;
-            for (module_idx, pm) in pending_modules.iter().enumerate() {
-                let module = Module::new(
-                    pm.module_id.clone(),
-                    course_id.clone(),
-                    pm.title.clone(),
-                    module_idx as u32,
-                );
-                self.module_repo
-                    .save(&module)
+            for (sort_order, video_data) in pm.videos.iter().enumerate() {
+                let youtube_id = YouTubeVideoId::new(&video_data.youtube_id)
                     .map_err(|e| IngestError::PersistFailed(e.to_string()))?;
-                for (sort_order, video_data) in pm.videos.iter().enumerate() {
-                    let youtube_id = YouTubeVideoId::new(&video_data.youtube_id)
-                        .map_err(|e| IngestError::PersistFailed(e.to_string()))?;
-                    let source = VideoSource::youtube(youtube_id);
-                    let video = Video::with_description(
-                        VideoId::new(),
-                        pm.module_id.clone(),
-                        source,
-                        video_data.title.clone(),
-                        video_data.description.clone(),
-                        video_data.duration_secs,
-                        sort_order as u32,
-                    );
-                    self.video_repo
-                        .save(&video)
-                        .map_err(|e| IngestError::PersistFailed(e.to_string()))?;
-                    self.search_repo
-                        .index_video(
-                            &video.id().as_uuid().to_string(),
-                            video.title(),
-                            video_data.description.as_deref(),
-                            &course_id,
-                        )
-                        .map_err(|e| IngestError::PersistFailed(e.to_string()))?;
-                }
+                let source = VideoSource::youtube(youtube_id);
+                let video = Video::with_description(
+                    VideoId::new(),
+                    pm.module_id.clone(),
+                    source,
+                    video_data.title.clone(),
+                    video_data.description.clone(),
+                    video_data.duration_secs,
+                    sort_order as u32,
+                );
+                video_search_entries.push(SearchEntry {
+                    entity_type: "video".to_string(),
+                    entity_id: video.id().as_uuid().to_string(),
+                    title: video_data.title.clone(),
+                    content: video_data.description.clone().unwrap_or_default(),
+                    course_id: course_id.as_uuid().to_string(),
+                });
+                all_videos.push(video);
             }
         }
+
+        self.module_repo
+            .save_batch(&all_modules)
+            .map_err(|e| IngestError::PersistFailed(e.to_string()))?;
+        self.video_repo
+            .save_batch(&all_videos)
+            .map_err(|e| IngestError::PersistFailed(e.to_string()))?;
+        self.search_repo
+            .index_batch(&video_search_entries)
+            .map_err(|e| IngestError::PersistFailed(e.to_string()))?;
 
         Ok(IngestPlaylistOutput {
             course_id,

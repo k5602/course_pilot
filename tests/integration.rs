@@ -10,7 +10,8 @@ use course_pilot::domain::{
     entities::{Course, Module, Video},
     ports::{
         CourseRepository, FetchError, LocalMediaError, LocalMediaScanner, ModuleRepository,
-        PlaylistFetcher, RawLocalMediaMetadata, RepositoryError, SearchRepository, VideoRepository,
+        PlaylistFetcher, RawLocalMediaMetadata, RepositoryError, SearchEntry, SearchRepository,
+        VideoRepository,
     },
     services::{BoundaryDetector, TranscriptChunker},
     value_objects::{CourseId, ModuleId, PlaylistUrl, VideoId},
@@ -88,6 +89,13 @@ impl CourseRepository for InMemoryCourseRepo {
         Ok(())
     }
 
+    fn save_batch(&self, courses: &[Course]) -> Result<(), RepositoryError> {
+        for course in courses {
+            self.save(course)?;
+        }
+        Ok(())
+    }
+
     fn find_by_id(&self, id: &CourseId) -> Result<Option<Course>, RepositoryError> {
         let c = self.courses.lock().unwrap();
         Ok(c.iter().find(|e| e.id() == id).cloned())
@@ -140,6 +148,13 @@ impl ModuleRepository for InMemoryModuleRepo {
         Ok(())
     }
 
+    fn save_batch(&self, modules: &[Module]) -> Result<(), RepositoryError> {
+        for module in modules {
+            self.save(module)?;
+        }
+        Ok(())
+    }
+
     fn find_by_id(&self, id: &ModuleId) -> Result<Option<Module>, RepositoryError> {
         let m = self.modules.lock().unwrap();
         Ok(m.iter().find(|e| e.id() == id).cloned())
@@ -181,6 +196,13 @@ impl VideoRepository for InMemoryVideoRepo {
             v[pos] = video.clone();
         } else {
             v.push(video.clone());
+        }
+        Ok(())
+    }
+
+    fn save_batch(&self, videos: &[Video]) -> Result<(), RepositoryError> {
+        for video in videos {
+            self.save(video)?;
         }
         Ok(())
     }
@@ -269,6 +291,9 @@ impl SearchRepository for InMemorySearchRepo {
     ) -> Result<(), RepositoryError> {
         Ok(())
     }
+    fn index_batch(&self, _entries: &[SearchEntry]) -> Result<(), RepositoryError> {
+        Ok(())
+    }
     fn remove_from_index(&self, _entity_id: &str) -> Result<(), RepositoryError> {
         Ok(())
     }
@@ -310,7 +335,6 @@ fn ingest_local_with_folder_grouping() {
         module_repo.clone(),
         video_repo.clone(),
         search_repo,
-        None,
         None,
     );
 
@@ -371,7 +395,6 @@ fn ingest_playlist_with_mock_fetcher() {
         video_repo.clone(),
         search_repo,
         None,
-        None,
     );
 
     let input = course_pilot::application::use_cases::IngestPlaylistInput {
@@ -405,7 +428,6 @@ fn ingest_playlist_failure_returns_error() {
         module_repo.clone(),
         video_repo.clone(),
         search_repo,
-        None,
         None,
     );
 

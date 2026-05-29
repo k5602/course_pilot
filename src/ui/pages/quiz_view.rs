@@ -151,99 +151,7 @@ impl QuizViewPage {
     }
 
     fn show_current_question(&self) {
-        while let Some(child) = self.content_box.first_child() {
-            self.content_box.remove(&child);
-        }
-
-        let quiz_state = self.quiz_state.borrow();
-        let qs = match *quiz_state {
-            Some(ref qs) => qs,
-            None => return,
-        };
-
-        if qs.current_index >= qs.questions.len() {
-            drop(quiz_state);
-            self.submit_quiz();
-            return;
-        }
-
-        let q = &qs.questions[qs.current_index];
-        let idx = qs.current_index;
-        let total = qs.questions.len();
-        let saved_answer = qs.answers[idx];
-
-        let counter = gtk::Label::new(Some(&format!("Question {} of {}", idx + 1, total)));
-        counter.add_css_class("subtitle");
-        counter.set_halign(gtk::Align::Start);
-        self.content_box.append(&counter);
-
-        let q_label = gtk::Label::new(Some(&q.question));
-        q_label.set_wrap(true);
-        q_label.set_halign(gtk::Align::Start);
-        q_label.add_css_class("heading");
-        self.content_box.append(&q_label);
-
-        let option_box = gtk::Box::new(gtk::Orientation::Vertical, 4);
-        option_box.set_margin_start(12);
-
-        let mut radios: Vec<gtk::CheckButton> = Vec::new();
-        for (oi, opt) in q.options.iter().enumerate() {
-            let radio = gtk::CheckButton::with_label(opt);
-            if let Some(first) = radios.first() {
-                radio.set_group(Some(first));
-            }
-            if saved_answer == Some(oi) {
-                radio.set_active(true);
-            }
-            option_box.append(&radio);
-            radios.push(radio);
-        }
-
-        self.content_box.append(&option_box);
-
-        let btn_box = gtk::Box::new(gtk::Orientation::Horizontal, 8);
-        btn_box.set_halign(gtk::Align::End);
-
-        let is_last = idx + 1 >= total;
-        let next_btn = gtk::Button::with_label(if is_last { "Submit" } else { "Next" });
-        next_btn.add_css_class("suggested-action");
-
-        let quiz_state = self.quiz_state.clone();
-        let content_box = self.content_box.clone();
-        let state = self.state.clone();
-        let nav = self.nav.clone();
-        let radios_clone = radios;
-
-        next_btn.connect_clicked(move |_| {
-            let mut qs_borrow = quiz_state.borrow_mut();
-            let qs = match *qs_borrow {
-                Some(ref mut qs) => qs,
-                None => return,
-            };
-
-            for (oi, r) in radios_clone.iter().enumerate() {
-                if r.is_active() {
-                    qs.answers[qs.current_index] = Some(oi);
-                    break;
-                }
-            }
-
-            if is_last {
-                drop(qs_borrow);
-                submit_quiz_inner(&quiz_state, &state, &nav, &content_box);
-            } else {
-                qs.current_index += 1;
-                drop(qs_borrow);
-                show_question_inner(&quiz_state, &content_box);
-            }
-        });
-
-        btn_box.append(&next_btn);
-        self.content_box.append(&btn_box);
-    }
-
-    fn submit_quiz(&self) {
-        submit_quiz_inner(&self.quiz_state, &self.state, &self.nav, &self.content_box);
+        show_question_inner(&self.quiz_state, &self.content_box, &self.state, &self.nav);
     }
 
     fn show_results(
@@ -324,7 +232,12 @@ impl QuizViewPage {
     }
 }
 
-fn show_question_inner(quiz_state: &Rc<RefCell<Option<QuizState>>>, content_box: &gtk::Box) {
+fn show_question_inner(
+    quiz_state: &Rc<RefCell<Option<QuizState>>>,
+    content_box: &gtk::Box,
+    state: &SharedState,
+    nav: &Rc<NavigationView>,
+) {
     while let Some(child) = content_box.first_child() {
         content_box.remove(&child);
     }
@@ -336,6 +249,8 @@ fn show_question_inner(quiz_state: &Rc<RefCell<Option<QuizState>>>, content_box:
     };
 
     if qs.current_index >= qs.questions.len() {
+        drop(qs_borrow);
+        submit_quiz_inner(quiz_state, state, nav, content_box);
         return;
     }
 
@@ -382,29 +297,31 @@ fn show_question_inner(quiz_state: &Rc<RefCell<Option<QuizState>>>, content_box:
 
     let qs = quiz_state.clone();
     let radios_clone = radios;
+    let content_box_clone = content_box.clone();
+    let state_clone = state.clone();
+    let nav_clone = nav.clone();
 
     next_btn.connect_clicked(move |_| {
         let mut qs_borrow = qs.borrow_mut();
-        let qs = match *qs_borrow {
+        let qs_ref = match *qs_borrow {
             Some(ref mut qs) => qs,
             None => return,
         };
 
         for (oi, r) in radios_clone.iter().enumerate() {
             if r.is_active() {
-                qs.answers[qs.current_index] = Some(oi);
+                qs_ref.answers[qs_ref.current_index] = Some(oi);
                 break;
             }
         }
 
         if is_last {
-            // Can't call submit directly with borrow held; drop it
             drop(qs_borrow);
-            // submit needs state, stack, content_box which we don't have here
-            // This path shouldn't be reached from this free function in normal flow
-            // since show_question_inner is only called for "Next" not "Submit"
+            submit_quiz_inner(&qs, &state_clone, &nav_clone, &content_box_clone);
         } else {
-            qs.current_index += 1;
+            qs_ref.current_index += 1;
+            drop(qs_borrow);
+            show_question_inner(&qs, &content_box_clone, &state_clone, &nav_clone);
         }
     });
 
@@ -437,7 +354,7 @@ fn submit_quiz_inner(
 
     let total = qs.questions.len();
     let score = if total > 0 { correct as f32 / total as f32 } else { 0.0 };
-    let passed = score >= 0.7;
+    let passed = score >= crate::domain::entities::PASS_THRESHOLD;
 
     // Save answers before we drop the borrow
     let answers_snapshot = qs.answers.clone();
@@ -448,7 +365,9 @@ fn submit_quiz_inner(
         let quiz_id_str = s.current_quiz_id.as_ref().cloned().unwrap_or_default();
         if let Ok(exam_id) = quiz_id_str.parse::<crate::domain::value_objects::ExamId>() {
             let answers_json = serde_json::to_string(&answers_snapshot).ok();
-            let _ = ctx.exam_repo.update_result(&exam_id, score, passed, answers_json);
+            if let Err(e) = ctx.exam_repo.update_result(&exam_id, score, passed, answers_json) {
+                Toast::show_error(&format!("Failed to save quiz result: {}", e));
+            }
         }
     }
 
