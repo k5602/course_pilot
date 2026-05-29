@@ -10,15 +10,19 @@ use crate::application::use_cases::{
     NotesUseCase, PlanSessionUseCase, PreferencesUseCase, ReorderVideoUseCase,
     SummarizeVideoUseCase, TakeExamUseCase, UpdateCourseUseCase, UpdatePresenceUseCase,
 };
-use crate::domain::ports::{ModuleTitleGenerator, PresenceProvider, SecretStore};
+use crate::domain::ports::{
+    ChatMessageRepository, CourseRepository, EventBus, ExamRepository, ModuleRepository,
+    ModuleTitleGenerator, NoteRepository, PresenceProvider, SearchRepository, SecretStore,
+    TagRepository, UserPreferencesRepository, VideoRepository,
+};
 use crate::infrastructure::{
     discord::DiscordPresenceAdapter,
     keystore::NativeKeystore,
     llm::GeminiAdapter,
     local_media::LocalMediaScannerAdapter,
     persistence::{
-        DbPool, SqliteCourseRepository, SqliteExamRepository, SqliteModuleRepository,
-        SqliteNoteRepository, SqliteSearchRepository, SqliteTagRepository,
+        DbPool, SqliteChatMessageRepository, SqliteCourseRepository, SqliteExamRepository,
+        SqliteModuleRepository, SqliteNoteRepository, SqliteSearchRepository, SqliteTagRepository,
         SqliteUserPreferencesRepository, SqliteVideoRepository,
     },
     transcript::TranscriptAdapter,
@@ -119,14 +123,15 @@ pub struct AppContext {
     pub config: AppConfig,
 
     // Repositories
-    pub course_repo: Arc<SqliteCourseRepository>,
-    pub module_repo: Arc<SqliteModuleRepository>,
-    pub video_repo: Arc<SqliteVideoRepository>,
-    pub exam_repo: Arc<SqliteExamRepository>,
-    pub note_repo: Arc<SqliteNoteRepository>,
-    pub tag_repo: Arc<SqliteTagRepository>,
-    pub search_repo: Arc<SqliteSearchRepository>,
-    pub preferences_repo: Arc<SqliteUserPreferencesRepository>,
+    pub course_repo: Arc<dyn CourseRepository>,
+    pub module_repo: Arc<dyn ModuleRepository>,
+    pub video_repo: Arc<dyn VideoRepository>,
+    pub exam_repo: Arc<dyn ExamRepository>,
+    pub note_repo: Arc<dyn NoteRepository>,
+    pub tag_repo: Arc<dyn TagRepository>,
+    pub search_repo: Arc<dyn SearchRepository>,
+    pub preferences_repo: Arc<dyn UserPreferencesRepository>,
+    pub chat_repo: Arc<dyn ChatMessageRepository>,
 
     // Infrastructure adapters
     pub local_media: Arc<LocalMediaScannerAdapter>,
@@ -135,6 +140,7 @@ pub struct AppContext {
     pub llm: Mutex<Option<Arc<GeminiAdapter>>>,
     pub presence: Arc<dyn PresenceProvider>,
     pub keystore: Arc<NativeKeystore>,
+    pub event_bus: Arc<dyn EventBus>,
 
     // Database pool
     pub db_pool: Arc<DbPool>,
@@ -157,6 +163,7 @@ impl AppContext {
         let tag_repo = Arc::new(SqliteTagRepository::new(db_pool.clone()));
         let search_repo = Arc::new(SqliteSearchRepository::new(db_pool.clone()));
         let preferences_repo = Arc::new(SqliteUserPreferencesRepository::new(db_pool.clone()));
+        let chat_repo = Arc::new(SqliteChatMessageRepository::new(db_pool.clone()));
 
         // Create keystore
         let keystore = Arc::new(NativeKeystore::new());
@@ -208,6 +215,8 @@ impl AppContext {
             gemini_api_key.map(|key| Arc::new(GeminiAdapter::new(key, config.llm_model.clone()))),
         );
 
+        let event_bus = Arc::new(crate::infrastructure::event_bus::InMemoryEventBus::new());
+
         Ok(Self {
             config,
             course_repo,
@@ -218,12 +227,14 @@ impl AppContext {
             tag_repo,
             search_repo,
             preferences_repo,
+            chat_repo,
             local_media,
             youtube,
             transcript,
             llm,
             presence,
             keystore,
+            event_bus,
             db_pool,
         })
     }
@@ -283,15 +294,7 @@ pub struct ServiceFactory;
 impl ServiceFactory {
     /// Creates the playlist ingestion use case.
     /// Always available since YouTube adapter doesn't need API key.
-    pub fn ingest_playlist(
-        ctx: &AppContext,
-    ) -> IngestPlaylistUseCase<
-        RustyYtdlAdapter,
-        SqliteCourseRepository,
-        SqliteModuleRepository,
-        SqliteVideoRepository,
-        SqliteSearchRepository,
-    > {
+    pub fn ingest_playlist(ctx: &AppContext) -> IngestPlaylistUseCase {
         let batch_size = ServiceFactory::preferences(ctx)
             .load()
             .map(|p| p.boundary_batch_size() as usize)
@@ -303,6 +306,7 @@ impl ServiceFactory {
             ctx.module_repo.clone(),
             ctx.video_repo.clone(),
             ctx.search_repo.clone(),
+            ctx.event_bus.clone(),
             ctx.llm
                 .lock()
                 .unwrap()
@@ -313,15 +317,7 @@ impl ServiceFactory {
     }
 
     /// Creates the local library ingestion use case.
-    pub fn ingest_local(
-        ctx: &AppContext,
-    ) -> IngestLocalUseCase<
-        LocalMediaScannerAdapter,
-        SqliteCourseRepository,
-        SqliteModuleRepository,
-        SqliteVideoRepository,
-        SqliteSearchRepository,
-    > {
+    pub fn ingest_local(ctx: &AppContext) -> IngestLocalUseCase {
         let batch_size = ServiceFactory::preferences(ctx)
             .load()
             .map(|p| p.boundary_batch_size() as usize)
@@ -333,6 +329,7 @@ impl ServiceFactory {
             ctx.module_repo.clone(),
             ctx.video_repo.clone(),
             ctx.search_repo.clone(),
+            ctx.event_bus.clone(),
             ctx.llm
                 .lock()
                 .unwrap()
@@ -343,7 +340,7 @@ impl ServiceFactory {
     }
 
     /// Creates the session planning use case.
-    pub fn plan_session(ctx: &AppContext) -> PlanSessionUseCase<SqliteVideoRepository> {
+    pub fn plan_session(ctx: &AppContext) -> PlanSessionUseCase {
         PlanSessionUseCase::new(ctx.video_repo.clone())
     }
 
@@ -353,17 +350,7 @@ impl ServiceFactory {
     }
 
     /// Creates the companion AI use case.
-    pub fn ask_companion(
-        ctx: &AppContext,
-    ) -> Option<
-        AskCompanionUseCase<
-            GeminiAdapter,
-            SqliteVideoRepository,
-            SqliteModuleRepository,
-            SqliteCourseRepository,
-            SqliteNoteRepository,
-        >,
-    > {
+    pub fn ask_companion(ctx: &AppContext) -> Option<AskCompanionUseCase> {
         let llm = ctx.llm.lock().unwrap().as_ref()?.clone();
 
         Some(AskCompanionUseCase::new(
@@ -376,16 +363,7 @@ impl ServiceFactory {
     }
 
     /// Creates the notes use case.
-    pub fn notes(
-        ctx: &AppContext,
-    ) -> NotesUseCase<
-        SqliteNoteRepository,
-        SqliteVideoRepository,
-        SqliteModuleRepository,
-        SqliteCourseRepository,
-        SqliteTagRepository,
-        SqliteSearchRepository,
-    > {
+    pub fn notes(ctx: &AppContext) -> NotesUseCase {
         NotesUseCase::new(
             ctx.note_repo.clone(),
             ctx.video_repo.clone(),
@@ -393,24 +371,17 @@ impl ServiceFactory {
             ctx.course_repo.clone(),
             ctx.tag_repo.clone(),
             ctx.search_repo.clone(),
+            ctx.event_bus.clone(),
         )
     }
 
     /// Creates the transcript attachment use case.
-    pub fn attach_transcript(ctx: &AppContext) -> AttachTranscriptUseCase<SqliteVideoRepository> {
+    pub fn attach_transcript(ctx: &AppContext) -> AttachTranscriptUseCase {
         AttachTranscriptUseCase::new(ctx.video_repo.clone())
     }
 
     /// Creates the export notes use case.
-    pub fn export_course_notes(
-        ctx: &AppContext,
-    ) -> ExportCourseNotesUseCase<
-        SqliteCourseRepository,
-        SqliteModuleRepository,
-        SqliteVideoRepository,
-        SqliteNoteRepository,
-        SqliteTagRepository,
-    > {
+    pub fn export_course_notes(ctx: &AppContext) -> ExportCourseNotesUseCase {
         ExportCourseNotesUseCase::new(
             ctx.course_repo.clone(),
             ctx.module_repo.clone(),
@@ -421,48 +392,41 @@ impl ServiceFactory {
     }
 
     /// Creates the update course use case.
-    pub fn update_course(
-        ctx: &AppContext,
-    ) -> UpdateCourseUseCase<SqliteCourseRepository, SqliteSearchRepository> {
+    pub fn update_course(ctx: &AppContext) -> UpdateCourseUseCase {
         UpdateCourseUseCase::new(ctx.course_repo.clone(), ctx.search_repo.clone())
     }
 
     /// Creates the update module title use case.
     pub fn update_module_title(
         ctx: &AppContext,
-    ) -> crate::application::use_cases::UpdateModuleTitleUseCase<SqliteModuleRepository> {
+    ) -> crate::application::use_cases::UpdateModuleTitleUseCase {
         crate::application::use_cases::UpdateModuleTitleUseCase::new(ctx.module_repo.clone())
     }
 
     /// Creates the create module use case.
-    pub fn create_module(ctx: &AppContext) -> CreateModuleUseCase<SqliteModuleRepository> {
+    pub fn create_module(ctx: &AppContext) -> CreateModuleUseCase {
         CreateModuleUseCase::new(ctx.module_repo.clone())
     }
 
     /// Creates the delete module use case.
-    pub fn delete_module(
-        ctx: &AppContext,
-    ) -> DeleteModuleUseCase<SqliteModuleRepository, SqliteVideoRepository> {
+    pub fn delete_module(ctx: &AppContext) -> DeleteModuleUseCase {
         DeleteModuleUseCase::new(ctx.module_repo.clone(), ctx.video_repo.clone())
     }
 
     /// Creates the reorder video use case.
-    pub fn reorder_video(ctx: &AppContext) -> ReorderVideoUseCase<SqliteVideoRepository> {
+    pub fn reorder_video(ctx: &AppContext) -> ReorderVideoUseCase {
         ReorderVideoUseCase::new(ctx.video_repo.clone())
     }
 
     /// Creates the move video use case.
     pub fn move_video_to_module(
         ctx: &AppContext,
-    ) -> crate::application::use_cases::MoveVideoToModuleUseCase<SqliteVideoRepository> {
+    ) -> crate::application::use_cases::MoveVideoToModuleUseCase {
         crate::application::use_cases::MoveVideoToModuleUseCase::new(ctx.video_repo.clone())
     }
 
     /// Creates the dashboard analytics use case.
-    pub fn dashboard(
-        ctx: &AppContext,
-    ) -> LoadDashboardUseCase<SqliteCourseRepository, SqliteModuleRepository, SqliteVideoRepository>
-    {
+    pub fn dashboard(ctx: &AppContext) -> LoadDashboardUseCase {
         LoadDashboardUseCase::new(
             ctx.course_repo.clone(),
             ctx.module_repo.clone(),
@@ -471,27 +435,27 @@ impl ServiceFactory {
     }
 
     /// Creates the preferences use case.
-    pub fn preferences(ctx: &AppContext) -> PreferencesUseCase<SqliteUserPreferencesRepository> {
+    pub fn preferences(ctx: &AppContext) -> PreferencesUseCase {
         PreferencesUseCase::new(ctx.preferences_repo.clone())
     }
 
     /// Creates the summarize video use case.
-    pub fn summarize_video(
-        ctx: &AppContext,
-    ) -> Option<SummarizeVideoUseCase<GeminiAdapter, TranscriptAdapter, SqliteVideoRepository>>
-    {
+    pub fn summarize_video(ctx: &AppContext) -> Option<SummarizeVideoUseCase> {
         let llm = ctx.llm.lock().unwrap().as_ref()?.clone();
 
         Some(SummarizeVideoUseCase::new(llm, ctx.transcript.clone(), ctx.video_repo.clone()))
     }
 
     /// Creates the exam use case.
-    pub fn take_exam(
-        ctx: &AppContext,
-    ) -> Option<TakeExamUseCase<GeminiAdapter, SqliteVideoRepository, SqliteExamRepository>> {
+    pub fn take_exam(ctx: &AppContext) -> Option<TakeExamUseCase> {
         let llm = ctx.llm.lock().unwrap().as_ref()?.clone();
 
-        Some(TakeExamUseCase::new(llm, ctx.video_repo.clone(), ctx.exam_repo.clone()))
+        Some(TakeExamUseCase::new(
+            llm,
+            ctx.video_repo.clone(),
+            ctx.exam_repo.clone(),
+            ctx.event_bus.clone(),
+        ))
     }
 }
 

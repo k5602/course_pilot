@@ -4,7 +4,6 @@ use std::rc::Rc;
 use std::sync::Arc;
 
 use crate::application::AppContext;
-use crate::domain::ports::UserPreferencesRepository;
 use crate::domain::value_objects::{UserId, VideoQuality};
 
 pub const MAX_CHAT_HISTORY_PER_VIDEO: usize = 50;
