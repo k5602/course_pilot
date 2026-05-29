@@ -4,7 +4,7 @@ use std::str::FromStr;
 use uuid::Uuid;
 
 /// Unique identifier for a Tag.
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub struct TagId(Uuid);
 
 impl TagId {
