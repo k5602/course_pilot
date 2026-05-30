@@ -6,6 +6,63 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/)
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 
+## [0.2.1] - 2026-05-30
+
+### Added
+
+- **Persistent Companion Chat History**: Chat messages are now saved to SQLite (`chat_messages`
+  table) and reloaded per-video on every panel refresh. History survives app restarts.
+- **GTK Spinner Loading Indicators**: `gtk::Spinner` widgets added to the Video Summary,
+  Associated Quizzes, and Companion Chat sections. Inputs are disabled during AI generation
+  to prevent double-submission.
+- **Domain EventBus**: A thread-safe in-memory `EventBus` backed by `tokio::sync::broadcast`
+  channels for reactive UI event dispatching without coupling domain to infrastructure.
+- **Domain Service Unit Tests**: Full edge-case coverage for `BoundaryDetector`,
+  `SessionPlanner`, and `TitleSanitizer` (numbered-pattern detection, fallback batch
+  grouping, cognitive load splitting at module boundaries, noise stripping).
+- **LLM Orchestrator Integration Tests**: `MockSummarizerAI` and `MockExaminerAI` wired
+  into `SummarizeVideoUseCase` and `TakeExamUseCase` integration tests - no live API key
+  required.
+
+### Changed
+
+- **Architecture - Dynamic Dispatch (Ports & Adapters)**: All `AppContext` fields and all
+  19 application use-case structs migrated from concrete `SqliteXxxRepository` generic
+  bounds to `Arc<dyn PortTrait>` dynamic dispatch. Eliminates all infrastructure type
+  leakage from the application layer.
+- **Architecture - Async Port Traits**: All domain port traits annotated with `async_trait`
+  for object-safety under dynamic dispatch.
+- **`RepositoryError` Semantic Variants**: Added `NotFound { entity, id }`,
+  `Conflict { entity, id }`, and `BatchFailed { entity, index, source }` variants.
+  Diesel unique constraint violations and not-found results now map to structured errors.
+- **Subprocess Timeout Protection**: All `yt-dlp` and `ffmpeg` invocations
+  (`youtube/mod.rs`, `transcript/mod.rs`, `local_media/mod.rs`) wrapped in
+  `tokio::time::timeout(60s)`. App no longer hangs indefinitely on network stalls.
+- **GStreamer Pipeline Caching**: `VideoPlayerPage::refresh()` now guards reconstruction
+  behind a `current_video_id` equality check. Eliminates redundant pipeline teardown and
+  rebuild on every navigation event for the same source.
+- **Async FTS5 Search**: SQLite full-text search queries offloaded from the GTK main
+  thread to a Tokio background thread via `tokio_bridge::spawn` + `mpsc` + `idle_add_local`.
+  A 250ms `glib::timeout_add_local` debouncer prevents per-keystroke query floods.
+
+### Fixed
+
+- **CPU 100% on video start (issue #32)**: `glib::idle_add_local(ControlFlow::Continue)` in
+  `VideoPlayer::new()` registered a permanent busy-loop firing on every GLib main-loop
+  iteration, saturating one CPU core the moment any video started. Replaced with
+  `glib::timeout_add_local(16ms)` to cap frame-render polling at ~60 fps and yield CPU
+  between ticks. The `SourceId` is stored in `VideoPlayer` and cancelled on `Drop`,
+  preventing ghost loops from accumulating across pipeline recreations.
+- **Graceful Window Shutdown**: Replaced `std::process::exit(0)` in `connect_close_request`
+  with `glib::Propagation::Proceed`, ensuring GStreamer pipeline teardown, Diesel connection
+  pool draining, and all `Drop` impls run on window close.
+- **Production `unwrap()` Panics**: Eliminated all `unwrap()` calls in production paths
+  (`video_player.rs` VideoId parsing, `ingest_playlist.rs` iterator sequences). Failures
+  now surface as `Toast::show_error` alerts.
+- **`MockVideoRepository` Scope Bug**: `find_by_course` was returning all videos regardless
+  of course affiliation. Now cross-references `MockModuleRepository` to correctly scope
+  the result set.
+
 ## [0.2.0] - 2026-05-29
 
 ### Added
