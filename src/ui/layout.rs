@@ -11,7 +11,6 @@ use crate::application::ServiceFactory;
 use crate::application::use_cases::UpdatePresenceInput;
 use crate::domain::entities::SearchResultType;
 use crate::domain::ports::Activity;
-use crate::domain::ports::SearchRepository;
 use crate::ui::dialogs;
 use crate::ui::navigation::{
     PAGE_COURSE_LIST, PAGE_COURSE_VIEW, PAGE_DASHBOARD, PAGE_QUIZ_LIST, PAGE_QUIZ_VIEW,
@@ -71,8 +70,8 @@ fn wrap_page(
     local_btn.add_css_class("flat");
     local_btn.set_halign(gtk::Align::Fill);
 
-    let state_local = state.clone();
-    let pw_local = parent_window.clone();
+    let state_local = state;
+    let pw_local = parent_window;
     let refresh_local = import_refresh_cb.clone();
     let popover_local = popover.clone();
     local_btn.connect_clicked(move |_| {
@@ -247,7 +246,7 @@ fn build_sidebar(
     notes_btn.set_child(Some(&notes_lbl));
     notes_btn.set_tooltip_text(Some("Open dynamic floating Notes editor"));
 
-    let state_notes = state.clone();
+    let state_notes = state;
     notes_btn.connect_clicked(move |_| {
         crate::ui::notes_window::open_notes_window(state_notes.clone());
     });
@@ -407,7 +406,7 @@ impl MainLayout {
 
         let on_import_refresh = {
             let nav = nav_view_rc.clone();
-            let cl_page = cl_nav.clone();
+            let cl_page = cl_nav;
             let cl = course_list.clone();
             Rc::new(move || {
                 nav.pop_to_tag(PAGE_DASHBOARD);
@@ -415,7 +414,7 @@ impl MainLayout {
                 cl.refresh();
             })
         };
-        *import_refresh_cb.borrow_mut() = Some(on_import_refresh.clone());
+        *import_refresh_cb.borrow_mut() = Some(on_import_refresh);
 
         let sidebar_box = build_sidebar(
             state.clone(),
@@ -477,16 +476,16 @@ impl MainLayout {
             presence.execute(UpdatePresenceInput { activity: Activity::Dashboard });
         }
 
-        let db = dashboard.clone();
-        let cl = course_list.clone();
-        let cv = course_view.clone();
-        let vp = video_player.clone();
-        let ql = quiz_list.clone();
-        let qv = quiz_view.clone();
-        let st = settings.clone();
-        let rp = right_panel.clone();
+        let db = dashboard;
+        let cl = course_list;
+        let cv = course_view;
+        let vp = video_player;
+        let ql = quiz_list;
+        let qv = quiz_view;
+        let st = settings;
+        let rp = right_panel;
         let old_page: Rc<RefCell<String>> = Rc::new(RefCell::new(PAGE_DASHBOARD.to_string()));
-        let nav_state = state.clone();
+        let nav_state = state;
         let tag_btn = tag_to_button.clone();
 
         nav_view_rc.connect_visible_page_notify(move |nav| {
@@ -564,80 +563,98 @@ fn perform_search(
     search_popover: &gtk::Popover,
     query: &str,
 ) {
-    let results: Vec<crate::domain::entities::SearchResult> = {
-        let s = state.borrow();
-        s.backend
-            .as_ref()
-            .and_then(|ctx| ctx.search_repo.search(query, 20).ok())
-            .unwrap_or_default()
-    };
+    let query_str = query.to_string();
+    let backend_opt = state.borrow().backend.clone();
+    let (tx, rx) = std::sync::mpsc::channel::<Vec<crate::domain::entities::SearchResult>>();
 
-    if results.is_empty() {
-        search_popover.popdown();
-        return;
-    }
+    crate::infrastructure::tokio_bridge::spawn(async move {
+        let results = if let Some(ctx) = backend_opt {
+            ctx.search_repo.search(&query_str, 20).unwrap_or_default()
+        } else {
+            vec![]
+        };
+        let _ = tx.send(results);
+    });
 
-    let box_ = gtk::Box::new(gtk::Orientation::Vertical, 4);
-    box_.set_margin_start(8);
-    box_.set_margin_end(8);
-    box_.set_margin_top(8);
-    box_.set_margin_bottom(8);
+    let state = state.clone();
+    let nav = nav.clone();
+    let nav_pages = nav_pages.clone();
+    let search_popover = search_popover.clone();
 
-    for result in &results {
-        let row = gtk::Box::new(gtk::Orientation::Vertical, 2);
-
-        let type_label = gtk::Label::new(Some(&result.entity_type.to_string()));
-        type_label.add_css_class("caption");
-        type_label.set_halign(gtk::Align::Start);
-
-        let title_label = gtk::Label::new(Some(&result.title));
-        title_label.set_halign(gtk::Align::Start);
-        title_label.set_wrap(true);
-        title_label.set_max_width_chars(40);
-
-        row.append(&type_label);
-        row.append(&title_label);
-
-        let r = result.clone();
-        let s_cl = state.clone();
-        let nav_cl = nav.clone();
-        let pages_cl = nav_pages.clone();
-        let popover_cl = search_popover.clone();
-        let gesture = gtk::GestureClick::new();
-        gesture.connect_released(move |_, _, _, _| {
-            popover_cl.popdown();
-            let mut s = s_cl.borrow_mut();
-            match r.entity_type {
-                SearchResultType::Course => {
-                    s.current_course_id = Some(r.course_id.as_uuid().to_string());
-                    if let Some(cv_page) = pages_cl.get(PAGE_COURSE_VIEW) {
-                        nav_cl.push(cv_page);
-                    }
-                },
-                SearchResultType::Video => {
-                    s.current_course_id = Some(r.course_id.as_uuid().to_string());
-                    s.current_video_id = Some(r.entity_id.clone());
-                    if let Some(vp_page) = pages_cl.get(PAGE_VIDEO_PLAYER) {
-                        nav_cl.push(vp_page);
-                    }
-                },
-                SearchResultType::Note => {
-                    s.current_course_id = Some(r.course_id.as_uuid().to_string());
-                    if let Some(cv_page) = pages_cl.get(PAGE_COURSE_VIEW) {
-                        nav_cl.push(cv_page);
-                    }
-                },
+    glib::idle_add_local(move || match rx.try_recv() {
+        Ok(results) => {
+            if results.is_empty() {
+                search_popover.popdown();
+                return glib::ControlFlow::Break;
             }
-        });
-        row.add_controller(gesture);
 
-        let separator = gtk::Separator::new(gtk::Orientation::Horizontal);
-        box_.append(&row);
-        box_.append(&separator);
-    }
+            let box_ = gtk::Box::new(gtk::Orientation::Vertical, 4);
+            box_.set_margin_start(8);
+            box_.set_margin_end(8);
+            box_.set_margin_top(8);
+            box_.set_margin_bottom(8);
 
-    search_popover.set_child(Some(&box_));
-    if !search_popover.is_visible() {
-        search_popover.popup();
-    }
+            for result in &results {
+                let row = gtk::Box::new(gtk::Orientation::Vertical, 2);
+
+                let type_label = gtk::Label::new(Some(&result.entity_type.to_string()));
+                type_label.add_css_class("caption");
+                type_label.set_halign(gtk::Align::Start);
+
+                let title_label = gtk::Label::new(Some(&result.title));
+                title_label.set_halign(gtk::Align::Start);
+                title_label.set_wrap(true);
+                title_label.set_max_width_chars(40);
+
+                row.append(&type_label);
+                row.append(&title_label);
+
+                let r = result.clone();
+                let s_cl = state.clone();
+                let nav_cl = nav.clone();
+                let pages_cl = nav_pages.clone();
+                let popover_cl = search_popover.clone();
+                let gesture = gtk::GestureClick::new();
+                gesture.connect_released(move |_, _, _, _| {
+                    popover_cl.popdown();
+                    let mut s = s_cl.borrow_mut();
+                    match r.entity_type {
+                        SearchResultType::Course => {
+                            s.current_course_id = Some(r.course_id.as_uuid().to_string());
+                            if let Some(cv_page) = pages_cl.get(PAGE_COURSE_VIEW) {
+                                nav_cl.push(cv_page);
+                            }
+                        },
+                        SearchResultType::Video => {
+                            s.current_course_id = Some(r.course_id.as_uuid().to_string());
+                            s.current_video_id = Some(r.entity_id.clone());
+                            if let Some(vp_page) = pages_cl.get(PAGE_VIDEO_PLAYER) {
+                                nav_cl.push(vp_page);
+                            }
+                        },
+                        SearchResultType::Note => {
+                            s.current_course_id = Some(r.course_id.as_uuid().to_string());
+                            if let Some(cv_page) = pages_cl.get(PAGE_COURSE_VIEW) {
+                                nav_cl.push(cv_page);
+                            }
+                        },
+                    }
+                });
+                row.add_controller(gesture);
+
+                let separator = gtk::Separator::new(gtk::Orientation::Horizontal);
+                box_.append(&row);
+                box_.append(&separator);
+            }
+
+            search_popover.set_child(Some(&box_));
+            if !search_popover.is_visible() {
+                search_popover.popup();
+            }
+
+            glib::ControlFlow::Break
+        },
+        Err(std::sync::mpsc::TryRecvError::Empty) => glib::ControlFlow::Continue,
+        Err(std::sync::mpsc::TryRecvError::Disconnected) => glib::ControlFlow::Break,
+    });
 }
