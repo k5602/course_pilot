@@ -100,6 +100,7 @@ fn extract_json_from_response(text: &str) -> Result<&str, LLMError> {
     Ok(&text[start..end])
 }
 
+#[async_trait::async_trait]
 impl CompanionAI for GeminiAdapter {
     async fn ask(&self, question: &str, context: &CompanionContext) -> Result<String, LLMError> {
         use std::borrow::Cow;
@@ -154,6 +155,7 @@ Guidelines:
     }
 }
 
+#[async_trait::async_trait]
 impl ExaminerAI for GeminiAdapter {
     async fn generate_mcq(
         &self,
@@ -236,6 +238,7 @@ Rules:
     }
 }
 
+#[async_trait::async_trait]
 impl SummarizerAI for GeminiAdapter {
     async fn summarize_transcript(
         &self,

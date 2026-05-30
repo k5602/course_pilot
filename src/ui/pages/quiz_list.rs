@@ -6,7 +6,6 @@ use adw::prelude::*;
 use adw::{NavigationPage, NavigationView};
 use gio::prelude::ListModelExt;
 
-use crate::domain::ports::ExamRepository;
 use crate::ui::list_models::QuizObject;
 use crate::ui::navigation::PAGE_QUIZ_VIEW;
 use crate::ui::state::SharedState;
@@ -138,7 +137,7 @@ impl QuizListPage {
         let nav_pages_rc: Rc<RefCell<Rc<HashMap<&'static str, NavigationPage>>>> =
             Rc::new(RefCell::new(Rc::new(HashMap::new())));
         let store_for_activate = store.clone();
-        let nav_for_activate = nav.clone();
+        let nav_for_activate = nav;
         let state_for_activate = state.clone();
         let pages_for_activate = nav_pages_rc.clone();
         list_view.connect_activate(move |_, pos| {

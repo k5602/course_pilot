@@ -6,7 +6,6 @@ use adw::prelude::*;
 use adw::{NavigationPage, NavigationView};
 use gio::prelude::ListModelExt;
 
-use crate::domain::ports::{CourseRepository, ModuleRepository};
 use crate::ui::list_models::CourseObject;
 use crate::ui::navigation::PAGE_COURSE_VIEW;
 use crate::ui::state::SharedState;
@@ -125,7 +124,7 @@ impl CourseListPage {
             }
         });
 
-        let list_view = gtk::ListView::new(Some(no_selection.clone()), Some(factory.clone()));
+        let list_view = gtk::ListView::new(Some(no_selection), Some(factory));
         list_view.set_single_click_activate(true);
         list_view.set_margin_start(16);
         list_view.set_margin_end(16);
@@ -136,7 +135,7 @@ impl CourseListPage {
         let nav_pages_rc: Rc<RefCell<Rc<HashMap<&'static str, NavigationPage>>>> =
             Rc::new(RefCell::new(Rc::new(HashMap::new())));
         let store_for_activate = store.clone();
-        let nav_for_activate = nav.clone();
+        let nav_for_activate = nav;
         let state_for_activate = state.clone();
         let pages_for_activate = nav_pages_rc.clone();
         list_view.connect_activate(move |_, pos| {
@@ -156,13 +155,13 @@ impl CourseListPage {
             widget,
             state: state.clone(),
             nav_pages: nav_pages_rc,
-            store: store.clone(),
+            store,
             search_entry: search_entry.clone(),
             status_page,
             list_view,
         };
 
-        let state_cl = state.clone();
+        let state_cl = state;
         let search_cl = search_entry.clone();
         let store_cl = page.store.clone();
         let status_cl = page.status_page.clone();

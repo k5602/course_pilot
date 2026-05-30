@@ -167,8 +167,8 @@ impl SearchRepository for SqliteSearchRepository {
             return Ok(());
         }
         let mut conn = self.pool.get().map_err(|e| RepositoryError::Database(e.to_string()))?;
-        conn.transaction::<_, diesel::result::Error, _>(|tx| {
-            for entry in entries {
+        conn.transaction::<_, RepositoryError, _>(|tx| {
+            for (index, entry) in entries.iter().enumerate() {
                 sql_query(
                     "INSERT INTO search_index (entity_type, entity_id, title, content, course_id) VALUES (?, ?, ?, ?, ?)",
                 )
@@ -177,10 +177,14 @@ impl SearchRepository for SqliteSearchRepository {
                 .bind::<Text, _>(&entry.title)
                 .bind::<Text, _>(&entry.content)
                 .bind::<Text, _>(&entry.course_id)
-                .execute(tx)?;
+                .execute(tx)
+                .map_err(|e| RepositoryError::BatchFailed {
+                    entity: "SearchEntry",
+                    index,
+                    source: Box::new(RepositoryError::Database(e.to_string())),
+                })?;
             }
             Ok(())
         })
-        .map_err(|e| RepositoryError::Database(e.to_string()))
     }
 }

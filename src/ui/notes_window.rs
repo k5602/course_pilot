@@ -4,7 +4,6 @@ use std::fmt::Write;
 
 use crate::application::ServiceFactory;
 use crate::application::use_cases::{LoadNoteInput, SaveNoteInput};
-use crate::domain::ports::VideoRepository;
 use crate::domain::value_objects::VideoId;
 use crate::ui::state::SharedState;
 use crate::ui::toast::Toast;
@@ -128,7 +127,7 @@ pub fn open_notes_window(state: SharedState) {
     window.set_child(Some(&main_box));
 
     // Connect Dynamic Preview compilation on visible-child changes
-    let preview_label_cl = preview_label.clone();
+    let preview_label_cl = preview_label;
     let editor_cl = editor.clone();
     stack.connect_visible_child_notify(move |st| {
         if st.visible_child_name().as_deref() == Some("preview") {
@@ -142,7 +141,7 @@ pub fn open_notes_window(state: SharedState) {
     // Save notes to DB on click
     let editor_save = editor.clone();
     let state_save = state.clone();
-    let vid_save = video_id_str.clone();
+    let vid_save = video_id_str;
     save_btn.connect_clicked(move |_| {
         let buffer = editor_save.buffer();
         let text = buffer.text(&buffer.start_iter(), &buffer.end_iter(), false).to_string();
@@ -164,7 +163,7 @@ pub fn open_notes_window(state: SharedState) {
     });
 
     // Reference Injection
-    let editor_ref = editor.clone();
+    let editor_ref = editor;
     let ref_title = video_title;
     ref_btn.connect_clicked(move |_| {
         let buffer = editor_ref.buffer();
