@@ -9,7 +9,6 @@ use crate::application::ServiceFactory;
 use crate::application::use_cases::{
     CreateModuleInput, DeleteModuleInput, MoveVideoInput, UpdateModuleTitleInput,
 };
-use crate::domain::ports::{CourseRepository, ModuleRepository, VideoRepository};
 use crate::domain::value_objects::ModuleId;
 use crate::ui::navigation::PAGE_VIDEO_PLAYER;
 use crate::ui::state::SharedState;

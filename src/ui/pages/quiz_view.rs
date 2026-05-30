@@ -5,7 +5,6 @@ use adw::NavigationView;
 use adw::prelude::*;
 
 use crate::domain::entities::QuizQuestion;
-use crate::domain::ports::ExamRepository;
 use crate::ui::state::SharedState;
 use crate::ui::toast::Toast;
 

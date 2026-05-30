@@ -25,19 +25,13 @@ pub struct UpdateModuleTitleInput {
 }
 
 /// Use case for renaming a module.
-pub struct UpdateModuleTitleUseCase<MR>
-where
-    MR: ModuleRepository,
-{
-    module_repo: Arc<MR>,
+pub struct UpdateModuleTitleUseCase {
+    module_repo: Arc<dyn ModuleRepository>,
 }
 
-impl<MR> UpdateModuleTitleUseCase<MR>
-where
-    MR: ModuleRepository,
-{
+impl UpdateModuleTitleUseCase {
     /// Creates a new use case with the given repository.
-    pub fn new(module_repo: Arc<MR>) -> Self {
+    pub fn new(module_repo: Arc<dyn ModuleRepository>) -> Self {
         Self { module_repo }
     }
 

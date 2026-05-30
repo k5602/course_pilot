@@ -3,7 +3,7 @@
 use diesel::prelude::*;
 use diesel::sqlite::Sqlite;
 
-use crate::schema::{courses, exams, modules, notes, user_preferences, videos};
+use crate::schema::{chat_messages, courses, exams, modules, notes, user_preferences, videos};
 
 /// Diesel model for the courses table.
 #[derive(Queryable, Selectable, Identifiable, Debug)]
@@ -15,8 +15,8 @@ pub struct CourseRow {
     pub source_url: String,
     pub playlist_id: String,
     pub description: Option<String>,
-    pub source_hash: Option<String>,
     pub created_at: String, // SQLite stores TIMESTAMP as TEXT
+    pub source_hash: Option<String>,
 }
 
 /// Insertable model for courses.
@@ -208,4 +208,28 @@ pub struct NewTag<'a> {
 pub struct CourseTagRow {
     pub course_id: String,
     pub tag_id: String,
+}
+
+/// Diesel model for the chat_messages table.
+#[derive(Queryable, Selectable, Identifiable, Associations, Debug)]
+#[diesel(table_name = chat_messages)]
+#[diesel(belongs_to(VideoRow, foreign_key = video_id))]
+#[diesel(check_for_backend(Sqlite))]
+pub struct ChatMessageRow {
+    pub id: String,
+    pub video_id: String,
+    pub role: String,
+    pub content: String,
+    pub created_at: String,
+}
+
+/// Insertable model for chat messages.
+#[derive(Insertable)]
+#[diesel(table_name = chat_messages)]
+pub struct NewChatMessage<'a> {
+    pub id: &'a str,
+    pub video_id: &'a str,
+    pub role: &'a str,
+    pub content: &'a str,
+    pub created_at: &'a str,
 }

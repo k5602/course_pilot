@@ -47,6 +47,7 @@ impl Default for RustyYtdlAdapter {
     }
 }
 
+#[async_trait::async_trait]
 impl PlaylistFetcher for RustyYtdlAdapter {
     async fn fetch_playlist(&self, url: &PlaylistUrl) -> Result<Vec<RawVideoMetadata>, FetchError> {
         let url_str = url.raw().to_string();
@@ -112,16 +113,25 @@ async fn run_yt_dlp(
     }
 
     cmd.arg(url);
+    cmd.kill_on_drop(true);
 
-    let output = cmd.output().await.map_err(|e| {
-        if e.kind() == std::io::ErrorKind::NotFound {
-            FetchError::NotAvailable(
-                "yt-dlp not found. Install with: pip install yt-dlp".to_string(),
-            )
-        } else {
-            FetchError::Api(format!("failed to execute yt-dlp: {}", e))
-        }
-    })?;
+    let output_res = tokio::time::timeout(Duration::from_secs(60), cmd.output()).await;
+    let output = match output_res {
+        Ok(res) => res.map_err(|e| {
+            if e.kind() == std::io::ErrorKind::NotFound {
+                FetchError::NotAvailable(
+                    "yt-dlp not found. Install with: pip install yt-dlp".to_string(),
+                )
+            } else {
+                FetchError::Api(format!("failed to execute yt-dlp: {}", e))
+            }
+        })?,
+        Err(_) => {
+            return Err(FetchError::Network(
+                "yt-dlp playlist fetch timed out after 60 seconds".to_string(),
+            ));
+        },
+    };
 
     let stdout = String::from_utf8(output.stdout)
         .unwrap_or_else(|e| String::from_utf8_lossy(e.as_bytes()).into_owned());
@@ -212,15 +222,14 @@ pub(crate) async fn resolve_youtube_stream_inner(
 ) -> Result<String, FetchError> {
     let url = format!("https://www.youtube.com/watch?v={youtube_id}");
     let format_str = quality.ytdlp_format();
-    let output = Command::new("yt-dlp")
-        .arg("-g")
-        .arg("--no-warnings")
-        .arg("-f")
-        .arg(format_str)
-        .arg(&url)
-        .output()
-        .await
-        .map_err(|e| {
+    let mut cmd = Command::new("yt-dlp");
+    cmd.arg("-g").arg("--no-warnings").arg("-f").arg(format_str).arg(&url);
+    cmd.kill_on_drop(true);
+
+    let output_res = tokio::time::timeout(Duration::from_secs(60), cmd.output()).await;
+
+    let output = match output_res {
+        Ok(res) => res.map_err(|e| {
             if e.kind() == std::io::ErrorKind::NotFound {
                 FetchError::NotAvailable(
                     "yt-dlp not found. Install with: pip install yt-dlp".to_string(),
@@ -228,7 +237,13 @@ pub(crate) async fn resolve_youtube_stream_inner(
             } else {
                 FetchError::Api(format!("failed to execute yt-dlp: {e}"))
             }
-        })?;
+        })?,
+        Err(_) => {
+            return Err(FetchError::Network(
+                "yt-dlp stream resolution timed out after 60 seconds".to_string(),
+            ));
+        },
+    };
 
     let stdout = String::from_utf8(output.stdout)
         .unwrap_or_else(|e| String::from_utf8_lossy(e.as_bytes()).into_owned());

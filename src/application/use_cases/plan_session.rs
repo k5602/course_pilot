@@ -28,18 +28,12 @@ pub struct PlanSessionInput {
 }
 
 /// Use case for planning study sessions.
-pub struct PlanSessionUseCase<VR>
-where
-    VR: VideoRepository,
-{
-    video_repo: Arc<VR>,
+pub struct PlanSessionUseCase {
+    video_repo: Arc<dyn VideoRepository>,
 }
 
-impl<VR> PlanSessionUseCase<VR>
-where
-    VR: VideoRepository,
-{
-    pub fn new(video_repo: Arc<VR>) -> Self {
+impl PlanSessionUseCase {
+    pub fn new(video_repo: Arc<dyn VideoRepository>) -> Self {
         Self { video_repo }
     }
 

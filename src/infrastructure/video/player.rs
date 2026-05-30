@@ -16,6 +16,8 @@ pub struct VideoPlayer {
     picture: gtk::Picture,
     _bus_guard: gst::bus::BusWatchGuard,
     _frame_tx: mpsc::Sender<FrameData>,
+    // Held so Drop can cancel the frame-poll timer and prevent ghost loops.
+    _frame_source: glib::source::SourceId,
 }
 
 impl VideoPlayer {
@@ -78,26 +80,28 @@ impl VideoPlayer {
         appsink.set_callbacks(callbacks);
         // --- End video frame rendering setup ---
 
-        // Idle callback on main thread: render most recent frame only
+        // Poll for new frames at ~60 fps. Using timeout instead of idle_add so
+        // the main thread yields CPU between ticks rather than busy-looping.
         let picture_idle = picture.clone();
-        glib::idle_add_local(move || {
-            let mut latest: Option<FrameData> = None;
-            while let Ok(data) = frame_rx.try_recv() {
-                latest = Some(data);
-            }
-            if let Some(data) = latest {
-                let bytes = glib::Bytes::from_owned(data.mapped);
-                let texture = gtk::gdk::MemoryTexture::new(
-                    data.width,
-                    data.height,
-                    gtk::gdk::MemoryFormat::R8g8b8a8,
-                    &bytes,
-                    data.stride,
-                );
-                picture_idle.set_paintable(Some(&texture));
-            }
-            glib::ControlFlow::Continue
-        });
+        let _frame_source =
+            glib::timeout_add_local(std::time::Duration::from_millis(16), move || {
+                let mut latest: Option<FrameData> = None;
+                while let Ok(data) = frame_rx.try_recv() {
+                    latest = Some(data);
+                }
+                if let Some(data) = latest {
+                    let bytes = glib::Bytes::from_owned(data.mapped);
+                    let texture = gtk::gdk::MemoryTexture::new(
+                        data.width,
+                        data.height,
+                        gtk::gdk::MemoryFormat::R8g8b8a8,
+                        &bytes,
+                        data.stride,
+                    );
+                    picture_idle.set_paintable(Some(&texture));
+                }
+                glib::ControlFlow::Continue
+            });
 
         let bus = pipeline.bus().ok_or("Pipeline has no bus")?;
         let _bus_guard = bus.add_watch_local(move |_, msg| {
@@ -121,7 +125,7 @@ impl VideoPlayer {
             gst::glib::ControlFlow::Continue
         })?;
 
-        Ok(Self { pipeline, playbin, picture, _bus_guard, _frame_tx: frame_tx })
+        Ok(Self { pipeline, playbin, picture, _bus_guard, _frame_tx: frame_tx, _frame_source })
     }
 
     pub fn widget(&self) -> &gtk::Picture {
@@ -203,6 +207,7 @@ impl VideoPlayer {
 
 impl Drop for VideoPlayer {
     fn drop(&mut self) {
+        // _frame_source is removed automatically when SourceId drops.
         let _ = self.pipeline.set_state(gst::State::Null);
     }
 }

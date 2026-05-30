@@ -15,12 +15,6 @@ use crate::domain::{
 /// Error type for companion queries.
 #[derive(Debug, thiserror::Error)]
 pub enum CompanionError {
-    #[error("Video not found")]
-    VideoNotFound,
-    #[error("Module not found")]
-    ModuleNotFound,
-    #[error("Course not found")]
-    CourseNotFound,
     #[error(transparent)]
     AI(#[from] LLMError),
     #[error(transparent)]
@@ -36,35 +30,21 @@ pub struct AskCompanionInput {
 }
 
 /// Use case for asking questions to the AI companion.
-pub struct AskCompanionUseCase<AI, VR, MR, CR, NR>
-where
-    AI: CompanionAI,
-    VR: VideoRepository,
-    MR: ModuleRepository,
-    CR: CourseRepository,
-    NR: NoteRepository,
-{
-    companion: Arc<AI>,
-    video_repo: Arc<VR>,
-    module_repo: Arc<MR>,
-    course_repo: Arc<CR>,
-    note_repo: Arc<NR>,
+pub struct AskCompanionUseCase {
+    companion: Arc<dyn CompanionAI>,
+    video_repo: Arc<dyn VideoRepository>,
+    module_repo: Arc<dyn ModuleRepository>,
+    course_repo: Arc<dyn CourseRepository>,
+    note_repo: Arc<dyn NoteRepository>,
 }
 
-impl<AI, VR, MR, CR, NR> AskCompanionUseCase<AI, VR, MR, CR, NR>
-where
-    AI: CompanionAI,
-    VR: VideoRepository,
-    MR: ModuleRepository,
-    CR: CourseRepository,
-    NR: NoteRepository,
-{
+impl AskCompanionUseCase {
     pub fn new(
-        companion: Arc<AI>,
-        video_repo: Arc<VR>,
-        module_repo: Arc<MR>,
-        course_repo: Arc<CR>,
-        note_repo: Arc<NR>,
+        companion: Arc<dyn CompanionAI>,
+        video_repo: Arc<dyn VideoRepository>,
+        module_repo: Arc<dyn ModuleRepository>,
+        course_repo: Arc<dyn CourseRepository>,
+        note_repo: Arc<dyn NoteRepository>,
     ) -> Self {
         Self { companion, video_repo, module_repo, course_repo, note_repo }
     }
@@ -72,20 +52,19 @@ where
     /// Executes the Q&A request.
     pub async fn execute(&self, input: AskCompanionInput) -> Result<String, CompanionError> {
         // Get video
-        let video =
-            self.video_repo.find_by_id(&input.video_id)?.ok_or(CompanionError::VideoNotFound)?;
+        let video = self.video_repo.find_by_id(&input.video_id)?.ok_or_else(|| {
+            RepositoryError::NotFound { entity: "Video", id: input.video_id.to_string() }
+        })?;
 
         // Get module
-        let module = self
-            .module_repo
-            .find_by_id(video.module_id())?
-            .ok_or(CompanionError::ModuleNotFound)?;
+        let module = self.module_repo.find_by_id(video.module_id())?.ok_or_else(|| {
+            RepositoryError::NotFound { entity: "Module", id: video.module_id().to_string() }
+        })?;
 
         // Get course
-        let course = self
-            .course_repo
-            .find_by_id(module.course_id())?
-            .ok_or(CompanionError::CourseNotFound)?;
+        let course = self.course_repo.find_by_id(module.course_id())?.ok_or_else(|| {
+            RepositoryError::NotFound { entity: "Course", id: module.course_id().to_string() }
+        })?;
 
         let notes =
             self.note_repo.find_by_video(&input.video_id)?.map(|note| note.content().to_string());

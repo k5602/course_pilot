@@ -1,6 +1,6 @@
 [package]
 name = "course_pilot"
-version = "0.2.0"
+version = "0.2.1"
 edition = "2024"
 description = "Transform YouTube playlists into structured, intelligent study plans"
 readme = "README.md"
@@ -20,6 +20,7 @@ gst-video = { package = "gstreamer-video", version = "0.25" }
 dotenvy = "0.15"
 rustls = { version = "0.23", features = ["ring"] }
 # Utilities
+async-trait = "0.1"
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
 sha2 = "0.10"

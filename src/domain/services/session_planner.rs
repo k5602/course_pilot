@@ -191,4 +191,60 @@ mod tests {
             assert!(sessions[5].day >= 7);
         }
     }
+
+    #[test]
+    fn test_respects_module_boundaries_under_half_limit() {
+        let planner = SessionPlanner::new(CognitiveLimit::new(60)); // limit_secs = 3600, half = 1800
+        let durations = vec![1000, 1000, 1000];
+        let boundaries = vec![1];
+        let sessions = planner.plan_sessions(&durations, Some(&boundaries), 7);
+
+        assert_eq!(sessions.len(), 1);
+        assert_eq!(sessions[0].video_indices, vec![0, 1, 2]);
+    }
+
+    #[test]
+    fn test_respects_module_boundaries_over_half_limit() {
+        let planner = SessionPlanner::new(CognitiveLimit::new(60)); // limit_secs = 3600, half = 1800
+        let durations = vec![2000, 1000, 1000];
+        let boundaries = vec![1];
+        let sessions = planner.plan_sessions(&durations, Some(&boundaries), 7);
+
+        assert_eq!(sessions.len(), 2);
+        assert_eq!(sessions[0].video_indices, vec![0]);
+        assert_eq!(sessions[1].video_indices, vec![1, 2]);
+    }
+
+    #[test]
+    fn test_single_huge_video_exceeding_limit() {
+        let planner = SessionPlanner::new(CognitiveLimit::new(60)); // limit_secs = 3600
+        let durations = vec![5000, 1000];
+        let sessions = planner.plan_sessions(&durations, None, 7);
+
+        assert_eq!(sessions.len(), 2);
+        assert_eq!(sessions[0].video_indices, vec![0]);
+        assert_eq!(sessions[0].total_duration_secs, 5000);
+        assert_eq!(sessions[1].video_indices, vec![1]);
+        assert_eq!(sessions[1].total_duration_secs, 1000);
+    }
+
+    #[test]
+    fn test_weekly_study_days_extreme_values() {
+        let planner = SessionPlanner::new(CognitiveLimit::new(30)); // 1800s limit
+        let durations = vec![1000, 1000, 1000, 1000];
+
+        let sessions_1 = planner.plan_sessions(&durations, None, 1);
+        assert_eq!(sessions_1.len(), 4);
+        assert_eq!(sessions_1[0].day, 1);
+        assert_eq!(sessions_1[1].day, 8);
+        assert_eq!(sessions_1[2].day, 15);
+        assert_eq!(sessions_1[3].day, 22);
+
+        let sessions_0 = planner.plan_sessions(&durations, None, 0);
+        assert_eq!(sessions_0.len(), 4);
+        assert_eq!(sessions_0[0].day, 1);
+        assert_eq!(sessions_0[1].day, 8);
+        assert_eq!(sessions_0[2].day, 15);
+        assert_eq!(sessions_0[3].day, 22);
+    }
 }

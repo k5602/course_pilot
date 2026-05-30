@@ -4,6 +4,7 @@ use std::sync::Arc;
 
 use chrono::{DateTime, NaiveDateTime, Utc};
 use diesel::prelude::*;
+use diesel::result::{DatabaseErrorKind, Error as DieselError};
 
 use crate::domain::{
     entities::{Course, Exam, Module, Note, NoteId, Video},
@@ -18,6 +19,27 @@ use crate::domain::{
 use crate::infrastructure::persistence::connection::DbPool;
 use crate::infrastructure::persistence::models::*;
 use crate::schema::{courses, exams, modules, notes, videos};
+
+/// Blanket conversion so Diesel `?` inside transaction closures that return
+/// `Result<_, RepositoryError>` can propagate generic diesel errors as Database.
+impl From<DieselError> for RepositoryError {
+    fn from(e: DieselError) -> Self {
+        RepositoryError::Database(e.to_string())
+    }
+}
+
+/// Maps a Diesel error from a `save` operation to the appropriate
+/// `RepositoryError` variant, distinguishing `UniqueViolation` from other
+/// database errors. The `entity` and `id` strings identify the conflicting
+/// record for structured error reporting upstream.
+fn map_diesel_save_err(e: DieselError, entity: &'static str, id: &str) -> RepositoryError {
+    match e {
+        DieselError::DatabaseError(DatabaseErrorKind::UniqueViolation, _) => {
+            RepositoryError::Conflict { entity, id: id.to_owned() }
+        },
+        other => RepositoryError::Database(other.to_string()),
+    }
+}
 
 /// SQLite-backed course repository.
 pub struct SqliteCourseRepository {
@@ -53,7 +75,7 @@ impl CourseRepository for SqliteCourseRepository {
                 courses::description.eq(new_course.description),
             ))
             .execute(&mut conn)
-            .map_err(|e| RepositoryError::Database(e.to_string()))?;
+            .map_err(|e| map_diesel_save_err(e, "Course", &id_str))?;
 
         Ok(())
     }
@@ -63,8 +85,8 @@ impl CourseRepository for SqliteCourseRepository {
             return Ok(());
         }
         let mut conn = self.pool.get().map_err(|e| RepositoryError::Database(e.to_string()))?;
-        conn.transaction::<_, diesel::result::Error, _>(|tx| {
-            for course in courses {
+        conn.transaction::<_, RepositoryError, _>(|tx| {
+            for (index, course) in courses.iter().enumerate() {
                 let id_str = course.id().as_uuid().to_string();
                 let new_course = NewCourse {
                     id: &id_str,
@@ -82,11 +104,15 @@ impl CourseRepository for SqliteCourseRepository {
                         courses::name.eq(new_course.name),
                         courses::description.eq(new_course.description),
                     ))
-                    .execute(tx)?;
+                    .execute(tx)
+                    .map_err(|e| RepositoryError::BatchFailed {
+                        entity: "Course",
+                        index,
+                        source: Box::new(map_diesel_save_err(e, "Course", &id_str)),
+                    })?;
             }
             Ok(())
         })
-        .map_err(|e| RepositoryError::Database(e.to_string()))
     }
 
     fn find_by_id(&self, id: &CourseId) -> Result<Option<Course>, RepositoryError> {
@@ -191,7 +217,7 @@ impl ModuleRepository for SqliteModuleRepository {
                 modules::sort_order.eq(new_module.sort_order),
             ))
             .execute(&mut conn)
-            .map_err(|e| RepositoryError::Database(e.to_string()))?;
+            .map_err(|e| map_diesel_save_err(e, "Module", &id_str))?;
 
         Ok(())
     }
@@ -201,8 +227,8 @@ impl ModuleRepository for SqliteModuleRepository {
             return Ok(());
         }
         let mut conn = self.pool.get().map_err(|e| RepositoryError::Database(e.to_string()))?;
-        conn.transaction::<_, diesel::result::Error, _>(|tx| {
-            for module in modules {
+        conn.transaction::<_, RepositoryError, _>(|tx| {
+            for (index, module) in modules.iter().enumerate() {
                 let id_str = module.id().as_uuid().to_string();
                 let course_id_str = module.course_id().as_uuid().to_string();
                 let new_module = NewModule {
@@ -219,11 +245,15 @@ impl ModuleRepository for SqliteModuleRepository {
                         modules::title.eq(new_module.title),
                         modules::sort_order.eq(new_module.sort_order),
                     ))
-                    .execute(tx)?;
+                    .execute(tx)
+                    .map_err(|e| RepositoryError::BatchFailed {
+                        entity: "Module",
+                        index,
+                        source: Box::new(map_diesel_save_err(e, "Module", &id_str)),
+                    })?;
             }
             Ok(())
         })
-        .map_err(|e| RepositoryError::Database(e.to_string()))
     }
 
     fn find_by_id(&self, id: &ModuleId) -> Result<Option<Module>, RepositoryError> {
@@ -333,7 +363,7 @@ impl VideoRepository for SqliteVideoRepository {
                 videos::module_id.eq(&module_id_str),
             ))
             .execute(&mut conn)
-            .map_err(|e| RepositoryError::Database(e.to_string()))?;
+            .map_err(|e| map_diesel_save_err(e, "Video", &video_id_str))?;
 
         Ok(())
     }
@@ -343,8 +373,8 @@ impl VideoRepository for SqliteVideoRepository {
             return Ok(());
         }
         let mut conn = self.pool.get().map_err(|e| RepositoryError::Database(e.to_string()))?;
-        conn.transaction::<_, diesel::result::Error, _>(|tx| {
-            for video in videos {
+        conn.transaction::<_, RepositoryError, _>(|tx| {
+            for (index, video) in videos.iter().enumerate() {
                 let (source_type, source_ref, youtube_id) = match video.source() {
                     VideoSource::YouTube(id) => {
                         ("youtube", id.as_str().to_string(), Some(id.as_str()))
@@ -385,11 +415,15 @@ impl VideoRepository for SqliteVideoRepository {
                         videos::summary.eq(new_video.summary),
                         videos::module_id.eq(&module_id_str),
                     ))
-                    .execute(tx)?;
+                    .execute(tx)
+                    .map_err(|e| RepositoryError::BatchFailed {
+                        entity: "Video",
+                        index,
+                        source: Box::new(map_diesel_save_err(e, "Video", &video_id_str)),
+                    })?;
             }
             Ok(())
         })
-        .map_err(|e| RepositoryError::Database(e.to_string()))
     }
 
     fn find_by_id(&self, id: &VideoId) -> Result<Option<Video>, RepositoryError> {
@@ -573,7 +607,7 @@ impl ExamRepository for SqliteExamRepository {
                 exams::user_answers_json.eq(new_exam.user_answers_json),
             ))
             .execute(&mut conn)
-            .map_err(|e| RepositoryError::Database(e.to_string()))?;
+            .map_err(|e| map_diesel_save_err(e, "Exam", &id_str))?;
 
         Ok(())
     }
@@ -661,7 +695,7 @@ impl NoteRepository for SqliteNoteRepository {
             .do_update()
             .set(notes::content.eq(new_note.content))
             .execute(&mut conn)
-            .map_err(|e| RepositoryError::Database(e.to_string()))?;
+            .map_err(|e| map_diesel_save_err(e, "Note", &id_str))?;
 
         Ok(())
     }

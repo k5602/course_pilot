@@ -1,6 +1,16 @@
 // @generated automatically by Diesel CLI.
 
 diesel::table! {
+    chat_messages (id) {
+        id -> Text,
+        video_id -> Text,
+        role -> Text,
+        content -> Text,
+        created_at -> Text,
+    }
+}
+
+diesel::table! {
     course_tags (course_id, tag_id) {
         course_id -> Text,
         tag_id -> Text,
@@ -14,8 +24,8 @@ diesel::table! {
         source_url -> Text,
         playlist_id -> Text,
         description -> Nullable<Text>,
-        source_hash -> Nullable<Text>,
         created_at -> Timestamp,
+        source_hash -> Nullable<Text>,
     }
 }
 
@@ -88,6 +98,7 @@ diesel::table! {
     }
 }
 
+diesel::joinable!(chat_messages -> videos (video_id));
 diesel::joinable!(course_tags -> courses (course_id));
 diesel::joinable!(course_tags -> tags (tag_id));
 diesel::joinable!(exams -> videos (video_id));
@@ -96,6 +107,7 @@ diesel::joinable!(notes -> videos (video_id));
 diesel::joinable!(videos -> modules (module_id));
 
 diesel::allow_tables_to_appear_in_same_query!(
+    chat_messages,
     course_tags,
     courses,
     exams,

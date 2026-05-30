@@ -28,7 +28,7 @@ pub struct CompanionContext {
 }
 
 /// Port for the Sidecar Companion (AI-B).
-#[allow(async_fn_in_trait)]
+#[async_trait::async_trait]
 pub trait CompanionAI: Send + Sync {
     /// Answers a question in the context of the current video.
     async fn ask(&self, question: &str, context: &CompanionContext) -> Result<String, LLMError>;
@@ -44,7 +44,7 @@ pub struct MCQuestion {
 }
 
 /// Port for the Manual Examiner (AI-C).
-#[allow(async_fn_in_trait)]
+#[async_trait::async_trait]
 pub trait ExaminerAI: Send + Sync {
     /// Generates MCQ questions for a video.
     async fn generate_mcq(
@@ -58,7 +58,7 @@ pub trait ExaminerAI: Send + Sync {
 }
 
 /// Port for video transcript summarization.
-#[allow(async_fn_in_trait)]
+#[async_trait::async_trait]
 pub trait SummarizerAI: Send + Sync {
     /// Summarizes a video transcript into key points.
     async fn summarize_transcript(

@@ -27,19 +27,13 @@ pub struct MoveVideoInput {
 }
 
 /// Use case for moving a video to a different module.
-pub struct MoveVideoToModuleUseCase<VR>
-where
-    VR: VideoRepository,
-{
-    video_repo: Arc<VR>,
+pub struct MoveVideoToModuleUseCase {
+    video_repo: Arc<dyn VideoRepository>,
 }
 
-impl<VR> MoveVideoToModuleUseCase<VR>
-where
-    VR: VideoRepository,
-{
+impl MoveVideoToModuleUseCase {
     /// Creates a new use case with the given repository.
-    pub fn new(video_repo: Arc<VR>) -> Self {
+    pub fn new(video_repo: Arc<dyn VideoRepository>) -> Self {
         Self { video_repo }
     }
 

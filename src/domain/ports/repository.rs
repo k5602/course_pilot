@@ -8,6 +8,17 @@ use crate::domain::value_objects::{CourseId, ExamId, ModuleId, TagId, UserId, Vi
 pub enum RepositoryError {
     #[error("Database error: {0}")]
     Database(String),
+    #[error("{entity} not found (ID: {id})")]
+    NotFound { entity: &'static str, id: String },
+    #[error("{entity} conflict on save (ID: {id})")]
+    Conflict { entity: &'static str, id: String },
+    #[error("Batch operation failed on {entity} at index {index}: {source}")]
+    BatchFailed {
+        entity: &'static str,
+        index: usize,
+        #[source]
+        source: Box<RepositoryError>,
+    },
 }
 
 /// Repository for Course entities.

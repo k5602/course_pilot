@@ -10,9 +10,9 @@ use std::sync::Arc;
 use crate::domain::{
     entities::{Course, Module, Video},
     ports::{
-        CourseRepository, LocalMediaError, LocalMediaScanner, ModuleRepository,
-        ModuleTitleGenerator, RawLocalMediaMetadata, SearchEntry, SearchRepository,
-        VideoRepository,
+        CourseRepository, DomainEvent, EventBus, LocalMediaError, LocalMediaScanner,
+        ModuleRepository, ModuleTitleGenerator, RawLocalMediaMetadata, SearchEntry,
+        SearchRepository, VideoRepository,
     },
     services::{BoundaryDetector, SubtitleCleaner, TitleSanitizer, title_number_sequence},
     value_objects::{CourseId, ModuleId, PlaylistUrl, VideoId, VideoSource},
@@ -48,32 +48,19 @@ pub struct IngestLocalOutput {
 
 /// Use case for ingesting a local media library into a structured course.
 #[allow(dead_code)]
-pub struct IngestLocalUseCase<S, CR, MR, VR, SR>
-where
-    S: LocalMediaScanner,
-    CR: CourseRepository,
-    MR: ModuleRepository,
-    VR: VideoRepository,
-    SR: SearchRepository,
-{
-    scanner: Arc<S>,
-    course_repo: Arc<CR>,
-    module_repo: Arc<MR>,
-    video_repo: Arc<VR>,
-    search_repo: Arc<SR>,
+pub struct IngestLocalUseCase {
+    scanner: Arc<dyn LocalMediaScanner>,
+    course_repo: Arc<dyn CourseRepository>,
+    module_repo: Arc<dyn ModuleRepository>,
+    video_repo: Arc<dyn VideoRepository>,
+    search_repo: Arc<dyn SearchRepository>,
+    event_bus: Arc<dyn EventBus>,
     sanitizer: TitleSanitizer,
     boundary_batch_size: usize,
     title_generator: Option<Arc<dyn ModuleTitleGenerator>>,
 }
 
-impl<S, CR, MR, VR, SR> IngestLocalUseCase<S, CR, MR, VR, SR>
-where
-    S: LocalMediaScanner,
-    CR: CourseRepository,
-    MR: ModuleRepository,
-    VR: VideoRepository,
-    SR: SearchRepository,
-{
+impl IngestLocalUseCase {
     async fn generate_module_title(
         &self,
         titles: &[String],
@@ -92,11 +79,12 @@ where
 
     #[allow(clippy::too_many_arguments)]
     pub fn new(
-        scanner: Arc<S>,
-        course_repo: Arc<CR>,
-        module_repo: Arc<MR>,
-        video_repo: Arc<VR>,
-        search_repo: Arc<SR>,
+        scanner: Arc<dyn LocalMediaScanner>,
+        course_repo: Arc<dyn CourseRepository>,
+        module_repo: Arc<dyn ModuleRepository>,
+        video_repo: Arc<dyn VideoRepository>,
+        search_repo: Arc<dyn SearchRepository>,
+        event_bus: Arc<dyn EventBus>,
         title_generator: Option<Arc<dyn ModuleTitleGenerator>>,
         boundary_batch_size: usize,
     ) -> Self {
@@ -106,6 +94,7 @@ where
             module_repo,
             video_repo,
             search_repo,
+            event_bus,
             sanitizer: TitleSanitizer::new(),
             boundary_batch_size,
             title_generator,
@@ -265,6 +254,8 @@ where
         self.search_repo
             .index_batch(&video_search_entries)
             .map_err(|e| IngestLocalError::PersistFailed(e.to_string()))?;
+
+        self.event_bus.publish(DomainEvent::CourseIngested(course_id));
 
         Ok(IngestLocalOutput {
             course_id,

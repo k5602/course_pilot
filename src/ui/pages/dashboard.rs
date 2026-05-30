@@ -5,7 +5,6 @@ use std::rc::Rc;
 use adw::prelude::*;
 use adw::{NavigationPage, NavigationView};
 
-use crate::domain::ports::{CourseRepository, VideoRepository};
 use crate::ui::navigation::PAGE_COURSE_VIEW;
 use crate::ui::state::SharedState;
 use crate::ui::toast::Toast;

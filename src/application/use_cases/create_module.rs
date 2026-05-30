@@ -25,18 +25,12 @@ pub struct CreateModuleInput {
 }
 
 /// Use case for creating a new module.
-pub struct CreateModuleUseCase<MR>
-where
-    MR: ModuleRepository,
-{
-    module_repo: Arc<MR>,
+pub struct CreateModuleUseCase {
+    module_repo: Arc<dyn ModuleRepository>,
 }
 
-impl<MR> CreateModuleUseCase<MR>
-where
-    MR: ModuleRepository,
-{
-    pub fn new(module_repo: Arc<MR>) -> Self {
+impl CreateModuleUseCase {
+    pub fn new(module_repo: Arc<dyn ModuleRepository>) -> Self {
         Self { module_repo }
     }
 

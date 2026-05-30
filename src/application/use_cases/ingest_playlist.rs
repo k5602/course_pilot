@@ -7,8 +7,8 @@ use std::sync::Arc;
 use crate::domain::{
     entities::{Course, Module, Video},
     ports::{
-        CourseRepository, FetchError, ModuleRepository, ModuleTitleGenerator, PlaylistFetcher,
-        SearchEntry, SearchRepository, VideoRepository,
+        CourseRepository, DomainEvent, EventBus, FetchError, ModuleRepository,
+        ModuleTitleGenerator, PlaylistFetcher, SearchEntry, SearchRepository, VideoRepository,
     },
     services::{BoundaryDetector, TitleSanitizer},
     value_objects::{CourseId, ModuleId, PlaylistUrl, VideoId, VideoSource, YouTubeVideoId},
@@ -44,32 +44,19 @@ pub struct IngestPlaylistOutput {
 
 /// Use case for ingesting a YouTube playlist into a structured course.
 #[allow(dead_code)]
-pub struct IngestPlaylistUseCase<F, CR, MR, VR, SR>
-where
-    F: PlaylistFetcher,
-    CR: CourseRepository,
-    MR: ModuleRepository,
-    VR: VideoRepository,
-    SR: SearchRepository,
-{
-    fetcher: Arc<F>,
-    course_repo: Arc<CR>,
-    module_repo: Arc<MR>,
-    video_repo: Arc<VR>,
-    search_repo: Arc<SR>,
+pub struct IngestPlaylistUseCase {
+    fetcher: Arc<dyn PlaylistFetcher>,
+    course_repo: Arc<dyn CourseRepository>,
+    module_repo: Arc<dyn ModuleRepository>,
+    video_repo: Arc<dyn VideoRepository>,
+    search_repo: Arc<dyn SearchRepository>,
+    event_bus: Arc<dyn EventBus>,
     sanitizer: TitleSanitizer,
     boundary_batch_size: usize,
     title_generator: Option<Arc<dyn ModuleTitleGenerator>>,
 }
 
-impl<F, CR, MR, VR, SR> IngestPlaylistUseCase<F, CR, MR, VR, SR>
-where
-    F: PlaylistFetcher,
-    CR: CourseRepository,
-    MR: ModuleRepository,
-    VR: VideoRepository,
-    SR: SearchRepository,
-{
+impl IngestPlaylistUseCase {
     async fn generate_module_title(
         &self,
         titles: &[String],
@@ -88,11 +75,12 @@ where
 
     #[allow(clippy::too_many_arguments)]
     pub fn new(
-        fetcher: Arc<F>,
-        course_repo: Arc<CR>,
-        module_repo: Arc<MR>,
-        video_repo: Arc<VR>,
-        search_repo: Arc<SR>,
+        fetcher: Arc<dyn PlaylistFetcher>,
+        course_repo: Arc<dyn CourseRepository>,
+        module_repo: Arc<dyn ModuleRepository>,
+        video_repo: Arc<dyn VideoRepository>,
+        search_repo: Arc<dyn SearchRepository>,
+        event_bus: Arc<dyn EventBus>,
         title_generator: Option<Arc<dyn ModuleTitleGenerator>>,
         boundary_batch_size: usize,
     ) -> Self {
@@ -102,6 +90,7 @@ where
             module_repo,
             video_repo,
             search_repo,
+            event_bus,
             sanitizer: TitleSanitizer::new(),
             boundary_batch_size,
             title_generator,
@@ -142,9 +131,14 @@ where
             raw_videos.iter().map(|v| self.sanitizer.sanitize(&v.title)).collect();
 
         // 5. Create course
+        // Snapshot the first sanitized title as a fallback for the course name before
+        // constructing the video-title iterator. This keeps the two consumers independent:
+        // course_name derivation never consumes from title_iter, so all N sanitized
+        // titles remain available for the N videos below.
+        let course_name_fallback =
+            sanitized_titles.first().cloned().unwrap_or_else(|| "Untitled Course".to_string());
         let mut title_iter = sanitized_titles.into_iter();
-        let course_name =
-            input.course_name.unwrap_or_else(|| title_iter.next().unwrap_or_default());
+        let course_name = input.course_name.unwrap_or(course_name_fallback);
         let course_id = CourseId::new();
         let course = Course::new(
             course_id,
@@ -185,7 +179,7 @@ where
                     let raw = &raw_videos[i];
                     PendingVideo {
                         youtube_id: raw.youtube_id.clone(),
-                        title: title_iter.next().unwrap(),
+                        title: title_iter.next().unwrap_or_else(|| "Untitled".to_string()),
                         description: raw.description.clone(),
                         duration_secs: raw.duration_secs,
                     }
@@ -243,6 +237,8 @@ where
         self.search_repo
             .index_batch(&video_search_entries)
             .map_err(|e| IngestError::PersistFailed(e.to_string()))?;
+
+        self.event_bus.publish(DomainEvent::CourseIngested(course_id));
 
         Ok(IngestPlaylistOutput {
             course_id,

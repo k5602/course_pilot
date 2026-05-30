@@ -30,7 +30,7 @@ pub enum LocalMediaError {
 }
 
 /// Port for scanning local media libraries.
-#[allow(async_fn_in_trait)]
+#[async_trait::async_trait]
 pub trait LocalMediaScanner: Send + Sync {
     /// Recursively scans a root directory for supported media.
     async fn scan(&self, root: &str) -> Result<Vec<RawLocalMediaMetadata>, LocalMediaError>;

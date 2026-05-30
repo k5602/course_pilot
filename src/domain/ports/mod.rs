@@ -1,6 +1,8 @@
 //! Ports - Trait definitions for external dependencies.
 //! These define the contracts that infrastructure adapters must implement.
 
+mod chat_repository;
+mod event_bus;
 mod keystore;
 mod llm;
 mod local_media;
@@ -10,6 +12,9 @@ mod stream;
 mod transcript;
 mod youtube;
 
+pub use event_bus::{DomainEvent, EventBus};
+
+pub use chat_repository::{ChatMessage, ChatMessageRepository, ChatRole};
 pub use keystore::{KeystoreError, SecretStore};
 pub use llm::{
     CompanionAI, CompanionContext, ExaminerAI, LLMError, MCQuestion, ModuleTitleGenerator,

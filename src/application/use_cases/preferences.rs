@@ -19,20 +19,14 @@ pub struct UpdatePreferencesInput {
 }
 
 /// Use case for loading and updating user preferences.
-pub struct PreferencesUseCase<PR>
-where
-    PR: UserPreferencesRepository,
-{
-    prefs_repo: Arc<PR>,
+pub struct PreferencesUseCase {
+    prefs_repo: Arc<dyn UserPreferencesRepository>,
     default_id: UserId,
 }
 
-impl<PR> PreferencesUseCase<PR>
-where
-    PR: UserPreferencesRepository,
-{
+impl PreferencesUseCase {
     /// Creates a new preferences use case.
-    pub fn new(prefs_repo: Arc<PR>) -> Self {
+    pub fn new(prefs_repo: Arc<dyn UserPreferencesRepository>) -> Self {
         Self { prefs_repo, default_id: UserId::new("default") }
     }
 

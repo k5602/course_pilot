@@ -69,13 +69,13 @@ pub fn show_import_playlist_dialog(
     });
 
     let import_btn_cl = import_btn.clone();
-    let cancel_btn_for_import = cancel_btn.clone();
-    let url_entry_cl = url_entry.clone();
-    let name_entry_cl = name_entry.clone();
-    let status_cl = status_label.clone();
-    let spinner_cl = spinner.clone();
+    let cancel_btn_for_import = cancel_btn;
+    let url_entry_cl = url_entry;
+    let name_entry_cl = name_entry;
+    let status_cl = status_label;
+    let spinner_cl = spinner;
     let dialog_cl = dialog.clone();
-    let state_cl = state.clone();
+    let state_cl = state;
     let on_success_cl = on_success;
 
     import_btn.connect_clicked(move |_| {

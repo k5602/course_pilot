@@ -202,10 +202,14 @@ fn parse_number_sequence(text: &str, start: usize) -> Option<Vec<u32>> {
     let mut numbers: Vec<u32> = Vec::new();
     let mut current: Option<u32> = None;
     let mut saw_digit = false;
+    let mut expect_separator = false;
 
     while idx < bytes.len() {
         let c = bytes[idx] as char;
         if c.is_ascii_digit() {
+            if expect_separator {
+                break;
+            }
             saw_digit = true;
             let digit = (c as u8 - b'0') as u32;
             current = Some(current.unwrap_or(0).saturating_mul(10).saturating_add(digit));
@@ -220,6 +224,15 @@ fn parse_number_sequence(text: &str, start: usize) -> Option<Vec<u32>> {
             } else if saw_digit {
                 // e.g., "1..2" -> stop on malformed sequence
                 break;
+            }
+            expect_separator = false;
+            idx += 1;
+            continue;
+        }
+
+        if c.is_whitespace() {
+            if current.is_some() {
+                expect_separator = true;
             }
             idx += 1;
             continue;
@@ -386,5 +399,48 @@ mod tests {
         let detector = BoundaryDetector::new();
         let groups = detector.group_by_titles(&titles);
         assert!(!groups.is_empty());
+    }
+
+    #[test]
+    fn test_group_by_titles_weak_signal_fallback() {
+        let titles =
+            vec!["1.1 Intro", "Deep Dive", "Advanced Topics", "Expert Course", "Conclusion"];
+        let detector = BoundaryDetector::with_batch_size(2);
+        let groups = detector.group_by_titles(&titles);
+
+        assert_eq!(groups.len(), 3);
+        assert_eq!(groups[0], vec![0, 1]);
+        assert_eq!(groups[1], vec![2, 3]);
+        assert_eq!(groups[2], vec![4]);
+    }
+
+    #[test]
+    fn test_group_by_titles_single_major_fallback() {
+        let titles = vec!["1.1 Intro", "1.2 Basics", "1.3 Ownership"];
+        let detector = BoundaryDetector::with_batch_size(2);
+        let groups = detector.group_by_titles(&titles);
+
+        assert_eq!(groups.len(), 2);
+        assert_eq!(groups[0], vec![0, 1]);
+        assert_eq!(groups[1], vec![2]);
+    }
+
+    #[test]
+    fn test_group_by_titles_multi_major_split() {
+        let titles = vec!["1.1 Intro", "1.2 Basics", "2.1 Advanced", "2.2 Expert"];
+        let detector = BoundaryDetector::with_batch_size(5);
+        let groups = detector.group_by_titles(&titles);
+
+        assert_eq!(groups.len(), 2);
+        assert_eq!(groups[0], vec![0, 1]);
+        assert_eq!(groups[1], vec![2, 3]);
+    }
+
+    #[test]
+    fn test_title_number_sequence_various_formats() {
+        assert_eq!(title_number_sequence("Module 1 - 2 - 3"), Some(vec![1, 2, 3]));
+        assert_eq!(title_number_sequence("1.2.3.4"), Some(vec![1, 2, 3, 4]));
+        assert_eq!(title_number_sequence("No numbers here"), None);
+        assert_eq!(title_number_sequence("V2.0 Version"), Some(vec![2, 0]));
     }
 }

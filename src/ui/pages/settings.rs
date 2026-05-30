@@ -164,7 +164,7 @@ impl SettingsPage {
             save_btn,
         };
 
-        let state_cl = state.clone();
+        let state_cl = state;
         let api_entry = page.api_key_entry.clone();
         let discord_entry_cl = page.discord_entry.clone();
         let cookie_entry_cl = page.cookie_entry.clone();

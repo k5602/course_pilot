@@ -36,20 +36,14 @@ pub struct AttachTranscriptOutput {
 }
 
 /// Use case for attaching a transcript to a video.
-pub struct AttachTranscriptUseCase<VR>
-where
-    VR: VideoRepository,
-{
-    video_repo: Arc<VR>,
+pub struct AttachTranscriptUseCase {
+    video_repo: Arc<dyn VideoRepository>,
     cleaner: SubtitleCleaner,
 }
 
-impl<VR> AttachTranscriptUseCase<VR>
-where
-    VR: VideoRepository,
-{
+impl AttachTranscriptUseCase {
     /// Creates a new use case instance.
-    pub fn new(video_repo: Arc<VR>) -> Self {
+    pub fn new(video_repo: Arc<dyn VideoRepository>) -> Self {
         Self { video_repo, cleaner: SubtitleCleaner::new() }
     }
 
