@@ -7,8 +7,8 @@ use std::sync::Arc;
 use crate::domain::{
     entities::{Note, Tag},
     ports::{
-        CourseRepository, DomainEvent, EventBus, ModuleRepository, NoteRepository, RepositoryError,
-        SearchRepository, TagRepository, VideoRepository,
+        CourseRepository, ModuleRepository, NoteRepository, RepositoryError, SearchRepository,
+        TagRepository, VideoRepository,
     },
     value_objects::{CourseId, VideoId},
 };
@@ -54,7 +54,6 @@ pub struct NotesUseCase {
     course_repo: Arc<dyn CourseRepository>,
     tag_repo: Arc<dyn TagRepository>,
     search_repo: Arc<dyn SearchRepository>,
-    event_bus: Arc<dyn EventBus>,
 }
 
 impl NotesUseCase {
@@ -65,9 +64,8 @@ impl NotesUseCase {
         course_repo: Arc<dyn CourseRepository>,
         tag_repo: Arc<dyn TagRepository>,
         search_repo: Arc<dyn SearchRepository>,
-        event_bus: Arc<dyn EventBus>,
     ) -> Self {
-        Self { note_repo, video_repo, module_repo, course_repo, tag_repo, search_repo, event_bus }
+        Self { note_repo, video_repo, module_repo, course_repo, tag_repo, search_repo }
     }
 
     /// Saves a note (create/update) and updates the search index.
@@ -90,8 +88,6 @@ impl NotesUseCase {
             note.content(),
             &course_id,
         )?;
-
-        self.event_bus.publish(DomainEvent::NotesUpdated(input.video_id));
 
         Ok(NoteView {
             note_id: note.id().as_uuid().to_string(),
@@ -138,8 +134,6 @@ impl NotesUseCase {
             self.note_repo.delete(&input.video_id)?;
 
             self.search_repo.remove_from_index(&note.id().as_uuid().to_string())?;
-
-            self.event_bus.publish(DomainEvent::NotesUpdated(input.video_id));
         }
 
         Ok(())

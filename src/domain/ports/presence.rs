@@ -24,7 +24,4 @@ pub trait PresenceProvider: Send + Sync {
 
     /// Clears the current activity.
     fn clear_activity(&self);
-
-    /// Returns whether the presence provider is currently connected.
-    fn is_connected(&self) -> bool;
 }

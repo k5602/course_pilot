@@ -124,3 +124,84 @@ impl QuizObject {
         *self.imp().passed.borrow()
     }
 }
+
+mod video_row_imp {
+    use std::cell::RefCell;
+
+    use glib::subclass::prelude::*;
+
+    #[derive(Default)]
+    pub struct VideoRowObject {
+        pub id: RefCell<String>,
+        pub module_id: RefCell<String>,
+        pub title: RefCell<String>,
+        pub is_completed: RefCell<bool>,
+        pub duration_secs: RefCell<u32>,
+        pub source_type: RefCell<String>,
+        pub sort_order: RefCell<u32>,
+    }
+
+    #[glib::object_subclass]
+    impl ObjectSubclass for VideoRowObject {
+        const NAME: &'static str = "VideoRowObject";
+        type Type = super::VideoRowObject;
+        type ParentType = glib::Object;
+    }
+
+    impl ObjectImpl for VideoRowObject {}
+}
+
+glib::wrapper! {
+    pub struct VideoRowObject(ObjectSubclass<video_row_imp::VideoRowObject>);
+}
+
+impl VideoRowObject {
+    pub fn new(
+        id: String,
+        module_id: String,
+        title: String,
+        is_completed: bool,
+        duration_secs: u32,
+        source_type: String,
+        sort_order: u32,
+    ) -> Self {
+        let obj: VideoRowObject = glib::Object::builder().build();
+        let imp = obj.imp();
+        *imp.id.borrow_mut() = id;
+        *imp.module_id.borrow_mut() = module_id;
+        *imp.title.borrow_mut() = title;
+        *imp.is_completed.borrow_mut() = is_completed;
+        *imp.duration_secs.borrow_mut() = duration_secs;
+        *imp.source_type.borrow_mut() = source_type;
+        *imp.sort_order.borrow_mut() = sort_order;
+        obj
+    }
+
+    pub fn id(&self) -> String {
+        self.imp().id.borrow().clone()
+    }
+
+    pub fn module_id(&self) -> String {
+        self.imp().module_id.borrow().clone()
+    }
+
+    pub fn title(&self) -> String {
+        self.imp().title.borrow().clone()
+    }
+
+    pub fn is_completed(&self) -> bool {
+        *self.imp().is_completed.borrow()
+    }
+
+    pub fn duration_secs(&self) -> u32 {
+        *self.imp().duration_secs.borrow()
+    }
+
+    pub fn source_type(&self) -> String {
+        self.imp().source_type.borrow().clone()
+    }
+
+    pub fn sort_order(&self) -> u32 {
+        *self.imp().sort_order.borrow()
+    }
+}

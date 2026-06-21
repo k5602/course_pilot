@@ -22,10 +22,8 @@ pub struct GeminiAdapter {
 
 impl GeminiAdapter {
     /// Creates a new adapter with the given API key and model name.
-    pub fn new(api_key: String, mut model: String) -> Self {
-        if model.starts_with("gemini/") {
-            model = model.strip_prefix("gemini/").unwrap().to_string();
-        }
+    pub fn new(api_key: String, model: String) -> Self {
+        let model = model.strip_prefix("gemini/").unwrap_or(&model).to_string();
         let client = Client::builder()
             .with_auth_resolver_fn(move |_: genai::ModelIden| {
                 Ok(Some(AuthData::from_single(api_key.clone())))

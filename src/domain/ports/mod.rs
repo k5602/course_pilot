@@ -2,7 +2,6 @@
 //! These define the contracts that infrastructure adapters must implement.
 
 mod chat_repository;
-mod event_bus;
 mod keystore;
 mod llm;
 mod local_media;
@@ -11,8 +10,6 @@ mod repository;
 mod stream;
 mod transcript;
 mod youtube;
-
-pub use event_bus::{DomainEvent, EventBus};
 
 pub use chat_repository::{ChatMessage, ChatMessageRepository, ChatRole};
 pub use keystore::{KeystoreError, SecretStore};

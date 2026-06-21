@@ -3,9 +3,11 @@ use std::rc::Rc;
 use adw::prelude::*;
 
 use crate::application::ServiceFactory;
-use crate::application::use_cases::AskCompanionInput;
+use crate::application::use_cases::{
+    AskCompanionInput, ChatMessageView, ChatRole, SendChatMessageInput,
+};
 use crate::domain::value_objects::VideoId;
-use crate::ui::state::{ChatMessage, ChatRole, MAX_CHAT_HISTORY_PER_VIDEO, SharedState};
+use crate::ui::state::{MAX_CHAT_HISTORY_PER_VIDEO, SharedState};
 
 pub struct RightPanel {
     widget: gtk::Box,
@@ -186,32 +188,55 @@ impl RightPanel {
                 (vid, s.backend.as_ref().cloned())
             };
 
+            // Save user message to repository via use case
+            let saved_user_view = if let Some(ctx) = &backend {
+                if let Ok(parsed_video_id) = video_id.parse::<VideoId>() {
+                    let chat_uc = ServiceFactory::chat(ctx);
+                    match chat_uc.send_message(SendChatMessageInput {
+                        video_id: parsed_video_id,
+                        role: ChatRole::User,
+                        content: question.clone(),
+                    }) {
+                        Ok(view) => Some(view),
+                        Err(e) => {
+                            log::error!("Failed to save user chat message: {}", e);
+                            None
+                        },
+                    }
+                } else {
+                    None
+                }
+            } else {
+                None
+            };
+
+            // Push user message and "Thinking..." placeholder to in-memory state
             {
                 let mut s = state_clone.borrow_mut();
                 let history = s.chat_history_by_video.entry(video_id.clone()).or_default();
-                history.push(ChatMessage { role: ChatRole::User, content: question.clone() });
-                history.push(ChatMessage {
+                if let Some(view) = saved_user_view {
+                    history.push(view);
+                } else {
+                    // Fallback: create a local view if use case save failed
+                    history.push(ChatMessageView {
+                        id: uuid::Uuid::new_v4().to_string(),
+                        video_id: video_id.parse::<VideoId>().unwrap_or_default(),
+                        role: ChatRole::User,
+                        content: question.clone(),
+                        created_at: chrono::Utc::now().to_rfc3339(),
+                    });
+                }
+                history.push(ChatMessageView {
+                    id: String::new(),
+                    video_id: video_id.parse::<VideoId>().unwrap_or_default(),
                     role: ChatRole::Assistant,
-                    content: "Thinking…".to_string(),
+                    content: "Thinking\u{2026}".to_string(),
+                    created_at: String::new(),
                 });
                 if history.len() > MAX_CHAT_HISTORY_PER_VIDEO {
                     let excess = history.len() - MAX_CHAT_HISTORY_PER_VIDEO;
                     history.drain(0..excess);
                 }
-            }
-
-            // Save user message to repository
-            if let Some(ctx) = &backend
-                && let Ok(parsed_video_id) = video_id.parse::<VideoId>()
-            {
-                let domain_msg = crate::domain::ports::ChatMessage {
-                    id: uuid::Uuid::new_v4().to_string(),
-                    video_id: parsed_video_id,
-                    role: crate::domain::ports::ChatRole::User,
-                    content: question.clone(),
-                    created_at: chrono::Utc::now().to_rfc3339(),
-                };
-                let _ = ctx.chat_repo.save(&domain_msg);
             }
 
             // Immediately show user's question and "Thinking..." bubble
@@ -265,42 +290,70 @@ impl RightPanel {
 
             glib::idle_add_local(move || match rx.try_recv() {
                 Ok(response) => {
+                    // Save assistant response to repository via use case
+                    let saved_assistant_view = if let Some(ctx) = &backend_for_save {
+                        if let Ok(parsed_video_id) = vid.parse::<VideoId>() {
+                            let chat_uc = ServiceFactory::chat(ctx);
+                            match chat_uc.send_message(SendChatMessageInput {
+                                video_id: parsed_video_id,
+                                role: ChatRole::Assistant,
+                                content: response.clone(),
+                            }) {
+                                Ok(view) => Some(view),
+                                Err(e) => {
+                                    log::error!("Failed to save assistant chat message: {}", e);
+                                    None
+                                },
+                            }
+                        } else {
+                            None
+                        }
+                    } else {
+                        None
+                    };
+
                     {
                         let mut s = state.borrow_mut();
                         let history = s.chat_history_by_video.entry(vid.clone()).or_default();
                         if let Some(last) = history.last_mut() {
-                            if last.role == ChatRole::Assistant && last.content == "Thinking…" {
-                                last.content = response.clone();
+                            if last.role == ChatRole::Assistant
+                                && last.content == "Thinking\u{2026}"
+                            {
+                                if let Some(view) = saved_assistant_view {
+                                    *last = view;
+                                } else {
+                                    last.content = response;
+                                }
                             } else {
-                                history.push(ChatMessage {
-                                    role: ChatRole::Assistant,
-                                    content: response.clone(),
-                                });
+                                if let Some(view) = saved_assistant_view {
+                                    history.push(view);
+                                } else {
+                                    history.push(ChatMessageView {
+                                        id: uuid::Uuid::new_v4().to_string(),
+                                        video_id: vid.parse::<VideoId>().unwrap_or_default(),
+                                        role: ChatRole::Assistant,
+                                        content: response,
+                                        created_at: chrono::Utc::now().to_rfc3339(),
+                                    });
+                                }
                             }
                         } else {
-                            history.push(ChatMessage {
-                                role: ChatRole::Assistant,
-                                content: response.clone(),
-                            });
+                            if let Some(view) = saved_assistant_view {
+                                history.push(view);
+                            } else {
+                                history.push(ChatMessageView {
+                                    id: uuid::Uuid::new_v4().to_string(),
+                                    video_id: vid.parse::<VideoId>().unwrap_or_default(),
+                                    role: ChatRole::Assistant,
+                                    content: response,
+                                    created_at: chrono::Utc::now().to_rfc3339(),
+                                });
+                            }
                         }
                         if history.len() > MAX_CHAT_HISTORY_PER_VIDEO {
                             let excess = history.len() - MAX_CHAT_HISTORY_PER_VIDEO;
                             history.drain(0..excess);
                         }
-                    }
-
-                    // Save assistant response to repository
-                    if let Some(ctx) = &backend_for_save
-                        && let Ok(parsed_video_id) = vid.parse::<VideoId>()
-                    {
-                        let domain_msg = crate::domain::ports::ChatMessage {
-                            id: uuid::Uuid::new_v4().to_string(),
-                            video_id: parsed_video_id,
-                            role: crate::domain::ports::ChatRole::Assistant,
-                            content: response,
-                            created_at: chrono::Utc::now().to_rfc3339(),
-                        };
-                        let _ = ctx.chat_repo.save(&domain_msg);
                     }
 
                     rebuild_chat_history(&chat_box, &state, &vid, &scroll_for_spawn);
@@ -316,7 +369,7 @@ impl RightPanel {
                         let history = s.chat_history_by_video.entry(vid.clone()).or_default();
                         if let Some(last) = history.last_mut()
                             && last.role == ChatRole::Assistant
-                            && last.content == "Thinking…"
+                            && last.content == "Thinking\u{2026}"
                         {
                             last.content = "Failed to receive response.".to_string();
                         }
@@ -360,23 +413,22 @@ impl RightPanel {
         self.content_area.set_visible(true);
         self.context_text.buffer().set_text("");
 
-        // Fetch companion chat history from SQLite repository if available
+        // Fetch companion chat history via use case
         let mut loaded_messages = None;
         if let Some(ctx) = &state.backend
             && let Ok(parsed_video_id) = video_id.parse::<VideoId>()
-            && let Ok(messages) = ctx.chat_repo.find_by_video(&parsed_video_id)
         {
-            let ui_messages: Vec<ChatMessage> = messages
-                .into_iter()
-                .map(|msg| {
-                    let ui_role = match msg.role {
-                        crate::domain::ports::ChatRole::User => ChatRole::User,
-                        crate::domain::ports::ChatRole::Assistant => ChatRole::Assistant,
-                    };
-                    ChatMessage { role: ui_role, content: msg.content }
-                })
-                .collect();
-            loaded_messages = Some(ui_messages);
+            let chat_uc = ServiceFactory::chat(ctx);
+            match chat_uc.load_history(crate::application::use_cases::LoadChatHistoryInput {
+                video_id: parsed_video_id,
+            }) {
+                Ok(messages) => {
+                    loaded_messages = Some(messages);
+                },
+                Err(e) => {
+                    log::error!("Failed to load chat history: {}", e);
+                },
+            }
         }
         drop(state);
 

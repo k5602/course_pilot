@@ -6,10 +6,7 @@ use std::sync::Arc;
 
 use crate::domain::{
     entities::Exam,
-    ports::{
-        DomainEvent, EventBus, ExamRepository, ExaminerAI, LLMError, MCQuestion, RepositoryError,
-        VideoRepository,
-    },
+    ports::{ExamRepository, ExaminerAI, LLMError, MCQuestion, RepositoryError, VideoRepository},
     value_objects::{ExamDifficulty, ExamId, VideoId},
 };
 
@@ -54,7 +51,6 @@ pub struct TakeExamUseCase {
     examiner: Arc<dyn ExaminerAI>,
     video_repo: Arc<dyn VideoRepository>,
     exam_repo: Arc<dyn ExamRepository>,
-    event_bus: Arc<dyn EventBus>,
 }
 
 impl TakeExamUseCase {
@@ -62,9 +58,8 @@ impl TakeExamUseCase {
         examiner: Arc<dyn ExaminerAI>,
         video_repo: Arc<dyn VideoRepository>,
         exam_repo: Arc<dyn ExamRepository>,
-        event_bus: Arc<dyn EventBus>,
     ) -> Self {
-        Self { examiner, video_repo, exam_repo, event_bus }
+        Self { examiner, video_repo, exam_repo }
     }
 
     /// Generates an exam for a video.
@@ -97,8 +92,6 @@ impl TakeExamUseCase {
 
         let exam = Exam::new(exam_id, input.video_id, question_json);
         self.exam_repo.save(&exam)?;
-
-        self.event_bus.publish(DomainEvent::QuizGenerated { exam_id, video_id: input.video_id });
 
         Ok(GenerateExamOutput { exam_id, questions })
     }
@@ -147,10 +140,6 @@ impl TakeExamUseCase {
         if passed {
             self.video_repo.update_completion(exam.video_id(), true)?;
             video_marked_complete = true;
-            self.event_bus.publish(DomainEvent::VideoCompleted {
-                video_id: *exam.video_id(),
-                completed: true,
-            });
         }
 
         Ok(SubmitExamOutput { score, passed, video_marked_complete })

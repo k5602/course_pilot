@@ -2,16 +2,16 @@
 //!
 //! Wires all infrastructure adapters to application use cases.
 
-use std::sync::{Arc, Mutex};
+use parking_lot::Mutex;
+use std::sync::Arc;
 
 use crate::application::use_cases::{
-    AskCompanionUseCase, AttachTranscriptUseCase, CreateModuleUseCase, DeleteModuleUseCase,
-    ExportCourseNotesUseCase, IngestLocalUseCase, IngestPlaylistUseCase, LoadDashboardUseCase,
-    NotesUseCase, PlanSessionUseCase, PreferencesUseCase, ReorderVideoUseCase,
-    SummarizeVideoUseCase, TakeExamUseCase, UpdateCourseUseCase, UpdatePresenceUseCase,
+    AskCompanionUseCase, ChatUseCase, CreateModuleUseCase, DeleteModuleUseCase, IngestLocalUseCase,
+    IngestPlaylistUseCase, LoadDashboardUseCase, NotesUseCase, PreferencesUseCase,
+    SummarizeVideoUseCase, TakeExamUseCase, UpdatePresenceUseCase,
 };
 use crate::domain::ports::{
-    ChatMessageRepository, CourseRepository, EventBus, ExamRepository, ModuleRepository,
+    ChatMessageRepository, CourseRepository, ExamRepository, ModuleRepository,
     ModuleTitleGenerator, NoteRepository, PresenceProvider, SearchRepository, SecretStore,
     TagRepository, UserPreferencesRepository, VideoRepository,
 };
@@ -135,12 +135,11 @@ pub struct AppContext {
 
     // Infrastructure adapters
     pub local_media: Arc<LocalMediaScannerAdapter>,
-    pub youtube: Arc<RustyYtdlAdapter>, // Always available (no API key needed)
+    pub youtube: Arc<RustyYtdlAdapter>,
     pub transcript: Arc<TranscriptAdapter>,
     pub llm: Mutex<Option<Arc<GeminiAdapter>>>,
     pub presence: Arc<dyn PresenceProvider>,
     pub keystore: Arc<NativeKeystore>,
-    pub event_bus: Arc<dyn EventBus>,
 
     // Database pool
     pub db_pool: Arc<DbPool>,
@@ -215,8 +214,6 @@ impl AppContext {
             gemini_api_key.map(|key| Arc::new(GeminiAdapter::new(key, config.llm_model.clone()))),
         );
 
-        let event_bus = Arc::new(crate::infrastructure::event_bus::InMemoryEventBus::new());
-
         Ok(Self {
             config,
             course_repo,
@@ -234,14 +231,13 @@ impl AppContext {
             llm,
             presence,
             keystore,
-            event_bus,
             db_pool,
         })
     }
 
     /// Checks if the LLM is available.
     pub fn has_llm(&self) -> bool {
-        self.llm.lock().unwrap().is_some()
+        self.llm.lock().is_some()
     }
 
     /// Stores a Gemini API key in the secure keystore and reloads the adapter.
@@ -251,7 +247,7 @@ impl AppContext {
         self.keystore
             .store("gemini_api_key", trimmed)
             .map_err(|e| AppContextError::Keystore(e.to_string()))?;
-        *self.llm.lock().unwrap() =
+        *self.llm.lock() =
             Some(Arc::new(GeminiAdapter::new(trimmed.to_string(), self.config.llm_model.clone())));
         Ok(())
     }
@@ -267,11 +263,11 @@ impl AppContext {
         if let Some(key) = key_opt {
             let trimmed = key.trim().to_string();
             log::info!("Reloaded Gemini LLM adapter with key.");
-            *self.llm.lock().unwrap() =
+            *self.llm.lock() =
                 Some(Arc::new(GeminiAdapter::new(trimmed, self.config.llm_model.clone())));
         } else {
             log::info!("Gemini LLM adapter cleared (no key available).");
-            *self.llm.lock().unwrap() = None;
+            *self.llm.lock() = None;
         }
         Ok(())
     }
@@ -293,7 +289,6 @@ pub struct ServiceFactory;
 
 impl ServiceFactory {
     /// Creates the playlist ingestion use case.
-    /// Always available since YouTube adapter doesn't need API key.
     pub fn ingest_playlist(ctx: &AppContext) -> IngestPlaylistUseCase {
         let batch_size = ServiceFactory::preferences(ctx)
             .load()
@@ -306,12 +301,7 @@ impl ServiceFactory {
             ctx.module_repo.clone(),
             ctx.video_repo.clone(),
             ctx.search_repo.clone(),
-            ctx.event_bus.clone(),
-            ctx.llm
-                .lock()
-                .unwrap()
-                .as_ref()
-                .map(|a| Arc::clone(a) as Arc<dyn ModuleTitleGenerator>),
+            ctx.llm.lock().as_ref().map(|a| Arc::clone(a) as Arc<dyn ModuleTitleGenerator>),
             batch_size,
         )
     }
@@ -329,19 +319,9 @@ impl ServiceFactory {
             ctx.module_repo.clone(),
             ctx.video_repo.clone(),
             ctx.search_repo.clone(),
-            ctx.event_bus.clone(),
-            ctx.llm
-                .lock()
-                .unwrap()
-                .as_ref()
-                .map(|a| Arc::clone(a) as Arc<dyn ModuleTitleGenerator>),
+            ctx.llm.lock().as_ref().map(|a| Arc::clone(a) as Arc<dyn ModuleTitleGenerator>),
             batch_size,
         )
-    }
-
-    /// Creates the session planning use case.
-    pub fn plan_session(ctx: &AppContext) -> PlanSessionUseCase {
-        PlanSessionUseCase::new(ctx.video_repo.clone())
     }
 
     /// Creates the presence update use case.
@@ -351,7 +331,7 @@ impl ServiceFactory {
 
     /// Creates the companion AI use case.
     pub fn ask_companion(ctx: &AppContext) -> Option<AskCompanionUseCase> {
-        let llm = ctx.llm.lock().unwrap().as_ref()?.clone();
+        let llm = ctx.llm.lock().as_ref()?.clone();
 
         Some(AskCompanionUseCase::new(
             llm,
@@ -360,6 +340,11 @@ impl ServiceFactory {
             ctx.course_repo.clone(),
             ctx.note_repo.clone(),
         ))
+    }
+
+    /// Creates the chat use case.
+    pub fn chat(ctx: &AppContext) -> ChatUseCase {
+        ChatUseCase::new(ctx.chat_repo.clone(), ctx.video_repo.clone())
     }
 
     /// Creates the notes use case.
@@ -371,29 +356,7 @@ impl ServiceFactory {
             ctx.course_repo.clone(),
             ctx.tag_repo.clone(),
             ctx.search_repo.clone(),
-            ctx.event_bus.clone(),
         )
-    }
-
-    /// Creates the transcript attachment use case.
-    pub fn attach_transcript(ctx: &AppContext) -> AttachTranscriptUseCase {
-        AttachTranscriptUseCase::new(ctx.video_repo.clone())
-    }
-
-    /// Creates the export notes use case.
-    pub fn export_course_notes(ctx: &AppContext) -> ExportCourseNotesUseCase {
-        ExportCourseNotesUseCase::new(
-            ctx.course_repo.clone(),
-            ctx.module_repo.clone(),
-            ctx.video_repo.clone(),
-            ctx.note_repo.clone(),
-            ctx.tag_repo.clone(),
-        )
-    }
-
-    /// Creates the update course use case.
-    pub fn update_course(ctx: &AppContext) -> UpdateCourseUseCase {
-        UpdateCourseUseCase::new(ctx.course_repo.clone(), ctx.search_repo.clone())
     }
 
     /// Creates the update module title use case.
@@ -411,11 +374,6 @@ impl ServiceFactory {
     /// Creates the delete module use case.
     pub fn delete_module(ctx: &AppContext) -> DeleteModuleUseCase {
         DeleteModuleUseCase::new(ctx.module_repo.clone(), ctx.video_repo.clone())
-    }
-
-    /// Creates the reorder video use case.
-    pub fn reorder_video(ctx: &AppContext) -> ReorderVideoUseCase {
-        ReorderVideoUseCase::new(ctx.video_repo.clone())
     }
 
     /// Creates the move video use case.
@@ -441,48 +399,36 @@ impl ServiceFactory {
 
     /// Creates the summarize video use case.
     pub fn summarize_video(ctx: &AppContext) -> Option<SummarizeVideoUseCase> {
-        let llm = ctx.llm.lock().unwrap().as_ref()?.clone();
+        let llm = ctx.llm.lock().as_ref()?.clone();
 
         Some(SummarizeVideoUseCase::new(llm, ctx.transcript.clone(), ctx.video_repo.clone()))
     }
 
     /// Creates the exam use case.
     pub fn take_exam(ctx: &AppContext) -> Option<TakeExamUseCase> {
-        let llm = ctx.llm.lock().unwrap().as_ref()?.clone();
+        let llm = ctx.llm.lock().as_ref()?.clone();
 
-        Some(TakeExamUseCase::new(
-            llm,
-            ctx.video_repo.clone(),
-            ctx.exam_repo.clone(),
-            ctx.event_bus.clone(),
-        ))
+        Some(TakeExamUseCase::new(llm, ctx.video_repo.clone(), ctx.exam_repo.clone()))
     }
 }
 
 #[cfg(test)]
 mod tests {
-    use std::sync::{Arc, Mutex};
+    use parking_lot::Mutex;
+    use std::sync::Arc;
 
     use crate::infrastructure::llm::GeminiAdapter;
 
-    /// Verify that the Mutex<Option<Arc<GeminiAdapter>>> field correctly tracks LLM availability.
-    /// This tests the core logic of set_gemini_api_key / has_llm without spinning up a full AppContext.
     #[test]
     fn mutex_llm_starts_none_and_becomes_some_after_set() {
-        // Simulate the LLM field in AppContext
         let llm: Mutex<Option<Arc<GeminiAdapter>>> = Mutex::new(None);
+        assert!(llm.lock().is_none(), "LLM should start as None");
 
-        // Initially no LLM
-        assert!(llm.lock().unwrap().is_none(), "LLM should start as None");
-
-        // Simulate set_gemini_api_key
-        *llm.lock().unwrap() = Some(Arc::new(GeminiAdapter::new(
+        *llm.lock() = Some(Arc::new(GeminiAdapter::new(
             "test-key".to_string(),
             "gemini-3.1-flash-lite".to_string(),
         )));
-
-        // Now has LLM
-        assert!(llm.lock().unwrap().is_some(), "LLM should be Some after set");
+        assert!(llm.lock().is_some(), "LLM should be Some after set");
     }
 
     #[test]
@@ -490,17 +436,14 @@ mod tests {
         let llm: Mutex<Option<Arc<GeminiAdapter>>> = Mutex::new(Some(Arc::new(
             GeminiAdapter::new("test-key".to_string(), "gemini-3.1-flash-lite".to_string()),
         )));
+        assert!(llm.lock().is_some(), "LLM should start as Some");
 
-        assert!(llm.lock().unwrap().is_some(), "LLM should start as Some");
-
-        *llm.lock().unwrap() = None;
-
-        assert!(llm.lock().unwrap().is_none(), "LLM should be None after reset");
+        *llm.lock() = None;
+        assert!(llm.lock().is_none(), "LLM should be None after reset");
     }
 
     #[test]
     fn appconfig_from_env_defaults() {
-        // Ensure AppConfig::default() doesn't panic and has expected defaults
         let cfg = super::AppConfig::default();
         assert!(cfg.gemini_api_key.is_none());
         assert_eq!(cfg.llm_model, "gemini-3.1-flash-lite");
