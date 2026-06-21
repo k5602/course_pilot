@@ -1,6 +1,7 @@
 use std::cell::{Cell, RefCell};
 use std::collections::HashMap;
 use std::rc::Rc;
+use std::sync::Arc;
 
 use adw::NavigationPage;
 use adw::prelude::*;
@@ -34,6 +35,82 @@ fn find_parent<T: IsA<gtk::Widget>>(start: &gtk::Widget) -> Option<T> {
     None
 }
 
+/// Shared fullscreen toggle logic used by both keyboard shortcuts and button/gesture handlers.
+fn toggle_fullscreen_state(
+    is_fullscreen: &Rc<Cell<bool>>,
+    widget: &gtk::ScrolledWindow,
+    video_title: &gtk::Label,
+    details_box: &gtk::Box,
+    state: &SharedState,
+) {
+    let new_fs = !is_fullscreen.get();
+    is_fullscreen.set(new_fs);
+
+    let root_window = widget.root().and_then(|r| r.downcast::<gtk::Window>().ok());
+    if let Some(win) = root_window {
+        if new_fs {
+            win.fullscreen();
+        } else {
+            win.unfullscreen();
+        }
+    }
+
+    let w_ref = widget.upcast_ref::<gtk::Widget>();
+    let inner_split = find_parent::<adw::NavigationSplitView>(w_ref);
+    let outer_split = find_parent::<adw::OverlaySplitView>(w_ref);
+    let toolbar = find_parent::<adw::ToolbarView>(w_ref);
+
+    if new_fs {
+        if let Some(split) = inner_split {
+            split.set_collapsed(true);
+        }
+        if let Some(split) = outer_split {
+            split.set_show_sidebar(false);
+        }
+        if let Some(tb) = toolbar {
+            tb.set_reveal_top_bars(false);
+        }
+        video_title.set_visible(false);
+        details_box.set_visible(false);
+    } else {
+        if let Some(split) = inner_split {
+            split.set_collapsed(false);
+        }
+        if let Some(split) = outer_split {
+            let show_chat = state.borrow().right_panel_visible;
+            split.set_show_sidebar(show_chat);
+        }
+        if let Some(tb) = toolbar {
+            tb.set_reveal_top_bars(true);
+        }
+        video_title.set_visible(true);
+        details_box.set_visible(true);
+    }
+}
+
+/// Spawns an async YouTube stream resolution task and returns a channel receiver.
+/// The receiver yields the stream URL on success, or "ERROR:..." on failure.
+fn resolve_stream_url_async(
+    backend: &Option<Arc<crate::application::context::AppContext>>,
+    youtube_id: &str,
+    quality: crate::domain::value_objects::VideoQuality,
+) -> Option<std::sync::mpsc::Receiver<String>> {
+    let ctx = backend.clone()?;
+    let yid = youtube_id.to_string();
+    let (tx, rx) = std::sync::mpsc::channel();
+    crate::infrastructure::tokio_bridge::spawn(async move {
+        match ctx.youtube.resolve_youtube_stream(&yid, quality).await {
+            Ok(url) => {
+                let _ = tx.send(url);
+            },
+            Err(e) => {
+                let _ = tx.send(format!("ERROR:{}", e));
+            },
+        }
+    });
+    Some(rx)
+}
+
 pub struct VideoPlayerPage {
     widget: gtk::ScrolledWindow,
     state: SharedState,
@@ -49,7 +126,7 @@ pub struct VideoPlayerPage {
     player_frame: gtk::Frame,
     status_page: adw::StatusPage,
     suppress_seek: Rc<Cell<bool>>,
-    current_video_source: RefCell<Option<VideoSourceForQuality>>,
+    current_video_source: RefCell<Option<String>>,
     current_video_id: RefCell<Option<crate::domain::value_objects::VideoId>>,
     suppress_quality: Rc<Cell<bool>>,
     is_playing: Rc<Cell<bool>>,
@@ -60,12 +137,6 @@ pub struct VideoPlayerPage {
     details_box: gtk::Box,
     is_fullscreen: Rc<Cell<bool>>,
     fullscreen_btn: gtk::Button,
-}
-
-#[derive(Clone)]
-enum VideoSourceForQuality {
-    YouTube(String),
-    Local,
 }
 
 impl VideoPlayerPage {
@@ -621,8 +692,8 @@ impl VideoPlayerPage {
                 return;
             }
             let yid = match *current_source.borrow() {
-                Some(VideoSourceForQuality::YouTube(ref id)) => id.clone(),
-                _ => return,
+                Some(ref id) => id.clone(),
+                None => return,
             };
 
             let pos = player.borrow().as_ref().and_then(|p| p.position()).unwrap_or(0);
@@ -634,22 +705,16 @@ impl VideoPlayerPage {
             play_btn.set_icon_name("process-working-symbolic");
             play_btn.set_sensitive(false);
 
-            let (tx, rx) = std::sync::mpsc::channel::<String>();
-            let yid_clone = yid;
             let backend_opt = state.borrow().backend.clone();
-
-            if let Some(ctx) = backend_opt {
-                crate::infrastructure::tokio_bridge::spawn(async move {
-                    match ctx.youtube.resolve_youtube_stream(&yid_clone, quality).await {
-                        Ok(url) => {
-                            let _ = tx.send(url);
-                        },
-                        Err(e) => {
-                            let _ = tx.send(format!("ERROR:{}", e));
-                        },
-                    }
-                });
-            }
+            let rx = match resolve_stream_url_async(&backend_opt, &yid, quality) {
+                Some(rx) => rx,
+                None => {
+                    Toast::show_error("No backend connected");
+                    play_btn.set_icon_name("media-playback-start-symbolic");
+                    play_btn.set_sensitive(true);
+                    return;
+                },
+            };
 
             let player_rc = player.clone();
             let play_btn_cl = play_btn.clone();
@@ -690,64 +755,16 @@ impl VideoPlayerPage {
         let seek_bar = self.seek_bar.clone();
         let play_btn = self.play_btn.clone();
         let is_playing = self.is_playing.clone();
-
         let is_fs = self.is_fullscreen.clone();
         let widget = self.widget.clone();
         let video_title = self.video_title.clone();
         let details_box = self.details_box.clone();
         let state = self.state.clone();
 
-        let toggle_shortcut = move || {
-            let is_fs_val = is_fs.get();
-            let new_fs = !is_fs_val;
-            is_fs.set(new_fs);
-
-            let root_window = widget.root().and_then(|r| r.downcast::<gtk::Window>().ok());
-            if let Some(win) = root_window {
-                if new_fs {
-                    win.fullscreen();
-                } else {
-                    win.unfullscreen();
-                }
-            }
-
-            let w_ref = widget.upcast_ref::<gtk::Widget>();
-            let inner_split = find_parent::<adw::NavigationSplitView>(w_ref);
-            let outer_split = find_parent::<adw::OverlaySplitView>(w_ref);
-            let toolbar = find_parent::<adw::ToolbarView>(w_ref);
-
-            if new_fs {
-                if let Some(split) = inner_split {
-                    split.set_collapsed(true);
-                }
-                if let Some(split) = outer_split {
-                    split.set_show_sidebar(false);
-                }
-                if let Some(tb) = toolbar {
-                    tb.set_reveal_top_bars(false);
-                }
-                video_title.set_visible(false);
-                details_box.set_visible(false);
-            } else {
-                if let Some(split) = inner_split {
-                    split.set_collapsed(false);
-                }
-                if let Some(split) = outer_split {
-                    let show_chat = state.borrow().right_panel_visible;
-                    split.set_show_sidebar(show_chat);
-                }
-                if let Some(tb) = toolbar {
-                    tb.set_reveal_top_bars(true);
-                }
-                video_title.set_visible(true);
-                details_box.set_visible(true);
-            }
-        };
-
         controller.connect_key_pressed(move |_, keyval, _code, _state| match keyval {
             gtk::gdk::Key::Left | gtk::gdk::Key::KP_Left => {
                 let val = seek_bar.value();
-                let new_val = (val - 5_000_000_000.0).max(seek_bar.adjustment().lower());
+                let new_val = (val - 10_000_000_000.0).max(seek_bar.adjustment().lower());
                 seek_bar.set_value(new_val);
                 if let Some(ref p) = *player.borrow() {
                     p.seek(new_val as u64);
@@ -756,7 +773,7 @@ impl VideoPlayerPage {
             },
             gtk::gdk::Key::Right | gtk::gdk::Key::KP_Right => {
                 let val = seek_bar.value();
-                let new_val = (val + 5_000_000_000.0).min(seek_bar.adjustment().upper());
+                let new_val = (val + 10_000_000_000.0).min(seek_bar.adjustment().upper());
                 seek_bar.set_value(new_val);
                 if let Some(ref p) = *player.borrow() {
                     p.seek(new_val as u64);
@@ -780,7 +797,7 @@ impl VideoPlayerPage {
                 glib::Propagation::Stop
             },
             gtk::gdk::Key::f | gtk::gdk::Key::F | gtk::gdk::Key::F11 => {
-                toggle_shortcut();
+                toggle_fullscreen_state(&is_fs, &widget, &video_title, &details_box, &state);
                 glib::Propagation::Stop
             },
             _ => glib::Propagation::Proceed,
@@ -817,18 +834,7 @@ impl VideoPlayerPage {
         let video_id_str = match state.current_video_id {
             Some(ref id) => id.clone(),
             None => {
-                self.stop_timer();
-                if let Some(ref p) = *self.player.borrow() {
-                    p.stop();
-                }
-                *self.player.borrow_mut() = None;
-                *self.current_video_id.borrow_mut() = None;
-                self.is_playing.set(false);
-                self.play_btn.set_icon_name("media-playback-start-symbolic");
-
-                while let Some(child) = self.quizzes_container.first_child() {
-                    self.quizzes_container.remove(&child);
-                }
+                self.reset_to_idle();
 
                 self.video_title.set_text("No video selected.");
                 self.player_frame.set_child(Some(&self.status_page));
@@ -841,18 +847,7 @@ impl VideoPlayerPage {
             let video_id = match video_id_str.parse::<crate::domain::value_objects::VideoId>() {
                 Ok(id) => id,
                 Err(_) => {
-                    self.stop_timer();
-                    if let Some(ref p) = *self.player.borrow() {
-                        p.stop();
-                    }
-                    *self.player.borrow_mut() = None;
-                    *self.current_video_id.borrow_mut() = None;
-                    self.is_playing.set(false);
-                    self.play_btn.set_icon_name("media-playback-start-symbolic");
-
-                    while let Some(child) = self.quizzes_container.first_child() {
-                        self.quizzes_container.remove(&child);
-                    }
+                    self.reset_to_idle();
 
                     self.video_title.set_text("Invalid video ID.");
                     self.player_frame.set_child(Some(&self.status_page));
@@ -906,7 +901,7 @@ impl VideoPlayerPage {
                             crate::domain::value_objects::VideoSource::YouTube(yid) => {
                                 player.set_volume(0.8);
                                 *self.current_video_source.borrow_mut() =
-                                    Some(VideoSourceForQuality::YouTube(yid.as_str().to_string()));
+                                    Some(yid.as_str().to_string());
                                 *self.player.borrow_mut() = Some(player);
                                 self.play_btn.set_icon_name("process-working-symbolic");
                                 self.play_btn.set_sensitive(false);
@@ -917,60 +912,47 @@ impl VideoPlayerPage {
 
                                 let yid_str = yid.as_str().to_string();
                                 let backend_opt = self.state.borrow().backend.clone();
-                                let (tx, rx) = std::sync::mpsc::channel::<String>();
 
-                                if let Some(ctx) = backend_opt {
-                                    crate::infrastructure::tokio_bridge::spawn(async move {
-                                        match ctx
-                                            .youtube
-                                            .resolve_youtube_stream(&yid_str, quality)
-                                            .await
-                                        {
-                                            Ok(url) => {
-                                                let _ = tx.send(url);
-                                            },
-                                            Err(e) => {
-                                                let _ = tx.send(format!("ERROR:{}", e));
-                                            },
-                                        }
+                                if let Some(rx) =
+                                    resolve_stream_url_async(&backend_opt, &yid_str, quality)
+                                {
+                                    let player_rc = self.player.clone();
+                                    let play_btn_cl = self.play_btn.clone();
+                                    let is_playing_cl = self.is_playing.clone();
+
+                                    glib::idle_add_local(move || match rx.try_recv() {
+                                        Ok(msg) if msg.starts_with("ERROR:") => {
+                                            let detail = msg
+                                                .strip_prefix("ERROR:")
+                                                .unwrap_or("Stream resolution failed");
+                                            Toast::show_error(detail);
+                                            is_playing_cl.set(false);
+                                            play_btn_cl
+                                                .set_icon_name("media-playback-start-symbolic");
+                                            play_btn_cl.set_sensitive(true);
+                                            glib::ControlFlow::Break
+                                        },
+                                        Ok(stream_url) => {
+                                            if let Some(ref p) = *player_rc.borrow() {
+                                                p.play_uri(&stream_url);
+                                            }
+                                            is_playing_cl.set(true);
+                                            play_btn_cl
+                                                .set_icon_name("media-playback-pause-symbolic");
+                                            play_btn_cl.set_sensitive(true);
+                                            glib::ControlFlow::Break
+                                        },
+                                        Err(std::sync::mpsc::TryRecvError::Empty) => {
+                                            glib::ControlFlow::Continue
+                                        },
+                                        Err(std::sync::mpsc::TryRecvError::Disconnected) => {
+                                            glib::ControlFlow::Break
+                                        },
                                     });
                                 }
-
-                                let player_rc = self.player.clone();
-                                let play_btn_cl = self.play_btn.clone();
-                                let is_playing_cl = self.is_playing.clone();
-
-                                glib::idle_add_local(move || match rx.try_recv() {
-                                    Ok(msg) if msg.starts_with("ERROR:") => {
-                                        let detail = msg
-                                            .strip_prefix("ERROR:")
-                                            .unwrap_or("Stream resolution failed");
-                                        Toast::show_error(detail);
-                                        is_playing_cl.set(false);
-                                        play_btn_cl.set_icon_name("media-playback-start-symbolic");
-                                        play_btn_cl.set_sensitive(true);
-                                        glib::ControlFlow::Break
-                                    },
-                                    Ok(stream_url) => {
-                                        if let Some(ref p) = *player_rc.borrow() {
-                                            p.play_uri(&stream_url);
-                                        }
-                                        is_playing_cl.set(true);
-                                        play_btn_cl.set_icon_name("media-playback-pause-symbolic");
-                                        play_btn_cl.set_sensitive(true);
-                                        glib::ControlFlow::Break
-                                    },
-                                    Err(std::sync::mpsc::TryRecvError::Empty) => {
-                                        glib::ControlFlow::Continue
-                                    },
-                                    Err(std::sync::mpsc::TryRecvError::Disconnected) => {
-                                        glib::ControlFlow::Break
-                                    },
-                                });
                             },
                             crate::domain::value_objects::VideoSource::LocalPath(path) => {
-                                *self.current_video_source.borrow_mut() =
-                                    Some(VideoSourceForQuality::Local);
+                                *self.current_video_source.borrow_mut() = None;
                                 player.set_volume(0.8);
                                 let uri = format!("file://{path}");
                                 player.play_uri(&uri);
@@ -1040,36 +1022,14 @@ impl VideoPlayerPage {
                     }
                 },
                 Ok(None) => {
-                    self.stop_timer();
-                    if let Some(ref p) = *self.player.borrow() {
-                        p.stop();
-                    }
-                    *self.player.borrow_mut() = None;
-                    *self.current_video_id.borrow_mut() = None;
-                    self.is_playing.set(false);
-                    self.play_btn.set_icon_name("media-playback-start-symbolic");
-
-                    while let Some(child) = self.quizzes_container.first_child() {
-                        self.quizzes_container.remove(&child);
-                    }
+                    self.reset_to_idle();
 
                     self.video_title.set_text("Video not found.");
                     self.player_frame.set_child(Some(&self.status_page));
                     self.transcript_lbl.set_text("No summary loaded.");
                 },
                 Err(e) => {
-                    self.stop_timer();
-                    if let Some(ref p) = *self.player.borrow() {
-                        p.stop();
-                    }
-                    *self.player.borrow_mut() = None;
-                    *self.current_video_id.borrow_mut() = None;
-                    self.is_playing.set(false);
-                    self.play_btn.set_icon_name("media-playback-start-symbolic");
-
-                    while let Some(child) = self.quizzes_container.first_child() {
-                        self.quizzes_container.remove(&child);
-                    }
+                    self.reset_to_idle();
 
                     self.video_title.set_text(&format!("Error: {}", e));
                     self.player_frame.set_child(Some(&self.status_page));
@@ -1077,18 +1037,7 @@ impl VideoPlayerPage {
                 },
             }
         } else {
-            self.stop_timer();
-            if let Some(ref p) = *self.player.borrow() {
-                p.stop();
-            }
-            *self.player.borrow_mut() = None;
-            *self.current_video_id.borrow_mut() = None;
-            self.is_playing.set(false);
-            self.play_btn.set_icon_name("media-playback-start-symbolic");
-
-            while let Some(child) = self.quizzes_container.first_child() {
-                self.quizzes_container.remove(&child);
-            }
+            self.reset_to_idle();
 
             self.video_title.set_text("No backend connected.");
             self.player_frame.set_child(Some(&self.status_page));
@@ -1141,74 +1090,45 @@ impl VideoPlayerPage {
         }
     }
 
+    fn reset_to_idle(&self) {
+        self.stop_timer();
+        if let Some(ref p) = *self.player.borrow() {
+            p.stop();
+        }
+        *self.player.borrow_mut() = None;
+        *self.current_video_id.borrow_mut() = None;
+        self.is_playing.set(false);
+        self.play_btn.set_icon_name("media-playback-start-symbolic");
+        while let Some(child) = self.quizzes_container.first_child() {
+            self.quizzes_container.remove(&child);
+        }
+    }
+
     fn setup_fullscreen(&self) {
+        let fullscreen_btn = self.fullscreen_btn.clone();
+        let player_frame = self.player_frame.clone();
+
         let is_fs = self.is_fullscreen.clone();
         let widget = self.widget.clone();
         let video_title = self.video_title.clone();
         let details_box = self.details_box.clone();
         let state = self.state.clone();
-        let fullscreen_btn = self.fullscreen_btn.clone();
-        let player_frame = self.player_frame.clone();
 
-        let toggle = move || {
-            let is_fs_val = is_fs.get();
-            let new_fs = !is_fs_val;
-            is_fs.set(new_fs);
-
-            let root_window = widget.root().and_then(|r| r.downcast::<gtk::Window>().ok());
-            if let Some(win) = root_window {
-                if new_fs {
-                    win.fullscreen();
-                } else {
-                    win.unfullscreen();
-                }
-            }
-
-            let w_ref = widget.upcast_ref::<gtk::Widget>();
-            let inner_split = find_parent::<adw::NavigationSplitView>(w_ref);
-            let outer_split = find_parent::<adw::OverlaySplitView>(w_ref);
-            let toolbar = find_parent::<adw::ToolbarView>(w_ref);
-
-            if new_fs {
-                if let Some(split) = inner_split {
-                    split.set_collapsed(true);
-                }
-                if let Some(split) = outer_split {
-                    split.set_show_sidebar(false);
-                }
-                if let Some(tb) = toolbar {
-                    tb.set_reveal_top_bars(false);
-                }
-                video_title.set_visible(false);
-                details_box.set_visible(false);
-            } else {
-                if let Some(split) = inner_split {
-                    split.set_collapsed(false);
-                }
-                if let Some(split) = outer_split {
-                    let show_chat = state.borrow().right_panel_visible;
-                    split.set_show_sidebar(show_chat);
-                }
-                if let Some(tb) = toolbar {
-                    tb.set_reveal_top_bars(true);
-                }
-                video_title.set_visible(true);
-                details_box.set_visible(true);
-            }
-        };
-
-        let toggle_btn = toggle.clone();
         fullscreen_btn.connect_clicked(move |_| {
-            toggle_btn();
+            toggle_fullscreen_state(&is_fs, &widget, &video_title, &details_box, &state);
         });
 
-        let toggle_gest = toggle;
+        let is_fs2 = self.is_fullscreen.clone();
+        let widget2 = self.widget.clone();
+        let video_title2 = self.video_title.clone();
+        let details_box2 = self.details_box.clone();
+        let state2 = self.state.clone();
         let gesture = gtk::GestureClick::new();
         gesture.set_button(1);
         gesture.connect_pressed(move |gest, n_press, _, _| {
             if n_press == 2 {
                 gest.set_state(gtk::EventSequenceState::Claimed);
-                toggle_gest();
+                toggle_fullscreen_state(&is_fs2, &widget2, &video_title2, &details_box2, &state2);
             }
         });
         player_frame.add_controller(gesture);

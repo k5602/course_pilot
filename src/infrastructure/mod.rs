@@ -1,7 +1,6 @@
 //! Infrastructure Layer - Adapters implementing domain ports.
 
 pub mod discord;
-pub mod event_bus;
 pub mod keystore;
 pub mod llm;
 pub mod local_media;

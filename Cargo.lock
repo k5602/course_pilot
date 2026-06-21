@@ -329,6 +329,7 @@ dependencies = [
  "keyring",
  "libadwaita",
  "log",
+ "parking_lot",
  "rustls",
  "serde",
  "serde_json",

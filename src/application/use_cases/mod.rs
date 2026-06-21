@@ -1,34 +1,28 @@
 //! Use Cases - Application-level orchestration of domain logic.
 
 mod ask_companion;
-mod attach_transcript;
+mod chat;
 mod create_module;
 mod dashboard;
 mod delete_module;
-mod export_course_notes;
 mod ingest_local;
 mod ingest_playlist;
 mod move_video_to_module;
 mod notes;
-mod plan_session;
 mod preferences;
-mod reorder_video;
 mod summarize_video;
 mod take_exam;
-mod update_course;
 mod update_module_title;
 mod update_presence;
 
 pub use ask_companion::{AskCompanionInput, AskCompanionUseCase};
-pub use attach_transcript::{
-    AttachTranscriptError, AttachTranscriptInput, AttachTranscriptOutput, AttachTranscriptUseCase,
+pub use chat::{
+    ChatError, ChatMessageView, ChatRole, ChatUseCase, DeleteChatHistoryInput,
+    LoadChatHistoryInput, SendChatMessageInput,
 };
 pub use create_module::{CreateModuleError, CreateModuleInput, CreateModuleUseCase};
 pub use dashboard::LoadDashboardUseCase;
 pub use delete_module::{DeleteModuleError, DeleteModuleInput, DeleteModuleUseCase};
-pub use export_course_notes::{
-    ExportCourseNotesError, ExportCourseNotesInput, ExportCourseNotesUseCase,
-};
 pub use ingest_local::{IngestLocalInput, IngestLocalOutput, IngestLocalUseCase};
 pub use ingest_playlist::{
     IngestError, IngestPlaylistInput, IngestPlaylistOutput, IngestPlaylistUseCase,
@@ -37,16 +31,11 @@ pub use move_video_to_module::{MoveVideoError, MoveVideoInput, MoveVideoToModule
 pub use notes::{
     DeleteNoteInput, LoadNoteInput, NoteView, NotesError, NotesUseCase, SaveNoteInput,
 };
-pub use plan_session::{PlanSessionInput, PlanSessionUseCase};
 pub use preferences::{PreferencesUseCase, UpdatePreferencesInput};
-pub use reorder_video::{ReorderError, ReorderVideoInput, ReorderVideoUseCase};
 pub use summarize_video::{
     SummarizeVideoError, SummarizeVideoInput, SummarizeVideoOutput, SummarizeVideoUseCase,
 };
 pub use take_exam::{GenerateExamInput, SubmitExamInput, SubmitExamOutput, TakeExamUseCase};
-pub use update_course::{
-    UpdateCourseError, UpdateCourseInput, UpdateCourseOutput, UpdateCourseUseCase,
-};
 pub use update_module_title::{
     UpdateModuleTitleError, UpdateModuleTitleInput, UpdateModuleTitleUseCase,
 };

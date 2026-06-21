@@ -15,18 +15,6 @@ pub enum RightPanelTab {
     AiChat,
 }
 
-#[derive(Clone, Debug, PartialEq)]
-pub struct ChatMessage {
-    pub role: ChatRole,
-    pub content: String,
-}
-
-#[derive(Clone, Copy, Debug, PartialEq)]
-pub enum ChatRole {
-    User,
-    Assistant,
-}
-
 #[derive(Clone)]
 pub struct AppState {
     pub backend: Option<Arc<AppContext>>,
@@ -35,7 +23,7 @@ pub struct AppState {
     pub right_panel_visible: bool,
     pub right_panel_width: f64,
     pub onboarding_completed: bool,
-    pub chat_history_by_video: HashMap<String, Vec<ChatMessage>>,
+    pub chat_history_by_video: HashMap<String, Vec<crate::application::use_cases::ChatMessageView>>,
     pub notes: HashMap<String, String>,
     pub current_video_id: Option<String>,
     pub current_course_id: Option<String>,

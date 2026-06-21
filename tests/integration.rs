@@ -497,7 +497,6 @@ fn ingest_local_with_folder_grouping() {
         module_repo.clone(),
         video_repo.clone(),
         search_repo,
-        Arc::new(course_pilot::infrastructure::event_bus::InMemoryEventBus::new()),
         None,
         5,
     );
@@ -558,7 +557,6 @@ fn ingest_playlist_with_mock_fetcher() {
         module_repo.clone(),
         video_repo.clone(),
         search_repo,
-        Arc::new(course_pilot::infrastructure::event_bus::InMemoryEventBus::new()),
         None,
         5,
     );
@@ -594,7 +592,6 @@ fn ingest_playlist_failure_returns_error() {
         module_repo.clone(),
         video_repo.clone(),
         search_repo,
-        Arc::new(course_pilot::infrastructure::event_bus::InMemoryEventBus::new()),
         None,
         5,
     );
@@ -678,7 +675,6 @@ fn ingest_playlist_preserves_labeled_module_boundaries() {
         module_repo.clone(),
         video_repo.clone(),
         search_repo,
-        Arc::new(course_pilot::infrastructure::event_bus::InMemoryEventBus::new()),
         None,
         5,
     );
@@ -896,12 +892,7 @@ fn test_take_exam_use_case_flow() {
 
     let examiner_ai = Arc::new(MockExaminerAI { questions: vec![q1, q2] });
 
-    let use_case = TakeExamUseCase::new(
-        examiner_ai.clone(),
-        video_repo.clone(),
-        exam_repo.clone(),
-        Arc::new(course_pilot::infrastructure::event_bus::InMemoryEventBus::new()),
-    );
+    let use_case = TakeExamUseCase::new(examiner_ai.clone(), video_repo.clone(), exam_repo.clone());
 
     let generate_input =
         GenerateExamInput { video_id, num_questions: 2, difficulty: ExamDifficulty::Medium };

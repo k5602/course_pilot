@@ -10,6 +10,8 @@ use adw::prelude::{AdwApplicationWindowExt, BreakpointBinExt, NavigationPageExt}
 use crate::application::ServiceFactory;
 use crate::application::use_cases::UpdatePresenceInput;
 use crate::domain::entities::SearchResultType;
+use std::str::FromStr;
+
 use crate::domain::ports::Activity;
 use crate::ui::dialogs;
 use crate::ui::navigation::{
@@ -521,14 +523,61 @@ impl MainLayout {
                     PAGE_DASHBOARD => Activity::Dashboard,
                     PAGE_COURSE_LIST => Activity::BrowsingCourses,
                     PAGE_COURSE_VIEW => Activity::BrowsingCourses,
-                    PAGE_VIDEO_PLAYER => Activity::Watching {
-                        course_title: String::new(),
-                        video_title: String::new(),
+                    PAGE_VIDEO_PLAYER => {
+                        let state_ref = nav_state.borrow();
+                        let video_title = state_ref
+                            .current_video_id
+                            .as_ref()
+                            .and_then(|id_str| {
+                                let vid_id =
+                                    crate::domain::value_objects::VideoId::from_str(id_str).ok()?;
+                                ctx.video_repo.find_by_id(&vid_id).ok().flatten()
+                            })
+                            .map(|v| v.title().to_string())
+                            .unwrap_or_else(|| "Watching video".to_string());
+                        let course_title = state_ref
+                            .current_course_id
+                            .as_ref()
+                            .and_then(|id_str| {
+                                let c_id = crate::domain::value_objects::CourseId::from_str(id_str)
+                                    .ok()?;
+                                ctx.course_repo.find_by_id(&c_id).ok().flatten()
+                            })
+                            .map(|c| c.name().to_string())
+                            .unwrap_or_default();
+                        drop(state_ref);
+                        Activity::Watching { course_title, video_title }
                     },
                     PAGE_QUIZ_LIST => Activity::Idle,
-                    PAGE_QUIZ_VIEW => Activity::TakingExam {
-                        course_title: String::new(),
-                        exam_title: String::new(),
+                    PAGE_QUIZ_VIEW => {
+                        let state_ref = nav_state.borrow();
+                        let exam_title = state_ref
+                            .current_quiz_id
+                            .as_ref()
+                            .and_then(|id_str| {
+                                let exam_id =
+                                    crate::domain::value_objects::ExamId::from_str(id_str).ok()?;
+                                let exam = ctx.exam_repo.find_by_id(&exam_id).ok().flatten()?;
+                                let vid_id = exam.video_id();
+                                ctx.video_repo
+                                    .find_by_id(vid_id)
+                                    .ok()
+                                    .flatten()
+                                    .map(|v| v.title().to_string())
+                            })
+                            .unwrap_or_else(|| "Taking quiz".to_string());
+                        let course_title = state_ref
+                            .current_course_id
+                            .as_ref()
+                            .and_then(|id_str| {
+                                let c_id = crate::domain::value_objects::CourseId::from_str(id_str)
+                                    .ok()?;
+                                ctx.course_repo.find_by_id(&c_id).ok().flatten()
+                            })
+                            .map(|c| c.name().to_string())
+                            .unwrap_or_default();
+                        drop(state_ref);
+                        Activity::TakingExam { course_title, exam_title }
                     },
                     PAGE_SETTINGS => Activity::Settings,
                     _ => Activity::Idle,

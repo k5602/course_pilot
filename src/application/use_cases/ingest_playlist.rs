@@ -7,8 +7,8 @@ use std::sync::Arc;
 use crate::domain::{
     entities::{Course, Module, Video},
     ports::{
-        CourseRepository, DomainEvent, EventBus, FetchError, ModuleRepository,
-        ModuleTitleGenerator, PlaylistFetcher, SearchEntry, SearchRepository, VideoRepository,
+        CourseRepository, FetchError, ModuleRepository, ModuleTitleGenerator, PlaylistFetcher,
+        SearchEntry, SearchRepository, VideoRepository,
     },
     services::{BoundaryDetector, TitleSanitizer},
     value_objects::{CourseId, ModuleId, PlaylistUrl, VideoId, VideoSource, YouTubeVideoId},
@@ -43,36 +43,18 @@ pub struct IngestPlaylistOutput {
 }
 
 /// Use case for ingesting a YouTube playlist into a structured course.
-#[allow(dead_code)]
 pub struct IngestPlaylistUseCase {
     fetcher: Arc<dyn PlaylistFetcher>,
     course_repo: Arc<dyn CourseRepository>,
     module_repo: Arc<dyn ModuleRepository>,
     video_repo: Arc<dyn VideoRepository>,
     search_repo: Arc<dyn SearchRepository>,
-    event_bus: Arc<dyn EventBus>,
     sanitizer: TitleSanitizer,
     boundary_batch_size: usize,
     title_generator: Option<Arc<dyn ModuleTitleGenerator>>,
 }
 
 impl IngestPlaylistUseCase {
-    async fn generate_module_title(
-        &self,
-        titles: &[String],
-        course_name: &str,
-        module_idx: usize,
-    ) -> String {
-        if let Some(ref generator) = self.title_generator
-            && let Ok(title) =
-                generator.generate_module_title(titles, course_name, module_idx).await
-            && !title.is_empty()
-        {
-            return title;
-        }
-        titles.first().cloned().unwrap_or_else(|| format!("Module {}", module_idx + 1))
-    }
-
     #[allow(clippy::too_many_arguments)]
     pub fn new(
         fetcher: Arc<dyn PlaylistFetcher>,
@@ -80,7 +62,6 @@ impl IngestPlaylistUseCase {
         module_repo: Arc<dyn ModuleRepository>,
         video_repo: Arc<dyn VideoRepository>,
         search_repo: Arc<dyn SearchRepository>,
-        event_bus: Arc<dyn EventBus>,
         title_generator: Option<Arc<dyn ModuleTitleGenerator>>,
         boundary_batch_size: usize,
     ) -> Self {
@@ -90,7 +71,6 @@ impl IngestPlaylistUseCase {
             module_repo,
             video_repo,
             search_repo,
-            event_bus,
             sanitizer: TitleSanitizer::new(),
             boundary_batch_size,
             title_generator,
@@ -170,8 +150,13 @@ impl IngestPlaylistUseCase {
 
             let module_video_titles: Vec<String> =
                 video_indices.iter().map(|&i| raw_videos[i].title.clone()).collect();
-            let module_title =
-                self.generate_module_title(&module_video_titles, &course_name, module_idx).await;
+            let module_title = crate::application::generate_module_title(
+                self.title_generator.as_ref(),
+                &module_video_titles,
+                &course_name,
+                module_idx,
+            )
+            .await;
 
             let videos: Vec<PendingVideo> = video_indices
                 .iter()
@@ -237,8 +222,6 @@ impl IngestPlaylistUseCase {
         self.search_repo
             .index_batch(&video_search_entries)
             .map_err(|e| IngestError::PersistFailed(e.to_string()))?;
-
-        self.event_bus.publish(DomainEvent::CourseIngested(course_id));
 
         Ok(IngestPlaylistOutput {
             course_id,

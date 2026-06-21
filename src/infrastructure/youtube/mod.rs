@@ -212,10 +212,6 @@ impl StreamResolver for RustyYtdlAdapter {
     }
 }
 
-pub async fn resolve_stream_url(youtube_id: &str) -> Result<String, FetchError> {
-    resolve_youtube_stream_inner(youtube_id, VideoQuality::Best).await
-}
-
 pub(crate) async fn resolve_youtube_stream_inner(
     youtube_id: &str,
     quality: VideoQuality,

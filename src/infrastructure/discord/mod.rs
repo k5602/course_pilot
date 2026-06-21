@@ -39,7 +39,6 @@ enum PresenceMsg {
 /// Adapter for Discord Rich Presence.
 pub struct DiscordPresenceAdapter {
     tx: Sender<PresenceMsg>,
-    connected: Arc<AtomicBool>,
 }
 
 impl Default for DiscordPresenceAdapter {
@@ -62,8 +61,7 @@ impl DiscordPresenceAdapter {
     /// Creates a new Discord Presence adapter with a specific client ID and starts the worker.
     pub fn new_with_client_id(client_id: impl Into<String>) -> Self {
         let (tx, rx) = channel::<PresenceMsg>();
-        let connected = Arc::new(AtomicBool::new(false));
-        let connected_flag = connected.clone();
+        let connected_flag = Arc::new(AtomicBool::new(false));
 
         let client_id = client_id.into();
 
@@ -71,7 +69,7 @@ impl DiscordPresenceAdapter {
             presence_worker(rx, connected_flag, client_id);
         });
 
-        Self { tx, connected }
+        Self { tx }
     }
 }
 
@@ -343,15 +341,10 @@ impl PresenceProvider for DiscordPresenceAdapter {
     fn clear_activity(&self) {
         let _ = self.tx.send(PresenceMsg::Clear);
     }
-
-    fn is_connected(&self) -> bool {
-        self.connected.load(Ordering::SeqCst)
-    }
 }
 
 impl Drop for DiscordPresenceAdapter {
     fn drop(&mut self) {
-        self.connected.store(false, Ordering::SeqCst);
         let _ = self.tx.send(PresenceMsg::Shutdown);
     }
 }
